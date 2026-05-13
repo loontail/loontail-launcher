@@ -1,0 +1,40 @@
+appId: app.loontail.minecraft-launcher
+productName: Loontail Minecraft Launcher
+copyright: Copyright © 2026 Loontail
+directories:
+  buildResources: build
+  output: dist
+files:
+  - out/**/*
+  - package.json
+  - "!**/.vscode/*"
+  - "!**/{.eslintrc*,.prettierrc*,.editorconfig,.gitignore,.gitattributes}"
+  - "!**/{tsconfig*,biome.json,vitest.config*}"
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+linux:
+  target:
+    - AppImage
+  category: Game
+publish:
+  provider: github
