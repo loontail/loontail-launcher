@@ -1,0 +1,81 @@
+{
+  "appBar": {
+    "title": "Loontail Minecraft Launcher"
+  },
+  "home": {
+    "welcome": "Welcome, {{name}}",
+    "version": "version {{version}}",
+    "loading": "Loading…"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "description": "Use your Loontail account to launch the game.",
+    "identifier": "Username or email",
+    "password": "Password",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "errorInvalid": "Invalid login or password.",
+    "errorNetwork": "Could not reach the server. Check your connection.",
+    "errorRateLimited": "Too many sign-in attempts. Please wait a minute and try again.",
+    "errorUnknown": "Something went wrong. Try again later."
+  },
+  "appBarActions": {
+    "openSettings": "Open settings",
+    "back": "Back"
+  },
+  "settings": {
+    "tabs": {
+      "account": "Account",
+      "game": "Game",
+      "system": "System",
+      "launcher": "Launcher"
+    },
+    "account": {
+      "profile": "Profile",
+      "username": "Username",
+      "email": "Email",
+      "password": "Password",
+      "changeSkin": "Change skin",
+      "changeCape": "Change cape",
+      "skinSave": "Save",
+      "skinSaving": "Saving…"
+    },
+    "game": {
+      "launch": "Launch",
+      "console": "Console",
+      "consoleDesc": "Open the game console window on launch",
+      "fullscreen": "Fullscreen",
+      "fullscreenDesc": "Start the game in fullscreen mode"
+    },
+    "system": {
+      "memory": "Memory",
+      "allocatedRam": "Allocated RAM",
+      "ramDesc": "More RAM reduces lag and improves performance, but leaving some free for the OS is recommended.",
+      "save": "Save",
+      "saving": "Saving…",
+      "storage": "Storage",
+      "clientsFolder": "Clients folder",
+      "clientsFolderDesc": "All Minecraft client files are stored here: versions, mods, resource packs and configs.",
+      "openFolder": "Open folder",
+      "change": "Change",
+      "diskUsed": "{{value}} used",
+      "diskFree": "{{free}} free of {{total}}",
+      "folderNotSet": "Not set"
+    },
+    "launcher": {
+      "maintenance": "Maintenance",
+      "clearCache": "Clear cache",
+      "clearCacheDesc": "Remove all cached images and data",
+      "clear": "Clear",
+      "updates": "Updates",
+      "updatesDesc": "Check for a new launcher version",
+      "check": "Check",
+      "interface": "Interface",
+      "language": "Language",
+      "languageDesc": "Change the interface language",
+      "account": "Account",
+      "logOut": "Log out",
+      "logOutDesc": "Sign out and return to login"
+    }
+  }
+}

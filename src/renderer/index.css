@@ -4,26 +4,28 @@
   --font-sans: "Nunito", system-ui, sans-serif;
 
   --color-background: oklch(0.15 0 0);
-  --color-foreground: oklch(0.95 0 0);
+  --color-foreground: oklch(0.96 0 0);
   --color-card: oklch(0.18 0 0);
-  --color-card-foreground: oklch(0.95 0 0);
+  --color-card-foreground: oklch(0.96 0 0);
   --color-popover: oklch(0.18 0 0);
-  --color-popover-foreground: oklch(0.95 0 0);
-  --color-primary: oklch(0.7 0.16 250);
+  --color-popover-foreground: oklch(0.96 0 0);
+  --color-primary: oklch(0.96 0 0);
   --color-primary-foreground: oklch(0.15 0 0);
   --color-secondary: oklch(0.25 0 0);
-  --color-secondary-foreground: oklch(0.95 0 0);
+  --color-secondary-foreground: oklch(0.96 0 0);
   --color-muted: oklch(0.22 0 0);
   --color-muted-foreground: oklch(0.65 0 0);
-  --color-accent: oklch(0.3 0.04 250);
-  --color-accent-foreground: oklch(0.95 0 0);
-  --color-destructive: oklch(0.6 0.22 25);
-  --color-destructive-foreground: oklch(0.95 0 0);
+  --color-accent: oklch(0.25 0 0);
+  --color-accent-foreground: oklch(0.96 0 0);
+  --color-destructive: oklch(0.6 0.18 25);
+  --color-destructive-foreground: oklch(0.96 0 0);
   --color-border: oklch(0.28 0 0);
   --color-input: oklch(0.28 0 0);
-  --color-ring: oklch(0.7 0.16 250);
+  --color-ring: oklch(0.96 0 0);
 
-  --radius: 0.5rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.875rem;
+  --radius-lg: 1.25rem;
 }
 
 @utility app-region-drag {
@@ -32,6 +34,11 @@
 
 @utility app-region-no-drag {
   -webkit-app-region: no-drag;
+}
+
+@utility title-bar-safe {
+  padding-left: env(titlebar-area-x, 0px);
+  padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
 }
 
 html,
@@ -43,4 +50,35 @@ body,
 body {
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+  transition: background-color 120ms ease;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted-foreground);
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
 }

@@ -1,0 +1,81 @@
+{
+  "appBar": {
+    "title": "Loontail Minecraft Launcher"
+  },
+  "home": {
+    "welcome": "Вітаємо, {{name}}",
+    "version": "версія {{version}}",
+    "loading": "Завантаження…"
+  },
+  "auth": {
+    "signIn": "Вхід",
+    "description": "Увійдіть до акаунта Loontail, щоб запустити гру.",
+    "identifier": "Логін або email",
+    "password": "Пароль",
+    "submit": "Увійти",
+    "submitting": "Вхід…",
+    "errorInvalid": "Невірний логін або пароль.",
+    "errorNetwork": "Не вдається зʼєднатися із сервером. Перевірте підключення.",
+    "errorRateLimited": "Забагато спроб входу. Зачекайте хвилину і спробуйте знову.",
+    "errorUnknown": "Щось пішло не так. Спробуйте пізніше."
+  },
+  "appBarActions": {
+    "openSettings": "Відкрити налаштування",
+    "back": "Назад"
+  },
+  "settings": {
+    "tabs": {
+      "account": "Акаунт",
+      "game": "Гра",
+      "system": "Система",
+      "launcher": "Лаунчер"
+    },
+    "account": {
+      "profile": "Профіль",
+      "username": "Імʼя користувача",
+      "email": "Email",
+      "password": "Пароль",
+      "changeSkin": "Змінити скін",
+      "changeCape": "Змінити плащ",
+      "skinSave": "Зберегти",
+      "skinSaving": "Збереження…"
+    },
+    "game": {
+      "launch": "Запуск",
+      "console": "Консоль",
+      "consoleDesc": "Відкривати вікно консолі гри при запуску",
+      "fullscreen": "Повноекранний режим",
+      "fullscreenDesc": "Запускати гру в повноекранному режимі"
+    },
+    "system": {
+      "memory": "Памʼять",
+      "allocatedRam": "Виділена памʼять",
+      "ramDesc": "Більше RAM зменшує лаги та покращує продуктивність, але краще лишити трохи памʼяті системі.",
+      "save": "Зберегти",
+      "saving": "Збереження…",
+      "storage": "Сховище",
+      "clientsFolder": "Папка клієнтів",
+      "clientsFolderDesc": "Тут зберігаються всі файли клієнтів Minecraft: версії, моди, ресурс-паки та конфіги.",
+      "openFolder": "Відкрити папку",
+      "change": "Змінити",
+      "diskUsed": "{{value}} використано",
+      "diskFree": "{{free}} вільно з {{total}}",
+      "folderNotSet": "Не задано"
+    },
+    "launcher": {
+      "maintenance": "Обслуговування",
+      "clearCache": "Очистити кеш",
+      "clearCacheDesc": "Видалити всі кешовані зображення та дані",
+      "clear": "Очистити",
+      "updates": "Оновлення",
+      "updatesDesc": "Перевірити нову версію лаунчера",
+      "check": "Перевірити",
+      "interface": "Інтерфейс",
+      "language": "Мова",
+      "languageDesc": "Змінити мову інтерфейсу",
+      "account": "Акаунт",
+      "logOut": "Вийти",
+      "logOutDesc": "Вийти з акаунта та повернутися до входу"
+    }
+  }
+}

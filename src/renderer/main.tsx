@@ -3,6 +3,7 @@ import '@fontsource/nunito/500.css';
 import '@fontsource/nunito/600.css';
 import '@fontsource/nunito/700.css';
 import './index.css';
+import './i18n';
 
 import { App } from '@renderer/app/App';
 import { createQueryClient } from '@renderer/shared/lib/queryClient';

@@ -91,7 +91,23 @@ Visual layer rules: design system, typography, icons, theming.
 - Prefer **OKLCH** over HSL/HEX in token definitions — perceptually uniform
   lightness, easier to keep contrast consistent across the palette.
 
-## 4. Typography
+## 4. Border radius
+
+- Three radius tokens are declared in `@theme` and used everywhere:
+  - `--radius-sm` (0.5rem / 8px) — small surfaces: buttons, inputs, chips,
+    dropdown items, single-line controls.
+  - `--radius-md` (0.875rem / 14px) — cards, section containers, list
+    groups, modal panels, viewer frames.
+  - `--radius-lg` (1.25rem / 20px) — top-level page-spanning containers,
+    hero panels.
+- Components reference them through Tailwind's `rounded-sm` /
+  `rounded-md` / `rounded-lg`.
+- `rounded-full` is reserved for true pills/circles (switch tracks,
+  avatars, badge dots).
+- Do not introduce arbitrary radius values (`rounded-[7px]`). If a new
+  scale step is needed, add a fourth token and document it here.
+
+## 5. Typography
 
 - The single font family is **Nunito**, served via `@fontsource/nunito`.
 - Installation:
@@ -125,7 +141,7 @@ Visual layer rules: design system, typography, icons, theming.
 - No other font families are added without a discussion. Headings and body
   share Nunito; weight differentiates hierarchy, not family.
 
-## 5. Icons
+## 6. Icons
 
 - Use **`lucide-react`** (the shadcn default). No mixing icon libraries.
 - Icon size is set via Tailwind (`size-4`, `size-5`), not via the `size` prop
@@ -133,7 +149,7 @@ Visual layer rules: design system, typography, icons, theming.
 - Custom icons (non-Lucide assets) live in `src/renderer/shared/ui/icons/`
   as React components, not raw SVG files imported in components.
 
-## 6. Theming
+## 7. Theming
 
 - **The launcher is dark-only.** There is no light theme, no theme toggle,
   no system-theme detection, no `themeStore`. The palette in §3 is the
@@ -145,7 +161,7 @@ Visual layer rules: design system, typography, icons, theming.
   light palette under `@theme`, add a theme store and a `.dark` toggle on
   `<html>`. Do not pre-build any of this scaffolding now.
 
-## 7. Component authorship rules
+## 8. Component authorship rules
 
 - A component does one thing. If it grows past ~200 lines or accepts more
   than ~8 props, split it.
@@ -157,7 +173,7 @@ Visual layer rules: design system, typography, icons, theming.
 - No business logic in components. Data fetching goes through TanStack Query
   hooks (`useBundleStatus()` etc.); components stay declarative.
 
-## 8. What we do NOT do
+## 9. What we do NOT do
 
 - No Tailwind v3 syntax (`@tailwind base;`, `tailwind.config.ts` as primary
   config) — the project is on **Tailwind v4** end-to-end.
@@ -165,7 +181,7 @@ Visual layer rules: design system, typography, icons, theming.
   default color shades (`text-red-500`, `bg-zinc-900`) in components.
   Everything goes through palette tokens.
 - No light theme, no theme toggle, no `prefers-color-scheme` reads. Dark is
-  the only mode (see §6).
+  the only mode (see §7).
 - No Material UI, Chakra, Mantine, Ant Design, or other component kits.
 - No `styled-components`, Emotion, or other CSS-in-JS.
 - No global SCSS / Less / PostCSS plugins beyond what Tailwind ships with.

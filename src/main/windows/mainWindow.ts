@@ -70,6 +70,7 @@ export const createMainWindow = (): BrowserWindow => {
   const devServerUrl = process.env.ELECTRON_RENDERER_URL;
   if (devServerUrl) {
     void window.loadURL(devServerUrl);
+    window.webContents.openDevTools({ mode: 'detach' });
   } else {
     void window.loadFile(join(__dirname, '../renderer/index.html'));
   }
