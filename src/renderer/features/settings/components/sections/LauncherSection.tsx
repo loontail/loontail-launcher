@@ -1,13 +1,12 @@
 import { Button } from '@renderer/shared/ui/Button';
 import { IPC_CHANNELS } from '@shared/ipc';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Group } from '../Group';
 import { LanguageSwitcher } from '../LanguageSwitcher';
 import { Row } from '../Row';
 
-const VersionRow = (): ReactElement => {
+const VersionRow = () => {
   const versionQuery = useQuery({
     queryKey: ['app', 'version'],
     queryFn: () => window.api.invoke(IPC_CHANNELS.appGetVersion, undefined),
@@ -19,11 +18,11 @@ const VersionRow = (): ReactElement => {
   );
 };
 
-export const LauncherSection = (): ReactElement => {
+export const LauncherSection = () => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
 
-  const handleClearCache = (): void => {
+  const handleClearCache = () => {
     queryClient.removeQueries({
       predicate: (query) => {
         const [first] = query.queryKey;
@@ -32,7 +31,7 @@ export const LauncherSection = (): ReactElement => {
     });
   };
 
-  const handleCheckUpdates = (): void => {
+  const handleCheckUpdates = () => {
     // TODO(updater): wire to electron-updater when the auto-update flow lands.
   };
 

@@ -2,14 +2,13 @@ import { useCurrentUser, useLogout } from '@renderer/features/auth';
 import { SkinEditor } from '@renderer/features/skin';
 import { Button } from '@renderer/shared/ui/Button';
 import { Loader2, LogOut } from 'lucide-react';
-import type { ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Group } from '../Group';
 import { Row } from '../Row';
 
 const SKIN_VIEWER_WIDTH = 170;
 
-export const AccountSection = (): ReactElement => {
+export const AccountSection = () => {
   const { t } = useTranslation();
   const { user } = useCurrentUser();
   const { submit: logoutSubmit, isPending: isLoggingOut } = useLogout();

@@ -1,6 +1,6 @@
 import { cn } from '@renderer/shared/lib/cn';
 import { Switch } from '@renderer/shared/ui/Switch';
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 type RowProps = {
   label: ReactNode;
@@ -9,7 +9,7 @@ type RowProps = {
   onClick?: (() => void) | undefined;
 };
 
-export const Row = ({ label, description, right, onClick }: RowProps): ReactElement => {
+export const Row = ({ label, description, right, onClick }: RowProps) => {
   const interactive = typeof onClick === 'function';
   const content = (
     <>
@@ -55,7 +55,7 @@ export const SwitchRow = ({
   checked,
   onCheckedChange,
   disabled,
-}: SwitchRowProps): ReactElement => {
+}: SwitchRowProps) => {
   const isDisabled = disabled === true;
   return (
     <button

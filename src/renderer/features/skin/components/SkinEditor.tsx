@@ -4,7 +4,7 @@ import { useCurrentUser } from '@renderer/features/auth';
 import { DropdownMenu, DropdownMenuItem } from '@renderer/shared/ui/DropdownMenu';
 import type { SkinKind } from '@shared/contracts/skin';
 import { Loader2, Pencil, Trash2 } from 'lucide-react';
-import { type ChangeEvent, type ReactElement, useEffect, useRef, useState } from 'react';
+import { type ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { WalkingAnimation } from 'skinview3d';
 import { useClearSkin, useUploadSkin } from '../hooks';
@@ -16,7 +16,7 @@ type SkinEditorProps = {
   width?: number;
 };
 
-export const SkinEditor = ({ width = 200 }: SkinEditorProps): ReactElement => {
+export const SkinEditor = ({ width = 200 }: SkinEditorProps) => {
   const { t } = useTranslation();
   const { user } = useCurrentUser();
   const { mutate: upload, isPending: isUploading } = useUploadSkin();
@@ -54,27 +54,25 @@ export const SkinEditor = ({ width = 200 }: SkinEditorProps): ReactElement => {
     }
   }, [remoteCape, pendingCape]);
 
-  const handleFileChange =
-    (kind: SkinKind) =>
-    (event: ChangeEvent<HTMLInputElement>): void => {
-      const file = event.target.files?.[0];
-      event.target.value = '';
-      if (!file) return;
-      const objectUrl = URL.createObjectURL(file);
-      if (kind === 'skin') {
-        if (skinBlobRef.current) URL.revokeObjectURL(skinBlobRef.current);
-        skinBlobRef.current = objectUrl;
-        setSkinUrl(objectUrl);
-        setPendingSkin(file);
-      } else {
-        if (capeBlobRef.current) URL.revokeObjectURL(capeBlobRef.current);
-        capeBlobRef.current = objectUrl;
-        setCapeUrl(objectUrl);
-        setPendingCape(file);
-      }
-    };
+  const handleFileChange = (kind: SkinKind) => (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    const objectUrl = URL.createObjectURL(file);
+    if (kind === 'skin') {
+      if (skinBlobRef.current) URL.revokeObjectURL(skinBlobRef.current);
+      skinBlobRef.current = objectUrl;
+      setSkinUrl(objectUrl);
+      setPendingSkin(file);
+    } else {
+      if (capeBlobRef.current) URL.revokeObjectURL(capeBlobRef.current);
+      capeBlobRef.current = objectUrl;
+      setCapeUrl(objectUrl);
+      setPendingCape(file);
+    }
+  };
 
-  const handleSave = async (): Promise<void> => {
+  const handleSave = async () => {
     if (pendingSkin) {
       const buffer = await pendingSkin.arrayBuffer();
       await upload({ type: 'skin', buffer });
@@ -95,7 +93,7 @@ export const SkinEditor = ({ width = 200 }: SkinEditorProps): ReactElement => {
     }
   };
 
-  const handleReset = async (): Promise<void> => {
+  const handleReset = async () => {
     await clearAll();
     if (skinBlobRef.current) {
       URL.revokeObjectURL(skinBlobRef.current);

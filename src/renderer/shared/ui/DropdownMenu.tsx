@@ -1,5 +1,5 @@
 import { cn } from '@renderer/shared/lib/cn';
-import { type ReactElement, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 
 type DropdownMenuProps = {
   trigger: ReactNode;
@@ -7,22 +7,18 @@ type DropdownMenuProps = {
   align?: 'start' | 'end';
 };
 
-export const DropdownMenu = ({
-  trigger,
-  children,
-  align = 'end',
-}: DropdownMenuProps): ReactElement => {
+export const DropdownMenu = ({ trigger, children, align = 'end' }: DropdownMenuProps) => {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    const handleOutside = (event: MouseEvent): void => {
+    const handleOutside = (event: MouseEvent) => {
       if (!containerRef.current?.contains(event.target as Node)) {
         setOpen(false);
       }
     };
-    const handleEscape = (event: KeyboardEvent): void => {
+    const handleEscape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') setOpen(false);
     };
     document.addEventListener('mousedown', handleOutside);
@@ -59,9 +55,9 @@ type DropdownMenuItemProps = {
   children: ReactNode;
 };
 
-export const DropdownMenuItem = ({ onSelect, children }: DropdownMenuItemProps): ReactElement => {
+export const DropdownMenuItem = ({ onSelect, children }: DropdownMenuItemProps) => {
   const closeMenu = useDropdownMenuClose();
-  const handleClick = useCallback((): void => {
+  const handleClick = useCallback(() => {
     onSelect();
     closeMenu();
   }, [onSelect, closeMenu]);

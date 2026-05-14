@@ -7,7 +7,7 @@ import {
 import { cn } from '@renderer/shared/lib/cn';
 import { GbFlagIcon } from '@renderer/shared/ui/icons/GbFlagIcon';
 import { UaFlagIcon } from '@renderer/shared/ui/icons/UaFlagIcon';
-import type { ComponentType, ReactElement, SVGProps } from 'react';
+import type { ComponentType, SVGProps } from 'react';
 import { useTranslation } from 'react-i18next';
 
 type LanguageOption = {
@@ -20,7 +20,7 @@ const LANGUAGE_OPTIONS: Record<Language, LanguageOption> = {
   uk: { Flag: UaFlagIcon, label: 'UA' },
 };
 
-export const LanguageSwitcher = (): ReactElement => {
+export const LanguageSwitcher = () => {
   const { i18n } = useTranslation();
   const current = getCurrentLanguage();
   void i18n.language;

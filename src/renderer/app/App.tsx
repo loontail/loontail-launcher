@@ -10,11 +10,10 @@ import { Button } from '@renderer/shared/ui/Button';
 import { IPC_CHANNELS } from '@shared/ipc';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Loader2, Settings } from 'lucide-react';
-import type { ReactElement } from 'react';
 
 const hasCustomTitleBar = window.api.platform !== 'linux';
 
-const VersionLine = (): ReactElement => {
+const VersionLine = () => {
   const versionQuery = useQuery({
     queryKey: ['app', 'version'],
     queryFn: () => window.api.invoke(IPC_CHANNELS.appGetVersion, undefined),
@@ -26,12 +25,12 @@ const VersionLine = (): ReactElement => {
   );
 };
 
-const NavigationButton = (): ReactElement => {
+const NavigationButton = () => {
   const canGoBack = useCanGoBack();
   const push = useNavigationStore((state) => state.push);
   const pop = useNavigationStore((state) => state.pop);
 
-  const handleClick = (): void => {
+  const handleClick = () => {
     if (canGoBack) {
       pop();
     } else {
@@ -60,14 +59,14 @@ type HomeViewProps = {
   username: string;
 };
 
-const HomeView = ({ username }: HomeViewProps): ReactElement => (
+const HomeView = ({ username }: HomeViewProps) => (
   <div className="flex flex-1 flex-col items-center justify-center gap-3">
     <h1 className="text-2xl font-bold">Welcome, {username}</h1>
     <VersionLine />
   </div>
 );
 
-export const App = (): ReactElement => {
+export const App = () => {
   const { user, isPending } = useCurrentUser();
   const view = useCurrentView();
   const isAuthenticated = !isPending && user !== null && user !== undefined;

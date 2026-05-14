@@ -1,4 +1,4 @@
-import { type ReactElement, useEffect, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { SkinViewer as SkinView3d } from 'skinview3d';
 
 type SkinViewerOptions = ConstructorParameters<typeof SkinView3d>[0];
@@ -21,7 +21,7 @@ export const SkinViewer = ({
   options,
   onReady,
   className,
-}: SkinViewerProps): ReactElement => {
+}: SkinViewerProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const viewerRef = useRef<SkinView3d | null>(null);
 

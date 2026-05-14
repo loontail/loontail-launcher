@@ -1,5 +1,5 @@
 import { cn } from '@renderer/shared/lib/cn';
-import type { ButtonHTMLAttributes, ReactElement } from 'react';
+import type { ButtonHTMLAttributes } from 'react';
 
 type Variant = 'default' | 'destructive' | 'outline' | 'ghost';
 type Size = 'default' | 'sm';
@@ -27,7 +27,7 @@ export const Button = ({
   size = 'default',
   type = 'button',
   ...rest
-}: ButtonProps): ReactElement => (
+}: ButtonProps) => (
   <button
     type={type}
     className={cn(

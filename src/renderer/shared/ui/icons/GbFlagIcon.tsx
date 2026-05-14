@@ -1,6 +1,6 @@
-import type { ReactElement, SVGProps } from 'react';
+import type { SVGProps } from 'react';
 
-export const GbFlagIcon = (props: SVGProps<SVGSVGElement>): ReactElement => (
+export const GbFlagIcon = (props: SVGProps<SVGSVGElement>) => (
   <svg
     viewBox="0 0 60 36"
     xmlns="http://www.w3.org/2000/svg"

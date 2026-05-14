@@ -1,4 +1,4 @@
-import { type ReactElement, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   useDiskSpace,
@@ -11,7 +11,7 @@ import {
 import { FolderInfoBlock } from '../FolderInfoBlock';
 import { RamControl } from '../RamControl';
 
-export const SystemSection = (): ReactElement => {
+export const SystemSection = () => {
   const { t } = useTranslation();
 
   const { settings, isPending: settingsPending } = useLauncherSettings();
@@ -29,7 +29,7 @@ export const SystemSection = (): ReactElement => {
   const settingsReady = settings !== undefined && !settingsPending;
   const ramReady = settingsReady && range !== undefined && !rangePending;
 
-  const handleRamSave = async (): Promise<void> => {
+  const handleRamSave = async () => {
     if (pendingRam === null) return;
     await setLauncherMutate({ memory: { allocatedRamMb: pendingRam } });
     setPendingRam(null);

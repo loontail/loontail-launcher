@@ -19,6 +19,15 @@ must include a short rationale (**Why**) so they can be revisited later.
 - Prefer `unknown` + narrowing over `any`.
 - All public service functions must have explicit return types. Internal
   helpers may rely on inference.
+- **Do not annotate return types you can infer.** React components, simple
+  helpers, and one-liners where the return type is obvious from the body
+  should rely on inference — annotating `(): ReactElement => …` on every
+  component adds noise without protecting any contract. Add an explicit
+  annotation only when it actually buys something: a non-obvious union
+  return, a public service boundary (see the previous rule), or a case
+  where inference picks a wider type than intended. **Why:** the previous
+  blanket rule produced wall-to-wall `: ReactElement` annotations that
+  hurt readability and weren't catching real bugs.
 - No one-letter variables or arguments, except for obvious cases (`x`, `y`,
   `i` in short loops).
 - No dead code. If something "might come in handy later", delete it — git
@@ -49,12 +58,15 @@ must include a short rationale (**Why**) so they can be revisited later.
   ```ts
   // good
   export const createService = (router: Router): Service => { … };
-  export const App = (): ReactElement => { … };
+  export const App = () => { … };
 
   // bad
   export function createService(router: Router): Service { … }
   export function App(): ReactElement { … }
   ```
+
+  The service keeps its explicit return type because it is a public
+  boundary; the component drops it because inference is enough.
 - Model variant state with **discriminated unions** — a literal `kind` /
   `status` / `type` field as the discriminator — not boolean flag soups.
 

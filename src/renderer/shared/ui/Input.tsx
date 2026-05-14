@@ -1,9 +1,9 @@
 import { cn } from '@renderer/shared/lib/cn';
-import type { InputHTMLAttributes, ReactElement } from 'react';
+import type { InputHTMLAttributes } from 'react';
 
 type InputProps = InputHTMLAttributes<HTMLInputElement>;
 
-export const Input = ({ className, type = 'text', ...rest }: InputProps): ReactElement => (
+export const Input = ({ className, type = 'text', ...rest }: InputProps) => (
   <input
     type={type}
     className={cn(

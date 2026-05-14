@@ -3,7 +3,7 @@ import { Button } from '@renderer/shared/ui/Button';
 import { Skeleton } from '@renderer/shared/ui/Skeleton';
 import type { DiskInfo } from '@shared/contracts/system';
 import { Folder, HardDrive } from 'lucide-react';
-import type { ReactElement, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { OverrideMark } from './OverrideMark';
 
@@ -47,7 +47,7 @@ export const FolderInfoBlock = ({
   showDiskUsage = false,
   overridden = false,
   disabled = false,
-}: FolderInfoBlockProps): ReactElement => {
+}: FolderInfoBlockProps) => {
   const { t } = useTranslation();
 
   const displayPath = path ?? folder?.path ?? '';

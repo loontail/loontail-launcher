@@ -2,7 +2,6 @@ import { Button } from '@renderer/shared/ui/Button';
 import { Skeleton } from '@renderer/shared/ui/Skeleton';
 import { Slider } from '@renderer/shared/ui/Slider';
 import { Loader2, MemoryStick } from 'lucide-react';
-import type { ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { OverrideMark } from './OverrideMark';
 
@@ -26,7 +25,7 @@ export const RamControl = ({
   loading,
   saving,
   overridden = false,
-}: RamControlProps): ReactElement => {
+}: RamControlProps) => {
   const { t } = useTranslation();
 
   const min = range[0] ?? 0;

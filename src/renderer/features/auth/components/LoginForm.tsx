@@ -2,7 +2,7 @@ import { Button } from '@renderer/shared/ui/Button';
 import { Input } from '@renderer/shared/ui/Input';
 import type { LoginErrorCode } from '@shared/contracts';
 import { Loader2 } from 'lucide-react';
-import { type FormEvent, type ReactElement, useState } from 'react';
+import { type FormEvent, useState } from 'react';
 import { useLogin } from '../hooks';
 
 const ERROR_COPY: Record<LoginErrorCode, string> = {
@@ -12,13 +12,13 @@ const ERROR_COPY: Record<LoginErrorCode, string> = {
   UNKNOWN: 'Something went wrong. Try again later.',
 };
 
-export const LoginForm = (): ReactElement => {
+export const LoginForm = () => {
   const { submit, isPending } = useLogin();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>): Promise<void> => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError(null);
     const result = await submit({ identifier, password });

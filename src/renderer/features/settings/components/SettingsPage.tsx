@@ -1,6 +1,6 @@
 import { type TabItem, Tabs } from '@renderer/shared/ui/Tabs';
 import { Cpu, Gamepad2, User, Wrench } from 'lucide-react';
-import { type ComponentType, type ReactElement, useState } from 'react';
+import { type ComponentType, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AccountSection } from './sections/AccountSection';
 import { GameSection } from './sections/GameSection';
@@ -16,7 +16,7 @@ const SECTION_RENDERERS: Record<SettingsTab, ComponentType> = {
   launcher: LauncherSection,
 };
 
-export const SettingsPage = (): ReactElement => {
+export const SettingsPage = () => {
   const { t } = useTranslation();
   const [tab, setTab] = useState<SettingsTab>('account');
   const Section = SECTION_RENDERERS[tab];

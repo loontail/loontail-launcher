@@ -1,5 +1,5 @@
 import { cn } from '@renderer/shared/lib/cn';
-import type { ChangeEvent, ReactElement } from 'react';
+import type { ChangeEvent } from 'react';
 
 type SliderProps = {
   value: number;
@@ -19,8 +19,8 @@ export const Slider = ({
   step = 1,
   disabled = false,
   className,
-}: SliderProps): ReactElement => {
-  const handleChange = (event: ChangeEvent<HTMLInputElement>): void => {
+}: SliderProps) => {
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     onValueChange(Number(event.target.value));
   };
 

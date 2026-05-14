@@ -1,10 +1,9 @@
-import type { ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLauncherSettings, useSetLauncher } from '../../hooks';
 import { Group } from '../Group';
 import { SwitchRow } from '../Row';
 
-export const GameSection = (): ReactElement => {
+export const GameSection = () => {
   const { t } = useTranslation();
   const { settings, isPending } = useLauncherSettings();
   const { mutate } = useSetLauncher();
@@ -12,7 +11,7 @@ export const GameSection = (): ReactElement => {
   const launchConsole = settings?.launch.console ?? false;
   const launchFullscreen = settings?.launch.fullscreen ?? false;
 
-  const handleToggle = async (key: 'console' | 'fullscreen', value: boolean): Promise<void> => {
+  const handleToggle = async (key: 'console' | 'fullscreen', value: boolean) => {
     await mutate({ launch: { [key]: value } });
   };
 

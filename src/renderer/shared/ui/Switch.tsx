@@ -1,12 +1,11 @@
 import { cn } from '@renderer/shared/lib/cn';
-import type { ReactElement } from 'react';
 
 type SwitchProps = {
   checked?: boolean;
   disabled?: boolean;
 };
 
-export const Switch = ({ checked = false, disabled = false }: SwitchProps): ReactElement => (
+export const Switch = ({ checked = false, disabled = false }: SwitchProps) => (
   <span
     aria-hidden
     className={cn(

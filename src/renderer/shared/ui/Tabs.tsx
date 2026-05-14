@@ -1,5 +1,5 @@
 import { cn } from '@renderer/shared/lib/cn';
-import type { ComponentType, ReactElement, SVGProps } from 'react';
+import type { ComponentType, SVGProps } from 'react';
 
 export type TabItem<T extends string> = {
   id: T;
@@ -14,12 +14,7 @@ type TabsProps<T extends string> = {
   className?: string;
 };
 
-export const Tabs = <T extends string>({
-  tabs,
-  selected,
-  onSelect,
-  className,
-}: TabsProps<T>): ReactElement => (
+export const Tabs = <T extends string>({ tabs, selected, onSelect, className }: TabsProps<T>) => (
   <div
     className={cn('flex gap-1 rounded-md border border-border bg-card p-1', className)}
     role="tablist"
