@@ -2,6 +2,7 @@ import { writeBuffer } from '@main/infra/cache';
 import { scopedLogger } from '@main/infra/logger';
 import { getStoredAuth, setStoredAuth } from '@main/infra/store';
 import { ERROR_CODES } from '@shared/constants';
+import { type UserId, asUserId } from '@shared/contracts/ids';
 import type { SkinKind, UploadSkinPayload, UploadSkinResult } from '@shared/contracts/skin';
 import { buildMediaUrl, updateUserSkinFields, uploadSkinFile } from './skinApi';
 
@@ -9,7 +10,7 @@ const CACHE_NAMESPACE = 'skins';
 
 const logger = scopedLogger('skin');
 
-const requireUserId = (): number => {
+const requireUserId = (): UserId => {
   const auth = getStoredAuth();
   if (!auth) {
     throw {
@@ -17,12 +18,12 @@ const requireUserId = (): number => {
       message: 'No authenticated user',
     };
   }
-  return auth.user.id;
+  return asUserId(auth.user.id);
 };
 
-const cacheKey = (userId: number, kind: SkinKind): string => `${userId}-${kind}`;
+const cacheKey = (userId: UserId, kind: SkinKind) => `${userId}-${kind}`;
 
-const updateStoredUserAsset = (kind: SkinKind, url: string | null): void => {
+const updateStoredUserAsset = (kind: SkinKind, url: string | null) => {
   const auth = getStoredAuth();
   if (!auth) return;
   const nextUser = { ...auth.user, [kind]: url };

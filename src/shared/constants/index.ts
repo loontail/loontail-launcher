@@ -1,6 +1,7 @@
-export { API_ROUTES } from './apiRoutes';
+export { API_PATH_PREFIX, API_ROUTES } from './apiRoutes';
 export { ERROR_CODES } from './errorCodes';
 export type { ErrorCode } from './errorCodes';
+export { QUERY_KEY_ROOTS, QUERY_KEYS } from './queryKeys';
 export {
   LAUNCHER_DIRNAME,
   RAM_DEFAULT_FALLBACK_MB,

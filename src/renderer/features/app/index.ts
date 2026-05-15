@@ -1,0 +1,1 @@
+export { useAppVersion } from './hooks';

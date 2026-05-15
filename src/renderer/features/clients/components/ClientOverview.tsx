@@ -1,0 +1,119 @@
+import type { Client } from '@shared/contracts/client';
+import { marked } from 'marked';
+import type { ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+import { Carousel } from './Carousel';
+import { ServersInfo } from './ServersInfo';
+import { StrapiMedia } from './StrapiMedia';
+
+type ClientOverviewProps = {
+  client: Client;
+};
+
+const SectionLabel = ({ children }: { children: ReactNode }) => (
+  <p className="mb-3 text-[10px] font-bold uppercase tracking-eyebrow text-glass/40">{children}</p>
+);
+
+export const ClientOverview = ({ client }: ClientOverviewProps) => {
+  const { t } = useTranslation();
+  const {
+    title,
+    shortDescription,
+    description,
+    screenshots,
+    servers,
+    titleImage,
+    keywords,
+    minecraftVersion,
+  } = client;
+
+  const parsedDescription = marked.parse(description ?? '') as string;
+
+  const hasScreenshots = (screenshots?.length ?? 0) > 0;
+  const hasAbout = Boolean(description);
+  const hasServers = Boolean(servers?.length);
+  const hasBelow = hasScreenshots || hasAbout;
+
+  return (
+    <div className="flex flex-col">
+      <section className="flex flex-col gap-6 px-12 pb-12 pt-6">
+        <div className="flex max-w-[560px] flex-col gap-5">
+          {titleImage ? (
+            <div className="flex h-22 max-w-[410px] items-start">
+              <StrapiMedia
+                media={titleImage}
+                className="h-full w-auto object-contain object-left drop-shadow-[0_8px_24px_var(--color-glow-overlay-lg)]"
+              />
+            </div>
+          ) : (
+            <h1 className="text-5xl font-black leading-[1.05] tracking-tight drop-shadow-[0_4px_16px_var(--color-glow-overlay-md)]">
+              {title}
+            </h1>
+          )}
+
+          {(minecraftVersion || (keywords?.length ?? 0) > 0) && (
+            <div className="flex flex-wrap gap-1.5">
+              {minecraftVersion && (
+                <span className="rounded-full border border-edge-md bg-chip-dark px-2.5 py-1 text-[11px] font-semibold tracking-wide text-glass/85 backdrop-blur-sm">
+                  Minecraft {minecraftVersion}
+                </span>
+              )}
+              {keywords?.map((keyword) => (
+                <span
+                  key={keyword.id}
+                  className="rounded-full border border-edge bg-chip px-2.5 py-1 text-[11px] font-medium text-glass/55 backdrop-blur-sm"
+                >
+                  {keyword.title}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {shortDescription && (
+            <p className="max-w-[460px] text-sm leading-relaxed text-glass/75 drop-shadow">
+              {shortDescription}
+            </p>
+          )}
+        </div>
+
+        {hasServers && servers && (
+          <div className="max-w-[520px]">
+            <SectionLabel>{t('clients.servers')}</SectionLabel>
+            <ServersInfo servers={servers} />
+          </div>
+        )}
+      </section>
+
+      {hasBelow && (
+        <div className="flex flex-col gap-10 px-12 pb-16">
+          {hasScreenshots && screenshots && (
+            <section>
+              <SectionLabel>{t('clients.screenshots')}</SectionLabel>
+              <Carousel autoPlay speed={700}>
+                {screenshots.map((screenshot) => (
+                  <div
+                    key={screenshot.id}
+                    className="relative aspect-[16/9] w-full overflow-hidden rounded-lg border border-edge"
+                  >
+                    <StrapiMedia media={screenshot} className="h-full w-full object-cover" />
+                  </div>
+                ))}
+              </Carousel>
+            </section>
+          )}
+
+          {hasAbout && (
+            <section>
+              <SectionLabel>{t('clients.about')}</SectionLabel>
+              <div
+                className="prose prose-invert prose-sm max-w-none text-glass/60 [&_a]:text-glass/75 [&_h1]:text-glass/90 [&_h2]:text-glass/85 [&_h3]:text-glass/80 [&_img]:h-auto [&_img]:w-full [&_img]:rounded-lg [&_strong]:text-glass/80"
+                // biome-ignore lint/security/noDangerouslySetInnerHtml: description is admin-authored in Strapi, parsed via `marked`
+                dangerouslySetInnerHTML={{ __html: parsedDescription }}
+              />
+            </section>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};

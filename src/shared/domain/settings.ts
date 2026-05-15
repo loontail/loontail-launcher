@@ -1,3 +1,4 @@
+import type { BundleSlug } from '@shared/contracts/ids';
 import type {
   ClientRuntimeRef,
   ClientSettingsOverride,
@@ -12,7 +13,7 @@ export const defaultLauncherSettings = (): LauncherSettings => ({
   clients: {},
 });
 
-export const joinClientFolder = (clientsFolder: string, bundleSlug: string): string => {
+export const joinClientFolder = (clientsFolder: string, bundleSlug: BundleSlug): string => {
   if (!clientsFolder) return '';
   const separator = clientsFolder.endsWith('/') || clientsFolder.endsWith('\\') ? '' : '/';
   return `${clientsFolder}${separator}${bundleSlug}`;
@@ -99,7 +100,7 @@ export const normalizeLauncherSettings = (value: unknown): LauncherSettings => {
 
 export const resolveClientSettings = (
   settings: LauncherSettings,
-  bundleSlug: string | null | undefined,
+  bundleSlug: BundleSlug | null | undefined,
 ): ResolvedClientSettings => {
   const override: ClientSettingsOverride =
     bundleSlug && settings.clients[bundleSlug] ? settings.clients[bundleSlug] : {};
@@ -162,7 +163,7 @@ const compactOverride = (override: ClientSettingsOverride): ClientSettingsOverri
 
 export const setClientOverride = (
   settings: LauncherSettings,
-  bundleSlug: string,
+  bundleSlug: BundleSlug,
   patch: ClientSettingsOverride,
 ): LauncherSettings => {
   const existing = settings.clients[bundleSlug] ?? {};
@@ -216,7 +217,7 @@ export const setClientOverride = (
 
 export const clearClientOverrides = (
   settings: LauncherSettings,
-  bundleSlug: string,
+  bundleSlug: BundleSlug,
 ): LauncherSettings => {
   const existing = settings.clients[bundleSlug];
   if (!existing) return settings;
@@ -231,7 +232,7 @@ export const clearClientOverrides = (
 
 export const removeClientEntry = (
   settings: LauncherSettings,
-  bundleSlug: string,
+  bundleSlug: BundleSlug,
 ): LauncherSettings => {
   if (!settings.clients[bundleSlug]) return settings;
   const clients = { ...settings.clients };

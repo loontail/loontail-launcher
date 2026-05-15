@@ -1,11 +1,11 @@
 import { join } from 'node:path';
 import { BrowserWindow, shell } from 'electron';
 
-const DEFAULT_WIDTH = 1100;
-const DEFAULT_HEIGHT = 720;
-const MIN_WIDTH = 900;
-const MIN_HEIGHT = 600;
-const BACKGROUND_COLOR = '#0f0f10';
+const DEFAULT_WIDTH = 1000;
+const DEFAULT_HEIGHT = 624;
+const MIN_WIDTH = 1000;
+const MIN_HEIGHT = 624;
+const BACKGROUND_COLOR = '#212121';
 const TITLE_BAR_HEIGHT = 40;
 const TITLE_BAR_OVERLAY_COLOR = 'rgba(0, 0, 0, 0)';
 const TITLE_BAR_SYMBOL_COLOR = '#a3a3a3';

@@ -1,31 +1,23 @@
-import type { Account, LoginPayload, LoginResult } from '@shared/contracts';
+import { QUERY_KEYS } from '@shared/constants';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchCurrentUser, login, logout } from './api';
 
-const AUTH_ME_KEY = ['auth', 'me'] as const;
-
-export const useCurrentUser = (): {
-  user: Account | null | undefined;
-  isPending: boolean;
-} => {
+export const useCurrentUser = () => {
   const query = useQuery({
-    queryKey: AUTH_ME_KEY,
+    queryKey: QUERY_KEYS.auth.me,
     queryFn: fetchCurrentUser,
     staleTime: Number.POSITIVE_INFINITY,
   });
   return { user: query.data, isPending: query.isPending };
 };
 
-export const useLogin = (): {
-  submit: (payload: LoginPayload) => Promise<LoginResult>;
-  isPending: boolean;
-} => {
+export const useLogin = () => {
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: login,
     onSuccess: (result) => {
       if (result.ok) {
-        queryClient.setQueryData(AUTH_ME_KEY, result.user);
+        queryClient.setQueryData(QUERY_KEYS.auth.me, result.user);
       }
     },
   });
@@ -35,13 +27,13 @@ export const useLogin = (): {
   };
 };
 
-export const useLogout = (): { submit: () => Promise<void>; isPending: boolean } => {
+export const useLogout = () => {
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: logout,
     onSuccess: async () => {
-      await queryClient.cancelQueries({ queryKey: AUTH_ME_KEY });
-      queryClient.setQueryData(AUTH_ME_KEY, null);
+      await queryClient.cancelQueries({ queryKey: QUERY_KEYS.auth.me });
+      queryClient.setQueryData(QUERY_KEYS.auth.me, null);
     },
   });
   return { submit: mutation.mutateAsync, isPending: mutation.isPending };

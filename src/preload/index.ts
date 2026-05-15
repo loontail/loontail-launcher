@@ -4,17 +4,16 @@ import { type IpcRendererEvent, contextBridge, ipcRenderer } from 'electron';
 type Unsubscribe = () => void;
 
 const api = {
-  invoke<TChannel extends keyof IpcContract>(
+  invoke: <TChannel extends keyof IpcContract>(
     channel: TChannel,
     args: IpcArgs<TChannel>,
-  ): Promise<IpcResult<TChannel>> {
-    return ipcRenderer.invoke(channel, args) as Promise<IpcResult<TChannel>>;
-  },
-  on<TEvent extends keyof IpcEventPayloads>(
+  ): Promise<IpcResult<TChannel>> =>
+    ipcRenderer.invoke(channel, args) as Promise<IpcResult<TChannel>>,
+  on: <TEvent extends keyof IpcEventPayloads>(
     event: TEvent,
     callback: (payload: IpcEventPayloads[TEvent]) => void,
-  ): Unsubscribe {
-    const listener = (_event: IpcRendererEvent, payload: IpcEventPayloads[TEvent]): void => {
+  ): Unsubscribe => {
+    const listener = (_event: IpcRendererEvent, payload: IpcEventPayloads[TEvent]) => {
       callback(payload);
     };
     ipcRenderer.on(event, listener);

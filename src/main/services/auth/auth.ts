@@ -5,6 +5,7 @@ import { API_ROUTES } from '@shared/constants';
 import {
   type Account,
   AccountSchema,
+  LOGIN_ERROR_CODE,
   type LoginPayload,
   type LoginResult,
   StrapiAuthOkSchema,
@@ -41,20 +42,20 @@ export const login = async (payload: LoginPayload): Promise<LoginResult> => {
 
     if (!response.ok) {
       if (response.status === HTTP_TOO_MANY_REQUESTS) {
-        return { ok: false, error: 'RATE_LIMITED' };
+        return { ok: false, error: LOGIN_ERROR_CODE.RateLimited };
       }
       if (isAuthFailureStatus(response.status)) {
-        return { ok: false, error: 'INVALID_CREDENTIALS' };
+        return { ok: false, error: LOGIN_ERROR_CODE.InvalidCredentials };
       }
       logger.warn(`Login failed with status ${response.status}`);
-      return { ok: false, error: 'UNKNOWN' };
+      return { ok: false, error: LOGIN_ERROR_CODE.Unknown };
     }
 
     const raw: unknown = await response.json();
     const parsed = StrapiAuthOkSchema.safeParse(raw);
     if (!parsed.success) {
       logger.warn('Login response did not match schema', parsed.error.format());
-      return { ok: false, error: 'UNKNOWN' };
+      return { ok: false, error: LOGIN_ERROR_CODE.Unknown };
     }
 
     const user = normalizeAccount(parsed.data.user);
@@ -62,7 +63,7 @@ export const login = async (payload: LoginPayload): Promise<LoginResult> => {
     return { ok: true, user };
   } catch (error) {
     logger.error('Login network error', error);
-    return { ok: false, error: 'NETWORK_ERROR' };
+    return { ok: false, error: LOGIN_ERROR_CODE.NetworkError };
   }
 };
 

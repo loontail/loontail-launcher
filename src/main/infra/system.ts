@@ -2,22 +2,21 @@ import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { totalmem } from 'node:os';
 import { basename, join } from 'node:path';
 import { scopedLogger } from '@main/infra/logger';
-import { RAM_STEP_MB } from '@shared/constants';
+import { RAM_MIN_MB, RAM_STEP_MB } from '@shared/constants';
 import type { DiskInfo, PickedFolder } from '@shared/contracts/system';
 import { type BrowserWindow, dialog, shell } from 'electron';
 
 const BYTES_PER_MB = 1024 * 1024;
-const MIN_RAM_MB = 1024;
 
 const logger = scopedLogger('system');
 
 export const getRamRange = (): number[] => {
   const totalMb = Math.floor(totalmem() / BYTES_PER_MB);
   const range: number[] = [];
-  for (let value = MIN_RAM_MB; value <= totalMb; value += RAM_STEP_MB) {
+  for (let value = RAM_MIN_MB; value <= totalMb; value += RAM_STEP_MB) {
     range.push(value);
   }
-  if (range.length === 0) range.push(MIN_RAM_MB);
+  if (range.length === 0) range.push(RAM_MIN_MB);
   return range;
 };
 

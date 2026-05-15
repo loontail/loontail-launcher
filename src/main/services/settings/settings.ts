@@ -1,5 +1,6 @@
 import { join } from 'node:path';
 import { getStoredLauncherSettings, setStoredLauncherSettings } from '@main/infra/store';
+import type { BundleSlug } from '@shared/contracts/ids';
 import type {
   ClientRuntimeRef,
   ClientSettingsOverride,
@@ -43,17 +44,17 @@ export const patchLauncherSettings = (patch: PatchLauncherSettings): LauncherSet
 };
 
 export const setClientOverride = (
-  bundleSlug: string,
+  bundleSlug: BundleSlug,
   patch: ClientSettingsOverride,
 ): LauncherSettings => writeSettings(setClientOverridePure(getSettings(), bundleSlug, patch));
 
-export const clearClientOverride = (bundleSlug: string): LauncherSettings =>
+export const clearClientOverride = (bundleSlug: BundleSlug): LauncherSettings =>
   writeSettings(clearClientOverridesPure(getSettings(), bundleSlug));
 
-export const removeClientEntry = (bundleSlug: string): LauncherSettings =>
+export const removeClientEntry = (bundleSlug: BundleSlug): LauncherSettings =>
   writeSettings(removeClientEntryPure(getSettings(), bundleSlug));
 
-export const getClientBundleDir = (bundleSlug: string): string => {
+export const getClientBundleDir = (bundleSlug: BundleSlug): string => {
   const settings = getSettings();
   const override = settings.clients[bundleSlug]?.storage?.clientFolder;
   if (override) return override;
@@ -63,10 +64,10 @@ export const getClientBundleDir = (bundleSlug: string): string => {
 
 export const getClientsFolder = (): string => getSettings().storage.clientsFolder;
 
-export const getClientRuntime = (bundleSlug: string): ClientRuntimeRef | undefined =>
+export const getClientRuntime = (bundleSlug: BundleSlug): ClientRuntimeRef | undefined =>
   getSettings().clients[bundleSlug]?.runtime;
 
-export const setClientRuntime = (bundleSlug: string, runtime: ClientRuntimeRef): void => {
+export const setClientRuntime = (bundleSlug: BundleSlug, runtime: ClientRuntimeRef): void => {
   const current = getSettings();
   const existing = current.clients[bundleSlug] ?? {};
   if (

@@ -23,6 +23,18 @@
     "openSettings": "Open settings",
     "back": "Back"
   },
+  "clients": {
+    "sectionTitle": "Available clients",
+    "empty": "No clients available",
+    "screenshots": "Screenshots",
+    "about": "About",
+    "servers": "Available servers"
+  },
+  "servers": {
+    "online": "Online",
+    "offline": "All servers offline",
+    "serverOffline": "Offline"
+  },
   "settings": {
     "tabs": {
       "account": "Account",
@@ -70,6 +82,7 @@
       "updates": "Updates",
       "updatesDesc": "Check for a new launcher version",
       "check": "Check",
+      "version": "Version",
       "interface": "Interface",
       "language": "Language",
       "languageDesc": "Change the interface language",

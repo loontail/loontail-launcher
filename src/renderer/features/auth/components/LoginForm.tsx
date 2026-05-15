@@ -1,29 +1,31 @@
 import { Button } from '@renderer/shared/ui/Button';
 import { Input } from '@renderer/shared/ui/Input';
-import type { LoginErrorCode } from '@shared/contracts';
+import { LOGIN_ERROR_CODE, type LoginErrorCode } from '@shared/contracts';
 import { Loader2 } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useLogin } from '../hooks';
 
-const ERROR_COPY: Record<LoginErrorCode, string> = {
-  INVALID_CREDENTIALS: 'Invalid login or password.',
-  NETWORK_ERROR: 'Could not reach the server. Check your connection.',
-  RATE_LIMITED: 'Too many sign-in attempts. Please wait a minute and try again.',
-  UNKNOWN: 'Something went wrong. Try again later.',
+const ERROR_COPY_KEYS: Record<LoginErrorCode, string> = {
+  [LOGIN_ERROR_CODE.InvalidCredentials]: 'auth.errorInvalid',
+  [LOGIN_ERROR_CODE.NetworkError]: 'auth.errorNetwork',
+  [LOGIN_ERROR_CODE.RateLimited]: 'auth.errorRateLimited',
+  [LOGIN_ERROR_CODE.Unknown]: 'auth.errorUnknown',
 };
 
 export const LoginForm = () => {
+  const { t } = useTranslation();
   const { submit, isPending } = useLogin();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [errorCode, setErrorCode] = useState<LoginErrorCode | null>(null);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setError(null);
+    setErrorCode(null);
     const result = await submit({ identifier, password });
     if (!result.ok) {
-      setError(ERROR_COPY[result.error]);
+      setErrorCode(result.error);
     }
   };
 
@@ -36,15 +38,13 @@ export const LoginForm = () => {
         className="flex w-full max-w-sm flex-col gap-4 rounded-lg border border-border bg-card p-6"
       >
         <div className="flex flex-col gap-1">
-          <h1 className="text-lg font-semibold text-card-foreground">Sign in</h1>
-          <p className="text-xs text-muted-foreground">
-            Use your Loontail account to launch the game.
-          </p>
+          <h1 className="text-lg font-semibold text-card-foreground">{t('auth.signIn')}</h1>
+          <p className="text-xs text-muted-foreground">{t('auth.description')}</p>
         </div>
 
         <div className="flex flex-col gap-2">
           <label htmlFor="login-identifier" className="text-xs font-medium text-foreground">
-            Username or email
+            {t('auth.identifier')}
           </label>
           <Input
             id="login-identifier"
@@ -58,7 +58,7 @@ export const LoginForm = () => {
 
         <div className="flex flex-col gap-2">
           <label htmlFor="login-password" className="text-xs font-medium text-foreground">
-            Password
+            {t('auth.password')}
           </label>
           <Input
             id="login-password"
@@ -70,10 +70,12 @@ export const LoginForm = () => {
           />
         </div>
 
-        {error !== null && <p className="text-xs text-destructive">{error}</p>}
+        {errorCode !== null && (
+          <p className="text-xs text-destructive">{t(ERROR_COPY_KEYS[errorCode])}</p>
+        )}
 
         <Button type="submit" disabled={isDisabled} className="w-full">
-          {isPending ? <Loader2 className="size-4 animate-spin" /> : 'Sign in'}
+          {isPending ? <Loader2 className="size-4 animate-spin" /> : t('auth.submit')}
         </Button>
       </form>
     </div>

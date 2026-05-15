@@ -15,7 +15,14 @@ export const StrapiAuthOkSchema = z.object({
 
 export type StrapiAuthOk = z.infer<typeof StrapiAuthOkSchema>;
 
-export type LoginErrorCode = 'NETWORK_ERROR' | 'INVALID_CREDENTIALS' | 'RATE_LIMITED' | 'UNKNOWN';
+export const LOGIN_ERROR_CODE = {
+  NetworkError: 'NETWORK_ERROR',
+  InvalidCredentials: 'INVALID_CREDENTIALS',
+  RateLimited: 'RATE_LIMITED',
+  Unknown: 'UNKNOWN',
+} as const;
+
+export type LoginErrorCode = (typeof LOGIN_ERROR_CODE)[keyof typeof LOGIN_ERROR_CODE];
 
 export type LoginResult = { ok: true; user: Account } | { ok: false; error: LoginErrorCode };
 

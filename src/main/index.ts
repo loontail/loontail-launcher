@@ -5,6 +5,8 @@ import { createRouter } from '@main/ipc/router';
 import { createTrustedSenderCheck } from '@main/ipc/trustedSender';
 import { createAppService } from '@main/services/app';
 import { createAuthService } from '@main/services/auth';
+import { createClientsService } from '@main/services/clients';
+import { createServersService } from '@main/services/servers';
 import { createSettingsService } from '@main/services/settings';
 import { createSkinService } from '@main/services/skin';
 import { createSystemService } from '@main/services/system';
@@ -48,12 +50,16 @@ const start = async (): Promise<void> => {
   const systemService = createSystemService(router, mainWindow);
   const settingsService = createSettingsService(router, mainWindow);
   const skinService = createSkinService(router);
+  const clientsService = createClientsService(router);
+  const serversService = createServersService(router);
 
   await appService.init();
   await authService.init();
   await systemService.init();
   await settingsService.init();
   await skinService.init();
+  await clientsService.init();
+  await serversService.init();
 
   seedLauncherSettings();
 
@@ -70,6 +76,8 @@ const start = async (): Promise<void> => {
   });
 
   app.on('before-quit', () => {
+    void serversService.dispose();
+    void clientsService.dispose();
     void skinService.dispose();
     void settingsService.dispose();
     void systemService.dispose();

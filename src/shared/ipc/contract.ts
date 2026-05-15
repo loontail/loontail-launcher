@@ -1,11 +1,15 @@
 import type { Account } from '@shared/contracts/account';
 import type { LoginPayload, LoginResult } from '@shared/contracts/auth';
+import type { Client } from '@shared/contracts/client';
+import type { BundleSlug } from '@shared/contracts/ids';
+import type { ServerStatus } from '@shared/contracts/serverStatus';
 import type {
   LauncherSettings,
   PatchLauncherSettings,
   SetClientOverridePayload,
 } from '@shared/contracts/settings';
 import type { UploadSkinPayload, UploadSkinResult } from '@shared/contracts/skin';
+import type { StrapiList } from '@shared/contracts/strapi';
 import type { DiskInfo, PickedFolder } from '@shared/contracts/system';
 
 export type IpcContract = {
@@ -16,9 +20,9 @@ export type IpcContract = {
   'settings.get': { args: undefined; result: LauncherSettings };
   'settings.setLauncher': { args: PatchLauncherSettings; result: LauncherSettings };
   'settings.setClientOverride': { args: SetClientOverridePayload; result: LauncherSettings };
-  'settings.clearClientOverrides': { args: string; result: LauncherSettings };
+  'settings.clearClientOverrides': { args: BundleSlug; result: LauncherSettings };
   'settings.chooseClientFolder': {
-    args: string;
+    args: BundleSlug;
     result: { settings: LauncherSettings; installed: boolean } | null;
   };
   'system.getRamRange': { args: undefined; result: number[] };
@@ -27,6 +31,8 @@ export type IpcContract = {
   'system.openPath': { args: string; result: void };
   'media.uploadSkin': { args: UploadSkinPayload; result: UploadSkinResult };
   'media.clearSkin': { args: undefined; result: void };
+  'clients.list': { args: { locale?: string } | undefined; result: StrapiList<Client> };
+  'servers.getStatuses': { args: string[]; result: ServerStatus[] };
 };
 
 export type IpcArgs<TChannel extends keyof IpcContract> = IpcContract[TChannel]['args'];

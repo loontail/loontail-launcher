@@ -1,10 +1,25 @@
 import { mainConfig } from '@main/config';
 import { buildMediaUrl, httpRequest } from '@main/infra/http';
-import { API_ROUTES } from '@shared/constants';
+import { API_PATH_PREFIX, API_ROUTES } from '@shared/constants';
+import type { UserId } from '@shared/contracts/ids';
 import type { SkinKind } from '@shared/contracts/skin';
+import { z } from 'zod';
 
 export type SkinFields = { skin: string | null; cape: string | null };
 export type UploadedAsset = { id: number; userId: number; fileUrl: string };
+
+const SkinFieldsResponseSchema = z
+  .object({
+    skin: z.union([z.string(), z.null()]).optional(),
+    cape: z.union([z.string(), z.null()]).optional(),
+  })
+  .passthrough();
+
+const UploadedAssetSchema = z.object({
+  id: z.number(),
+  userId: z.number(),
+  fileUrl: z.string(),
+});
 
 const readErrorBody = async (response: Response): Promise<string> => {
   try {
@@ -17,17 +32,18 @@ const readErrorBody = async (response: Response): Promise<string> => {
 
 export { buildMediaUrl };
 
-export const getUserSkinFields = async (userId: number): Promise<SkinFields> => {
+export const getUserSkinFields = async (userId: UserId): Promise<SkinFields> => {
   const response = await httpRequest(API_ROUTES.users.byId(userId));
   if (!response.ok) {
     throw new Error(`getUserSkinFields HTTP ${response.status}: ${await readErrorBody(response)}`);
   }
-  const user = (await response.json()) as { skin?: string | null; cape?: string | null };
-  return { skin: user.skin ?? null, cape: user.cape ?? null };
+  const raw: unknown = await response.json();
+  const parsed = SkinFieldsResponseSchema.parse(raw);
+  return { skin: parsed.skin ?? null, cape: parsed.cape ?? null };
 };
 
 export const updateUserSkinFields = async (
-  userId: number,
+  userId: UserId,
   fields: Partial<SkinFields>,
 ): Promise<void> => {
   const response = await httpRequest(API_ROUTES.users.byId(userId), {
@@ -42,7 +58,7 @@ export const updateUserSkinFields = async (
 };
 
 export const uploadSkinFile = async (
-  userId: number,
+  userId: UserId,
   type: SkinKind,
   buffer: Buffer,
   username?: string,
@@ -52,7 +68,7 @@ export const uploadSkinFile = async (
   formData.append('file', blob, `${type}_${userId}.png`);
   if (username) formData.append('username', username);
 
-  const endpoint = `${mainConfig.apiUrl}/api${API_ROUTES.skinsRegistry.upload(type, userId)}`;
+  const endpoint = `${mainConfig.apiUrl}${API_PATH_PREFIX}${API_ROUTES.skinsRegistry.upload(type, userId)}`;
   const response = await fetch(endpoint, {
     method: 'POST',
     body: formData,
@@ -61,7 +77,8 @@ export const uploadSkinFile = async (
   if (!response.ok) {
     throw new Error(`uploadSkinFile HTTP ${response.status}: ${await readErrorBody(response)}`);
   }
-  return (await response.json()) as UploadedAsset;
+  const raw: unknown = await response.json();
+  return UploadedAssetSchema.parse(raw);
 };
 
 export const fetchAssetBytes = async (fileUrl: string): Promise<Buffer> => {

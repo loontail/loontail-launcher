@@ -1,16 +1,14 @@
+import { useAppVersion } from '@renderer/features/app';
 import { Button } from '@renderer/shared/ui/Button';
-import { IPC_CHANNELS } from '@shared/ipc';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { QUERY_KEY_ROOTS } from '@shared/constants';
+import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Group } from '../Group';
 import { LanguageSwitcher } from '../LanguageSwitcher';
 import { Row } from '../Row';
 
 const VersionRow = () => {
-  const versionQuery = useQuery({
-    queryKey: ['app', 'version'],
-    queryFn: () => window.api.invoke(IPC_CHANNELS.appGetVersion, undefined),
-  });
+  const versionQuery = useAppVersion();
   return (
     <span className="text-sm text-muted-foreground">
       {versionQuery.isPending ? '…' : (versionQuery.data ?? 'unknown')}
@@ -26,7 +24,7 @@ export const LauncherSection = () => {
     queryClient.removeQueries({
       predicate: (query) => {
         const [first] = query.queryKey;
-        return first !== 'auth';
+        return first !== QUERY_KEY_ROOTS.auth;
       },
     });
   };
@@ -56,7 +54,7 @@ export const LauncherSection = () => {
             </Button>
           }
         />
-        <Row label="Version" right={<VersionRow />} />
+        <Row label={t('settings.launcher.version')} right={<VersionRow />} />
       </Group>
 
       <Group title={t('settings.launcher.interface')}>

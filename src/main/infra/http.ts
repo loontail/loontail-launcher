@@ -1,6 +1,5 @@
 import { mainConfig } from '@main/config';
-
-const API_PATH_PREFIX = '/api';
+import { API_PATH_PREFIX } from '@shared/constants';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 

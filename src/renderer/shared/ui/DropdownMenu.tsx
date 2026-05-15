@@ -1,11 +1,15 @@
 import { cn } from '@renderer/shared/lib/cn';
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, createContext, useContext, useEffect, useRef, useState } from 'react';
 
 type DropdownMenuProps = {
   trigger: ReactNode;
   children: ReactNode;
   align?: 'start' | 'end';
 };
+
+const DropdownMenuContext = createContext<() => void>(() => {});
+
+const useDropdownMenuClose = () => useContext(DropdownMenuContext);
 
 export const DropdownMenu = ({ trigger, children, align = 'end' }: DropdownMenuProps) => {
   const [open, setOpen] = useState(false);
@@ -57,10 +61,10 @@ type DropdownMenuItemProps = {
 
 export const DropdownMenuItem = ({ onSelect, children }: DropdownMenuItemProps) => {
   const closeMenu = useDropdownMenuClose();
-  const handleClick = useCallback(() => {
+  const handleClick = () => {
     onSelect();
     closeMenu();
-  }, [onSelect, closeMenu]);
+  };
 
   return (
     <button
@@ -72,9 +76,3 @@ export const DropdownMenuItem = ({ onSelect, children }: DropdownMenuItemProps) 
     </button>
   );
 };
-
-import { createContext, useContext } from 'react';
-
-const DropdownMenuContext = createContext<() => void>(() => {});
-
-const useDropdownMenuClose = (): (() => void) => useContext(DropdownMenuContext);

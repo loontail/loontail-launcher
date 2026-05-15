@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { BundleSlugSchema } from './ids';
+import type { BundleSlug } from './ids';
 
 export const MemorySettingsSchema = z.object({
   allocatedRamMb: z.number().int().nonnegative(),
@@ -41,6 +43,9 @@ export const LauncherSettingsSchema = z.object({
   memory: MemorySettingsSchema,
   storage: StorageSettingsSchema,
   launch: LaunchSettingsSchema,
+  // Keys are persisted as plain strings in electron-store. The brand is enforced at
+  // function arg / payload boundaries; the record stays string-keyed to permit lookup
+  // with any BundleSlug (string & brand is assignable to string).
   clients: z.record(z.string(), ClientSettingsOverrideSchema),
 });
 
@@ -59,11 +64,14 @@ export type ResolvedClientSettings = {
 };
 
 export const SetClientOverridePayloadSchema = z.object({
-  bundleSlug: z.string().min(1),
+  bundleSlug: BundleSlugSchema,
   patch: ClientSettingsOverrideSchema,
 });
 
-export type SetClientOverridePayload = z.infer<typeof SetClientOverridePayloadSchema>;
+export type SetClientOverridePayload = {
+  bundleSlug: BundleSlug;
+  patch: ClientSettingsOverride;
+};
 
 export const PatchLauncherSettingsSchema = z
   .object({

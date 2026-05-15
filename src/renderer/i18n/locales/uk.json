@@ -23,6 +23,18 @@
     "openSettings": "Відкрити налаштування",
     "back": "Назад"
   },
+  "clients": {
+    "sectionTitle": "Доступні клієнти",
+    "empty": "Немає доступних клієнтів",
+    "screenshots": "Скриншоти",
+    "about": "Про клієнт",
+    "servers": "Доступні сервери"
+  },
+  "servers": {
+    "online": "Онлайн",
+    "offline": "Усі сервери офлайн",
+    "serverOffline": "Офлайн"
+  },
   "settings": {
     "tabs": {
       "account": "Акаунт",
@@ -70,6 +82,7 @@
       "updates": "Оновлення",
       "updatesDesc": "Перевірити нову версію лаунчера",
       "check": "Перевірити",
+      "version": "Версія",
       "interface": "Інтерфейс",
       "language": "Мова",
       "languageDesc": "Змінити мову інтерфейсу",

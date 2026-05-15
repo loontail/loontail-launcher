@@ -1,13 +1,12 @@
+import { QUERY_KEYS } from '@shared/constants';
+import type { BundleSlug } from '@shared/contracts/ids';
 import type {
   ClientSettingsOverride,
   LauncherSettings,
   PatchLauncherSettings,
-  ResolvedClientSettings,
 } from '@shared/contracts/settings';
-import type { DiskInfo } from '@shared/contracts/system';
 import { resolveClientSettings } from '@shared/domain/settings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo } from 'react';
 import {
   chooseClientFolder,
   clearClientOverrides,
@@ -17,93 +16,71 @@ import {
 } from './api';
 import { getDiskSpace, getRamRange, openPath, pickInstallFolder } from './systemApi';
 
-const SETTINGS_KEY = ['settings'] as const;
-const RAM_RANGE_KEY = ['system', 'ramRange'] as const;
-const DISK_SPACE_KEY = (path: string): readonly unknown[] => ['system', 'diskSpace', path];
-
-export const useLauncherSettings = (): {
-  settings: LauncherSettings | undefined;
-  isPending: boolean;
-} => {
+export const useLauncherSettings = () => {
   const query = useQuery({
-    queryKey: SETTINGS_KEY,
+    queryKey: QUERY_KEYS.settings.root,
     queryFn: getSettings,
     staleTime: Number.POSITIVE_INFINITY,
   });
   return { settings: query.data, isPending: query.isPending };
 };
 
-export const useSetLauncher = (): {
-  mutate: (patch: PatchLauncherSettings) => Promise<LauncherSettings>;
-  isPending: boolean;
-} => {
+export const useSetLauncher = () => {
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: setLauncher,
     onSuccess: (next) => {
-      queryClient.setQueryData(SETTINGS_KEY, next);
+      queryClient.setQueryData(QUERY_KEYS.settings.root, next);
     },
   });
   return { mutate: mutation.mutateAsync, isPending: mutation.isPending };
 };
 
-export const useSetClientOverride = (): {
-  mutate: (args: {
-    bundleSlug: string;
-    patch: ClientSettingsOverride;
-  }) => Promise<LauncherSettings>;
-  isPending: boolean;
-} => {
+export const useSetClientOverride = () => {
   const queryClient = useQueryClient();
   const mutation = useMutation({
-    mutationFn: ({ bundleSlug, patch }: { bundleSlug: string; patch: ClientSettingsOverride }) =>
-      setClientOverride(bundleSlug, patch),
+    mutationFn: ({
+      bundleSlug,
+      patch,
+    }: {
+      bundleSlug: BundleSlug;
+      patch: ClientSettingsOverride;
+    }) => setClientOverride(bundleSlug, patch),
     onSuccess: (next) => {
-      queryClient.setQueryData(SETTINGS_KEY, next);
+      queryClient.setQueryData(QUERY_KEYS.settings.root, next);
     },
   });
   return { mutate: mutation.mutateAsync, isPending: mutation.isPending };
 };
 
-export const useClearClientOverrides = (): {
-  mutate: (bundleSlug: string) => Promise<LauncherSettings>;
-  isPending: boolean;
-} => {
+export const useClearClientOverrides = () => {
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: clearClientOverrides,
     onSuccess: (next) => {
-      queryClient.setQueryData(SETTINGS_KEY, next);
+      queryClient.setQueryData(QUERY_KEYS.settings.root, next);
     },
   });
   return { mutate: mutation.mutateAsync, isPending: mutation.isPending };
 };
 
-export const useChooseClientFolder = (): {
-  mutate: (
-    bundleSlug: string,
-  ) => Promise<{ settings: LauncherSettings; installed: boolean } | null>;
-  isPending: boolean;
-} => {
+export const useChooseClientFolder = () => {
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn: chooseClientFolder,
     onSuccess: (result) => {
-      if (result) queryClient.setQueryData(SETTINGS_KEY, result.settings);
+      if (result) queryClient.setQueryData(QUERY_KEYS.settings.root, result.settings);
     },
   });
   return { mutate: mutation.mutateAsync, isPending: mutation.isPending };
 };
 
-export const usePickInstallFolder = (): {
-  mutate: () => Promise<void>;
-  isPending: boolean;
-} => {
+export const usePickInstallFolder = () => {
   const queryClient = useQueryClient();
-  const setLauncherMutation = useMutation({
+  const setLauncherMutation = useMutation<LauncherSettings, Error, PatchLauncherSettings>({
     mutationFn: setLauncher,
     onSuccess: (next) => {
-      queryClient.setQueryData(SETTINGS_KEY, next);
+      queryClient.setQueryData(QUERY_KEYS.settings.root, next);
     },
   });
   const mutation = useMutation({
@@ -111,31 +88,26 @@ export const usePickInstallFolder = (): {
       const picked = await pickInstallFolder();
       if (!picked) return;
       await setLauncherMutation.mutateAsync({ storage: { clientsFolder: picked.path } });
-      void queryClient.invalidateQueries({ queryKey: ['system', 'diskSpace'] });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.system.diskSpaceRoot });
     },
   });
   return { mutate: mutation.mutateAsync, isPending: mutation.isPending };
 };
 
-export const useOpenPath = (): ((path: string) => Promise<void>) => openPath;
+export const useOpenPath = () => openPath;
 
-export const useRamRange = (): { range: number[] | undefined; isPending: boolean } => {
+export const useRamRange = () => {
   const query = useQuery({
-    queryKey: RAM_RANGE_KEY,
+    queryKey: QUERY_KEYS.system.ramRange,
     queryFn: getRamRange,
     staleTime: Number.POSITIVE_INFINITY,
   });
   return { range: query.data, isPending: query.isPending };
 };
 
-export const useDiskSpace = (
-  path: string | undefined | null,
-): {
-  info: DiskInfo | undefined;
-  isPending: boolean;
-} => {
+export const useDiskSpace = (path: string | undefined | null) => {
   const query = useQuery({
-    queryKey: DISK_SPACE_KEY(path ?? ''),
+    queryKey: QUERY_KEYS.system.diskSpace(path ?? ''),
     queryFn: () => getDiskSpace(path ?? ''),
     enabled: typeof path === 'string' && path.length > 0,
     staleTime: 30_000,
@@ -143,12 +115,7 @@ export const useDiskSpace = (
   return { info: query.data, isPending: query.isPending };
 };
 
-export const useResolveFor = (
-  bundleSlug: string | null | undefined,
-): ResolvedClientSettings | null => {
+export const useResolveFor = (bundleSlug: BundleSlug | null | undefined) => {
   const { settings } = useLauncherSettings();
-  return useMemo(
-    () => (settings ? resolveClientSettings(settings, bundleSlug) : null),
-    [settings, bundleSlug],
-  );
+  return settings ? resolveClientSettings(settings, bundleSlug) : null;
 };

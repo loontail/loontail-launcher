@@ -7,6 +7,7 @@ import {
   setClientOverride,
 } from '@main/services/settings/settings';
 import { ERROR_CODES } from '@shared/constants';
+import { BundleSlugSchema } from '@shared/contracts/ids';
 import {
   PatchLauncherSettingsSchema,
   SetClientOverridePayloadSchema,
@@ -42,23 +43,25 @@ export const registerSettingsRoutes = (router: Router, mainWindow: BrowserWindow
   });
 
   router.handle(IPC_CHANNELS.settingsClearClientOverrides, (rawArgs) => {
-    if (typeof rawArgs !== 'string' || rawArgs.length === 0) {
+    const parsed = BundleSlugSchema.safeParse(rawArgs);
+    if (!parsed.success) {
       throw {
         code: ERROR_CODES.SettingsInvalidPayload,
         message: 'bundleSlug must be a non-empty string',
       };
     }
-    return clearClientOverride(rawArgs);
+    return clearClientOverride(parsed.data);
   });
 
   router.handle(IPC_CHANNELS.settingsChooseClientFolder, async (rawArgs) => {
-    if (typeof rawArgs !== 'string' || rawArgs.length === 0) {
+    const parsed = BundleSlugSchema.safeParse(rawArgs);
+    if (!parsed.success) {
       throw {
         code: ERROR_CODES.SettingsInvalidPayload,
         message: 'bundleSlug must be a non-empty string',
       };
     }
-    const bundleSlug = rawArgs;
+    const bundleSlug = parsed.data;
     const picked = await pickFolderWithSuffix(mainWindow, bundleSlug);
     if (!picked) return null;
     const next = setClientOverride(bundleSlug, { storage: { clientFolder: picked.path } });

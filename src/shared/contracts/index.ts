@@ -1,6 +1,15 @@
 export { AccountSchema } from './account';
 export type { Account } from './account';
-export { LoginPayloadSchema, StrapiAuthOkSchema } from './auth';
+export {
+  BundleSlugSchema,
+  ClientIdSchema,
+  UserIdSchema,
+  asBundleSlug,
+  asClientId,
+  asUserId,
+} from './ids';
+export type { BundleSlug, ClientId, UserId } from './ids';
+export { LOGIN_ERROR_CODE, LoginPayloadSchema, StrapiAuthOkSchema } from './auth';
 export type {
   AuthState,
   LoginErrorCode,
@@ -33,3 +42,21 @@ export { DiskInfoSchema, PickedFolderSchema } from './system';
 export type { DiskInfo, PickedFolder } from './system';
 export { SKIN_KINDS, SkinKindSchema, UploadSkinPayloadSchema } from './skin';
 export type { SkinKind, SkinPayload, UploadSkinPayload, UploadSkinResult } from './skin';
+export { ClientResponseSchema, KeywordSchema } from './client';
+export type { Client, ClientResponse, Keyword } from './client';
+export { ServerStatusSchema } from './serverStatus';
+export type { ServerStatus } from './serverStatus';
+export {
+  ServerSchema,
+  StrapiEntitySchema,
+  StrapiImageFormatSchema,
+  StrapiListSchema,
+  StrapiMediaSchema,
+} from './strapi';
+export type {
+  Server,
+  StrapiEntity,
+  StrapiImageFormat,
+  StrapiList,
+  StrapiMedia,
+} from './strapi';

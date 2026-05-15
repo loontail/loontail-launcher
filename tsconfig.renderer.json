@@ -8,7 +8,8 @@
     "types": [],
     "paths": {
       "@shared/*": ["src/shared/*"],
-      "@renderer/*": ["src/renderer/*"]
+      "@renderer/*": ["src/renderer/*"],
+      "@splidejs/react-splide": ["node_modules/@splidejs/react-splide/dist/types/index.d.ts"]
     }
   },
   "include": [
