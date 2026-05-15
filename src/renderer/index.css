@@ -72,6 +72,32 @@
   padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
 }
 
+/* Frosted-glass surface with a subtle film-grain texture.
+   Apply to any block (modal panel, popover, sheet) to get the same look.
+   Requires the element to participate in the stacking context (positioned children
+   inside still need their own `position` if they should sit above the grain).
+   The launcher is dark-only today (see docs/ui-guideline.md §7); if a light
+   theme lands later, swap the background fill and noise tint inside this rule. */
+@utility glass {
+  position: relative;
+  isolation: isolate;
+  background-color: hsl(0 0% 0% / 0.55);
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    border-radius: inherit;
+    opacity: 0.18;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='2.4' numOctaves='1' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    background-size: 128px 128px;
+  }
+}
+
 html,
 body,
 #root {
@@ -83,6 +109,26 @@ body {
   background: var(--color-background);
   color: var(--color-foreground);
   -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Inputs and explicitly opt-in containers stay selectable so users can copy errors,
+   paste into login forms, etc. */
+input,
+textarea,
+[contenteditable="true"],
+.selectable,
+.selectable * {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+/* Block native drag-image and drop targets for all <img> tags. */
+img {
+  -webkit-user-drag: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 * {

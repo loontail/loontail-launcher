@@ -3,7 +3,7 @@ import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persist
 import type { PersistQueryClientOptions } from '@tanstack/react-query-persist-client';
 
 const STORAGE_KEY = 'loontail-query-cache-v1';
-const MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+export const QUERY_PERSIST_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const THROTTLE_MS = 1000;
 
 // Roots whose values should always be refetched on launch — never persist them.
@@ -17,7 +17,7 @@ const persister = createSyncStoragePersister({
 
 export const persistOptions: Omit<PersistQueryClientOptions, 'queryClient'> = {
   persister,
-  maxAge: MAX_AGE_MS,
+  maxAge: QUERY_PERSIST_MAX_AGE_MS,
   buster: STORAGE_KEY,
   dehydrateOptions: {
     shouldDehydrateQuery: (query) => {

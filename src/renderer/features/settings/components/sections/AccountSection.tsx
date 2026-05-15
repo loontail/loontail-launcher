@@ -1,10 +1,10 @@
 import { useCurrentUser, useLogout } from '@renderer/features/auth';
 import { SkinEditor } from '@renderer/features/skin';
 import { Button } from '@renderer/shared/ui/Button';
+import { SettingsGroup } from '@renderer/shared/ui/SettingsGroup';
+import { SettingsRow } from '@renderer/shared/ui/SettingsRow';
 import { Loader2, LogOut } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { Group } from '../Group';
-import { Row } from '../Row';
 
 const SKIN_VIEWER_WIDTH = 170;
 
@@ -20,8 +20,8 @@ export const AccountSection = () => {
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col gap-3">
-        <Group title={t('settings.account.profile')}>
-          <Row
+        <SettingsGroup title={t('settings.account.profile')}>
+          <SettingsRow
             label={t('settings.account.username')}
             right={
               <span className="truncate text-sm font-medium text-foreground">
@@ -29,7 +29,7 @@ export const AccountSection = () => {
               </span>
             }
           />
-          <Row
+          <SettingsRow
             label={t('settings.account.email')}
             right={
               <span className="truncate text-sm text-muted-foreground" title={user?.email}>
@@ -37,11 +37,11 @@ export const AccountSection = () => {
               </span>
             }
           />
-          <Row
+          <SettingsRow
             label={t('settings.account.password')}
             right={<span className="text-sm tracking-widest text-muted-foreground">••••••••</span>}
           />
-        </Group>
+        </SettingsGroup>
 
         <Button
           variant="destructive"

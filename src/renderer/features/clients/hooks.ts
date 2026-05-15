@@ -1,6 +1,7 @@
 import { QUERY_KEYS } from '@shared/constants';
 import type { Client } from '@shared/contracts/client';
 import { useQuery } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import { getClients, getServerStatuses } from './api';
 
 const CLIENTS_STALE_TIME_MS = 60_000;
@@ -17,7 +18,7 @@ export const useClientsList = () => {
     queryFn: () => getClients(),
     staleTime: CLIENTS_STALE_TIME_MS,
   });
-  const clients = sortClients(query.data?.data ?? []);
+  const clients = useMemo(() => sortClients(query.data?.data ?? []), [query.data]);
   return { clients, isPending: query.isPending, isError: query.isError };
 };
 

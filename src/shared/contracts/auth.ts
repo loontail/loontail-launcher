@@ -25,5 +25,3 @@ export const LOGIN_ERROR_CODE = {
 export type LoginErrorCode = (typeof LOGIN_ERROR_CODE)[keyof typeof LOGIN_ERROR_CODE];
 
 export type LoginResult = { ok: true; user: Account } | { ok: false; error: LoginErrorCode };
-
-export type AuthState = { kind: 'unauthenticated' } | { kind: 'authenticated'; user: Account };

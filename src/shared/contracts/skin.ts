@@ -5,11 +5,6 @@ export type SkinKind = (typeof SKIN_KINDS)[number];
 
 export const SkinKindSchema = z.enum(SKIN_KINDS);
 
-export type SkinPayload = {
-  skin?: string;
-  cape?: string;
-};
-
 export const UploadSkinPayloadSchema = z.object({
   type: SkinKindSchema,
   buffer: z.custom<ArrayBuffer>((value) => value instanceof ArrayBuffer, {

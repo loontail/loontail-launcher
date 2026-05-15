@@ -1,4 +1,5 @@
 import { directoryHasEntries, pickFolderWithSuffix } from '@main/infra/system';
+import { parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
 import {
   clearClientOverride,
@@ -6,7 +7,6 @@ import {
   patchLauncherSettings,
   setClientOverride,
 } from '@main/services/settings/settings';
-import { ERROR_CODES } from '@shared/constants';
 import { BundleSlugSchema } from '@shared/contracts/ids';
 import {
   PatchLauncherSettingsSchema,
@@ -19,49 +19,34 @@ export const registerSettingsRoutes = (router: Router, mainWindow: BrowserWindow
   router.handle(IPC_CHANNELS.settingsGet, () => getSettings());
 
   router.handle(IPC_CHANNELS.settingsSetLauncher, (rawArgs) => {
-    const parsed = PatchLauncherSettingsSchema.safeParse(rawArgs);
-    if (!parsed.success) {
-      throw {
-        code: ERROR_CODES.SettingsInvalidPayload,
-        message: 'Invalid launcher patch',
-        details: parsed.error.format(),
-      };
-    }
-    return patchLauncherSettings(parsed.data);
+    const patch = parseIpcArgs(PatchLauncherSettingsSchema, rawArgs, 'Invalid launcher patch');
+    return patchLauncherSettings(patch);
   });
 
   router.handle(IPC_CHANNELS.settingsSetClientOverride, (rawArgs) => {
-    const parsed = SetClientOverridePayloadSchema.safeParse(rawArgs);
-    if (!parsed.success) {
-      throw {
-        code: ERROR_CODES.SettingsInvalidPayload,
-        message: 'Invalid client override',
-        details: parsed.error.format(),
-      };
-    }
-    return setClientOverride(parsed.data.bundleSlug, parsed.data.patch);
+    const payload = parseIpcArgs(
+      SetClientOverridePayloadSchema,
+      rawArgs,
+      'Invalid client override',
+    );
+    return setClientOverride(payload.bundleSlug, payload.patch);
   });
 
   router.handle(IPC_CHANNELS.settingsClearClientOverrides, (rawArgs) => {
-    const parsed = BundleSlugSchema.safeParse(rawArgs);
-    if (!parsed.success) {
-      throw {
-        code: ERROR_CODES.SettingsInvalidPayload,
-        message: 'bundleSlug must be a non-empty string',
-      };
-    }
-    return clearClientOverride(parsed.data);
+    const bundleSlug = parseIpcArgs(
+      BundleSlugSchema,
+      rawArgs,
+      'bundleSlug must be a non-empty string',
+    );
+    return clearClientOverride(bundleSlug);
   });
 
   router.handle(IPC_CHANNELS.settingsChooseClientFolder, async (rawArgs) => {
-    const parsed = BundleSlugSchema.safeParse(rawArgs);
-    if (!parsed.success) {
-      throw {
-        code: ERROR_CODES.SettingsInvalidPayload,
-        message: 'bundleSlug must be a non-empty string',
-      };
-    }
-    const bundleSlug = parsed.data;
+    const bundleSlug = parseIpcArgs(
+      BundleSlugSchema,
+      rawArgs,
+      'bundleSlug must be a non-empty string',
+    );
     const picked = await pickFolderWithSuffix(mainWindow, bundleSlug);
     if (!picked) return null;
     const next = setClientOverride(bundleSlug, { storage: { clientFolder: picked.path } });

@@ -6,7 +6,6 @@ type NavigationState = {
   stack: View[];
   push: (view: View) => void;
   pop: () => void;
-  reset: () => void;
 };
 
 export const useNavigationStore = create<NavigationState>((set) => ({
@@ -19,7 +18,6 @@ export const useNavigationStore = create<NavigationState>((set) => ({
     set((state) => ({
       stack: state.stack.length > 1 ? state.stack.slice(0, -1) : state.stack,
     })),
-  reset: () => set({ stack: ['home'] }),
 }));
 
 export const useCurrentView = (): View =>

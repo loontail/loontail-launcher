@@ -1,5 +1,5 @@
+import { parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
-import { ERROR_CODES } from '@shared/constants';
 import { IPC_CHANNELS } from '@shared/ipc';
 import { z } from 'zod';
 import { getClients } from './clients';
@@ -12,10 +12,7 @@ const ListArgsSchema = z
 
 export const registerClientsRoutes = (router: Router): void => {
   router.handle(IPC_CHANNELS.clientsList, (args) => {
-    const parsed = ListArgsSchema.safeParse(args);
-    if (!parsed.success) {
-      throw { code: ERROR_CODES.IpcInvalidArgs, message: 'Invalid clients.list payload' };
-    }
-    return getClients(parsed.data?.locale);
+    const parsed = parseIpcArgs(ListArgsSchema, args, 'Invalid clients.list payload');
+    return getClients(parsed?.locale);
   });
 };

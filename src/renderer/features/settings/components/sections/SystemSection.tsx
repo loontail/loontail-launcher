@@ -3,11 +3,11 @@ import { useTranslation } from 'react-i18next';
 import {
   useDiskSpace,
   useLauncherSettings,
-  useOpenPath,
   usePickInstallFolder,
   useRamRange,
   useSetLauncher,
 } from '../../hooks';
+import { openPath } from '../../systemApi';
 import { FolderInfoBlock } from '../FolderInfoBlock';
 import { RamControl } from '../RamControl';
 
@@ -18,7 +18,6 @@ export const SystemSection = () => {
   const { range, isPending: rangePending } = useRamRange();
   const { mutate: setLauncherMutate, isPending: isSavingLauncher } = useSetLauncher();
   const { mutate: pickFolder } = usePickInstallFolder();
-  const openPath = useOpenPath();
   const { info: diskInfo } = useDiskSpace(settings?.storage.clientsFolder);
 
   const [pendingRam, setPendingRam] = useState<number | null>(null);

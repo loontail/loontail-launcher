@@ -2,14 +2,14 @@ import { cn } from '@renderer/shared/lib/cn';
 import { Switch } from '@renderer/shared/ui/Switch';
 import type { ReactNode } from 'react';
 
-type RowProps = {
+type SettingsRowProps = {
   label: ReactNode;
   description?: ReactNode | undefined;
   right?: ReactNode | undefined;
   onClick?: (() => void) | undefined;
 };
 
-export const Row = ({ label, description, right, onClick }: RowProps) => {
+export const SettingsRow = ({ label, description, right, onClick }: SettingsRowProps) => {
   const interactive = typeof onClick === 'function';
   const content = (
     <>
@@ -41,7 +41,7 @@ export const Row = ({ label, description, right, onClick }: RowProps) => {
   return <div className="flex items-center justify-between gap-4 px-4 py-3">{content}</div>;
 };
 
-type SwitchRowProps = {
+type SettingsSwitchRowProps = {
   label: ReactNode;
   description?: ReactNode | undefined;
   checked: boolean;
@@ -49,13 +49,13 @@ type SwitchRowProps = {
   disabled?: boolean;
 };
 
-export const SwitchRow = ({
+export const SettingsSwitchRow = ({
   label,
   description,
   checked,
   onCheckedChange,
   disabled,
-}: SwitchRowProps) => {
+}: SettingsSwitchRowProps) => {
   const isDisabled = disabled === true;
   return (
     <button

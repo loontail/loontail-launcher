@@ -1,11 +1,11 @@
 import { cn } from '@renderer/shared/lib/cn';
 import { Button } from '@renderer/shared/ui/Button';
+import { OverrideMark } from '@renderer/shared/ui/OverrideMark';
 import { Skeleton } from '@renderer/shared/ui/Skeleton';
 import type { DiskInfo } from '@shared/contracts/system';
 import { Folder, HardDrive } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { OverrideMark } from './OverrideMark';
 
 const BYTES_PER_GB = 1024 ** 3;
 const USAGE_DESTRUCTIVE_THRESHOLD = 0.9;

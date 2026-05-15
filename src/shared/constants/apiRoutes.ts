@@ -12,8 +12,6 @@ export const API_ROUTES = {
   },
   skinsRegistry: {
     upload: (type: SkinKind, userId: number) => `/skins-registry/${type}/${userId}`,
-    forPlayer: (userId: number) => `/skins-registry/player/${userId}`,
-    byKind: (type: SkinKind, userId: number) => `/skins-registry/${type}/${userId}`,
   },
   clients: {
     list: (params: { locale?: string } = {}) => {

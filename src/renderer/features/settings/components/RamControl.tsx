@@ -1,9 +1,9 @@
 import { Button } from '@renderer/shared/ui/Button';
+import { OverrideMark } from '@renderer/shared/ui/OverrideMark';
 import { Skeleton } from '@renderer/shared/ui/Skeleton';
 import { Slider } from '@renderer/shared/ui/Slider';
 import { Loader2, MemoryStick } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { OverrideMark } from './OverrideMark';
 
 type RamControlProps = {
   value: number;

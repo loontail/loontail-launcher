@@ -30,6 +30,18 @@
     "about": "About",
     "servers": "Available servers"
   },
+  "clientSettings": {
+    "title": "{{name}}",
+    "subtitle": "Per-client overrides",
+    "openAria": "Open client settings",
+    "close": "Close",
+    "clientFolder": "Client folder",
+    "clientFolderDesc": "Versions, mods, resource packs and configs for this client live here — separately from other clients.",
+    "openFolder": "Open",
+    "changeFolder": "Change",
+    "resetAll": "Reset to defaults",
+    "footnote": "* — differs from launcher defaults"
+  },
   "servers": {
     "online": "Online",
     "offline": "All servers offline",

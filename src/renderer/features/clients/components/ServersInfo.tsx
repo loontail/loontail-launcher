@@ -53,10 +53,15 @@ export const ServersInfo = ({ servers }: ServersInfoProps) => {
         if (!server) return null;
         const displayName = server.name ?? status.motd?.clean[0] ?? server.address;
 
+        const hasPlayerCount = status.online && status.players;
+
         return (
           <div
             key={server.address}
-            className="flex items-center justify-between gap-4 rounded-xl border border-edge bg-surface px-4 py-3 backdrop-blur-sm"
+            className={cn(
+              'flex items-center justify-between gap-4 rounded-xl border border-edge bg-surface px-4 py-3 backdrop-blur-sm',
+              !status.online && 'opacity-60',
+            )}
           >
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <span
@@ -78,13 +83,15 @@ export const ServersInfo = ({ servers }: ServersInfoProps) => {
             </div>
 
             <div className="flex shrink-0 items-center gap-2 text-[11px]">
-              {status.online && status.players ? (
-                <span className="tabular-nums text-glass/75">
-                  {status.players.online}
-                  <span className="text-glass/40"> / {status.players.max}</span>
-                </span>
-              ) : null}
-              <span className="text-glass/30">·</span>
+              {hasPlayerCount && status.players && (
+                <>
+                  <span className="tabular-nums text-glass/75">
+                    {status.players.online}
+                    <span className="text-glass/40"> / {status.players.max}</span>
+                  </span>
+                  <span className="text-glass/30">·</span>
+                </>
+              )}
               <span
                 className={cn(
                   'font-bold uppercase tracking-wider',

@@ -229,13 +229,3 @@ export const clearClientOverrides = (
   }
   return { ...settings, clients };
 };
-
-export const removeClientEntry = (
-  settings: LauncherSettings,
-  bundleSlug: BundleSlug,
-): LauncherSettings => {
-  if (!settings.clients[bundleSlug]) return settings;
-  const clients = { ...settings.clients };
-  delete clients[bundleSlug];
-  return { ...settings, clients };
-};

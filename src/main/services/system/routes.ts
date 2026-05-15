@@ -5,22 +5,22 @@ import {
   openPath,
   pickFolderWithSuffix,
 } from '@main/infra/system';
+import { parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
-import { ERROR_CODES, LAUNCHER_DIRNAME } from '@shared/constants';
+import { LAUNCHER_DIRNAME } from '@shared/constants';
 import { IPC_CHANNELS } from '@shared/ipc';
 import type { BrowserWindow } from 'electron';
+import { z } from 'zod';
+
+const PathArgSchema = z.string().min(1);
+const PATH_ERROR_MESSAGE = 'path must be a non-empty string';
 
 export const registerSystemRoutes = (router: Router, mainWindow: BrowserWindow): void => {
   router.handle(IPC_CHANNELS.systemGetRamRange, () => getRamRange());
 
   router.handle(IPC_CHANNELS.systemGetDiskSpace, (rawArgs) => {
-    if (typeof rawArgs !== 'string') {
-      throw {
-        code: ERROR_CODES.IpcInvalidArgs,
-        message: 'path must be a string',
-      };
-    }
-    return getDiskSpace(rawArgs);
+    const path = parseIpcArgs(PathArgSchema, rawArgs, PATH_ERROR_MESSAGE);
+    return getDiskSpace(path);
   });
 
   router.handle(IPC_CHANNELS.systemPickInstallFolder, async () => {
@@ -30,12 +30,7 @@ export const registerSystemRoutes = (router: Router, mainWindow: BrowserWindow):
   });
 
   router.handle(IPC_CHANNELS.systemOpenPath, async (rawArgs) => {
-    if (typeof rawArgs !== 'string') {
-      throw {
-        code: ERROR_CODES.IpcInvalidArgs,
-        message: 'path must be a string',
-      };
-    }
-    await openPath(rawArgs);
+    const path = parseIpcArgs(PathArgSchema, rawArgs, PATH_ERROR_MESSAGE);
+    await openPath(path);
   });
 };

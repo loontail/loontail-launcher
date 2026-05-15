@@ -1,11 +1,11 @@
 import { useAppVersion } from '@renderer/features/app';
 import { Button } from '@renderer/shared/ui/Button';
+import { SettingsGroup } from '@renderer/shared/ui/SettingsGroup';
+import { SettingsRow } from '@renderer/shared/ui/SettingsRow';
 import { QUERY_KEY_ROOTS } from '@shared/constants';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Group } from '../Group';
 import { LanguageSwitcher } from '../LanguageSwitcher';
-import { Row } from '../Row';
 
 const VersionRow = () => {
   const versionQuery = useAppVersion();
@@ -35,8 +35,8 @@ export const LauncherSection = () => {
 
   return (
     <div className="flex flex-col gap-5">
-      <Group title={t('settings.launcher.maintenance')}>
-        <Row
+      <SettingsGroup title={t('settings.launcher.maintenance')}>
+        <SettingsRow
           label={t('settings.launcher.clearCache')}
           description={t('settings.launcher.clearCacheDesc')}
           right={
@@ -45,7 +45,7 @@ export const LauncherSection = () => {
             </Button>
           }
         />
-        <Row
+        <SettingsRow
           label={t('settings.launcher.updates')}
           description={t('settings.launcher.updatesDesc')}
           right={
@@ -54,16 +54,16 @@ export const LauncherSection = () => {
             </Button>
           }
         />
-        <Row label={t('settings.launcher.version')} right={<VersionRow />} />
-      </Group>
+        <SettingsRow label={t('settings.launcher.version')} right={<VersionRow />} />
+      </SettingsGroup>
 
-      <Group title={t('settings.launcher.interface')}>
-        <Row
+      <SettingsGroup title={t('settings.launcher.interface')}>
+        <SettingsRow
           label={t('settings.launcher.language')}
           description={t('settings.launcher.languageDesc')}
           right={<LanguageSwitcher />}
         />
-      </Group>
+      </SettingsGroup>
     </div>
   );
 };

@@ -1,7 +1,7 @@
+import { SettingsGroup } from '@renderer/shared/ui/SettingsGroup';
+import { SettingsSwitchRow } from '@renderer/shared/ui/SettingsRow';
 import { useTranslation } from 'react-i18next';
 import { useLauncherSettings, useSetLauncher } from '../../hooks';
-import { Group } from '../Group';
-import { SwitchRow } from '../Row';
 
 export const GameSection = () => {
   const { t } = useTranslation();
@@ -16,21 +16,21 @@ export const GameSection = () => {
   };
 
   return (
-    <Group title={t('settings.game.launch')}>
-      <SwitchRow
+    <SettingsGroup title={t('settings.game.launch')}>
+      <SettingsSwitchRow
         label={t('settings.game.console')}
         description={t('settings.game.consoleDesc')}
         checked={launchConsole}
         onCheckedChange={(value) => void handleToggle('console', value)}
         disabled={isPending}
       />
-      <SwitchRow
+      <SettingsSwitchRow
         label={t('settings.game.fullscreen')}
         description={t('settings.game.fullscreenDesc')}
         checked={launchFullscreen}
         onCheckedChange={(value) => void handleToggle('fullscreen', value)}
         disabled={isPending}
       />
-    </Group>
+    </SettingsGroup>
   );
 };
