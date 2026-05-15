@@ -1,12 +1,10 @@
-import { writeBuffer } from '@main/infra/cache';
 import { scopedLogger } from '@main/infra/logger';
 import { getStoredAuth, setStoredAuth } from '@main/infra/store';
+import { invalidateMediaCache, prewarmMediaCache } from '@main/services/media/mediaCache';
 import { ERROR_CODES } from '@shared/constants';
 import { type UserId, asUserId } from '@shared/contracts/ids';
 import type { SkinKind, UploadSkinPayload, UploadSkinResult } from '@shared/contracts/skin';
 import { buildMediaUrl, updateUserSkinFields, uploadSkinFile } from './skinApi';
-
-const CACHE_NAMESPACE = 'skins';
 
 const logger = scopedLogger('skin');
 
@@ -21,9 +19,13 @@ const requireUserId = (): UserId => {
   return asUserId(auth.user.id);
 };
 
-const cacheKey = (userId: UserId, kind: SkinKind) => `${userId}-${kind}`;
-
 const updateStoredUserAsset = (kind: SkinKind, url: string | null) => {
+  // Drop the cached binary for the previous URL so the renderer's cache:// lookup falls
+  // back to the network if the user re-uploads under a different filename.
+  const previous = getStoredAuth()?.user?.[kind];
+  if (typeof previous === 'string' && previous.length > 0) {
+    invalidateMediaCache(previous);
+  }
   const auth = getStoredAuth();
   if (!auth) return;
   const nextUser = { ...auth.user, [kind]: url };
@@ -59,8 +61,8 @@ export const uploadSkin = async (payload: UploadSkinPayload): Promise<UploadSkin
     };
   }
 
-  writeBuffer(CACHE_NAMESPACE, cacheKey(userId, payload.type), buffer);
   updateStoredUserAsset(payload.type, uploadedUrl);
+  prewarmMediaCache(uploadedUrl, buffer);
   return { url: uploadedUrl };
 };
 

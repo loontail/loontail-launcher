@@ -1,3 +1,4 @@
+import { toCachedMediaUrl } from '@renderer/shared/lib/mediaUrl';
 import type { StrapiImageFormat, StrapiMedia as StrapiMediaType } from '@shared/contracts/strapi';
 
 type StrapiMediaProps = {
@@ -21,5 +22,5 @@ const pickBestUrl = (media: StrapiMediaType): string => {
 };
 
 export const StrapiMedia = ({ media, className }: StrapiMediaProps) => (
-  <img src={pickBestUrl(media)} alt={media.name} className={className} />
+  <img src={toCachedMediaUrl(pickBestUrl(media))} alt={media.name} className={className} />
 );

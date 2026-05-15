@@ -7,7 +7,8 @@ import './i18n';
 
 import { App } from '@renderer/app/App';
 import { createQueryClient } from '@renderer/shared/lib/queryClient';
-import { QueryClientProvider } from '@tanstack/react-query';
+import { persistOptions } from '@renderer/shared/lib/queryPersister';
+import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -20,8 +21,8 @@ const queryClient = createQueryClient();
 
 createRoot(rootElement).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
+    <PersistQueryClientProvider client={queryClient} persistOptions={persistOptions}>
       <App />
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   </StrictMode>,
 );

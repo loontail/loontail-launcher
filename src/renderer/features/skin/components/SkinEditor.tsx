@@ -1,6 +1,7 @@
 import defaultCape from '@renderer/assets/default-cape.png';
 import defaultSkin from '@renderer/assets/default-skin.png';
 import { useCurrentUser } from '@renderer/features/auth';
+import { toCachedMediaUrl } from '@renderer/shared/lib/mediaUrl';
 import { DropdownMenu, DropdownMenuItem } from '@renderer/shared/ui/DropdownMenu';
 import type { SkinKind } from '@shared/contracts/skin';
 import { Loader2, Pencil, Trash2 } from 'lucide-react';
@@ -22,8 +23,8 @@ export const SkinEditor = ({ width = 200 }: SkinEditorProps) => {
   const { mutate: upload, isPending: isUploading } = useUploadSkin();
   const { mutate: clearAll, isPending: isClearing } = useClearSkin();
 
-  const remoteSkin = user?.skin ?? null;
-  const remoteCape = user?.cape ?? null;
+  const remoteSkin = user?.skin ? toCachedMediaUrl(user.skin) : null;
+  const remoteCape = user?.cape ? toCachedMediaUrl(user.cape) : null;
 
   const [skinUrl, setSkinUrl] = useState<string>(remoteSkin ?? defaultSkin);
   const [capeUrl, setCapeUrl] = useState<string>(remoteCape ?? defaultCape);

@@ -6,12 +6,13 @@ import { createTrustedSenderCheck } from '@main/ipc/trustedSender';
 import { createAppService } from '@main/services/app';
 import { createAuthService } from '@main/services/auth';
 import { createClientsService } from '@main/services/clients';
+import { CACHE_SCHEME, createMediaService } from '@main/services/media';
 import { createServersService } from '@main/services/servers';
 import { createSettingsService } from '@main/services/settings';
 import { createSkinService } from '@main/services/skin';
 import { createSystemService } from '@main/services/system';
 import { createMainWindow } from '@main/windows/mainWindow';
-import { BrowserWindow, app } from 'electron';
+import { BrowserWindow, app, protocol } from 'electron';
 
 initLogger();
 const logger = scopedLogger('bootstrap');
@@ -28,6 +29,21 @@ if (!app.requestSingleInstanceLock()) {
   app.quit();
   process.exit(0);
 }
+
+// Must be called before app `ready`. The privileges let `<img src="cache://...">` resolve
+// like a normal HTTPS resource (CSP, range requests, fetch API support).
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: CACHE_SCHEME,
+    privileges: {
+      standard: true,
+      secure: true,
+      supportFetchAPI: true,
+      stream: true,
+      bypassCSP: false,
+    },
+  },
+]);
 
 app.on('second-instance', () => {
   const [existing] = BrowserWindow.getAllWindows();
@@ -52,6 +68,7 @@ const start = async (): Promise<void> => {
   const skinService = createSkinService(router);
   const clientsService = createClientsService(router);
   const serversService = createServersService(router);
+  const mediaService = createMediaService();
 
   await appService.init();
   await authService.init();
@@ -60,6 +77,7 @@ const start = async (): Promise<void> => {
   await skinService.init();
   await clientsService.init();
   await serversService.init();
+  await mediaService.init();
 
   seedLauncherSettings();
 
@@ -76,6 +94,7 @@ const start = async (): Promise<void> => {
   });
 
   app.on('before-quit', () => {
+    void mediaService.dispose();
     void serversService.dispose();
     void clientsService.dispose();
     void skinService.dispose();
