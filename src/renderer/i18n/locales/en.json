@@ -40,7 +40,12 @@
     "openFolder": "Open",
     "changeFolder": "Change",
     "resetAll": "Reset to defaults",
-    "footnote": "* — differs from launcher defaults"
+    "footnote": "* — differs from launcher defaults",
+    "actions": "Maintenance",
+    "repair": "Repair",
+    "repairDesc": "Re-check files against the server manifest and re-download anything missing or corrupt.",
+    "uninstall": "Uninstall",
+    "uninstallDesc": "Delete this client's files from disk. Saves and overrides are kept."
   },
   "servers": {
     "online": "Online",

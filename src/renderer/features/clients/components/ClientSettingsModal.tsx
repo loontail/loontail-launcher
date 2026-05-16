@@ -14,10 +14,10 @@ import { Button } from '@renderer/shared/ui/Button';
 import { Modal } from '@renderer/shared/ui/Modal';
 import { OverrideMark } from '@renderer/shared/ui/OverrideMark';
 import { SettingsGroup } from '@renderer/shared/ui/SettingsGroup';
-import { SettingsSwitchRow } from '@renderer/shared/ui/SettingsRow';
+import { SettingsRow, SettingsSwitchRow } from '@renderer/shared/ui/SettingsRow';
 import type { Client } from '@shared/contracts/client';
 import type { BundleSlug } from '@shared/contracts/ids';
-import { X } from 'lucide-react';
+import { RotateCcw, Trash2, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -157,6 +157,29 @@ export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsM
             description={t('settings.game.fullscreenDesc')}
             checked={resolved.launch.fullscreen}
             onCheckedChange={(value) => void handleToggleFullscreen(value)}
+          />
+        </SettingsGroup>
+
+        <SettingsGroup title={t('clientSettings.actions')}>
+          <SettingsRow
+            label={t('clientSettings.repair')}
+            description={t('clientSettings.repairDesc')}
+            right={
+              <Button variant="outline" size="sm" onClick={() => {}}>
+                <RotateCcw className="size-3.5" strokeWidth={2} />
+                {t('clientSettings.repair')}
+              </Button>
+            }
+          />
+          <SettingsRow
+            label={t('clientSettings.uninstall')}
+            description={t('clientSettings.uninstallDesc')}
+            right={
+              <Button variant="destructive" size="sm" onClick={() => {}}>
+                <Trash2 className="size-3.5" strokeWidth={2} />
+                {t('clientSettings.uninstall')}
+              </Button>
+            }
           />
         </SettingsGroup>
       </div>
