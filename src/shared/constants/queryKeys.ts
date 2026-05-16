@@ -6,7 +6,7 @@ export const QUERY_KEYS = {
     version: ['app', 'version'] as const,
   },
   clients: {
-    list: ['clients', 'list'] as const,
+    list: (locale: string) => ['clients', 'list', locale] as const,
   },
   servers: {
     statuses: (addressesKey: string) => ['servers', 'statuses', addressesKey] as const,

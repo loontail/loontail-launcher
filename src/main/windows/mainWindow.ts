@@ -1,4 +1,6 @@
 import { join } from 'node:path';
+import { mainConfig } from '@main/config';
+import { scopedLogger } from '@main/infra/logger';
 import { BrowserWindow, shell } from 'electron';
 
 const DEFAULT_WIDTH = 1000;
@@ -10,7 +12,59 @@ const TITLE_BAR_HEIGHT = 40;
 const TITLE_BAR_OVERLAY_COLOR = 'rgba(0, 0, 0, 0)';
 const TITLE_BAR_SYMBOL_COLOR = '#a3a3a3';
 
+const logger = scopedLogger('mainWindow');
+
 const useNativeFrame = (): boolean => process.platform === 'linux';
+
+const safeParseUrl = (raw: string): URL | null => {
+  try {
+    return new URL(raw);
+  } catch {
+    return null;
+  }
+};
+
+// Hosts the launcher is allowed to hand off to the OS browser via shell.openExternal.
+// The Strapi host comes from mainConfig.apiUrl so prod / dev stay aligned without a
+// second source of truth. Extend with extra constants only when a real link target
+// appears in the UI — the default posture is "deny everything else".
+const buildExternalHostAllowlist = (): ReadonlySet<string> => {
+  const allowed = new Set<string>();
+  const apiUrl = safeParseUrl(mainConfig.apiUrl);
+  if (apiUrl?.hostname) allowed.add(apiUrl.hostname.toLowerCase());
+  return allowed;
+};
+
+const isAllowedExternalUrl = (raw: string, allowlist: ReadonlySet<string>): boolean => {
+  const parsed = safeParseUrl(raw);
+  if (!parsed) return false;
+  if (parsed.protocol !== 'https:') return false;
+  const host = parsed.hostname.toLowerCase();
+  for (const allowed of allowlist) {
+    if (host === allowed || host.endsWith(`.${allowed}`)) return true;
+  }
+  return false;
+};
+
+type NavigationGuard = (url: string) => boolean;
+
+// The renderer is always loaded from one origin: either the dev server URL or the
+// local file bundle. Anything else is a navigation attempt away from the app and
+// must be denied.
+const buildNavigationGuard = (): NavigationGuard => {
+  const devUrl = process.env.ELECTRON_RENDERER_URL;
+  if (devUrl) {
+    const devOrigin = safeParseUrl(devUrl)?.origin ?? null;
+    return (url) => {
+      const parsed = safeParseUrl(url);
+      return parsed !== null && devOrigin !== null && parsed.origin === devOrigin;
+    };
+  }
+  return (url) => {
+    const parsed = safeParseUrl(url);
+    return parsed !== null && parsed.protocol === 'file:';
+  };
+};
 
 const buildWindowOptions = (): Electron.BrowserWindowConstructorOptions => {
   const base: Electron.BrowserWindowConstructorOptions = {
@@ -49,21 +103,26 @@ const buildWindowOptions = (): Electron.BrowserWindowConstructorOptions => {
 
 export const createMainWindow = (): BrowserWindow => {
   const window = new BrowserWindow(buildWindowOptions());
+  const externalAllowlist = buildExternalHostAllowlist();
+  const isAllowedNavigation = buildNavigationGuard();
 
   window.on('ready-to-show', () => {
     window.show();
   });
 
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://')) {
+    if (isAllowedExternalUrl(url, externalAllowlist)) {
       void shell.openExternal(url);
+    } else {
+      logger.info(`Denied external navigation: ${url}`);
     }
     return { action: 'deny' };
   });
 
   window.webContents.on('will-navigate', (event, url) => {
-    if (!url.startsWith('file://')) {
+    if (!isAllowedNavigation(url)) {
       event.preventDefault();
+      logger.info(`Denied in-window navigation: ${url}`);
     }
   });
 

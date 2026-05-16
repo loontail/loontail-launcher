@@ -1,4 +1,4 @@
-import { buildMediaUrl, httpRequest } from '@main/infra/http';
+import { buildMediaUrl, httpGet } from '@main/infra/http';
 import { scopedLogger } from '@main/infra/logger';
 import { API_ROUTES } from '@shared/constants';
 import {
@@ -9,8 +9,8 @@ import {
   type StrapiList,
   StrapiListSchema,
   type StrapiMedia,
-  asBundleSlug,
   asClientId,
+  asClientSlug,
 } from '@shared/contracts';
 
 const logger = scopedLogger('clients');
@@ -51,12 +51,22 @@ const absolutizeMedia = (media: StrapiMedia): StrapiMedia => ({
   formats: absolutizeFormats(media.formats),
 });
 
-const normalizeClient = (client: ClientResponse): Client => {
+const normalizeClient = (client: ClientResponse): Client | null => {
+  if (!client.slug) {
+    // Admin hasn't set `slug` for this record yet. The launcher cannot identify
+    // it (settings key, install folder, IPC). Drop it from the list rather
+    // than crashing — fetchClients warns once per affected document.
+    logger.warn(
+      `Strapi client id=${client.id} (documentId=${client.documentId}) has no slug; skipping`,
+    );
+    return null;
+  }
   const titleImage = client.titleImage ? absolutizeMedia(client.titleImage) : undefined;
   return {
     ...client,
     id: asClientId(client.id),
-    bundleSlug: client.bundleSlug ? asBundleSlug(client.bundleSlug) : null,
+    slug: asClientSlug(client.slug),
+    bundleSlug: client.bundleSlug ?? null,
     description: coerceDescriptionString(client.description),
     shortDescription: coerceDescriptionString(client.shortDescription),
     minecraftVersion: coerceVersionString(client.minecraftVersion) ?? '',
@@ -70,22 +80,23 @@ const normalizeClient = (client: ClientResponse): Client => {
   };
 };
 
-export const fetchClients = async (locale?: string): Promise<StrapiList<Client>> => {
-  const response = await httpRequest(API_ROUTES.clients.list(locale ? { locale } : {}));
-  if (!response.ok) {
-    logger.warn(`clients.list failed with status ${response.status}`);
-    throw new Error(`Failed to fetch clients (${response.status})`);
-  }
-  const raw: unknown = await response.json();
-  const parsed = ClientListResponseSchema.safeParse(raw);
-  if (!parsed.success) {
-    logger.warn(
-      `clients.list response did not match schema: ${JSON.stringify(parsed.error.format())}`,
-    );
-    throw new Error('Clients response shape is invalid');
-  }
+export type FetchClientsOptions = {
+  locale?: string;
+  signal?: AbortSignal;
+};
+
+export const fetchClients = async (
+  options: FetchClientsOptions = {},
+): Promise<StrapiList<Client>> => {
+  const { locale, signal } = options;
+  const parsed = await httpGet(
+    API_ROUTES.clients.list(locale ? { locale } : {}),
+    ClientListResponseSchema,
+    signal ? { signal } : {},
+  );
+  const normalized = parsed.data.map(normalizeClient).filter((c): c is Client => c !== null);
   return {
-    ...parsed.data,
-    data: parsed.data.data.map(normalizeClient),
+    ...parsed,
+    data: normalized,
   };
 };

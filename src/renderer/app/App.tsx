@@ -1,6 +1,7 @@
 import { AppBar } from '@renderer/features/app-bar';
 import { LoginForm, useCurrentUser } from '@renderer/features/auth';
 import { ClientsPage } from '@renderer/features/clients';
+import { MinecraftEventsListener } from '@renderer/features/minecraft';
 import { SettingsPage } from '@renderer/features/settings';
 import { cn } from '@renderer/shared/lib/cn';
 import {
@@ -47,6 +48,7 @@ export const App = () => {
 
   return (
     <div className="flex h-full flex-col">
+      <MinecraftEventsListener />
       {hasCustomTitleBar && <AppBar actions={isAuthenticated ? <NavigationButton /> : null} />}
       <main className="flex flex-1 flex-col overflow-hidden">
         {isPending && (

@@ -1,4 +1,4 @@
-import type { BundleSlug } from '@shared/contracts/ids';
+import type { ClientSlug } from '@shared/contracts/ids';
 import type {
   ClientSettingsOverride,
   LauncherSettings,
@@ -13,15 +13,15 @@ export const setLauncher = (patch: PatchLauncherSettings): Promise<LauncherSetti
   window.api.invoke(IPC_CHANNELS.settingsSetLauncher, patch);
 
 export const setClientOverride = (
-  bundleSlug: BundleSlug,
+  slug: ClientSlug,
   patch: ClientSettingsOverride,
 ): Promise<LauncherSettings> =>
-  window.api.invoke(IPC_CHANNELS.settingsSetClientOverride, { bundleSlug, patch });
+  window.api.invoke(IPC_CHANNELS.settingsSetClientOverride, { slug, patch });
 
-export const clearClientOverrides = (bundleSlug: BundleSlug): Promise<LauncherSettings> =>
-  window.api.invoke(IPC_CHANNELS.settingsClearClientOverrides, bundleSlug);
+export const clearClientOverrides = (slug: ClientSlug): Promise<LauncherSettings> =>
+  window.api.invoke(IPC_CHANNELS.settingsClearClientOverrides, slug);
 
 export const chooseClientFolder = (
-  bundleSlug: BundleSlug,
+  slug: ClientSlug,
 ): Promise<{ settings: LauncherSettings; installed: boolean } | null> =>
-  window.api.invoke(IPC_CHANNELS.settingsChooseClientFolder, bundleSlug);
+  window.api.invoke(IPC_CHANNELS.settingsChooseClientFolder, slug);

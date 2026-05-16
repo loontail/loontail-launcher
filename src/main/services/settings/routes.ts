@@ -7,13 +7,15 @@ import {
   patchLauncherSettings,
   setClientOverride,
 } from '@main/services/settings/settings';
-import { BundleSlugSchema } from '@shared/contracts/ids';
+import { ClientSlugSchema } from '@shared/contracts/ids';
 import {
   PatchLauncherSettingsSchema,
   SetClientOverridePayloadSchema,
 } from '@shared/contracts/settings';
 import { IPC_CHANNELS } from '@shared/ipc';
 import type { BrowserWindow } from 'electron';
+
+const SLUG_REQUIRED = 'slug must be a non-empty string';
 
 export const registerSettingsRoutes = (router: Router, mainWindow: BrowserWindow): void => {
   router.handle(IPC_CHANNELS.settingsGet, () => getSettings());
@@ -29,27 +31,19 @@ export const registerSettingsRoutes = (router: Router, mainWindow: BrowserWindow
       rawArgs,
       'Invalid client override',
     );
-    return setClientOverride(payload.bundleSlug, payload.patch);
+    return setClientOverride(payload.slug, payload.patch);
   });
 
   router.handle(IPC_CHANNELS.settingsClearClientOverrides, (rawArgs) => {
-    const bundleSlug = parseIpcArgs(
-      BundleSlugSchema,
-      rawArgs,
-      'bundleSlug must be a non-empty string',
-    );
-    return clearClientOverride(bundleSlug);
+    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED);
+    return clearClientOverride(slug);
   });
 
   router.handle(IPC_CHANNELS.settingsChooseClientFolder, async (rawArgs) => {
-    const bundleSlug = parseIpcArgs(
-      BundleSlugSchema,
-      rawArgs,
-      'bundleSlug must be a non-empty string',
-    );
-    const picked = await pickFolderWithSuffix(mainWindow, bundleSlug);
+    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED);
+    const picked = await pickFolderWithSuffix(mainWindow, slug);
     if (!picked) return null;
-    const next = setClientOverride(bundleSlug, { storage: { clientFolder: picked.path } });
+    const next = setClientOverride(slug, { storage: { clientFolder: picked.path } });
     const installed = directoryHasEntries(picked.path);
     return { settings: next, installed };
   });

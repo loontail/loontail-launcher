@@ -1,14 +1,28 @@
 export { AccountSchema } from './account';
 export type { Account } from './account';
 export {
-  BundleSlugSchema,
+  ConsoleLevels,
+  ConsoleSources,
+  ConsoleStatuses,
+} from './console';
+export type {
+  ConsoleInitialPayload,
+  ConsoleLevel,
+  ConsoleLine,
+  ConsoleLineArgs,
+  ConsoleProcessState,
+  ConsoleProcessStatus,
+  ConsoleSource,
+} from './console';
+export {
   ClientIdSchema,
+  ClientSlugSchema,
   UserIdSchema,
-  asBundleSlug,
   asClientId,
+  asClientSlug,
   asUserId,
 } from './ids';
-export type { BundleSlug, ClientId, UserId } from './ids';
+export type { ClientId, ClientSlug, UserId } from './ids';
 export { LOGIN_ERROR_CODE, LoginPayloadSchema, StrapiAuthOkSchema } from './auth';
 export type { LoginErrorCode, LoginPayload, LoginResult, StrapiAuthOk } from './auth';
 export {

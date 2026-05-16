@@ -1,16 +1,33 @@
+import { useClientStatus } from '@renderer/features/minecraft';
 import type { Client } from '@shared/contracts/client';
+import { type InstallStatus, InstallStatuses } from '@shared/contracts/minecraft';
 import { Settings2 } from 'lucide-react';
 import { marked } from 'marked';
 import { type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Carousel } from './Carousel';
 import { ClientSettingsModal } from './ClientSettingsModal';
+import { PlayButton } from './PlayButton';
 import { ServersInfo } from './ServersInfo';
 import { StrapiMedia } from './StrapiMedia';
 
 type ClientOverviewProps = {
   client: Client;
 };
+
+const SETTABLE_STATUSES: ReadonlySet<InstallStatus> = new Set([
+  InstallStatuses.INSTALLED,
+  InstallStatuses.LAUNCHING,
+  InstallStatuses.RUNNING,
+  InstallStatuses.REPAIRING,
+  InstallStatuses.UNINSTALLING,
+]);
+
+const SETTINGS_DISABLED_STATUSES: ReadonlySet<InstallStatus> = new Set([
+  InstallStatuses.REPAIRING,
+  InstallStatuses.UNINSTALLING,
+  InstallStatuses.INSTALLING,
+]);
 
 const SectionLabel = ({ children }: { children: ReactNode }) => (
   <p className="mb-3 text-[10px] font-bold uppercase tracking-eyebrow text-glass/40">{children}</p>
@@ -19,6 +36,9 @@ const SectionLabel = ({ children }: { children: ReactNode }) => (
 export const ClientOverview = ({ client }: ClientOverviewProps) => {
   const { t } = useTranslation();
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const runtimeState = useClientStatus(client.slug);
+  const isSettable = SETTABLE_STATUSES.has(runtimeState.status);
+  const isSettingsDisabled = SETTINGS_DISABLED_STATUSES.has(runtimeState.status);
   const {
     title,
     shortDescription,
@@ -79,15 +99,26 @@ export const ClientOverview = ({ client }: ClientOverviewProps) => {
               </p>
             )}
 
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setSettingsOpen(true)}
-                aria-label={t('clientSettings.openAria')}
-                className="group flex size-11 items-center justify-center rounded-full border border-edge-md bg-chip-dark text-glass/80 backdrop-blur-sm transition-colors hover:bg-chip hover:text-glass focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Settings2 className="size-5 transition-transform duration-200 group-hover:rotate-45" />
-              </button>
+            <div className="mt-1 flex max-w-[480px] flex-wrap items-start gap-3">
+              <PlayButton client={client} />
+              {isSettable && (
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen(true)}
+                  aria-label={t('clientSettings.openAria')}
+                  disabled={isSettingsDisabled}
+                  className="group relative flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full bg-gradient-to-b from-glass/15 to-glass/5 text-glass/75 ring-1 ring-edge-md backdrop-blur-md transition-all duration-150 hover:from-glass/20 hover:to-glass/10 hover:text-glass hover:ring-edge-xl active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glass/50 disabled:opacity-50"
+                  style={{
+                    boxShadow:
+                      'inset 0 1px 0 rgba(255,255,255,0.10), 0 6px 18px -8px var(--color-glow-overlay-md)',
+                  }}
+                >
+                  <Settings2
+                    size={16}
+                    className="transition-transform duration-200 group-hover:rotate-45"
+                  />
+                </button>
+              )}
             </div>
           </div>
 

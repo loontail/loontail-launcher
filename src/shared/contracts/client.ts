@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { BundleSlug, ClientId } from './ids';
+import type { ClientId, ClientSlug } from './ids';
 import { ServerSchema, StrapiEntitySchema, type StrapiMedia, StrapiMediaSchema } from './strapi';
 import type { Server } from './strapi';
 
@@ -20,6 +20,10 @@ const VersionField = z
 const DescriptionField = z.unknown().optional();
 
 export const ClientResponseSchema = StrapiEntitySchema.extend({
+  // `slug` is the launcher-side identifier — required in the schema but kept
+  // optional/nullable here so the Zod parse doesn't reject records whose admin
+  // hasn't filled it yet. The service layer raises a typed error if missing.
+  slug: z.union([z.string(), z.null()]).optional(),
   title: z.string(),
   description: DescriptionField,
   shortDescription: DescriptionField,
@@ -43,7 +47,11 @@ export const ClientResponseSchema = StrapiEntitySchema.extend({
 export type ClientResponse = z.infer<typeof ClientResponseSchema>;
 
 // Renderer-facing shape: versions normalized to strings, media URLs absolutized,
-// `id` branded as `ClientId` and `bundleSlug` as `BundleSlug`.
+// `id` branded as `ClientId` and `slug` as `ClientSlug`.
+// `slug` is the launcher's canonical client identifier — used as the settings key,
+// IPC arg, and install folder name. `bundleSlug` is a separate, plain-string
+// reference to a bundle in the bundle-registry plugin (kept here only because the
+// API still returns it; not used for client identity).
 // Optional fields include `| undefined` to satisfy exactOptionalPropertyTypes when
 // spreading the Zod-inferred ClientResponse (Zod's `.optional()` widens to `T | undefined`).
 export type Client = {
@@ -53,6 +61,7 @@ export type Client = {
   updatedAt: string;
   publishedAt?: string | undefined;
 
+  slug: ClientSlug;
   title: string;
   description: string;
   shortDescription: string;
@@ -63,7 +72,7 @@ export type Client = {
   fabricVersion?: string | null | undefined;
   runtimeVersion?: string | null | undefined;
 
-  bundleSlug?: BundleSlug | null | undefined;
+  bundleSlug?: string | null | undefined;
   servers?: Server[] | undefined;
 
   screenshots: StrapiMedia[];

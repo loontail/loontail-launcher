@@ -6,7 +6,9 @@ import { createTrustedSenderCheck } from '@main/ipc/trustedSender';
 import { createAppService } from '@main/services/app';
 import { createAuthService } from '@main/services/auth';
 import { createClientsService } from '@main/services/clients';
+import { createConsoleService } from '@main/services/console';
 import { CACHE_SCHEME, createMediaService } from '@main/services/media';
+import { createMinecraftService } from '@main/services/minecraft';
 import { createServersService } from '@main/services/servers';
 import { createSettingsService } from '@main/services/settings';
 import { createSkinService } from '@main/services/skin';
@@ -69,6 +71,8 @@ const start = async (): Promise<void> => {
   const clientsService = createClientsService(router);
   const serversService = createServersService(router);
   const mediaService = createMediaService();
+  const minecraftService = createMinecraftService(router, mainWindow);
+  const consoleService = createConsoleService(router);
 
   await appService.init();
   await authService.init();
@@ -78,6 +82,8 @@ const start = async (): Promise<void> => {
   await clientsService.init();
   await serversService.init();
   await mediaService.init();
+  await minecraftService.init();
+  await consoleService.init();
 
   seedLauncherSettings();
 
@@ -93,16 +99,30 @@ const start = async (): Promise<void> => {
     }
   });
 
-  app.on('before-quit', () => {
-    void mediaService.dispose();
-    void serversService.dispose();
-    void clientsService.dispose();
-    void skinService.dispose();
-    void settingsService.dispose();
-    void systemService.dispose();
-    void authService.dispose();
-    void appService.dispose();
+  let disposed = false;
+  const drain = async (): Promise<void> => {
+    // Reverse-init order so consumers tear down before the infrastructure they depend on.
+    await Promise.allSettled([
+      consoleService.dispose(),
+      minecraftService.dispose(),
+      mediaService.dispose(),
+      serversService.dispose(),
+      clientsService.dispose(),
+      skinService.dispose(),
+      settingsService.dispose(),
+      systemService.dispose(),
+      authService.dispose(),
+      appService.dispose(),
+    ]);
     router.dispose();
+    logger.info('Launcher disposed');
+  };
+
+  app.on('before-quit', (event) => {
+    if (disposed) return;
+    event.preventDefault();
+    disposed = true;
+    void drain().finally(() => app.quit());
   });
 
   logger.info('Launcher started');

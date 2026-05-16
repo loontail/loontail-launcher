@@ -1,10 +1,13 @@
 import { cn } from '@renderer/shared/lib/cn';
-import type { InputHTMLAttributes } from 'react';
+import type { InputHTMLAttributes, Ref } from 'react';
 
-type InputProps = InputHTMLAttributes<HTMLInputElement>;
+type InputProps = InputHTMLAttributes<HTMLInputElement> & {
+  ref?: Ref<HTMLInputElement>;
+};
 
-export const Input = ({ className, type = 'text', ...rest }: InputProps) => (
+export const Input = ({ className, type = 'text', ref, ...rest }: InputProps) => (
   <input
+    ref={ref}
     type={type}
     className={cn(
       'flex h-9 w-full rounded-sm border border-input bg-background px-3 py-1 text-sm',

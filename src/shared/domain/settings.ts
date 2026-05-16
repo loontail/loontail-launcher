@@ -1,9 +1,11 @@
-import type { BundleSlug } from '@shared/contracts/ids';
-import type {
-  ClientRuntimeRef,
-  ClientSettingsOverride,
-  LauncherSettings,
-  ResolvedClientSettings,
+import type { ClientSlug } from '@shared/contracts/ids';
+import {
+  type ClientRuntimeRef,
+  type ClientSettingsOverride,
+  type LauncherSettings,
+  type LoaderChoice,
+  LoaderChoices,
+  type ResolvedClientSettings,
 } from '@shared/contracts/settings';
 
 export const defaultLauncherSettings = (): LauncherSettings => ({
@@ -13,10 +15,10 @@ export const defaultLauncherSettings = (): LauncherSettings => ({
   clients: {},
 });
 
-export const joinClientFolder = (clientsFolder: string, bundleSlug: BundleSlug): string => {
+export const joinClientFolder = (clientsFolder: string, slug: ClientSlug): string => {
   if (!clientsFolder) return '';
   const separator = clientsFolder.endsWith('/') || clientsFolder.endsWith('\\') ? '' : '/';
-  return `${clientsFolder}${separator}${bundleSlug}`;
+  return `${clientsFolder}${separator}${slug}`;
 };
 
 const normalizeRuntimeRef = (value: unknown): ClientRuntimeRef | undefined => {
@@ -25,6 +27,11 @@ const normalizeRuntimeRef = (value: unknown): ClientRuntimeRef | undefined => {
   if (typeof raw.component !== 'string' || typeof raw.path !== 'string') return undefined;
   return { component: raw.component, path: raw.path };
 };
+
+const LOADER_VALUES: ReadonlySet<string> = new Set(Object.values(LoaderChoices));
+
+const normalizeLoaderChoice = (value: unknown): LoaderChoice | undefined =>
+  typeof value === 'string' && LOADER_VALUES.has(value) ? (value as LoaderChoice) : undefined;
 
 const normalizeClientOverride = (value: unknown): ClientSettingsOverride => {
   if (!value || typeof value !== 'object') return {};
@@ -55,6 +62,9 @@ const normalizeClientOverride = (value: unknown): ClientSettingsOverride => {
 
   const runtime = normalizeRuntimeRef(raw.runtime);
   if (runtime) out.runtime = runtime;
+
+  const loader = normalizeLoaderChoice(raw.loader);
+  if (loader) out.loader = loader;
 
   return out;
 };
@@ -100,19 +110,17 @@ export const normalizeLauncherSettings = (value: unknown): LauncherSettings => {
 
 export const resolveClientSettings = (
   settings: LauncherSettings,
-  bundleSlug: BundleSlug | null | undefined,
+  slug: ClientSlug | null | undefined,
 ): ResolvedClientSettings => {
   const override: ClientSettingsOverride =
-    bundleSlug && settings.clients[bundleSlug] ? settings.clients[bundleSlug] : {};
+    slug && settings.clients[slug] ? settings.clients[slug] : {};
 
   const ram =
     typeof override.memory?.allocatedRamMb === 'number'
       ? override.memory.allocatedRamMb
       : settings.memory.allocatedRamMb;
 
-  const defaultClientFolder = bundleSlug
-    ? joinClientFolder(settings.storage.clientsFolder, bundleSlug)
-    : '';
+  const defaultClientFolder = slug ? joinClientFolder(settings.storage.clientsFolder, slug) : '';
   const clientFolder = override.storage?.clientFolder ?? defaultClientFolder;
 
   const consoleVal =
@@ -128,6 +136,8 @@ export const resolveClientSettings = (
     memory: { allocatedRamMb: ram },
     storage: { clientsFolder: settings.storage.clientsFolder, clientFolder },
     launch: { console: consoleVal, fullscreen: fullscreenVal },
+    runtime: override.runtime ?? null,
+    loader: override.loader ?? null,
     diff: {
       ram: ram !== settings.memory.allocatedRamMb,
       folder: clientFolder !== defaultClientFolder,
@@ -143,7 +153,8 @@ export const hasClientOverrides = (override: ClientSettingsOverride | undefined)
   const stoEmpty = !override.storage || Object.keys(override.storage).length === 0;
   const lauEmpty = !override.launch || Object.keys(override.launch).length === 0;
   const runtimeEmpty = !override.runtime;
-  return !(memEmpty && stoEmpty && lauEmpty && runtimeEmpty);
+  const loaderEmpty = !override.loader;
+  return !(memEmpty && stoEmpty && lauEmpty && runtimeEmpty && loaderEmpty);
 };
 
 const compactOverride = (override: ClientSettingsOverride): ClientSettingsOverride => {
@@ -158,20 +169,22 @@ const compactOverride = (override: ClientSettingsOverride): ClientSettingsOverri
     out.launch = { ...override.launch };
   }
   if (override.runtime) out.runtime = { ...override.runtime };
+  if (override.loader) out.loader = override.loader;
   return out;
 };
 
 export const setClientOverride = (
   settings: LauncherSettings,
-  bundleSlug: BundleSlug,
+  slug: ClientSlug,
   patch: ClientSettingsOverride,
 ): LauncherSettings => {
-  const existing = settings.clients[bundleSlug] ?? {};
+  const existing = settings.clients[slug] ?? {};
   const merged: ClientSettingsOverride = {
     memory: { ...existing.memory, ...patch.memory },
     storage: { ...existing.storage, ...patch.storage },
     launch: { ...existing.launch, ...patch.launch },
-    runtime: patch.runtime ?? existing.runtime,
+    runtime: 'runtime' in patch ? patch.runtime : existing.runtime,
+    loader: 'loader' in patch ? patch.loader : existing.loader,
   };
 
   if (
@@ -183,7 +196,7 @@ export const setClientOverride = (
   }
 
   if (merged.storage && typeof merged.storage.clientFolder === 'string') {
-    const defaultClientFolder = joinClientFolder(settings.storage.clientsFolder, bundleSlug);
+    const defaultClientFolder = joinClientFolder(settings.storage.clientsFolder, slug);
     if (merged.storage.clientFolder === defaultClientFolder) {
       delete merged.storage.clientFolder;
     }
@@ -208,24 +221,24 @@ export const setClientOverride = (
   const compact = compactOverride(merged);
   const clients = { ...settings.clients };
   if (hasClientOverrides(compact)) {
-    clients[bundleSlug] = compact;
+    clients[slug] = compact;
   } else {
-    delete clients[bundleSlug];
+    delete clients[slug];
   }
   return { ...settings, clients };
 };
 
 export const clearClientOverrides = (
   settings: LauncherSettings,
-  bundleSlug: BundleSlug,
+  slug: ClientSlug,
 ): LauncherSettings => {
-  const existing = settings.clients[bundleSlug];
+  const existing = settings.clients[slug];
   if (!existing) return settings;
   const clients = { ...settings.clients };
   if (existing.runtime) {
-    clients[bundleSlug] = { runtime: existing.runtime };
+    clients[slug] = { runtime: existing.runtime };
   } else {
-    delete clients[bundleSlug];
+    delete clients[slug];
   }
   return { ...settings, clients };
 };

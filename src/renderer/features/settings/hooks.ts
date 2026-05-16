@@ -1,5 +1,5 @@
 import { QUERY_KEYS } from '@shared/constants';
-import type { BundleSlug } from '@shared/contracts/ids';
+import type { ClientSlug } from '@shared/contracts/ids';
 import type { ClientSettingsOverride, LauncherSettings } from '@shared/contracts/settings';
 import { resolveClientSettings } from '@shared/domain/settings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -50,8 +50,8 @@ export const useSetLauncher = () => useLauncherSettingsMutation(setLauncher);
 
 export const useSetClientOverride = () =>
   useLauncherSettingsMutation(
-    ({ bundleSlug, patch }: { bundleSlug: BundleSlug; patch: ClientSettingsOverride }) =>
-      setClientOverride(bundleSlug, patch),
+    ({ slug, patch }: { slug: ClientSlug; patch: ClientSettingsOverride }) =>
+      setClientOverride(slug, patch),
   );
 
 export const useClearClientOverrides = () => useLauncherSettingsMutation(clearClientOverrides);
@@ -92,7 +92,7 @@ export const useDiskSpace = (path: string | undefined | null) => {
   return { info: query.data, isPending: query.isPending };
 };
 
-export const useResolveFor = (bundleSlug: BundleSlug | null | undefined) => {
+export const useResolveFor = (slug: ClientSlug | null | undefined) => {
   const { settings } = useLauncherSettings();
-  return settings ? resolveClientSettings(settings, bundleSlug) : null;
+  return settings ? resolveClientSettings(settings, slug) : null;
 };

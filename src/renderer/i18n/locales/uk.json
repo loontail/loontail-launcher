@@ -28,7 +28,34 @@
     "empty": "Немає доступних клієнтів",
     "screenshots": "Скриншоти",
     "about": "Про клієнт",
-    "servers": "Доступні сервери"
+    "servers": "Доступні сервери",
+    "download": "Завантажити",
+    "play": "Грати",
+    "update": "Оновити",
+    "pause": "Пауза",
+    "resume": "Продовжити",
+    "cancel": "Скасувати",
+    "stop": "Зупинити",
+    "retry": "Повторити",
+    "installing": "Встановлення",
+    "launching": "Запуск…",
+    "repairing": "Відновлення…",
+    "uninstalling": "Видалення…",
+    "paused": "пауза",
+    "setInstallFolder": "Спочатку оберіть папку клієнтів у налаштуваннях",
+    "stage": {
+      "prepare": "Підготовка",
+      "runtime": "Завантаження Java",
+      "minecraft": "Завантаження Minecraft",
+      "loader": "Завантаження лоадера",
+      "finalize": "Завершення"
+    },
+    "loaderModal": {
+      "title": "Оберіть лоадер",
+      "subtitle": "{{name}} підтримує Forge і Fabric. Оберіть один для встановлення.",
+      "forge": "Forge",
+      "fabric": "Fabric"
+    }
   },
   "clientSettings": {
     "title": "{{name}}",
@@ -45,7 +72,29 @@
     "repair": "Перевстановити",
     "repairDesc": "Перевірити файли за маніфестом сервера та докачати втрачене чи пошкоджене.",
     "uninstall": "Видалити",
-    "uninstallDesc": "Видалити файли цього клієнта з диска. Збереження і перевизначення залишаються."
+    "uninstallDesc": "Видалити файли цього клієнта з диска. Збереження і перевизначення залишаються.",
+    "uninstallConfirmTitle": "Видалити файли клієнта?",
+    "uninstallConfirm": "Усі файли клієнта «{{name}}» буде видалено з папки встановлення. Спільний рантайм Java залишиться.",
+    "loader": {
+      "title": "Лоадер",
+      "kind": "Тип",
+      "switchDesc": "Цей клієнт підтримує обидва. Перемикання запустить встановлення при наступному запуску.",
+      "version": "Версія",
+      "vanilla": "Vanilla",
+      "forge": "Forge",
+      "fabric": "Fabric",
+      "minecraftVersion": "Версія Minecraft"
+    },
+    "runtime": {
+      "title": "Java-рантайм",
+      "component": "Компонент",
+      "componentDesc": "Java-дистрибутив від Mojang, який використовується для запуску клієнта.",
+      "path": "Шлях"
+    }
+  },
+  "common": {
+    "cancel": "Скасувати",
+    "close": "Закрити"
   },
   "servers": {
     "online": "Онлайн",
@@ -106,6 +155,54 @@
       "account": "Акаунт",
       "logOut": "Вийти",
       "logOutDesc": "Вийти з акаунта та повернутися до входу"
+    }
+  },
+  "console": {
+    "windowTitle": "Консоль лаунчера",
+    "header": "Консоль лаунчера",
+    "search": "Пошук…",
+    "searchClear": "Очистити пошук",
+    "matches": "{{current}} / {{total}}",
+    "noMatches": "0 / 0",
+    "previousMatch": "Попереднє",
+    "nextMatch": "Наступне",
+    "clear": "Очистити",
+    "copyAll": "Скопіювати все",
+    "pause": "Пауза",
+    "resume": "Продовжити",
+    "scrollToBottom": "Донизу",
+    "empty": "Очікування виводу…",
+    "droppedHint": "{{count}} попередніх рядків відкинуто з буфера",
+    "pausedBanner": "Рендеринг призупинено — новий вивід буферизується",
+    "detailHeader": "Обраний запис",
+    "detailClose": "Закрити",
+    "copyLine": "Скопіювати рядок",
+    "copied": "Скопійовано",
+    "copyFailed": "Не вдалося",
+    "exitCodeLabel": "Код виходу {{exitCode}}",
+    "crashHint": "Гра завершилася несподівано. Нижче — повний лог.",
+    "status": {
+      "idle": "Очікування",
+      "launching": "Запуск",
+      "running": "Запущено",
+      "exited": "Завершено",
+      "error": "Помилка",
+      "crashed": "Аварія"
+    },
+    "source": {
+      "stdout": "OUT",
+      "stderr": "ERR",
+      "system": "SYS"
+    },
+    "system": {
+      "processStarted": "Процес запущено",
+      "launching": "Запуск…",
+      "processExited": "Процес завершено",
+      "processExitedWithCode": "Процес завершено з кодом {{exitCode}}",
+      "processError": "Помилка процесу",
+      "processCrashed": "Процес аварійно завершено",
+      "processCrashedWithCode": "Процес аварійно завершено з кодом {{exitCode}}",
+      "processCrashedWithMessage": "Аварія процесу: {{detail}}"
     }
   }
 }

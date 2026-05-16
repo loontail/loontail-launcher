@@ -1,6 +1,21 @@
+import type { LoaderKind } from '@loontail/minecraft-kit';
 import { z } from 'zod';
-import { BundleSlugSchema } from './ids';
-import type { BundleSlug } from './ids';
+import { ClientSlugSchema } from './ids';
+import type { ClientSlug } from './ids';
+
+export type { LoaderKind as LoaderChoice } from '@loontail/minecraft-kit';
+
+export const LoaderChoices = {
+  VANILLA: 'vanilla',
+  FORGE: 'forge',
+  FABRIC: 'fabric',
+} as const satisfies Record<string, LoaderKind>;
+
+export const LoaderChoiceSchema = z.enum([
+  LoaderChoices.VANILLA,
+  LoaderChoices.FORGE,
+  LoaderChoices.FABRIC,
+]);
 
 export const MemorySettingsSchema = z.object({
   allocatedRamMb: z.number().int().nonnegative(),
@@ -35,6 +50,7 @@ export const ClientSettingsOverrideSchema = z.object({
     .object({ console: z.boolean().optional(), fullscreen: z.boolean().optional() })
     .optional(),
   runtime: ClientRuntimeRefSchema.optional(),
+  loader: LoaderChoiceSchema.optional(),
 });
 
 export type ClientSettingsOverride = z.infer<typeof ClientSettingsOverrideSchema>;
@@ -43,9 +59,8 @@ export const LauncherSettingsSchema = z.object({
   memory: MemorySettingsSchema,
   storage: StorageSettingsSchema,
   launch: LaunchSettingsSchema,
-  // Keys are persisted as plain strings in electron-store. The brand is enforced at
-  // function arg / payload boundaries; the record stays string-keyed to permit lookup
-  // with any BundleSlug (string & brand is assignable to string).
+  // Keys are persisted as plain strings; the ClientSlug brand is enforced at
+  // function arg / payload boundaries.
   clients: z.record(z.string(), ClientSettingsOverrideSchema),
 });
 
@@ -55,6 +70,8 @@ export type ResolvedClientSettings = {
   memory: MemorySettings;
   storage: { clientsFolder: string; clientFolder: string };
   launch: LaunchSettings;
+  runtime: ClientRuntimeRef | null;
+  loader: LoaderKind | null;
   diff: {
     ram: boolean;
     folder: boolean;
@@ -64,12 +81,12 @@ export type ResolvedClientSettings = {
 };
 
 export const SetClientOverridePayloadSchema = z.object({
-  bundleSlug: BundleSlugSchema,
+  slug: ClientSlugSchema,
   patch: ClientSettingsOverrideSchema,
 });
 
 export type SetClientOverridePayload = {
-  bundleSlug: BundleSlug;
+  slug: ClientSlug;
   patch: ClientSettingsOverride;
 };
 

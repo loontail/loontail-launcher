@@ -10,7 +10,7 @@
     "build:win": "electron-vite build && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
     "build:linux": "electron-vite build && electron-builder --linux",
-    "typecheck": "tsc -b --noEmit",
+    "typecheck": "tsc -b --noEmit && tsc --noEmit -p tsconfig.test.json",
     "format": "biome format --write .",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@fontsource/nunito": "^5.0.0",
+    "@loontail/minecraft-kit": "file:../minecraft-kit",
     "@splidejs/react-splide": "^0.7.12",
     "@splidejs/splide": "^4.1.4",
     "@tanstack/query-sync-storage-persister": "^5.100.10",

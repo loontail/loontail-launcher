@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "paths": {
+      "@shared/*": ["src/shared/*"],
+      "@main/*": ["src/main/*"],
+      "@preload/*": ["src/preload/*"],
+      "@renderer/*": ["src/renderer/*"],
+      "@splidejs/react-splide": ["node_modules/@splidejs/react-splide/dist/types/index.d.ts"]
+    }
+  },
+  "include": ["tests/**/*", "src/preload/index.d.ts", "vitest.config.ts"]
+}

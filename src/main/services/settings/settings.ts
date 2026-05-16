@@ -1,5 +1,5 @@
 import { getStoredLauncherSettings, setStoredLauncherSettings } from '@main/infra/store';
-import type { BundleSlug } from '@shared/contracts/ids';
+import type { ClientSlug } from '@shared/contracts/ids';
 import type {
   ClientSettingsOverride,
   LauncherSettings,
@@ -41,9 +41,9 @@ export const patchLauncherSettings = (patch: PatchLauncherSettings): LauncherSet
 };
 
 export const setClientOverride = (
-  bundleSlug: BundleSlug,
+  slug: ClientSlug,
   patch: ClientSettingsOverride,
-): LauncherSettings => writeSettings(setClientOverridePure(getSettings(), bundleSlug, patch));
+): LauncherSettings => writeSettings(setClientOverridePure(getSettings(), slug, patch));
 
-export const clearClientOverride = (bundleSlug: BundleSlug): LauncherSettings =>
-  writeSettings(clearClientOverridesPure(getSettings(), bundleSlug));
+export const clearClientOverride = (slug: ClientSlug): LauncherSettings =>
+  writeSettings(clearClientOverridesPure(getSettings(), slug));

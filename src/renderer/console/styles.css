@@ -1,0 +1,127 @@
+/**
+ * Console-window-specific styling. The launcher hides scrollbars
+ * globally; the log viewport needs them, so they are explicitly
+ * restored here. Source/level tinting and the search-highlight token
+ * also live in this file because they bind to data-attributes on rows.
+ *
+ * Colours come from the launcher's design tokens
+ * (`--color-destructive`, `--color-success`, `--color-edge*`,
+ * `--color-glass*`) — no hard-coded hex/HSL palette lives in this file.
+ */
+
+html,
+body,
+#console-root {
+  height: 100%;
+}
+
+.console-mono {
+  font-family: "Cascadia Mono", ui-monospace, "SFMono-Regular", Menlo, Monaco, "Courier New",
+    monospace;
+  font-feature-settings: "tnum";
+}
+
+.console-body {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-edge-lg) transparent;
+  -ms-overflow-style: auto;
+}
+.console-body::-webkit-scrollbar {
+  display: block;
+  width: 10px;
+  height: 10px;
+}
+.console-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+.console-body::-webkit-scrollbar-thumb {
+  background: var(--color-edge-lg);
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background-clip: content-box;
+}
+.console-body::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-edge-xl);
+  background-clip: content-box;
+}
+
+.console-row {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  cursor: default;
+  color: var(--color-foreground);
+}
+.console-row:hover {
+  background: var(--color-ghost);
+}
+.console-row:focus-visible {
+  outline: none;
+  background: var(--color-ghost-hover);
+  box-shadow: inset 0 0 0 1px var(--color-edge-lg);
+}
+.console-row[data-selected="true"] {
+  background: var(--color-ghost-active);
+}
+.console-row[data-active-match="true"] {
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+}
+
+.console-row-stripe {
+  flex: 0 0 3px;
+  background: transparent;
+}
+.console-row[data-source="stderr"] .console-row-stripe,
+.console-row[data-level="error"] .console-row-stripe {
+  background: var(--color-destructive);
+}
+.console-row[data-level="warn"] .console-row-stripe {
+  background: color-mix(in srgb, var(--color-destructive) 60%, var(--color-success) 40%);
+}
+.console-row[data-source="system"] .console-row-stripe {
+  background: var(--color-edge-xl);
+}
+.console-row[data-source="launcher"] .console-row-stripe {
+  background: var(--color-success);
+}
+
+.console-row[data-level="warn"] .console-message {
+  color: color-mix(in srgb, var(--color-destructive) 50%, var(--color-foreground) 50%);
+}
+.console-row[data-level="error"] .console-message,
+.console-row[data-source="stderr"] .console-message {
+  color: var(--color-destructive);
+}
+.console-row[data-level="debug"] .console-message {
+  color: color-mix(in srgb, var(--color-foreground) 55%, transparent);
+}
+.console-row[data-source="system"] .console-message {
+  color: color-mix(in srgb, var(--color-foreground) 70%, transparent);
+  font-style: italic;
+}
+
+.console-row[data-source="stderr"] .console-source,
+.console-row[data-level="error"] .console-source {
+  color: var(--color-destructive);
+}
+.console-row[data-source="system"] .console-source {
+  color: var(--color-foreground);
+  opacity: 0.55;
+  font-style: italic;
+}
+.console-row[data-source="launcher"] .console-source {
+  color: var(--color-success);
+}
+
+.console-highlight {
+  background: color-mix(in srgb, var(--color-success) 50%, transparent);
+  color: var(--color-primary-foreground);
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.console-highlight[data-active="true"] {
+  background: var(--color-success);
+}

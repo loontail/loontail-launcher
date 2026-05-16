@@ -28,7 +28,34 @@
     "empty": "No clients available",
     "screenshots": "Screenshots",
     "about": "About",
-    "servers": "Available servers"
+    "servers": "Available servers",
+    "download": "Download",
+    "play": "Play",
+    "update": "Update",
+    "pause": "Pause",
+    "resume": "Resume",
+    "cancel": "Cancel",
+    "stop": "Stop",
+    "retry": "Retry",
+    "installing": "Installing",
+    "launching": "Launching…",
+    "repairing": "Repairing…",
+    "uninstalling": "Removing…",
+    "paused": "paused",
+    "setInstallFolder": "Pick a client folder in System settings first",
+    "stage": {
+      "prepare": "Preparing",
+      "runtime": "Downloading Java runtime",
+      "minecraft": "Downloading Minecraft",
+      "loader": "Downloading loader",
+      "finalize": "Finishing up"
+    },
+    "loaderModal": {
+      "title": "Choose a loader",
+      "subtitle": "{{name}} ships with both Forge and Fabric. Pick one to install.",
+      "forge": "Forge",
+      "fabric": "Fabric"
+    }
   },
   "clientSettings": {
     "title": "{{name}}",
@@ -45,7 +72,29 @@
     "repair": "Repair",
     "repairDesc": "Re-check files against the server manifest and re-download anything missing or corrupt.",
     "uninstall": "Uninstall",
-    "uninstallDesc": "Delete this client's files from disk. Saves and overrides are kept."
+    "uninstallDesc": "Delete this client's files from disk. Saves and overrides are kept.",
+    "uninstallConfirmTitle": "Remove client files?",
+    "uninstallConfirm": "All files for \"{{name}}\" will be deleted from the install folder. The shared Java runtime stays.",
+    "loader": {
+      "title": "Loader",
+      "kind": "Type",
+      "switchDesc": "This client ships with both. Switching will trigger an install on next launch.",
+      "version": "Version",
+      "vanilla": "Vanilla",
+      "forge": "Forge",
+      "fabric": "Fabric",
+      "minecraftVersion": "Minecraft version"
+    },
+    "runtime": {
+      "title": "Java runtime",
+      "component": "Component",
+      "componentDesc": "Mojang-provided Java distribution used to launch this client.",
+      "path": "Path"
+    }
+  },
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close"
   },
   "servers": {
     "online": "Online",
@@ -106,6 +155,54 @@
       "account": "Account",
       "logOut": "Log out",
       "logOutDesc": "Sign out and return to login"
+    }
+  },
+  "console": {
+    "windowTitle": "Launcher Console",
+    "header": "Launcher Console",
+    "search": "Search…",
+    "searchClear": "Clear search",
+    "matches": "{{current}} / {{total}}",
+    "noMatches": "0 / 0",
+    "previousMatch": "Previous match",
+    "nextMatch": "Next match",
+    "clear": "Clear",
+    "copyAll": "Copy all",
+    "pause": "Pause",
+    "resume": "Resume",
+    "scrollToBottom": "Jump to bottom",
+    "empty": "Waiting for output…",
+    "droppedHint": "{{count}} earlier line(s) trimmed from buffer",
+    "pausedBanner": "Rendering paused — new output is buffered until you resume",
+    "detailHeader": "Selected entry",
+    "detailClose": "Close",
+    "copyLine": "Copy line",
+    "copied": "Copied",
+    "copyFailed": "Copy failed",
+    "exitCodeLabel": "Exit code {{exitCode}}",
+    "crashHint": "The game ended unexpectedly. The full log is shown below.",
+    "status": {
+      "idle": "Idle",
+      "launching": "Launching",
+      "running": "Running",
+      "exited": "Exited",
+      "error": "Error",
+      "crashed": "Crashed"
+    },
+    "source": {
+      "stdout": "OUT",
+      "stderr": "ERR",
+      "system": "SYS"
+    },
+    "system": {
+      "processStarted": "Process started",
+      "launching": "Launching…",
+      "processExited": "Process exited",
+      "processExitedWithCode": "Process exited with code {{exitCode}}",
+      "processError": "Process error",
+      "processCrashed": "Process crashed",
+      "processCrashedWithCode": "Process crashed with exit code {{exitCode}}",
+      "processCrashedWithMessage": "Process crashed: {{detail}}"
     }
   }
 }

@@ -2,18 +2,18 @@ import { z } from 'zod';
 
 type Brand<T, B extends string> = T & { readonly __brand: B };
 
-export type BundleSlug = Brand<string, 'BundleSlug'>;
+export type ClientSlug = Brand<string, 'ClientSlug'>;
 export type ClientId = Brand<number, 'ClientId'>;
 export type UserId = Brand<number, 'UserId'>;
 
-export const asBundleSlug = (value: string): BundleSlug => value as BundleSlug;
+export const asClientSlug = (value: string): ClientSlug => value as ClientSlug;
 export const asClientId = (value: number): ClientId => value as ClientId;
 export const asUserId = (value: number): UserId => value as UserId;
 
-export const BundleSlugSchema = z
+export const ClientSlugSchema = z
   .string()
   .min(1)
-  .transform((value): BundleSlug => value as BundleSlug);
+  .transform((value): ClientSlug => value as ClientSlug);
 
 export const ClientIdSchema = z
   .number()

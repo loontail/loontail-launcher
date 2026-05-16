@@ -1,5 +1,5 @@
 import { mainConfig } from '@main/config';
-import { buildMediaUrl, httpRequest } from '@main/infra/http';
+import { HttpError, buildAuthHeader, buildMediaUrl, httpGet, httpPutVoid } from '@main/infra/http';
 import { API_PATH_PREFIX, API_ROUTES } from '@shared/constants';
 import type { UserId } from '@shared/contracts/ids';
 import type { SkinKind } from '@shared/contracts/skin';
@@ -21,41 +21,24 @@ const UploadedAssetSchema = z.object({
   fileUrl: z.string(),
 });
 
+const BODY_PREVIEW_LIMIT = 500;
+
 const readErrorBody = async (response: Response): Promise<string> => {
   try {
     const text = await response.text();
-    return text.slice(0, 500);
+    return text.slice(0, BODY_PREVIEW_LIMIT);
   } catch {
     return '';
   }
 };
 
-export { buildMediaUrl };
-
 export const getUserSkinFields = async (userId: UserId): Promise<SkinFields> => {
-  const response = await httpRequest(API_ROUTES.users.byId(userId));
-  if (!response.ok) {
-    throw new Error(`getUserSkinFields HTTP ${response.status}: ${await readErrorBody(response)}`);
-  }
-  const raw: unknown = await response.json();
-  const parsed = SkinFieldsResponseSchema.parse(raw);
+  const parsed = await httpGet(API_ROUTES.users.byId(userId), SkinFieldsResponseSchema);
   return { skin: parsed.skin ?? null, cape: parsed.cape ?? null };
 };
 
-export const updateUserSkinFields = async (
-  userId: UserId,
-  fields: Partial<SkinFields>,
-): Promise<void> => {
-  const response = await httpRequest(API_ROUTES.users.byId(userId), {
-    method: 'PUT',
-    payload: fields,
-  });
-  if (!response.ok) {
-    throw new Error(
-      `updateUserSkinFields HTTP ${response.status}: ${await readErrorBody(response)}`,
-    );
-  }
-};
+export const updateUserSkinFields = (userId: UserId, fields: Partial<SkinFields>): Promise<void> =>
+  httpPutVoid(API_ROUTES.users.byId(userId), fields);
 
 export const uploadSkinFile = async (
   userId: UserId,
@@ -72,10 +55,10 @@ export const uploadSkinFile = async (
   const response = await fetch(endpoint, {
     method: 'POST',
     body: formData,
-    headers: { Authorization: `Bearer ${mainConfig.apiToken}` },
+    headers: buildAuthHeader(mainConfig.apiToken),
   });
   if (!response.ok) {
-    throw new Error(`uploadSkinFile HTTP ${response.status}: ${await readErrorBody(response)}`);
+    throw new HttpError(response.status, response.statusText, await readErrorBody(response));
   }
   const raw: unknown = await response.json();
   return UploadedAssetSchema.parse(raw);
@@ -85,7 +68,7 @@ export const fetchAssetBytes = async (fileUrl: string): Promise<Buffer> => {
   const absolute = buildMediaUrl(fileUrl);
   const response = await fetch(absolute);
   if (!response.ok) {
-    throw new Error(`fetchAssetBytes HTTP ${response.status}: ${await readErrorBody(response)}`);
+    throw new HttpError(response.status, response.statusText, await readErrorBody(response));
   }
   const arrayBuffer = await response.arrayBuffer();
   return Buffer.from(arrayBuffer);

@@ -1,4 +1,4 @@
-import { buildMediaUrl, httpRequest } from '@main/infra/http';
+import { HttpError, buildMediaUrl, httpGet, httpPost } from '@main/infra/http';
 import { scopedLogger } from '@main/infra/logger';
 import { clearStoredAuth, getStoredAuth, setStoredAuth } from '@main/infra/store';
 import { API_ROUTES } from '@shared/constants';
@@ -6,6 +6,7 @@ import {
   type Account,
   AccountSchema,
   LOGIN_ERROR_CODE,
+  type LoginErrorCode,
   type LoginPayload,
   type LoginResult,
   StrapiAuthOkSchema,
@@ -32,36 +33,29 @@ const normalizeAccount = (account: Account): Account => ({
       : null,
 });
 
+const loginErrorFromStatus = (status: number): LoginErrorCode => {
+  if (status === HTTP_TOO_MANY_REQUESTS) return LOGIN_ERROR_CODE.RateLimited;
+  if (isAuthFailureStatus(status)) return LOGIN_ERROR_CODE.InvalidCredentials;
+  return LOGIN_ERROR_CODE.Unknown;
+};
+
 export const login = async (payload: LoginPayload): Promise<LoginResult> => {
   try {
-    const response = await httpRequest(API_ROUTES.auth.login(), {
-      method: 'POST',
+    const parsed = await httpPost(API_ROUTES.auth.login(), StrapiAuthOkSchema, {
       payload,
       withToken: false,
     });
-
-    if (!response.ok) {
-      if (response.status === HTTP_TOO_MANY_REQUESTS) {
-        return { ok: false, error: LOGIN_ERROR_CODE.RateLimited };
-      }
-      if (isAuthFailureStatus(response.status)) {
-        return { ok: false, error: LOGIN_ERROR_CODE.InvalidCredentials };
-      }
-      logger.warn(`Login failed with status ${response.status}`);
-      return { ok: false, error: LOGIN_ERROR_CODE.Unknown };
-    }
-
-    const raw: unknown = await response.json();
-    const parsed = StrapiAuthOkSchema.safeParse(raw);
-    if (!parsed.success) {
-      logger.warn('Login response did not match schema', parsed.error.format());
-      return { ok: false, error: LOGIN_ERROR_CODE.Unknown };
-    }
-
-    const user = normalizeAccount(parsed.data.user);
-    setStoredAuth({ jwt: parsed.data.jwt, user });
+    const user = normalizeAccount(parsed.user);
+    setStoredAuth({ jwt: parsed.jwt, user });
     return { ok: true, user };
   } catch (error) {
+    if (error instanceof HttpError) {
+      const code = loginErrorFromStatus(error.status);
+      if (code === LOGIN_ERROR_CODE.Unknown) {
+        logger.warn(`Login failed with status ${error.status}`);
+      }
+      return { ok: false, error: code };
+    }
     logger.error('Login network error', error);
     return { ok: false, error: LOGIN_ERROR_CODE.NetworkError };
   }
@@ -72,33 +66,19 @@ export const fetchCurrentUser = async (): Promise<Account | null> => {
   if (stored === null) return null;
 
   try {
-    const response = await httpRequest(API_ROUTES.auth.me(), {
-      method: 'GET',
-      withToken: false,
-      bearer: stored.jwt,
-    });
-
-    if (response.status === HTTP_UNAUTHORIZED) {
-      clearStoredAuth();
-      return null;
-    }
-
-    if (!response.ok) {
-      logger.warn(`auth.me failed with status ${response.status}`);
-      return stored.user;
-    }
-
-    const raw: unknown = await response.json();
-    const parsed = AccountSchema.safeParse(raw);
-    if (!parsed.success) {
-      logger.warn('auth.me response did not match schema', parsed.error.format());
-      return stored.user;
-    }
-
-    const user = normalizeAccount(parsed.data);
+    const parsed = await httpGet(API_ROUTES.auth.me(), AccountSchema, { bearer: stored.jwt });
+    const user = normalizeAccount(parsed);
     setStoredAuth({ jwt: stored.jwt, user });
     return user;
   } catch (error) {
+    if (error instanceof HttpError) {
+      if (error.status === HTTP_UNAUTHORIZED) {
+        clearStoredAuth();
+        return null;
+      }
+      logger.warn(`auth.me failed with status ${error.status}`);
+      return stored.user;
+    }
     logger.error('auth.me network error', error);
     return stored.user;
   }
@@ -106,4 +86,11 @@ export const fetchCurrentUser = async (): Promise<Account | null> => {
 
 export const logout = (): void => {
   clearStoredAuth();
+};
+
+/** Read the locally-stored account without making a network request. Used by
+ *  the Minecraft service to derive an offline player name on launch. */
+export const getStoredAccount = (): Account | null => {
+  const stored = getStoredAuth();
+  return stored?.user ?? null;
 };

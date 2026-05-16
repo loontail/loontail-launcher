@@ -1,10 +1,11 @@
+import { buildMediaUrl } from '@main/infra/http';
 import { scopedLogger } from '@main/infra/logger';
 import { getStoredAuth, setStoredAuth } from '@main/infra/store';
 import { invalidateMediaCache, prewarmMediaCache } from '@main/services/media/mediaCache';
 import { ERROR_CODES } from '@shared/constants';
 import { type UserId, asUserId } from '@shared/contracts/ids';
 import type { SkinKind, UploadSkinPayload, UploadSkinResult } from '@shared/contracts/skin';
-import { buildMediaUrl, updateUserSkinFields, uploadSkinFile } from './skinApi';
+import { updateUserSkinFields, uploadSkinFile } from './skinApi';
 
 const logger = scopedLogger('skin');
 
