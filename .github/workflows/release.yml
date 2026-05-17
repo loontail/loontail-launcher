@@ -30,6 +30,20 @@ jobs:
             echo "proceed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Ensure required secrets are configured
+        if: steps.check.outputs.proceed == 'true'
+        env:
+          API_URL: ${{ secrets.API_URL }}
+          API_TOKEN: ${{ secrets.API_TOKEN }}
+        run: |
+          missing=()
+          [ -z "$API_URL" ] && missing+=("API_URL")
+          [ -z "$API_TOKEN" ] && missing+=("API_TOKEN")
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing required secret(s): ${missing[*]}. Set them under Settings → Secrets and variables → Actions before pushing to main."
+            exit 1
+          fi
+
   bump:
     needs: guard
     if: needs.guard.outputs.proceed == 'true'

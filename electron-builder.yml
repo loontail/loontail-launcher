@@ -18,14 +18,14 @@ electronFuses:
   enableEmbeddedAsarIntegrityValidation: true
   onlyLoadAppFromAsar: true
 win:
+  # Squirrel installs into %LOCALAPPDATA% and launches the app immediately
+  # after extracting; no wizard, no admin elevation. Updates are driven by
+  # electron-updater via the same GitHub Release that publishes
+  # `RELEASES` + the `.nupkg` files.
   target:
-    - target: nsis
+    - target: squirrel
       arch:
         - x64
-nsis:
-  oneClick: false
-  perMachine: false
-  allowToChangeInstallationDirectory: true
 mac:
   target:
     - target: dmg
