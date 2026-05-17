@@ -10,6 +10,12 @@ import { useUpdaterStore } from './store';
 // drives recurring checks while the launcher is open.
 const BACKGROUND_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 
+// Minimum gap between automatic checks (startup / focus / interval). Stops
+// burst focus events from spamming update.electronjs.org. User-clicked checks
+// bypass this — they go through `triggerUpdaterCheck` directly.
+const AUTO_CHECK_DEDUPE_MS = 5_000;
+let lastAutoCheckAt = 0;
+
 // Module state survives re-renders but resets on page reload — exactly right
 // for "don't re-toast the same news on every background poll, but do toast it
 // fresh in a new launcher session."
@@ -23,6 +29,27 @@ export const markUserInitiatedCheck = (): void => {
 
 export const triggerUpdaterCheck = (): void => {
   void window.api.invoke(IPC_CHANNELS.updaterCheck, undefined);
+};
+
+// Automatic checks (startup / focus / interval) skip if a check is already
+// in flight, an update is already staged, or another auto-check fired very
+// recently. The main process has its own in-flight guard too — this just
+// avoids the IPC roundtrip in the common case.
+const triggerAutoCheck = (): void => {
+  const now = Date.now();
+  if (now - lastAutoCheckAt < AUTO_CHECK_DEDUPE_MS) return;
+  const current = useUpdaterStore.getState().value;
+  if (
+    current &&
+    (current.state === UpdaterStates.CHECKING ||
+      current.state === UpdaterStates.AVAILABLE ||
+      current.state === UpdaterStates.DOWNLOADING ||
+      current.state === UpdaterStates.READY)
+  ) {
+    return;
+  }
+  lastAutoCheckAt = now;
+  triggerUpdaterCheck();
 };
 
 const isFinalState = (state: string): boolean =>
@@ -90,13 +117,18 @@ export const UpdaterEventsListener = (): null => {
   return null;
 };
 
-// Kick off an initial check on launcher startup, then poll in the background
-// while the app is open. Mounted alongside UpdaterEventsListener.
+// Kick off a check on launcher startup, on every window focus, and on a slow
+// interval while the app is open. Mounted alongside UpdaterEventsListener.
 export const UpdaterAutoCheck = (): null => {
   useEffect(() => {
-    triggerUpdaterCheck();
-    const id = setInterval(triggerUpdaterCheck, BACKGROUND_CHECK_INTERVAL_MS);
-    return () => clearInterval(id);
+    triggerAutoCheck();
+    const intervalId = setInterval(triggerAutoCheck, BACKGROUND_CHECK_INTERVAL_MS);
+    const onFocus = (): void => triggerAutoCheck();
+    window.addEventListener('focus', onFocus);
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('focus', onFocus);
+    };
   }, []);
   return null;
 };

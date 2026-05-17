@@ -27,25 +27,37 @@ export const createUpdaterService = (router: Router, mainWindow: BrowserWindow):
     mainWindow.webContents.send(IPC_EVENTS.updaterStatus, payload);
   };
 
-  let checking = false;
+  // `inFlight` is driven by autoUpdater lifecycle events, not the
+  // (synchronous) checkForUpdates() return — the actual check happens
+  // asynchronously via Squirrel events. We stay in-flight from CHECKING
+  // through download completion (READY) or terminal NOT_AVAILABLE / ERROR.
+  let inFlight = false;
   let registered = false;
 
-  const onCheckingForUpdate = (): void => broadcast({ state: UpdaterStates.CHECKING });
-  const onUpdateNotAvailable = (): void => broadcast({ state: UpdaterStates.NOT_AVAILABLE });
+  const onCheckingForUpdate = (): void => {
+    inFlight = true;
+    broadcast({ state: UpdaterStates.CHECKING });
+  };
+  const onUpdateNotAvailable = (): void => {
+    inFlight = false;
+    broadcast({ state: UpdaterStates.NOT_AVAILABLE });
+  };
   // Squirrel's autoUpdater doesn't surface a separate progress event; the
   // download is opaque until `update-downloaded` fires. Emit AVAILABLE so the
   // UI can show "downloading…" while Squirrel pulls the .nupkg in the
-  // background.
+  // background. Stay in-flight until READY (or ERROR).
   const onUpdateAvailable = (): void => broadcast({ state: UpdaterStates.AVAILABLE, version: '' });
   const onUpdateDownloaded = (
     _event: unknown,
     _releaseNotes: string,
     releaseName: string,
   ): void => {
+    inFlight = false;
     broadcast({ state: UpdaterStates.READY, version: releaseName || app.getVersion() });
   };
   const onError = (error: Error): void => {
     logger.error('autoUpdater error', error);
+    inFlight = false;
     broadcast({ state: UpdaterStates.ERROR, message: error.message });
   };
 
@@ -78,16 +90,18 @@ export const createUpdaterService = (router: Router, mainWindow: BrowserWindow):
           broadcast({ state: UpdaterStates.NOT_AVAILABLE });
           return;
         }
-        if (checking) return;
-        checking = true;
+        if (inFlight) {
+          logger.info('updaterCheck: skipped (already in flight)');
+          return;
+        }
         try {
+          logger.info('updaterCheck: invoking autoUpdater.checkForUpdates()');
           autoUpdater.checkForUpdates();
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
           logger.error('autoUpdater check failed', err);
+          inFlight = false;
           broadcast({ state: UpdaterStates.ERROR, message: err.message });
-        } finally {
-          checking = false;
         }
       });
     },
