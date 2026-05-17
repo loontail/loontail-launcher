@@ -1,5 +1,6 @@
 import type { InstallStage } from '@loontail/minecraft-kit';
 import { z } from 'zod';
+import { ConsoleSources } from './console';
 import { ClientSlugSchema } from './ids';
 import { LoaderChoiceSchema } from './settings';
 
@@ -54,6 +55,10 @@ export const MinecraftErrorCodes = {
   OP_IN_FLIGHT: 'opInFlight',
   NOT_INSTALLED: 'notInstalled',
   ABORTED: 'aborted',
+  NETWORK_ERROR: 'networkError',
+  INTEGRITY_ERROR: 'integrityError',
+  RUNTIME_ERROR: 'runtimeError',
+  LAUNCH_FAILED: 'launchFailed',
   KIT_ERROR: 'kitError',
   UNKNOWN: 'unknown',
 } as const;
@@ -67,6 +72,10 @@ export const MinecraftErrorCodeSchema = z.enum([
   MinecraftErrorCodes.OP_IN_FLIGHT,
   MinecraftErrorCodes.NOT_INSTALLED,
   MinecraftErrorCodes.ABORTED,
+  MinecraftErrorCodes.NETWORK_ERROR,
+  MinecraftErrorCodes.INTEGRITY_ERROR,
+  MinecraftErrorCodes.RUNTIME_ERROR,
+  MinecraftErrorCodes.LAUNCH_FAILED,
   MinecraftErrorCodes.KIT_ERROR,
   MinecraftErrorCodes.UNKNOWN,
 ]);
@@ -94,7 +103,7 @@ export type MinecraftProgressEvent = z.infer<typeof MinecraftProgressEventSchema
 
 export const MinecraftLogEventSchema = z.object({
   slug: ClientSlugSchema,
-  stream: z.enum(['stdout', 'stderr']),
+  stream: z.enum([ConsoleSources.STDOUT, ConsoleSources.STDERR]),
   line: z.string(),
 });
 

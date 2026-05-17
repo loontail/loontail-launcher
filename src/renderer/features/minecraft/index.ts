@@ -1,3 +1,4 @@
+export { localizeMinecraftError } from './errorCopy';
 export { MinecraftEventsListener } from './events';
 export {
   useCancelInstall,

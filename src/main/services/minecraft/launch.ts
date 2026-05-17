@@ -1,4 +1,4 @@
-import { AuthModes } from '@loontail/minecraft-kit';
+import { AuthModes, EventTypes } from '@loontail/minecraft-kit';
 import { consoleHub } from '@main/infra/consoleHub';
 import { openConsoleWindow } from '@main/windows/consoleWindow';
 import type { Account } from '@shared/contracts/account';
@@ -23,8 +23,7 @@ export const endLaunch = (env: ManagerEnv, slug: ClientSlug, error?: unknown): v
       args: { detail: message },
       slug,
     });
-    // Promote the console window so the user can see the crash details
-    // even when the launcher's auto-open preference was off.
+    // Surface crash details even if auto-open is off — user needs the backlog.
     if (!consoleHub.hasWindow()) openConsoleWindow();
   } else {
     env.logger.info(`[${slug}] launch: game exited`);
@@ -66,13 +65,12 @@ export const runLaunch = async (
     if (consoleEnabled) openConsoleWindow();
     const session = env.kit.launch.run(composition, {
       onEvent: (event) => {
-        if (event.type !== 'launch:stdout' && event.type !== 'launch:stderr') return;
+        if (event.type !== EventTypes.LAUNCH_STDOUT && event.type !== EventTypes.LAUNCH_STDERR)
+          return;
         const stream =
-          event.type === 'launch:stdout' ? ConsoleSources.STDOUT : ConsoleSources.STDERR;
+          event.type === EventTypes.LAUNCH_STDOUT ? ConsoleSources.STDOUT : ConsoleSources.STDERR;
         consoleHub.recordMinecraft(slug, stream, event.line);
-        // Preserve the legacy `minecraft.log` IPC event so any external
-        // subscribers keep working — the console window itself uses the
-        // ConsoleHub push channel.
+        // Keep the legacy `minecraft.log` IPC event for external subscribers.
         if (consoleEnabled) {
           env.broadcaster.log({ slug, stream, line: event.line });
         }
@@ -86,8 +84,8 @@ export const runLaunch = async (
       slug,
     });
 
-    // Kit rejects `session.exited` on non-zero exit; the trailing `.catch`
-    // covers the case where `endLaunch` itself throws (e.g. logger failure).
+    // Kit rejects session.exited on non-zero exit; trailing .catch guards
+    // against endLaunch itself throwing.
     void session.exited
       .then(() => {
         endLaunch(env, slug);
@@ -105,8 +103,6 @@ export const runLaunch = async (
     const message = errorMessage(error);
     consoleHub.emitState({ slug, status: ConsoleStatuses.ERROR, message });
     consoleHub.recordSystem(`Process error: ${message}`, { slug });
-    // Surface failures even when the user opted out of auto-open — they
-    // need the message + recorded backlog to diagnose what went wrong.
     if (!consoleHub.hasWindow()) openConsoleWindow();
     throw error;
   }

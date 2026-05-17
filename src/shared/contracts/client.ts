@@ -9,20 +9,17 @@ export const KeywordSchema = StrapiEntitySchema.extend({
 
 export type Keyword = z.infer<typeof KeywordSchema>;
 
-// Strapi sometimes returns versions as objects with a `version` field, sometimes as raw strings.
-// The raw schema stays permissive; the service normalizes versions to strings before returning.
+// Strapi may return versions as a raw string or `{ version: string }`; service normalizes.
 const VersionField = z
   .union([z.string(), z.null(), z.object({ version: z.string() }).passthrough()])
   .optional();
 
-// Strapi may serialize descriptions as rich-text blocks (object/array) or as `null`
-// for unset fields. Keep the raw shape permissive; the service coerces to string.
+// Permissive: rich-text can be string, blocks structure, or null. Service coerces.
 const DescriptionField = z.unknown().optional();
 
 export const ClientResponseSchema = StrapiEntitySchema.extend({
-  // `slug` is the launcher-side identifier — required in the schema but kept
-  // optional/nullable here so the Zod parse doesn't reject records whose admin
-  // hasn't filled it yet. The service layer raises a typed error if missing.
+  // Kept optional in the wire schema so unconfigured records don't blow up
+  // parsing; the service layer drops records without a slug.
   slug: z.union([z.string(), z.null()]).optional(),
   title: z.string(),
   description: DescriptionField,
@@ -34,7 +31,6 @@ export const ClientResponseSchema = StrapiEntitySchema.extend({
   fabricVersion: VersionField,
   runtimeVersion: VersionField,
 
-  bundleSlug: z.union([z.string(), z.null()]).optional(),
   servers: z.array(ServerSchema).optional(),
 
   screenshots: z.array(StrapiMediaSchema).default([]),
@@ -46,14 +42,10 @@ export const ClientResponseSchema = StrapiEntitySchema.extend({
 
 export type ClientResponse = z.infer<typeof ClientResponseSchema>;
 
-// Renderer-facing shape: versions normalized to strings, media URLs absolutized,
-// `id` branded as `ClientId` and `slug` as `ClientSlug`.
-// `slug` is the launcher's canonical client identifier — used as the settings key,
-// IPC arg, and install folder name. `bundleSlug` is a separate, plain-string
-// reference to a bundle in the bundle-registry plugin (kept here only because the
-// API still returns it; not used for client identity).
-// Optional fields include `| undefined` to satisfy exactOptionalPropertyTypes when
-// spreading the Zod-inferred ClientResponse (Zod's `.optional()` widens to `T | undefined`).
+// Renderer-facing shape: versions normalized to strings, media URLs absolutized.
+// `slug` is the launcher's canonical client id (settings key + folder name).
+// Optional fields include `| undefined` for exactOptionalPropertyTypes
+// compatibility with the Zod-inferred ClientResponse spread.
 export type Client = {
   id: ClientId;
   documentId: string;
@@ -72,7 +64,6 @@ export type Client = {
   fabricVersion?: string | null | undefined;
   runtimeVersion?: string | null | undefined;
 
-  bundleSlug?: string | null | undefined;
   servers?: Server[] | undefined;
 
   screenshots: StrapiMedia[];

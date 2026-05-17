@@ -75,17 +75,15 @@ export class MinecraftManager {
     this.requireIdle(slug);
     const ctx = await buildContext(this.kit, slug, loaderOverride);
     const op = beginInstall(this.env, slug, ctx, { fresh: true });
-    void runInstall(this.env, slug, ctx, op)
-      .then(() => {
-        this.env.emitStatus({
-          slug,
-          status: InstallStatuses.INSTALLED,
-          paused: false,
-        });
-      })
-      .catch((error: unknown) => {
-        logger.error(`[${slug}] install: unhandled rejection`, error);
-      });
+    // runInstall handles errors internally (emits via handleInstallFailure) and
+    // rethrows for the launch path; in the fire-and-forget case we only need
+    // the final INSTALLED status on success.
+    void runInstall(this.env, slug, ctx, op).then(
+      () => this.env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false }),
+      () => {
+        // Already reported by handleInstallFailure; nothing to do here.
+      },
+    );
   }
 
   pause(slug: ClientSlug): void {
@@ -126,9 +124,9 @@ export class MinecraftManager {
     this.ops.set(slug, op);
     this.env.emitStatus({ slug, status: InstallStatuses.REPAIRING, paused: false });
 
-    void runRepair(this.env, slug, ctx, op).catch((error: unknown) => {
-      logger.error(`[${slug}] repair: unhandled rejection`, error);
-    });
+    // runRepair never throws; it handles errors internally via emitError +
+    // emitStatus and always clears the ops map in finally.
+    void runRepair(this.env, slug, ctx, op);
   }
 
   async uninstall(slug: ClientSlug): Promise<void> {

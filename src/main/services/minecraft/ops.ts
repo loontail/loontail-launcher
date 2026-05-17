@@ -16,9 +16,7 @@ export type InstallOp = {
   abort: AbortController;
   paused: boolean;
   cancelled: boolean;
-  // True for first-time installs (Download button). False for the implicit
-  // update that runs before launch — those must not wipe the existing
-  // client folder when cancelled.
+  // false = implicit pre-launch update; cancelling such an op keeps the existing folder.
   fresh: boolean;
 };
 

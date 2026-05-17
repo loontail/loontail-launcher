@@ -37,6 +37,11 @@ const STATUSES_WITHOUT_PROGRESS: ReadonlySet<InstallStatus> = new Set([
   InstallStatuses.UNKNOWN,
 ]);
 
+const STATUSES_CLEAR_ERROR: ReadonlySet<InstallStatus> = new Set([
+  InstallStatuses.INSTALLED,
+  InstallStatuses.NOT_INSTALLED,
+]);
+
 export const useMinecraftStore = create<Store>((set) => ({
   entries: {},
   patch: (slug, change) =>
@@ -48,6 +53,9 @@ export const useMinecraftStore = create<Store>((set) => ({
         merged.stagePercent = undefined;
         merged.overallPercent = undefined;
         merged.currentFile = undefined;
+      }
+      if (change.status && STATUSES_CLEAR_ERROR.has(change.status)) {
+        merged.error = undefined;
       }
       return { entries: { ...state.entries, [slug]: merged } };
     }),

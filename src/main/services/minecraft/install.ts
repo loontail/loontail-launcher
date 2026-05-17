@@ -121,8 +121,7 @@ export const runInstall = async (
       tracker.finish();
       unsubscribe();
     }
-    // Runtime path is the only piece the launcher needs to remember per
-    // client — there's no derivable equivalent in launcher settings.
+    // No derivable equivalent for runtime path elsewhere in settings.
     env.persistRuntime(slug, {
       component: ctx.target.runtime.component,
       path: runtimePathFor(ctx.target.runtime.component),

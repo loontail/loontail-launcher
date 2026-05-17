@@ -6,10 +6,8 @@ import type { ManagerEnv } from './env';
 import { ManagerError, errorMessage } from './errors';
 import { OpKinds } from './ops';
 
-// Belt-and-braces guard before recursive rm. The folder must be the result of
-// the user's "Pick client folder" flow — i.e. somewhere under the configured
-// clientsRoot, not a parent of it. Anything ascending out of clientsRoot via
-// `..` or escaping by absolute path is rejected.
+// Guard before recursive rm: reject anything not strictly under clientsRoot
+// (no `..` escapes, no absolute paths).
 export const isUnderClientsRoot = (folder: string, clientsRoot: string): boolean => {
   if (!folder || !clientsRoot) return false;
   const rel = path.relative(clientsRoot, folder);

@@ -27,9 +27,8 @@ const coerceVersionString = (input: unknown): string | null => {
   return null;
 };
 
-// Strapi rich-text descriptions may arrive as string, null, or a blocks structure.
-// The renderer ultimately feeds `description` to `marked.parse`, so anything non-string
-// is collapsed to '' here — preserving the previous behavior of `description ?? ''`.
+// Strapi rich-text fields may be string, null, or a blocks structure; collapse
+// anything non-string to '' (renderer feeds this to marked.parse).
 const coerceDescriptionString = (input: unknown): string =>
   typeof input === 'string' ? input : '';
 
@@ -53,9 +52,7 @@ const absolutizeMedia = (media: StrapiMedia): StrapiMedia => ({
 
 const normalizeClient = (client: ClientResponse): Client | null => {
   if (!client.slug) {
-    // Admin hasn't set `slug` for this record yet. The launcher cannot identify
-    // it (settings key, install folder, IPC). Drop it from the list rather
-    // than crashing — fetchClients warns once per affected document.
+    // No slug — launcher cannot identify (settings key, folder, IPC). Drop.
     logger.warn(
       `Strapi client id=${client.id} (documentId=${client.documentId}) has no slug; skipping`,
     );
@@ -66,7 +63,6 @@ const normalizeClient = (client: ClientResponse): Client | null => {
     ...client,
     id: asClientId(client.id),
     slug: asClientSlug(client.slug),
-    bundleSlug: client.bundleSlug ?? null,
     description: coerceDescriptionString(client.description),
     shortDescription: coerceDescriptionString(client.shortDescription),
     minecraftVersion: coerceVersionString(client.minecraftVersion) ?? '',

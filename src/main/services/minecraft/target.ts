@@ -13,8 +13,7 @@ export const clientToTargetInput = (input: {
   loader: LoaderChoice;
 }): TargetResolveInput => {
   const { client, clientFolder, runtimeRoot, loader } = input;
-  // Admins use Strapi's `runtimeVersion` to pin a runtime; otherwise the kit
-  // picks one from the resolved Minecraft manifest's javaVersion.component.
+  // Strapi's `runtimeVersion` pins a runtime; falsy → kit picks from javaVersion.component.
   const runtimeComponent = client.runtimeVersion?.trim() || undefined;
   return {
     id: targetIdFor(client),

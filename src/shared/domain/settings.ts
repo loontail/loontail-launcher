@@ -242,3 +242,22 @@ export const clearClientOverrides = (
   }
   return { ...settings, clients };
 };
+
+// Drop per-client overrides whose slug isn't in keepSlugs. Used at startup to
+// sweep records left over from clients deleted in Strapi.
+export const pruneClientOverrides = (
+  settings: LauncherSettings,
+  keepSlugs: ReadonlySet<string>,
+): LauncherSettings => {
+  const next: Record<string, ClientSettingsOverride> = {};
+  let removed = false;
+  for (const [slug, override] of Object.entries(settings.clients)) {
+    if (override === undefined) continue;
+    if (keepSlugs.has(slug)) {
+      next[slug] = override;
+    } else {
+      removed = true;
+    }
+  }
+  return removed ? { ...settings, clients: next } : settings;
+};
