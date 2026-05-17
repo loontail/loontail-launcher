@@ -8,8 +8,14 @@ permissions:
   contents: write
 
 # Required secrets:
-#   API_URL    — Strapi base URL baked into the build
-#   API_TOKEN  — Strapi token baked into the build
+#   API_URL        — Strapi base URL baked into the build
+#   API_TOKEN      — Strapi token baked into the build
+#   RELEASE_TOKEN  — fine-grained PAT (Contents: read/write) belonging to a
+#                    user in the repo's branch ruleset bypass list. Used by
+#                    the bump job to push the version commit directly to
+#                    `main`, since the default `GITHUB_TOKEN` is not in the
+#                    bypass list and the ruleset requires PRs for direct
+#                    pushes.
 #
 # Loop guard: the bump commit ("chore(release): vX.Y.Z [skip release]") triggers
 # this workflow again; the guard job exits if the marker is present.
@@ -35,10 +41,12 @@ jobs:
         env:
           API_URL: ${{ secrets.API_URL }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
+          RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           missing=()
           [ -z "$API_URL" ] && missing+=("API_URL")
           [ -z "$API_TOKEN" ] && missing+=("API_TOKEN")
+          [ -z "$RELEASE_TOKEN" ] && missing+=("RELEASE_TOKEN")
           if [ ${#missing[@]} -gt 0 ]; then
             echo "::error::Missing required secret(s): ${missing[*]}. Set them under Settings → Secrets and variables → Actions before pushing to main."
             exit 1
@@ -55,7 +63,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # PAT belongs to a repo admin (bypass list), so the push below
+          # bypasses the "Require pull request" ruleset.
+          token: ${{ secrets.RELEASE_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
