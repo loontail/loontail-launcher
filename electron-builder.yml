@@ -22,23 +22,15 @@ electronFuses:
   enableEmbeddedAsarIntegrityValidation: true
   onlyLoadAppFromAsar: true
 win:
+  # Squirrel.Windows installs into %LOCALAPPDATA% and launches the app
+  # immediately after extracting — no wizard, no admin prompt. Updates use
+  # Electron's built-in `autoUpdater` (see `src/main/services/updater`) which
+  # talks to `update.electronjs.org` and pulls the `RELEASES` + `.nupkg` from
+  # this repo's GitHub Releases.
   target:
-    - target: nsis
+    - target: squirrel
       arch:
         - x64
-nsis:
-  # oneClick + perMachine:false installs into %LOCALAPPDATA% silently and
-  # launches the app immediately — same UX as Squirrel but without its
-  # built-in updater (we use electron-updater). NSIS is what electron-updater
-  # is best supported by: electron-builder bakes `app-update.yml` into
-  # `resources/` and `latest.yml` is published alongside the installer.
-  oneClick: true
-  perMachine: false
-  allowToChangeInstallationDirectory: false
-  runAfterFinish: true
-  createDesktopShortcut: true
-  createStartMenuShortcut: true
-  deleteAppDataOnUninstall: false
 mac:
   target:
     - target: dmg

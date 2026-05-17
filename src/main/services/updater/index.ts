@@ -2,42 +2,24 @@ import { scopedLogger } from '@main/infra/logger';
 import type { Router } from '@main/ipc/router';
 import { UpdaterStates, type UpdaterStatusEvent } from '@shared/contracts/updater';
 import { IPC_CHANNELS, IPC_EVENTS } from '@shared/ipc';
-import { type BrowserWindow, app } from 'electron';
-import { autoUpdater } from 'electron-updater';
+import { type BrowserWindow, app, autoUpdater } from 'electron';
 
 const logger = scopedLogger('updater');
+
+// `update.electronjs.org` is the Electron team's free Squirrel update proxy
+// in front of public GitHub Releases. It reads the `RELEASES` + `*-full.nupkg`
+// that `electron-builder` publishes for the Squirrel.Windows target and serves
+// them in the format `electron.autoUpdater` expects.
+const FEED_BASE = 'https://update.electronjs.org';
+const REPO_OWNER = 'loontail';
+const REPO_NAME = 'minecraft-launcher';
 
 export type UpdaterService = {
   init: () => Promise<void>;
   dispose: () => Promise<void>;
 };
 
-// Local event-to-payload map for the events we listen to. electron-updater
-// exposes the event name union but not a typed payload map, so we encode the
-// payloads here and validate them via the explicit handler signatures below.
-type EventMap = {
-  'checking-for-update': () => void;
-  'update-available': (info: { version: string }) => void;
-  'update-not-available': () => void;
-  'download-progress': (info: { percent: number }) => void;
-  'update-downloaded': (info: { version: string }) => void;
-  'update-cancelled': () => void;
-  error: (error: Error) => void;
-};
-
-type Unsubscribe = () => void;
-
-const bind = <Event extends keyof EventMap>(
-  event: Event,
-  handler: EventMap[Event],
-): Unsubscribe => {
-  // electron-updater's `on` is typed permissively (`event: UpdaterEvents`)
-  // and accepts any handler. We narrow at the call site.
-  autoUpdater.on(event, handler as never);
-  return () => {
-    autoUpdater.removeListener(event, handler as never);
-  };
-};
+const isSquirrelEnabled = (): boolean => app.isPackaged && process.platform === 'win32';
 
 export const createUpdaterService = (router: Router, mainWindow: BrowserWindow): UpdaterService => {
   const broadcast = (payload: UpdaterStatusEvent): void => {
@@ -46,53 +28,60 @@ export const createUpdaterService = (router: Router, mainWindow: BrowserWindow):
   };
 
   let checking = false;
-  const unsubscribers: Unsubscribe[] = [];
+  let registered = false;
+
+  const onCheckingForUpdate = (): void => broadcast({ state: UpdaterStates.CHECKING });
+  const onUpdateNotAvailable = (): void => broadcast({ state: UpdaterStates.NOT_AVAILABLE });
+  // Squirrel's autoUpdater doesn't surface a separate progress event; the
+  // download is opaque until `update-downloaded` fires. Emit AVAILABLE so the
+  // UI can show "downloading…" while Squirrel pulls the .nupkg in the
+  // background.
+  const onUpdateAvailable = (): void => broadcast({ state: UpdaterStates.AVAILABLE, version: '' });
+  const onUpdateDownloaded = (
+    _event: unknown,
+    _releaseNotes: string,
+    releaseName: string,
+  ): void => {
+    broadcast({ state: UpdaterStates.READY, version: releaseName || app.getVersion() });
+  };
+  const onError = (error: Error): void => {
+    logger.error('autoUpdater error', error);
+    broadcast({ state: UpdaterStates.ERROR, message: error.message });
+  };
 
   return {
     init: async () => {
-      autoUpdater.autoDownload = true;
-      autoUpdater.autoInstallOnAppQuit = true;
-      autoUpdater.logger = logger;
-
-      unsubscribers.push(
-        bind('checking-for-update', () => broadcast({ state: UpdaterStates.CHECKING })),
-        bind('update-available', (info) =>
-          broadcast({ state: UpdaterStates.AVAILABLE, version: info.version }),
-        ),
-        bind('update-not-available', () => broadcast({ state: UpdaterStates.NOT_AVAILABLE })),
-        bind('download-progress', (info) =>
-          broadcast({ state: UpdaterStates.DOWNLOADING, percent: info.percent }),
-        ),
-        bind('update-downloaded', (info) =>
-          broadcast({ state: UpdaterStates.READY, version: info.version }),
-        ),
-        bind('update-cancelled', () => broadcast({ state: UpdaterStates.NOT_AVAILABLE })),
-        bind('error', (error) => {
-          logger.error('autoUpdater error', error);
-          broadcast({ state: UpdaterStates.ERROR, message: error.message });
-        }),
-      );
+      if (isSquirrelEnabled()) {
+        const feed = `${FEED_BASE}/${REPO_OWNER}/${REPO_NAME}/${process.platform}-${process.arch}/${app.getVersion()}`;
+        try {
+          autoUpdater.setFeedURL({ url: feed });
+          autoUpdater.on('checking-for-update', onCheckingForUpdate);
+          autoUpdater.on('update-not-available', onUpdateNotAvailable);
+          autoUpdater.on('update-available', onUpdateAvailable);
+          autoUpdater.on('update-downloaded', onUpdateDownloaded);
+          autoUpdater.on('error', onError);
+          registered = true;
+        } catch (error) {
+          logger.warn('autoUpdater setup failed; updates disabled', error);
+        }
+      } else {
+        logger.info('autoUpdater disabled (not a packaged Windows build)');
+      }
 
       router.handle(IPC_CHANNELS.updaterInstall, () => {
-        // Restart + apply the staged update. autoUpdater drives app.quit()
-        // itself, so the renderer doesn't need to confirm.
-        if (!app.isPackaged) return;
+        if (!isSquirrelEnabled()) return;
         autoUpdater.quitAndInstall();
       });
 
       router.handle(IPC_CHANNELS.updaterCheck, async () => {
-        // electron-updater is a no-op in dev — `checkForUpdates` would throw
-        // on a missing dev-app-update.yml. Tell the renderer instead.
-        if (!app.isPackaged) {
+        if (!isSquirrelEnabled()) {
           broadcast({ state: UpdaterStates.NOT_AVAILABLE });
           return;
         }
-        // Guard against the user mashing the Check button: autoUpdater queues
-        // concurrent calls but surfaces them as confusing duplicate events.
         if (checking) return;
         checking = true;
         try {
-          await autoUpdater.checkForUpdates();
+          autoUpdater.checkForUpdates();
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
           logger.error('autoUpdater check failed', err);
@@ -103,10 +92,12 @@ export const createUpdaterService = (router: Router, mainWindow: BrowserWindow):
       });
     },
     dispose: async () => {
-      while (unsubscribers.length > 0) {
-        const off = unsubscribers.pop();
-        off?.();
-      }
+      if (!registered) return;
+      autoUpdater.removeListener('checking-for-update', onCheckingForUpdate);
+      autoUpdater.removeListener('update-not-available', onUpdateNotAvailable);
+      autoUpdater.removeListener('update-available', onUpdateAvailable);
+      autoUpdater.removeListener('update-downloaded', onUpdateDownloaded);
+      autoUpdater.removeListener('error', onError);
     },
   };
 };

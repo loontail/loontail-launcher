@@ -1,3 +1,12 @@
+// Squirrel.Windows spawns the packaged exe with `--squirrel-install`,
+// `--squirrel-uninstall`, `--squirrel-updated`, `--squirrel-obsolete`, or
+// `--squirrel-firstrun` during install/update/uninstall flows. The
+// `electron-squirrel-startup` module handles shortcut create/remove for those
+// arg variants and returns `true` so the app should exit immediately. This
+// has to run before any other Electron initialization.
+import squirrelStartup from 'electron-squirrel-startup';
+if (squirrelStartup) process.exit(0);
+
 import { seedLauncherSettings } from '@main/bootstrap/seed';
 import { sweepOrphanClientOverrides } from '@main/bootstrap/sweepOrphans';
 import { initLogger, scopedLogger } from '@main/infra/logger';
