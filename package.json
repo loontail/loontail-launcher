@@ -4,6 +4,10 @@
   "private": true,
   "description": "Loontail Minecraft launcher.",
   "main": "out/main/index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loontail/minecraft-launcher.git"
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
@@ -14,12 +18,15 @@
     "format": "biome format --write .",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
+    "lint:i18n": "node scripts/lintI18n.mjs",
+    "lint:strapi": "node scripts/diffStrapiSchemas.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "verify": "npm run lint && npm run typecheck && npm test && npm run lint:i18n && npm run lint:strapi && npm run build"
   },
   "dependencies": {
     "@fontsource/nunito": "^5.0.0",
-    "@loontail/minecraft-kit": "file:../minecraft-kit",
+    "@loontail/minecraft-kit": "^0.6.0",
     "@splidejs/react-splide": "^0.7.12",
     "@splidejs/splide": "^4.1.4",
     "@tanstack/query-sync-storage-persister": "^5.100.10",
@@ -48,7 +55,7 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.7.0",
-    "electron": "^33.0.0",
+    "electron": "^38.8.6",
     "electron-builder": "^25.0.0",
     "electron-vite": "^2.3.0",
     "tailwindcss": "^4.0.0",
