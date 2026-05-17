@@ -1,6 +1,6 @@
 {
   "name": "@loontail/minecraft-launcher",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "private": true,
   "description": "Loontail Minecraft launcher.",
   "main": "out/main/index.js",
