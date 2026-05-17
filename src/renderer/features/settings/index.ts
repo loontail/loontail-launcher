@@ -9,6 +9,7 @@ export {
   useChooseClientFolder,
   useClearClientOverrides,
   useDiskSpace,
+  useFolderSize,
   useLauncherSettings,
   usePickInstallFolder,
   useRamRange,

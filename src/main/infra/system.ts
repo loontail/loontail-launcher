@@ -1,9 +1,10 @@
-import { existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { type Dirent, existsSync, mkdirSync, readdirSync } from 'node:fs';
+import { readdir, stat } from 'node:fs/promises';
 import { totalmem } from 'node:os';
 import { basename, join } from 'node:path';
 import { scopedLogger } from '@main/infra/logger';
 import { RAM_MIN_MB, RAM_STEP_MB } from '@shared/constants';
-import type { DiskInfo, PickedFolder } from '@shared/contracts/system';
+import type { DiskInfo, FolderSize, PickedFolder } from '@shared/contracts/system';
 import { type BrowserWindow, dialog, shell } from 'electron';
 
 const BYTES_PER_MB = 1024 * 1024;
@@ -60,6 +61,46 @@ export const getDiskSpace = async (path: string): Promise<DiskInfo> => {
   } catch (error) {
     logger.warn('Failed to read disk space', { path, error });
     return { path, error: true };
+  }
+};
+
+const walkDirectorySize = async (root: string): Promise<number> => {
+  let total = 0;
+  const walk = async (dir: string): Promise<void> => {
+    let entries: Dirent[];
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    await Promise.all(
+      entries.map(async (entry) => {
+        const full = join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await walk(full);
+        } else if (entry.isFile()) {
+          try {
+            const info = await stat(full);
+            total += info.size;
+          } catch {
+            // skip unreadable file
+          }
+        }
+      }),
+    );
+  };
+  await walk(root);
+  return total;
+};
+
+export const getFolderSize = async (path: string): Promise<FolderSize> => {
+  if (!path || !existsSync(path)) return { path, bytes: null };
+  try {
+    const bytes = await walkDirectorySize(path);
+    return { path, bytes };
+  } catch (error) {
+    logger.warn('Failed to compute folder size', { path, error });
+    return { path, bytes: null };
   }
 };
 

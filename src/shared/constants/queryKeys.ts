@@ -18,6 +18,8 @@ export const QUERY_KEYS = {
     ramRange: ['system', 'ramRange'] as const,
     diskSpaceRoot: ['system', 'diskSpace'] as const,
     diskSpace: (path: string) => ['system', 'diskSpace', path] as const,
+    folderSizeRoot: ['system', 'folderSize'] as const,
+    folderSize: (path: string) => ['system', 'folderSize', path] as const,
   },
 } as const;
 
@@ -28,4 +30,4 @@ export const QUERY_KEY_ROOTS = {
   servers: 'servers',
   settings: 'settings',
   system: 'system',
-} as const;
+} as const satisfies Record<string, string>;

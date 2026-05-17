@@ -1,8 +1,11 @@
+import { i18n } from '@renderer/i18n';
+import { toast } from '@renderer/shared/ui/Toast';
 import { QUERY_KEYS } from '@shared/constants';
 import type { ClientSlug } from '@shared/contracts/ids';
 import type { ClientSettingsOverride, LauncherSettings } from '@shared/contracts/settings';
 import { resolveClientSettings } from '@shared/domain/settings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import {
   chooseClientFolder,
   clearClientOverrides,
@@ -10,17 +13,14 @@ import {
   setClientOverride,
   setLauncher,
 } from './api';
-import { getDiskSpace, getRamRange, pickInstallFolder } from './systemApi';
+import { getDiskSpace, getFolderSize, getRamRange, pickInstallFolder } from './systemApi';
 
 const DISK_SPACE_STALE_TIME_MS = 30_000;
+const DISK_SPACE_DEBOUNCE_MS = 300;
+const FOLDER_SIZE_STALE_TIME_MS = 60_000;
 
-/**
- * Wraps the four near-identical "settings mutation" patterns: run the IPC call,
- * push the resulting `LauncherSettings` into the cache, expose `{mutate,isPending}`.
- * The optional `extract` lets a mutation return a wrapper shape
- * (e.g. `chooseClientFolder` → `{settings, installed}`) and still feed only the
- * settings part into the cache; returns `null` to skip the cache update.
- */
+// Common settings-mutation pattern. `extract` lets a mutation return a wrapper
+// shape and still feed only the settings part into the cache.
 const useLauncherSettingsMutation = <TInput, TResult>(
   mutationFn: (input: TInput) => Promise<TResult>,
   extract: (result: TResult) => LauncherSettings | null = (result) =>
@@ -56,8 +56,18 @@ export const useSetClientOverride = () =>
 
 export const useClearClientOverrides = () => useLauncherSettingsMutation(clearClientOverrides);
 
-export const useChooseClientFolder = () =>
-  useLauncherSettingsMutation(chooseClientFolder, (result) => result?.settings ?? null);
+export const useChooseClientFolder = () => {
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: chooseClientFolder,
+    onSuccess: (result) => {
+      if (!result) return;
+      queryClient.setQueryData(QUERY_KEYS.settings.root, result.settings);
+      toast.success(i18n.t('clientSettings.folderChangedToast'));
+    },
+  });
+  return { mutate: mutation.mutateAsync, isPending: mutation.isPending };
+};
 
 export const usePickInstallFolder = () => {
   const queryClient = useQueryClient();
@@ -65,9 +75,14 @@ export const usePickInstallFolder = () => {
   const mutation = useMutation({
     mutationFn: async () => {
       const picked = await pickInstallFolder();
-      if (!picked) return;
+      if (!picked) return false;
       await applyLauncher({ storage: { clientsFolder: picked.path } });
       void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.system.diskSpaceRoot });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.system.folderSizeRoot });
+      return true;
+    },
+    onSuccess: (changed) => {
+      if (changed) toast.success(i18n.t('settings.system.folderChangedToast'));
     },
   });
   return { mutate: mutation.mutateAsync, isPending: mutation.isPending };
@@ -83,11 +98,32 @@ export const useRamRange = () => {
 };
 
 export const useDiskSpace = (path: string | undefined | null) => {
+  // Debounce so rapid client switching doesn't fan out N IPC calls.
+  const [debouncedPath, setDebouncedPath] = useState<string | undefined | null>(path);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedPath(path), DISK_SPACE_DEBOUNCE_MS);
+    return () => window.clearTimeout(handle);
+  }, [path]);
   const query = useQuery({
-    queryKey: QUERY_KEYS.system.diskSpace(path ?? ''),
-    queryFn: () => getDiskSpace(path ?? ''),
-    enabled: typeof path === 'string' && path.length > 0,
+    queryKey: QUERY_KEYS.system.diskSpace(debouncedPath ?? ''),
+    queryFn: () => getDiskSpace(debouncedPath ?? ''),
+    enabled: typeof debouncedPath === 'string' && debouncedPath.length > 0,
     staleTime: DISK_SPACE_STALE_TIME_MS,
+  });
+  return { info: query.data, isPending: query.isPending };
+};
+
+export const useFolderSize = (path: string | undefined | null) => {
+  const [debouncedPath, setDebouncedPath] = useState<string | undefined | null>(path);
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedPath(path), DISK_SPACE_DEBOUNCE_MS);
+    return () => window.clearTimeout(handle);
+  }, [path]);
+  const query = useQuery({
+    queryKey: QUERY_KEYS.system.folderSize(debouncedPath ?? ''),
+    queryFn: () => getFolderSize(debouncedPath ?? ''),
+    enabled: typeof debouncedPath === 'string' && debouncedPath.length > 0,
+    staleTime: FOLDER_SIZE_STALE_TIME_MS,
   });
   return { info: query.data, isPending: query.isPending };
 };

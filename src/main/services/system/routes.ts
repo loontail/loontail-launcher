@@ -1,6 +1,7 @@
 import {
   ensureDirectory,
   getDiskSpace,
+  getFolderSize,
   getRamRange,
   openPath,
   pickFolderWithSuffix,
@@ -21,6 +22,11 @@ export const registerSystemRoutes = (router: Router, mainWindow: BrowserWindow):
   router.handle(IPC_CHANNELS.systemGetDiskSpace, (rawArgs) => {
     const path = parseIpcArgs(PathArgSchema, rawArgs, PATH_ERROR_MESSAGE);
     return getDiskSpace(path);
+  });
+
+  router.handle(IPC_CHANNELS.systemGetFolderSize, (rawArgs) => {
+    const path = parseIpcArgs(PathArgSchema, rawArgs, PATH_ERROR_MESSAGE);
+    return getFolderSize(path);
   });
 
   router.handle(IPC_CHANNELS.systemPickInstallFolder, async () => {

@@ -1,11 +1,14 @@
 {
-  "appBar": {
-    "title": "Loontail Minecraft Launcher"
+  "toast": {
+    "copyMessage": "Copy message",
+    "dismiss": "Dismiss"
   },
-  "home": {
-    "welcome": "Welcome, {{name}}",
-    "version": "version {{version}}",
-    "loading": "Loading…"
+  "updater": {
+    "badge": {
+      "available": "{{version}} available",
+      "downloading": "Downloading {{percent}}%",
+      "ready": "Restart to update"
+    }
   },
   "auth": {
     "signIn": "Sign in",
@@ -19,10 +22,6 @@
     "errorRateLimited": "Too many sign-in attempts. Please wait a minute and try again.",
     "errorUnknown": "Something went wrong. Try again later."
   },
-  "appBarActions": {
-    "openSettings": "Open settings",
-    "back": "Back"
-  },
   "clients": {
     "sectionTitle": "Available clients",
     "empty": "No clients available",
@@ -31,7 +30,6 @@
     "servers": "Available servers",
     "download": "Download",
     "play": "Play",
-    "update": "Update",
     "pause": "Pause",
     "resume": "Resume",
     "cancel": "Cancel",
@@ -55,6 +53,20 @@
       "subtitle": "{{name}} ships with both Forge and Fabric. Pick one to install.",
       "forge": "Forge",
       "fabric": "Fabric"
+    },
+    "error": {
+      "noAccount": "Sign in before launching.",
+      "noClientFolder": "Set the launcher install folder in System settings first.",
+      "loaderAmbiguous": "Pick a loader (Forge or Fabric) before installing.",
+      "opInFlight": "Another operation is already running for this client.",
+      "notInstalled": "Client is not installed.",
+      "aborted": "Cancelled.",
+      "networkError": "Network error. Check your connection and try again.",
+      "integrityError": "Downloaded file integrity check failed. Try repairing the client.",
+      "runtimeError": "Java runtime is missing or unsupported on this platform.",
+      "launchFailed": "Failed to launch the game process. See console for details.",
+      "kitError": "Minecraft runtime error: {{message}}",
+      "unknown": "Unknown error: {{message}}"
     }
   },
   "clientSettings": {
@@ -75,6 +87,7 @@
     "uninstallDesc": "Delete this client's files from disk. Saves and overrides are kept.",
     "uninstallConfirmTitle": "Remove client files?",
     "uninstallConfirm": "All files for \"{{name}}\" will be deleted from the install folder. The shared Java runtime stays.",
+    "folderChangedToast": "Client folder updated",
     "loader": {
       "title": "Loader",
       "kind": "Type",
@@ -95,6 +108,10 @@
   "common": {
     "cancel": "Cancel",
     "close": "Close"
+  },
+  "navigation": {
+    "back": "Back",
+    "openSettings": "Open settings"
   },
   "servers": {
     "online": "Online",
@@ -126,19 +143,17 @@
       "fullscreenDesc": "Start the game in fullscreen mode"
     },
     "system": {
-      "memory": "Memory",
       "allocatedRam": "Allocated RAM",
       "ramDesc": "More RAM reduces lag and improves performance, but leaving some free for the OS is recommended.",
       "save": "Save",
-      "saving": "Saving…",
-      "storage": "Storage",
       "clientsFolder": "Clients folder",
       "clientsFolderDesc": "All Minecraft client files are stored here: versions, mods, resource packs and configs.",
       "openFolder": "Open folder",
       "change": "Change",
-      "diskUsed": "{{value}} used",
+      "folderUsed": "{{value}} used",
       "diskFree": "{{free}} free of {{total}}",
-      "folderNotSet": "Not set"
+      "folderNotSet": "Not set",
+      "folderChangedToast": "Install folder updated"
     },
     "launcher": {
       "maintenance": "Maintenance",
@@ -152,9 +167,15 @@
       "interface": "Interface",
       "language": "Language",
       "languageDesc": "Change the interface language",
-      "account": "Account",
       "logOut": "Log out",
-      "logOutDesc": "Sign out and return to login"
+      "checking": "Checking for updates…",
+      "available": "Update {{version}} available — downloading…",
+      "notAvailable": "Up to date",
+      "downloading": "Downloading {{percent}}%",
+      "ready": "Update {{version}} ready — restart to apply",
+      "updateError": "Update check failed: {{message}}",
+      "restartNow": "Restart now",
+      "cacheClearedToast": "Cache cleared"
     }
   },
   "console": {
@@ -198,10 +219,6 @@
       "processStarted": "Process started",
       "launching": "Launching…",
       "processExited": "Process exited",
-      "processExitedWithCode": "Process exited with code {{exitCode}}",
-      "processError": "Process error",
-      "processCrashed": "Process crashed",
-      "processCrashedWithCode": "Process crashed with exit code {{exitCode}}",
       "processCrashedWithMessage": "Process crashed: {{detail}}"
     }
   }

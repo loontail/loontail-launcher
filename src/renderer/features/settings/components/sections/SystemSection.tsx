@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   useDiskSpace,
+  useFolderSize,
   useLauncherSettings,
   usePickInstallFolder,
   useRamRange,
@@ -19,6 +20,9 @@ export const SystemSection = () => {
   const { mutate: setLauncherMutate, isPending: isSavingLauncher } = useSetLauncher();
   const { mutate: pickFolder } = usePickInstallFolder();
   const { info: diskInfo } = useDiskSpace(settings?.storage.clientsFolder);
+  const { info: folderSize, isPending: folderSizePending } = useFolderSize(
+    settings?.storage.clientsFolder,
+  );
 
   const [pendingRam, setPendingRam] = useState<number | null>(null);
   const savedRam = settings?.memory.allocatedRamMb ?? 0;
@@ -48,6 +52,8 @@ export const SystemSection = () => {
 
       <FolderInfoBlock
         folder={diskInfo}
+        folderSize={folderSize}
+        folderSizeLoading={folderSizePending}
         pathLoading={!settingsReady}
         heading={t('settings.system.clientsFolder')}
         description={t('settings.system.clientsFolderDesc')}

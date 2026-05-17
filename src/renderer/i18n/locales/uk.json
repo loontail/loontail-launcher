@@ -1,11 +1,14 @@
 {
-  "appBar": {
-    "title": "Loontail Minecraft Launcher"
+  "toast": {
+    "copyMessage": "Копіювати повідомлення",
+    "dismiss": "Закрити"
   },
-  "home": {
-    "welcome": "Вітаємо, {{name}}",
-    "version": "версія {{version}}",
-    "loading": "Завантаження…"
+  "updater": {
+    "badge": {
+      "available": "Доступне {{version}}",
+      "downloading": "Завантаження {{percent}}%",
+      "ready": "Перезапустіть для оновлення"
+    }
   },
   "auth": {
     "signIn": "Вхід",
@@ -19,10 +22,6 @@
     "errorRateLimited": "Забагато спроб входу. Зачекайте хвилину і спробуйте знову.",
     "errorUnknown": "Щось пішло не так. Спробуйте пізніше."
   },
-  "appBarActions": {
-    "openSettings": "Відкрити налаштування",
-    "back": "Назад"
-  },
   "clients": {
     "sectionTitle": "Доступні клієнти",
     "empty": "Немає доступних клієнтів",
@@ -31,7 +30,6 @@
     "servers": "Доступні сервери",
     "download": "Завантажити",
     "play": "Грати",
-    "update": "Оновити",
     "pause": "Пауза",
     "resume": "Продовжити",
     "cancel": "Скасувати",
@@ -55,6 +53,20 @@
       "subtitle": "{{name}} підтримує Forge і Fabric. Оберіть один для встановлення.",
       "forge": "Forge",
       "fabric": "Fabric"
+    },
+    "error": {
+      "noAccount": "Увійдіть до акаунта перед запуском.",
+      "noClientFolder": "Спершу оберіть теку встановлення у системних налаштуваннях.",
+      "loaderAmbiguous": "Оберіть лоадер (Forge або Fabric) перед встановленням.",
+      "opInFlight": "Для цього клієнта вже виконується інша операція.",
+      "notInstalled": "Клієнт не встановлено.",
+      "aborted": "Скасовано.",
+      "networkError": "Помилка мережі. Перевірте підключення та спробуйте ще раз.",
+      "integrityError": "Перевірка цілісності завантажених файлів не вдалася. Спробуйте відновити клієнт.",
+      "runtimeError": "Середовище Java відсутнє або не підтримується на цій платформі.",
+      "launchFailed": "Не вдалося запустити процес гри. Подробиці у консолі.",
+      "kitError": "Помилка Minecraft: {{message}}",
+      "unknown": "Невідома помилка: {{message}}"
     }
   },
   "clientSettings": {
@@ -75,6 +87,7 @@
     "uninstallDesc": "Видалити файли цього клієнта з диска. Збереження і перевизначення залишаються.",
     "uninstallConfirmTitle": "Видалити файли клієнта?",
     "uninstallConfirm": "Усі файли клієнта «{{name}}» буде видалено з папки встановлення. Спільний рантайм Java залишиться.",
+    "folderChangedToast": "Папку клієнта оновлено",
     "loader": {
       "title": "Лоадер",
       "kind": "Тип",
@@ -95,6 +108,10 @@
   "common": {
     "cancel": "Скасувати",
     "close": "Закрити"
+  },
+  "navigation": {
+    "back": "Назад",
+    "openSettings": "Відкрити налаштування"
   },
   "servers": {
     "online": "Онлайн",
@@ -126,19 +143,17 @@
       "fullscreenDesc": "Запускати гру в повноекранному режимі"
     },
     "system": {
-      "memory": "Памʼять",
       "allocatedRam": "Виділена памʼять",
       "ramDesc": "Більше RAM зменшує лаги та покращує продуктивність, але краще лишити трохи памʼяті системі.",
       "save": "Зберегти",
-      "saving": "Збереження…",
-      "storage": "Сховище",
       "clientsFolder": "Папка клієнтів",
       "clientsFolderDesc": "Тут зберігаються всі файли клієнтів Minecraft: версії, моди, ресурс-паки та конфіги.",
       "openFolder": "Відкрити папку",
       "change": "Змінити",
-      "diskUsed": "{{value}} використано",
+      "folderUsed": "{{value}} зайнято",
       "diskFree": "{{free}} вільно з {{total}}",
-      "folderNotSet": "Не задано"
+      "folderNotSet": "Не задано",
+      "folderChangedToast": "Папку встановлення оновлено"
     },
     "launcher": {
       "maintenance": "Обслуговування",
@@ -152,9 +167,15 @@
       "interface": "Інтерфейс",
       "language": "Мова",
       "languageDesc": "Змінити мову інтерфейсу",
-      "account": "Акаунт",
       "logOut": "Вийти",
-      "logOutDesc": "Вийти з акаунта та повернутися до входу"
+      "checking": "Перевірка оновлень…",
+      "available": "Доступне оновлення {{version}} — завантажується…",
+      "notAvailable": "Все актуально",
+      "downloading": "Завантаження {{percent}}%",
+      "ready": "Оновлення {{version}} готове — перезапустіть, щоб застосувати",
+      "updateError": "Помилка перевірки оновлень: {{message}}",
+      "restartNow": "Перезапустити",
+      "cacheClearedToast": "Кеш очищено"
     }
   },
   "console": {
@@ -198,10 +219,6 @@
       "processStarted": "Процес запущено",
       "launching": "Запуск…",
       "processExited": "Процес завершено",
-      "processExitedWithCode": "Процес завершено з кодом {{exitCode}}",
-      "processError": "Помилка процесу",
-      "processCrashed": "Процес аварійно завершено",
-      "processCrashedWithCode": "Процес аварійно завершено з кодом {{exitCode}}",
       "processCrashedWithMessage": "Аварія процесу: {{detail}}"
     }
   }

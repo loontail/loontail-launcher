@@ -1,15 +1,12 @@
-import { cn } from '@renderer/shared/lib/cn';
 import { Button } from '@renderer/shared/ui/Button';
 import { OverrideMark } from '@renderer/shared/ui/OverrideMark';
 import { Skeleton } from '@renderer/shared/ui/Skeleton';
-import type { DiskInfo } from '@shared/contracts/system';
+import type { DiskInfo, FolderSize } from '@shared/contracts/system';
 import { Folder, HardDrive } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const BYTES_PER_GB = 1024 ** 3;
-const USAGE_DESTRUCTIVE_THRESHOLD = 0.9;
-const USAGE_WARNING_THRESHOLD = 0.75;
 
 const formatBytes = (bytes: number | undefined): string => {
   if (typeof bytes !== 'number') return '—';
@@ -21,6 +18,8 @@ const formatBytes = (bytes: number | undefined): string => {
 
 type FolderInfoBlockProps = {
   folder: DiskInfo | null | undefined;
+  folderSize?: FolderSize | null | undefined;
+  folderSizeLoading?: boolean;
   pathLoading?: boolean;
   heading: ReactNode;
   description?: ReactNode | undefined;
@@ -36,6 +35,8 @@ type FolderInfoBlockProps = {
 
 export const FolderInfoBlock = ({
   folder,
+  folderSize,
+  folderSizeLoading = false,
   pathLoading = false,
   heading,
   description,
@@ -61,15 +62,15 @@ export const FolderInfoBlock = ({
     typeof folder.size === 'number' &&
     folder.size > 0;
 
-  const usedBytes = hasUsage ? (folder.size ?? 0) - (folder.free ?? 0) : 0;
-  const usedRatio = hasUsage ? usedBytes / (folder.size ?? 1) : 0;
-  const usageColor = !hasUsage
-    ? 'bg-muted'
-    : usedRatio >= USAGE_DESTRUCTIVE_THRESHOLD
-      ? 'bg-destructive'
-      : usedRatio >= USAGE_WARNING_THRESHOLD
-        ? 'bg-secondary'
-        : 'bg-primary';
+  const folderBytes = typeof folderSize?.bytes === 'number' ? folderSize.bytes : null;
+  const diskTotal = hasUsage ? (folder.size ?? 1) : 1;
+  const diskUsedBytes = hasUsage ? diskTotal - (folder.free ?? 0) : 0;
+  const diskUsedRatio = hasUsage ? diskUsedBytes / diskTotal : 0;
+  const folderRatio = hasUsage && folderBytes !== null ? folderBytes / diskTotal : 0;
+  // Clamp so the folder pill can't overshoot the total-used segment when the
+  // folder-size scan lags reality.
+  const clampedFolderRatio = Math.min(folderRatio, diskUsedRatio);
+  const restUsedRatio = Math.max(0, diskUsedRatio - clampedFolderRatio);
 
   const resolvedOpenLabel = openLabel ?? t('settings.system.openFolder');
   const resolvedChangeLabel = changeLabel ?? t('settings.system.change');
@@ -119,16 +120,28 @@ export const FolderInfoBlock = ({
         </div>
         {showUsageRow && (
           <>
-            <div className="h-1 w-full overflow-hidden rounded-full bg-muted">
-              {diskLoading ? (
-                <Skeleton className="h-full w-full rounded-full" />
-              ) : (
-                <div
-                  className={cn('h-full transition-all', usageColor)}
-                  style={{ width: `${Math.round(usedRatio * 100)}%` }}
-                />
-              )}
-            </div>
+            {diskLoading ? (
+              <Skeleton className="h-1.5 w-full rounded-full" />
+            ) : (
+              <div className="flex h-1.5 w-full items-center gap-1">
+                {restUsedRatio > 0 && (
+                  <div
+                    className="h-full rounded-full bg-foreground/85 transition-all"
+                    style={{ width: `${restUsedRatio * 100}%` }}
+                  />
+                )}
+                {clampedFolderRatio > 0 && (
+                  <div
+                    className="h-full rounded-full bg-foreground/85 transition-all"
+                    style={{
+                      width: `${clampedFolderRatio * 100}%`,
+                      minWidth: folderBytes !== null && folderBytes > 0 ? '0.5rem' : undefined,
+                    }}
+                  />
+                )}
+                <div className="h-full flex-1 rounded-full bg-muted" />
+              </div>
+            )}
             <div className="flex h-4 items-center justify-between text-xs text-muted-foreground">
               {diskLoading ? (
                 <>
@@ -137,7 +150,13 @@ export const FolderInfoBlock = ({
                 </>
               ) : (
                 <>
-                  <span>{t('settings.system.diskUsed', { value: formatBytes(usedBytes) })}</span>
+                  {folderSizeLoading || folderBytes === null ? (
+                    <Skeleton className="h-3 w-20" />
+                  ) : (
+                    <span>
+                      {t('settings.system.folderUsed', { value: formatBytes(folderBytes) })}
+                    </span>
+                  )}
                   <span>
                     {t('settings.system.diskFree', {
                       free: formatBytes(folder?.free),

@@ -6,11 +6,13 @@ import {
   useChooseClientFolder,
   useClearClientOverrides,
   useDiskSpace,
+  useFolderSize,
   useLauncherSettings,
   useRamRange,
   useResolveFor,
   useSetClientOverride,
 } from '@renderer/features/settings';
+import type { Translator } from '@renderer/i18n';
 import { cn } from '@renderer/shared/lib/cn';
 import { Button } from '@renderer/shared/ui/Button';
 import { Modal } from '@renderer/shared/ui/Modal';
@@ -19,16 +21,71 @@ import { SettingsGroup } from '@renderer/shared/ui/SettingsGroup';
 import { SettingsRow, SettingsSwitchRow } from '@renderer/shared/ui/SettingsRow';
 import type { Client } from '@shared/contracts/client';
 import { InstallStatuses } from '@shared/contracts/minecraft';
-import { LoaderChoices } from '@shared/contracts/settings';
+import { type LoaderChoice, LoaderChoices } from '@shared/contracts/settings';
 import { resolveLoader } from '@shared/domain/loader';
 import { FolderOpen, Loader2, RotateCcw, Trash2, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 type ClientSettingsModalProps = {
   isOpen: boolean;
   client: Client | null;
   onClose: () => void;
+};
+
+const pickLoaderVersion = (
+  loader: LoaderChoice | null,
+  client: Pick<Client, 'forgeVersion' | 'fabricVersion'>,
+): string | null => {
+  if (loader === LoaderChoices.FORGE) return client.forgeVersion ?? null;
+  if (loader === LoaderChoices.FABRIC) return client.fabricVersion ?? null;
+  return null;
+};
+
+const renderLoaderKindControl = (args: {
+  canSwitchLoader: boolean;
+  effectiveLoader: LoaderChoice | null;
+  isSavingOverride: boolean;
+  switchLoader: (loader: typeof LoaderChoices.FORGE | typeof LoaderChoices.FABRIC) => void;
+  t: Translator;
+}): ReactNode => {
+  const { canSwitchLoader, effectiveLoader, isSavingOverride, switchLoader, t } = args;
+  if (canSwitchLoader) {
+    return (
+      <div
+        aria-label={t('clientSettings.loader.title')}
+        className="inline-flex rounded-full border border-edge-md bg-chip-dark p-0.5"
+      >
+        {[LoaderChoices.FORGE, LoaderChoices.FABRIC].map((option) => {
+          const active = effectiveLoader === option;
+          return (
+            <button
+              key={option}
+              type="button"
+              aria-pressed={active}
+              disabled={isSavingOverride || active}
+              onClick={() => switchLoader(option)}
+              className={cn(
+                'px-3 py-1 text-[11px] font-semibold transition-colors rounded-full',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glass/40',
+                active ? 'bg-primary text-primary-foreground' : 'text-glass/65 hover:text-glass',
+              )}
+            >
+              {t(`clientSettings.loader.${option}`)}
+            </button>
+          );
+        })}
+      </div>
+    );
+  }
+  if (effectiveLoader) {
+    return (
+      <span className="text-[12px] font-semibold text-glass/85">
+        {t(`clientSettings.loader.${effectiveLoader}`)}
+      </span>
+    );
+  }
+  return <span className="text-[12px] font-semibold text-glass/55">—</span>;
 };
 
 export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsModalProps) => {
@@ -39,6 +96,9 @@ export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsM
   const resolved = useResolveFor(slug);
   const { range, isPending: rangePending } = useRamRange();
   const { info: diskInfo } = useDiskSpace(resolved?.storage.clientFolder);
+  const { info: folderSize, isPending: folderSizePending } = useFolderSize(
+    resolved?.storage.clientFolder,
+  );
   const { mutate: setClientOverride, isPending: isSavingOverride } = useSetClientOverride();
   const { mutate: clearClientOverrides } = useClearClientOverrides();
   const { mutate: chooseClientFolder } = useChooseClientFolder();
@@ -131,6 +191,8 @@ export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsM
 
         <FolderInfoBlock
           folder={diskInfo}
+          folderSize={folderSize}
+          folderSizeLoading={folderSizePending}
           pathLoading={settingsPending}
           heading={t('clientSettings.clientFolder')}
           description={t('clientSettings.clientFolderDesc')}
@@ -174,12 +236,7 @@ export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsM
           const hasForge = Boolean(client.forgeVersion);
           const hasFabric = Boolean(client.fabricVersion);
           const canSwitchLoader = hasForge && hasFabric;
-          const loaderVersion =
-            effectiveLoader === LoaderChoices.FORGE
-              ? client.forgeVersion
-              : effectiveLoader === LoaderChoices.FABRIC
-                ? client.fabricVersion
-                : null;
+          const loaderVersion = pickLoaderVersion(effectiveLoader, client);
           const switchLoader = (loader: typeof LoaderChoices.FORGE | typeof LoaderChoices.FABRIC) =>
             setClientOverride({ slug, patch: { loader } });
           return (
@@ -187,42 +244,13 @@ export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsM
               <SettingsRow
                 label={t('clientSettings.loader.kind')}
                 description={canSwitchLoader ? t('clientSettings.loader.switchDesc') : undefined}
-                right={
-                  canSwitchLoader ? (
-                    <div
-                      aria-label={t('clientSettings.loader.title')}
-                      className="inline-flex rounded-full border border-edge-md bg-chip-dark p-0.5"
-                    >
-                      {[LoaderChoices.FORGE, LoaderChoices.FABRIC].map((option) => {
-                        const active = effectiveLoader === option;
-                        return (
-                          <button
-                            key={option}
-                            type="button"
-                            aria-pressed={active}
-                            disabled={isSavingOverride || active}
-                            onClick={() => switchLoader(option)}
-                            className={cn(
-                              'px-3 py-1 text-[11px] font-semibold transition-colors rounded-full',
-                              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glass/40',
-                              active
-                                ? 'bg-primary text-primary-foreground'
-                                : 'text-glass/65 hover:text-glass',
-                            )}
-                          >
-                            {t(`clientSettings.loader.${option}`)}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : effectiveLoader ? (
-                    <span className="text-[12px] font-semibold text-glass/85">
-                      {t(`clientSettings.loader.${effectiveLoader}`)}
-                    </span>
-                  ) : (
-                    <span className="text-[12px] font-semibold text-glass/55">—</span>
-                  )
-                }
+                right={renderLoaderKindControl({
+                  canSwitchLoader,
+                  effectiveLoader,
+                  isSavingOverride,
+                  switchLoader,
+                  t,
+                })}
               />
               <SettingsRow
                 label={t('clientSettings.loader.minecraftVersion')}

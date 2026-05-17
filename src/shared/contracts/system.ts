@@ -10,6 +10,13 @@ export const DiskInfoSchema = z.object({
 
 export type DiskInfo = z.infer<typeof DiskInfoSchema>;
 
+export const FolderSizeSchema = z.object({
+  path: z.string(),
+  bytes: z.number().nullable(),
+});
+
+export type FolderSize = z.infer<typeof FolderSizeSchema>;
+
 export const PickedFolderSchema = z.object({
   path: z.string(),
   diskPath: z.string().optional(),
