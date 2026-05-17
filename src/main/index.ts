@@ -1,5 +1,7 @@
 import { seedLauncherSettings } from '@main/bootstrap/seed';
+import { sweepOrphanClientOverrides } from '@main/bootstrap/sweepOrphans';
 import { initLogger, scopedLogger } from '@main/infra/logger';
+import { attachNotifier, notify } from '@main/infra/notifier';
 import { configureSessionSecurity } from '@main/infra/session';
 import { createRouter } from '@main/ipc/router';
 import { createTrustedSenderCheck } from '@main/ipc/trustedSender';
@@ -13,18 +15,31 @@ import { createServersService } from '@main/services/servers';
 import { createSettingsService } from '@main/services/settings';
 import { createSkinService } from '@main/services/skin';
 import { createSystemService } from '@main/services/system';
+import { createUpdaterService } from '@main/services/updater';
 import { createMainWindow } from '@main/windows/mainWindow';
 import { BrowserWindow, app, protocol } from 'electron';
 
 initLogger();
 const logger = scopedLogger('bootstrap');
 
+const summarize = (value: unknown): string => {
+  if (value instanceof Error) return value.message;
+  if (typeof value === 'string') return value;
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+};
+
 process.on('uncaughtException', (error) => {
   logger.error('Uncaught exception', error);
+  notify.error(`Uncaught exception: ${summarize(error)}`);
 });
 
 process.on('unhandledRejection', (reason) => {
   logger.error('Unhandled rejection', reason);
+  notify.error(`Unhandled rejection: ${summarize(reason)}`);
 });
 
 if (!app.requestSingleInstanceLock()) {
@@ -32,8 +47,8 @@ if (!app.requestSingleInstanceLock()) {
   process.exit(0);
 }
 
-// Must be called before app `ready`. The privileges let `<img src="cache://...">` resolve
-// like a normal HTTPS resource (CSP, range requests, fetch API support).
+// Must be registered before app ready so `<img src="cache://...">` resolves
+// like an https resource (CSP, range requests, fetch API).
 protocol.registerSchemesAsPrivileged([
   {
     scheme: CACHE_SCHEME,
@@ -61,6 +76,7 @@ const start = async (): Promise<void> => {
   configureSessionSecurity();
 
   const mainWindow = createMainWindow();
+  attachNotifier(mainWindow);
   const router = createRouter(createTrustedSenderCheck(mainWindow));
 
   const appService = createAppService(router);
@@ -73,6 +89,7 @@ const start = async (): Promise<void> => {
   const mediaService = createMediaService();
   const minecraftService = createMinecraftService(router, mainWindow);
   const consoleService = createConsoleService(router);
+  const updaterService = createUpdaterService(router, mainWindow);
 
   await appService.init();
   await authService.init();
@@ -84,8 +101,10 @@ const start = async (): Promise<void> => {
   await mediaService.init();
   await minecraftService.init();
   await consoleService.init();
+  await updaterService.init();
 
   seedLauncherSettings();
+  void sweepOrphanClientOverrides();
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
@@ -103,6 +122,7 @@ const start = async (): Promise<void> => {
   const drain = async (): Promise<void> => {
     // Reverse-init order so consumers tear down before the infrastructure they depend on.
     await Promise.allSettled([
+      updaterService.dispose(),
       consoleService.dispose(),
       minecraftService.dispose(),
       mediaService.dispose(),

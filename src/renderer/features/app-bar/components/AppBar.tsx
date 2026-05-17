@@ -1,6 +1,8 @@
+import { UpdaterBadge } from '@renderer/features/updater';
 import type { ReactNode } from 'react';
 
 const APP_BRAND = 'Loontail Launcher';
+const APP_STAGE_BADGE = 'Alpha';
 
 type AppBarProps = {
   actions?: ReactNode;
@@ -18,8 +20,9 @@ export const AppBar = ({ actions }: AppBarProps) => (
           {APP_BRAND}
         </span>
         <span className="cursor-default rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider text-glass/30 ring-1 ring-glass/15 transition-colors hover:text-glass/50 hover:ring-glass/30">
-          Alpha
+          {APP_STAGE_BADGE}
         </span>
+        <UpdaterBadge />
       </div>
 
       <div className="flex-1" />

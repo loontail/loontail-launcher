@@ -22,6 +22,8 @@
   --color-destructive-foreground: oklch(0.96 0 0);
   --color-success: oklch(0.78 0.16 150);
   --color-success-foreground: oklch(0.15 0 0);
+  --color-warn: oklch(0.82 0.16 80);
+  --color-warn-foreground: oklch(0.15 0 0);
   --color-border: oklch(0.28 0 0);
   --color-input: oklch(0.28 0 0);
   --color-ring: oklch(0.96 0 0);
@@ -140,4 +142,13 @@ img {
   width: 0;
   height: 0;
   display: none;
+}
+
+@keyframes toast-shrink {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
 }

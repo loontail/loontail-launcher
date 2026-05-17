@@ -2,18 +2,24 @@ import { AppBar } from '@renderer/features/app-bar';
 import { LoginForm, useCurrentUser } from '@renderer/features/auth';
 import { ClientsPage } from '@renderer/features/clients';
 import { MinecraftEventsListener } from '@renderer/features/minecraft';
+import { NotificationsListener } from '@renderer/features/notifications';
 import { SettingsPage } from '@renderer/features/settings';
+import { UpdaterEventsListener } from '@renderer/features/updater';
 import { cn } from '@renderer/shared/lib/cn';
 import {
+  Views,
   useCanGoBack,
   useCurrentView,
   useNavigationStore,
 } from '@renderer/shared/lib/stores/navigation';
+import { ToastContainer } from '@renderer/shared/ui/Toast';
 import { ArrowLeft, Loader2, Settings } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 const hasCustomTitleBar = window.api.platform !== 'linux';
 
 const NavigationButton = () => {
+  const { t } = useTranslation();
   const canGoBack = useCanGoBack();
   const push = useNavigationStore((state) => state.push);
   const pop = useNavigationStore((state) => state.pop);
@@ -22,7 +28,7 @@ const NavigationButton = () => {
     if (canGoBack) {
       pop();
     } else {
-      push('settings');
+      push(Views.SETTINGS);
     }
   };
 
@@ -30,7 +36,7 @@ const NavigationButton = () => {
     <button
       type="button"
       onClick={handleClick}
-      aria-label={canGoBack ? 'Back' : 'Open settings'}
+      aria-label={t(canGoBack ? 'navigation.back' : 'navigation.openSettings')}
       className={cn(
         'flex h-full w-10 cursor-pointer items-center justify-center transition-colors hover:bg-glass/10 hover:text-glass',
         canGoBack ? 'text-glass/80' : 'text-glass/45',
@@ -49,6 +55,8 @@ export const App = () => {
   return (
     <div className="flex h-full flex-col">
       <MinecraftEventsListener />
+      <UpdaterEventsListener />
+      <NotificationsListener />
       {hasCustomTitleBar && <AppBar actions={isAuthenticated ? <NavigationButton /> : null} />}
       <main className="flex flex-1 flex-col overflow-hidden">
         {isPending && (
@@ -57,9 +65,10 @@ export const App = () => {
           </div>
         )}
         {!isPending && user === null && <LoginForm />}
-        {isAuthenticated && view === 'home' && <ClientsPage />}
-        {isAuthenticated && view === 'settings' && <SettingsPage />}
+        {isAuthenticated && view === Views.HOME && <ClientsPage />}
+        {isAuthenticated && view === Views.SETTINGS && <SettingsPage />}
       </main>
+      <ToastContainer />
     </div>
   );
 };
