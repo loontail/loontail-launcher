@@ -1,0 +1,30 @@
+# Normalize all text files to LF in the repository regardless of the host
+# platform's `core.autocrlf` setting. Biome's formatter (lineEnding: lf) and
+# the CI runners are configured for LF; the prior unspecified behavior let
+# Windows checkouts commit CRLF, which then broke `npm run lint` on Linux.
+* text=auto eol=lf
+
+# Keep platform-specific scripts in their native line endings.
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf
+
+# Binary assets — never touch them.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.icns  binary
+*.webp  binary
+*.woff  binary
+*.woff2 binary
+*.ttf   binary
+*.otf   binary
+*.zip   binary
+*.gz    binary
+*.7z    binary
+*.exe   binary
+*.dll   binary
+*.dmg   binary
+*.AppImage binary
