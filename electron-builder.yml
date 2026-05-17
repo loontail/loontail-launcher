@@ -5,7 +5,7 @@ copyright: Copyright © 2026 Loontail
 # `@loontail/minecraft-launcher`. Override the bundled package.json `name`
 # field so the generated .nuspec uses a flat identifier.
 extraMetadata:
-  name: minecraft-launcher
+  name: loontail-launcher
 directories:
   buildResources: build
   output: dist
