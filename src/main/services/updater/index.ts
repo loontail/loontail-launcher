@@ -30,28 +30,18 @@ export const createUpdaterService = (router: Router, mainWindow: BrowserWindow):
   let checking = false;
   let registered = false;
 
-  const onCheckingForUpdate = (): void => {
-    logger.info('autoUpdater: checking-for-update');
-    broadcast({ state: UpdaterStates.CHECKING });
-  };
-  const onUpdateNotAvailable = (): void => {
-    logger.info('autoUpdater: update-not-available');
-    broadcast({ state: UpdaterStates.NOT_AVAILABLE });
-  };
+  const onCheckingForUpdate = (): void => broadcast({ state: UpdaterStates.CHECKING });
+  const onUpdateNotAvailable = (): void => broadcast({ state: UpdaterStates.NOT_AVAILABLE });
   // Squirrel's autoUpdater doesn't surface a separate progress event; the
   // download is opaque until `update-downloaded` fires. Emit AVAILABLE so the
   // UI can show "downloading…" while Squirrel pulls the .nupkg in the
   // background.
-  const onUpdateAvailable = (): void => {
-    logger.info('autoUpdater: update-available — downloading…');
-    broadcast({ state: UpdaterStates.AVAILABLE, version: '' });
-  };
+  const onUpdateAvailable = (): void => broadcast({ state: UpdaterStates.AVAILABLE, version: '' });
   const onUpdateDownloaded = (
     _event: unknown,
     _releaseNotes: string,
     releaseName: string,
   ): void => {
-    logger.info(`autoUpdater: update-downloaded version=${releaseName}`);
     broadcast({ state: UpdaterStates.READY, version: releaseName || app.getVersion() });
   };
   const onError = (error: Error): void => {
@@ -63,7 +53,6 @@ export const createUpdaterService = (router: Router, mainWindow: BrowserWindow):
     init: async () => {
       if (isSquirrelEnabled()) {
         const feed = `${FEED_BASE}/${REPO_OWNER}/${REPO_NAME}/${process.platform}-${process.arch}/${app.getVersion()}`;
-        logger.info(`autoUpdater feed=${feed} currentVersion=${app.getVersion()}`);
         try {
           autoUpdater.setFeedURL({ url: feed });
           autoUpdater.on('checking-for-update', onCheckingForUpdate);
@@ -76,9 +65,7 @@ export const createUpdaterService = (router: Router, mainWindow: BrowserWindow):
           logger.warn('autoUpdater setup failed; updates disabled', error);
         }
       } else {
-        logger.info(
-          `autoUpdater disabled — isPackaged=${app.isPackaged} platform=${process.platform}`,
-        );
+        logger.info('autoUpdater disabled (not a packaged Windows build)');
       }
 
       router.handle(IPC_CHANNELS.updaterInstall, () => {
@@ -88,17 +75,12 @@ export const createUpdaterService = (router: Router, mainWindow: BrowserWindow):
 
       router.handle(IPC_CHANNELS.updaterCheck, async () => {
         if (!isSquirrelEnabled()) {
-          logger.info('updaterCheck: skipped (not packaged Windows)');
           broadcast({ state: UpdaterStates.NOT_AVAILABLE });
           return;
         }
-        if (checking) {
-          logger.info('updaterCheck: skipped (already in flight)');
-          return;
-        }
+        if (checking) return;
         checking = true;
         try {
-          logger.info('updaterCheck: invoking autoUpdater.checkForUpdates()');
           autoUpdater.checkForUpdates();
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
