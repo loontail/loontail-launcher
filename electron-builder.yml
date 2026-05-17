@@ -1,9 +1,8 @@
 appId: app.loontail.minecraft-launcher
 productName: Loontail Minecraft Launcher
 copyright: Copyright © 2026 Loontail
-# Squirrel.Windows uses NuGet, which doesn't accept scoped package names like
-# `@loontail/minecraft-launcher`. Override the bundled package.json `name`
-# field so the generated .nuspec uses a flat identifier.
+# Override the bundled package.json `name` to a flat identifier — Windows
+# install paths and electron-updater cache directories pick this up.
 extraMetadata:
   name: loontail-launcher
 directories:
@@ -23,14 +22,23 @@ electronFuses:
   enableEmbeddedAsarIntegrityValidation: true
   onlyLoadAppFromAsar: true
 win:
-  # Squirrel installs into %LOCALAPPDATA% and launches the app immediately
-  # after extracting; no wizard, no admin elevation. Updates are driven by
-  # electron-updater via the same GitHub Release that publishes
-  # `RELEASES` + the `.nupkg` files.
   target:
-    - target: squirrel
+    - target: nsis
       arch:
         - x64
+nsis:
+  # oneClick + perMachine:false installs into %LOCALAPPDATA% silently and
+  # launches the app immediately — same UX as Squirrel but without its
+  # built-in updater (we use electron-updater). NSIS is what electron-updater
+  # is best supported by: electron-builder bakes `app-update.yml` into
+  # `resources/` and `latest.yml` is published alongside the installer.
+  oneClick: true
+  perMachine: false
+  allowToChangeInstallationDirectory: false
+  runAfterFinish: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false
 mac:
   target:
     - target: dmg
