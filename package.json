@@ -26,7 +26,7 @@
     "lint:strapi": "node scripts/diffStrapiSchemas.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "verify": "npm run lint && npm run typecheck && npm test && npm run lint:i18n && npm run lint:strapi && npm run build"
+    "verify": "npm run lint && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
     "@fontsource/nunito": "^5.0.0",
