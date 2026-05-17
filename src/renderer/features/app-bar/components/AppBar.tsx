@@ -26,19 +26,19 @@ export const AppBar = ({ actions }: AppBarProps) => {
             </span>
             <span
               role="tooltip"
-              className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 max-w-[240px] -translate-x-1/2 whitespace-normal rounded-md bg-popover px-2.5 py-1.5 text-[10px] font-medium leading-snug text-popover-foreground opacity-0 shadow-md ring-1 ring-edge-md transition-opacity duration-150 group-hover:opacity-100"
+              className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-[280px] -translate-x-1/2 whitespace-normal rounded-md bg-popover px-3 py-2 text-[11px] font-medium leading-snug text-popover-foreground opacity-0 shadow-md ring-1 ring-edge-md transition-opacity duration-150 group-hover:opacity-100"
             >
               {t('appBar.alphaTooltip')}
             </span>
           </span>
-          <UpdaterBadge />
         </div>
 
         <div className="flex-1" />
 
-        {actions !== undefined && (
-          <div className="app-region-no-drag flex h-full items-center">{actions}</div>
-        )}
+        <div className="app-region-no-drag flex h-full items-center gap-2 pr-2">
+          <UpdaterBadge />
+          {actions !== undefined && <div className="flex h-full items-center">{actions}</div>}
+        </div>
       </div>
     </header>
   );

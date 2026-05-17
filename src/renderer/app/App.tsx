@@ -4,7 +4,7 @@ import { ClientsPage } from '@renderer/features/clients';
 import { MinecraftEventsListener } from '@renderer/features/minecraft';
 import { NotificationsListener } from '@renderer/features/notifications';
 import { SettingsPage } from '@renderer/features/settings';
-import { UpdaterEventsListener } from '@renderer/features/updater';
+import { UpdaterAutoCheck, UpdaterEventsListener } from '@renderer/features/updater';
 import { cn } from '@renderer/shared/lib/cn';
 import {
   Views,
@@ -56,6 +56,7 @@ export const App = () => {
     <div className="flex h-full flex-col">
       <MinecraftEventsListener />
       <UpdaterEventsListener />
+      <UpdaterAutoCheck />
       <NotificationsListener />
       {hasCustomTitleBar && <AppBar actions={isAuthenticated ? <NavigationButton /> : null} />}
       <main className="flex flex-1 flex-col overflow-hidden">

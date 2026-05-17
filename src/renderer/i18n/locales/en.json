@@ -5,9 +5,20 @@
   },
   "updater": {
     "badge": {
-      "available": "{{version}} available",
+      "available": "Downloading {{version}}…",
+      "availableNoVersion": "Downloading update…",
       "downloading": "Downloading {{percent}}%",
-      "ready": "Restart to update"
+      "ready": "Restart now",
+      "readyTitle": "Update {{version}} ready — click to restart and apply"
+    },
+    "toast": {
+      "checking": "Checking for updates…",
+      "available": "Update {{version}} available — downloading…",
+      "availableNoVersion": "Update available — downloading…",
+      "notAvailable": "You're on the latest version",
+      "ready": "Update {{version}} ready — restart to apply",
+      "readyNoVersion": "Update ready — restart to apply",
+      "error": "Update check failed: {{message}}"
     }
   },
   "auth": {
@@ -172,12 +183,6 @@
       "language": "Language",
       "languageDesc": "Change the interface language",
       "logOut": "Log out",
-      "checking": "Checking for updates…",
-      "available": "Update {{version}} available — downloading…",
-      "notAvailable": "Up to date",
-      "downloading": "Downloading {{percent}}%",
-      "ready": "Update {{version}} ready — restart to apply",
-      "updateError": "Update check failed: {{message}}",
       "restartNow": "Restart now",
       "cacheClearedToast": "Cache cleared"
     }
