@@ -1,6 +1,11 @@
 appId: app.loontail.minecraft-launcher
 productName: Loontail Minecraft Launcher
 copyright: Copyright © 2026 Loontail
+# Squirrel.Windows uses NuGet, which doesn't accept scoped package names like
+# `@loontail/minecraft-launcher`. Override the bundled package.json `name`
+# field so the generated .nuspec uses a flat identifier.
+extraMetadata:
+  name: minecraft-launcher
 directories:
   buildResources: build
   output: dist
