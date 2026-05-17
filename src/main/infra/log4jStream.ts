@@ -1,12 +1,8 @@
-/**
- * Streaming parser for Minecraft's log4j2 XMLLayout output. The Mojang
- * `client-1.12.xml` (and similar) configures the console appender to emit
- * `<log4j:Event>…</log4j:Event>` blocks rather than plain text. Stdout / stderr
- * chunks split arbitrarily — events can straddle chunk boundaries, and
- * non-XML lines (early JVM warnings, custom mod prints to System.out) appear
- * interleaved. The parser buffers per-stream and emits a typed sequence of
- * "text" / "event" chunks the console layer can render.
- */
+// Streaming parser for Minecraft log4j2 XMLLayout output. Events straddle
+// chunk boundaries and interleave with plain-text JVM/mod prints, so we buffer
+// per-stream and emit a typed sequence of text / event chunks.
+
+import type { ConsoleSources } from '@shared/contracts/console';
 
 const EVENT_OPEN = '<log4j:Event';
 const EVENT_CLOSE = '</log4j:Event>';
@@ -21,7 +17,7 @@ const ATTR_PATTERNS = {
 const MESSAGE_CDATA = /<log4j:Message>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/log4j:Message>/;
 const THROWABLE_CDATA = /<log4j:Throwable>\s*<!\[CDATA\[([\s\S]*?)\]\]>\s*<\/log4j:Throwable>/;
 
-export type Log4jStream = 'stdout' | 'stderr';
+export type Log4jStream = typeof ConsoleSources.STDOUT | typeof ConsoleSources.STDERR;
 
 export type Log4jEvent = {
   logger: string;
@@ -68,8 +64,8 @@ export class Log4jStreamParser {
     return this.drain(state, false);
   }
 
-  /** Emit whatever is left in the buffer — call when the session ends so a
-   *  trailing partial event doesn't get silently dropped. */
+  // Drain remaining buffer; call on session end so a trailing partial event
+  // doesn't get silently dropped.
   flush(stream: Log4jStream): readonly ParsedChunk[] {
     const state = this.streams[stream];
     return this.drain(state, true);
@@ -85,10 +81,8 @@ export class Log4jStreamParser {
     while (state.buffer.length > 0) {
       const openIndex = state.buffer.indexOf(EVENT_OPEN);
       if (openIndex === -1) {
-        // No event start in sight. On a final flush, drain everything;
-        // otherwise hold back the trailing suffix only if it's a *prefix* of
-        // EVENT_OPEN (e.g. chunk ends with "<log") — otherwise flushing it
-        // would corrupt plain-text output.
+        // Hold back the trailing suffix only if it's a prefix of EVENT_OPEN
+        // (e.g. chunk ends with "<log"); otherwise flush as text.
         if (isFinal) {
           out.push({ kind: 'text', text: state.buffer });
           state.buffer = '';
@@ -146,8 +140,5 @@ const LEVEL_MAP: Record<string, 'debug' | 'info' | 'warn' | 'error'> = {
 export const mapLog4jLevel = (level: string): 'debug' | 'info' | 'warn' | 'error' =>
   LEVEL_MAP[level.toUpperCase()] ?? 'info';
 
-/** Combine logger and message into a single human-friendly line. The renderer
- *  shows level / timestamp separately; including the logger here keeps the row
- *  parseable without expanding the ConsoleLine schema. */
 export const formatLog4jLine = (event: Log4jEvent, line: string): string =>
   event.logger ? `[${event.logger}] ${line}` : line;

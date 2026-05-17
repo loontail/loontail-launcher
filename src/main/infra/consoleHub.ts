@@ -1,17 +1,3 @@
-/**
- * Process-wide pub-sub for the Minecraft game console window.
- *
- * The hub owns a ring-buffered backlog of `ConsoleLine`s emitted by the
- * active Minecraft session (stdout / stderr / synthetic system events) and
- * pushes batches to an optional console `BrowserWindow`. The console
- * window is opened on demand by the launch flow and shows the per-session
- * output — launcher's own logs stay out of it.
- *
- * The hub is window-agnostic: the console window factory calls
- * `attach(window)` once on creation and the hub stops pushing when the
- * window is destroyed.
- */
-
 import {
   type ConsoleInitialPayload,
   type ConsoleLevel,
@@ -71,14 +57,10 @@ class ConsoleHub {
   attach(window: BrowserWindow): void {
     this.window = window;
     window.on('closed', () => {
-      // Only clear ourselves if this is still the active window — otherwise a
-      // close event from an older instance (after the user reopened the
-      // console quickly) would wipe the freshly attached one.
+      // Older window's close event after a quick reopen would otherwise wipe
+      // the freshly attached one.
       if (this.window !== window) return;
-      if (this.flushTimer) {
-        clearTimeout(this.flushTimer);
-        this.flushTimer = null;
-      }
+      this.clearFlushTimer();
       this.pending = [];
       this.window = null;
     });
@@ -102,6 +84,7 @@ class ConsoleHub {
   }
 
   clear(): void {
+    this.clearFlushTimer();
     this.buffer = [];
     this.pending = [];
     this.droppedCount = 0;
@@ -112,11 +95,6 @@ class ConsoleHub {
     return this.buffer.map((line) => line.message).join('\n');
   }
 
-  /** Record one or more lines from a Minecraft child process. Passes the raw
-   *  chunk through the log4j XMLLayout parser first — XML events become
-   *  structured lines with proper level + logger prefix; anything else
-   *  (early JVM output, mod prints, plain-text appenders) falls through to
-   *  the regex-based level guesser. */
   recordMinecraft(
     slug: ClientSlug,
     stream: typeof ConsoleSources.STDOUT | typeof ConsoleSources.STDERR,
@@ -151,7 +129,6 @@ class ConsoleHub {
     }
   }
 
-  /** Record a synthetic system event tied to the active session. */
   recordSystem(
     message: string,
     options?: { code?: string; args?: ConsoleLineArgs; slug?: ClientSlug },
@@ -167,9 +144,8 @@ class ConsoleHub {
   }
 
   setActiveSession(session: SessionInfo | null): void {
-    // Drain any trailing XML fragment left over from the previous session
-    // before the parser's buffers are reset — otherwise a partial event
-    // would silently leak into the new session's output.
+    // Drain partial XML left from the previous session before the parser is
+    // reset — a trailing fragment would otherwise leak into the new session.
     if (this.activeSession) {
       for (const stream of [ConsoleSources.STDOUT, ConsoleSources.STDERR] as const) {
         for (const chunk of this.log4j.flush(stream)) {
@@ -181,6 +157,7 @@ class ConsoleHub {
         }
       }
     }
+    this.clearFlushTimer();
     this.log4j.reset();
     this.activeSession = session;
   }
@@ -209,9 +186,8 @@ class ConsoleHub {
     const { source, raw, forcedLevel, slug, code, args: lineArgs } = args;
     if (!raw) return;
     const cleaned = stripAnsi(raw);
-    // Drop whitespace-only segments: Minecraft's XMLLayout puts `\n  ` between
-    // every `<log4j:Event>` block (indented next event), and a plain
-    // length-check would still admit the two-space line.
+    // XMLLayout puts `\n  ` (indent) between events; bare length check would
+    // admit the two-space line as a row.
     const segments = cleaned.split(/\r?\n/).filter((segment) => segment.trim().length > 0);
     if (segments.length === 0) return;
 
@@ -249,6 +225,12 @@ class ConsoleHub {
       if (batch.length === 0) return;
       this.sendToWindow(IPC_EVENTS.consoleLines, batch);
     }, FLUSH_INTERVAL_MS);
+  }
+
+  private clearFlushTimer(): void {
+    if (!this.flushTimer) return;
+    clearTimeout(this.flushTimer);
+    this.flushTimer = null;
   }
 
   private sendToWindow(channel: string, payload: unknown): void {

@@ -1,15 +1,13 @@
+import type { Translator } from '@renderer/i18n';
 import { cn } from '@renderer/shared/lib/cn';
 import { Button } from '@renderer/shared/ui/Button';
 import { Input } from '@renderer/shared/ui/Input';
 import {
-  type ConsoleInitialPayload,
-  type ConsoleLine,
   type ConsoleProcessState,
   type ConsoleSource,
   ConsoleStatuses,
 } from '@shared/contracts/console';
-import type { ClientSlug } from '@shared/contracts/ids';
-import { IPC_CHANNELS, IPC_EVENTS } from '@shared/ipc';
+import { IPC_CHANNELS } from '@shared/ipc';
 import {
   AlertTriangle,
   ArrowDown,
@@ -28,19 +26,26 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
-  useRef,
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useConsoleScroll } from './hooks/useConsoleScroll';
+import { type ConsoleSearchApi, useConsoleSearch } from './hooks/useConsoleSearch';
+import { useConsoleStream } from './hooks/useConsoleStream';
+
+const renderSearchCounter = (search: ConsoleSearchApi, t: Translator): string => {
+  if (!search.searchQuery) return '';
+  if (search.matches.length === 0) return t('console.noMatches');
+  return t('console.matches', {
+    current: search.activeMatchIndex + 1,
+    total: search.matches.length,
+  });
+};
 
 const BUFFER_LIMIT = 10000;
-const SEARCH_RESULT_CAP = 5000;
 const ROW_HEIGHT = 22;
 const OVERSCAN = 16;
-const SCROLL_BOTTOM_THRESHOLD = 24;
-const SEARCH_DEBOUNCE_MS = 120;
 const COPY_FEEDBACK_RESET_MS = 1500;
 
 const TWO_DIGITS = 2;
@@ -56,20 +61,6 @@ const formatTime = (timestamp: number): string => {
 };
 
 const sourceLabelKey = (source: ConsoleSource): string => `console.source.${source}`;
-
-const findMatches = (lines: ConsoleLine[], query: string): number[] => {
-  if (!query) return [];
-  const needle = query.toLowerCase();
-  const out: number[] = [];
-  for (let index = 0; index < lines.length; index++) {
-    const line = lines[index];
-    if (line?.message.toLowerCase().includes(needle)) {
-      out.push(index);
-      if (out.length >= SEARCH_RESULT_CAP) break;
-    }
-  }
-  return out;
-};
 
 type HighlightProps = {
   message: string;
@@ -113,6 +104,12 @@ const COPY_FEEDBACKS = {
 } as const;
 type CopyFeedback = (typeof COPY_FEEDBACKS)[keyof typeof COPY_FEEDBACKS];
 
+const copyFeedbackLabel = (feedback: CopyFeedback, idleLabel: string, t: Translator): string => {
+  if (feedback === COPY_FEEDBACKS.SUCCESS) return t('console.copied');
+  if (feedback === COPY_FEEDBACKS.ERROR) return t('console.copyFailed');
+  return idleLabel;
+};
+
 const statusToneClass = (status: ConsoleProcessState['status']): string => {
   switch (status) {
     case ConsoleStatuses.RUNNING:
@@ -129,288 +126,34 @@ const statusToneClass = (status: ConsoleProcessState['status']): string => {
   }
 };
 
-const INITIAL_STATE: ConsoleProcessState = {
-  slug: '' as ClientSlug,
-  status: ConsoleStatuses.IDLE,
-};
-
 export const ConsoleApp = () => {
   const { t } = useTranslation();
-  const [state, setState] = useState<ConsoleProcessState>(INITIAL_STATE);
-  const [clientTitle, setClientTitle] = useState<string>('');
-  const [lines, setLines] = useState<ConsoleLine[]>([]);
-  const [droppedCount, setDroppedCount] = useState(0);
-  const [paused, setPaused] = useState(false);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [searchInput, setSearchInput] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeMatch, setActiveMatch] = useState(0);
   const [copyAllFeedback, setCopyAllFeedback] = useState<CopyFeedback>(COPY_FEEDBACKS.IDLE);
   const [copyLineFeedback, setCopyLineFeedback] = useState<CopyFeedback>(COPY_FEEDBACKS.IDLE);
 
-  const seenIdsRef = useRef<Set<number>>(new Set());
-  const pendingRef = useRef<ConsoleLine[]>([]);
-  const flushRafRef = useRef<number | null>(null);
-  const bodyRef = useRef<HTMLDivElement | null>(null);
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
-  /**
-   * Mirror `paused` into a ref so the IPC listener doesn't have to be
-   * resubscribed every time the user toggles pause. The listener is
-   * registered once and reads the latest paused value through this ref —
-   * avoids a strict-mode / pause-toggle gap where pushes between
-   * cleanup and re-subscribe would be silently dropped by Electron.
-   */
-  const pausedRef = useRef(paused);
-  useEffect(() => {
-    pausedRef.current = paused;
-  }, [paused]);
-  const [scrollTop, setScrollTop] = useState(0);
-  const [viewportHeight, setViewportHeight] = useState(0);
-  const isAtBottomRef = useRef(true);
-  const [showJumpButton, setShowJumpButton] = useState(false);
-
-  const totalLines = lines.length;
-  const matches = useMemo(() => findMatches(lines, searchQuery), [lines, searchQuery]);
-  const activeMatchIndex = matches.length > 0 ? activeMatch % matches.length : 0;
-  const activeRowIndex = matches.length > 0 ? (matches[activeMatchIndex] ?? null) : null;
+  const resetSelection = useCallback(() => setSelectedId(null), []);
+  const stream = useConsoleStream(BUFFER_LIMIT, resetSelection);
+  const search = useConsoleSearch(stream.lines);
+  const scroll = useConsoleScroll(stream.lines.length);
 
   const isCrashed =
-    state.status === ConsoleStatuses.CRASHED || state.status === ConsoleStatuses.ERROR;
-  const exitCode = state.exitCode ?? null;
+    stream.state.status === ConsoleStatuses.CRASHED ||
+    stream.state.status === ConsoleStatuses.ERROR;
+  const exitCode = stream.state.exitCode ?? null;
 
-  // ── window title ─────────────────────────────────────────────────────────
   useEffect(() => {
     document.title = t('console.windowTitle');
   }, [t]);
 
-  // ── initial fetch ────────────────────────────────────────────────────────
-  const refreshInitial = useCallback(() => {
-    let cancelled = false;
-    window.api
-      .invoke(IPC_CHANNELS.consoleGetInitial, undefined)
-      .then((payload: ConsoleInitialPayload) => {
-        if (cancelled) return;
-        if (payload.activeSession) {
-          setClientTitle(payload.activeSession.clientTitle);
-          setState(payload.activeSession.state);
-        } else {
-          setClientTitle('');
-          setState(INITIAL_STATE);
-        }
-        setDroppedCount(payload.droppedCount);
-        const seen = new Set<number>();
-        for (const line of payload.lines) seen.add(line.id);
-        seenIdsRef.current = seen;
-        setLines(payload.lines);
-      })
-      .catch(() => {
-        /* main may not be ready yet — live updates will catch us up */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  useEffect(() => refreshInitial(), [refreshInitial]);
-
-  // ── live subscriptions ───────────────────────────────────────────────────
-  /**
-   * Mirror of the working elixir-app console: coalesce inbound push batches
-   * via RAF so a burst of stdout lines turns into one `setLines` update.
-   * The window is created with `backgroundThrottling: false` so RAF keeps
-   * firing even when the console is occluded by Minecraft / launcher.
-   */
-  const flushPending = useCallback(() => {
-    const incoming = pendingRef.current;
-    if (incoming.length === 0) return;
-    pendingRef.current = [];
-    setLines((prev) => {
-      const seen = seenIdsRef.current;
-      const next = prev.slice();
-      for (const line of incoming) {
-        if (seen.has(line.id)) continue;
-        seen.add(line.id);
-        next.push(line);
-      }
-      if (next.length > BUFFER_LIMIT) {
-        const overflow = next.length - BUFFER_LIMIT;
-        for (let i = 0; i < overflow; i++) {
-          const dropped = next[i];
-          if (dropped) seen.delete(dropped.id);
-        }
-        next.splice(0, overflow);
-        setDroppedCount((current) => current + overflow);
-      }
-      return next;
-    });
-  }, []);
-
-  const scheduleFlush = useCallback(() => {
-    if (flushRafRef.current != null) return;
-    // `requestAnimationFrame` is paused for occluded BrowserWindows even with
-    // `backgroundThrottling: false`. `queueMicrotask` runs synchronously at
-    // the end of the current task — never throttled, never paused — so the
-    // flush completes regardless of window visibility.
-    flushRafRef.current = 1;
-    queueMicrotask(() => {
-      flushRafRef.current = null;
-      flushPending();
-    });
-  }, [flushPending]);
-
   useEffect(() => {
-    const offLines = window.api.on(IPC_EVENTS.consoleLines, (incoming) => {
-      if (pausedRef.current) {
-        pendingRef.current.push(...incoming);
-        if (pendingRef.current.length > BUFFER_LIMIT) {
-          pendingRef.current.splice(0, pendingRef.current.length - BUFFER_LIMIT);
-        }
-        return;
-      }
-      pendingRef.current.push(...incoming);
-      scheduleFlush();
-    });
-    const offState = window.api.on(IPC_EVENTS.consoleState, (event) => {
-      setState(event);
-      if (event.clientTitle !== undefined) setClientTitle(event.clientTitle);
-    });
-    const offReset = window.api.on(IPC_EVENTS.consoleBufferReset, () => {
-      pendingRef.current = [];
-      seenIdsRef.current = new Set();
-      setSelectedId(null);
-      refreshInitial();
-    });
-    return () => {
-      offLines();
-      offState();
-      offReset();
-      // Microtask flushes can't be cancelled; just clear the guard so a
-      // late callback becomes a no-op (it reads empty pending).
-      flushRafRef.current = null;
-    };
-  }, [scheduleFlush, refreshInitial]);
+    if (search.activeRowIndex == null) return;
+    scroll.scrollToRow(search.activeRowIndex, ROW_HEIGHT);
+  }, [search.activeRowIndex, scroll]);
 
-  useEffect(() => {
-    if (!paused && pendingRef.current.length > 0) scheduleFlush();
-  }, [paused, scheduleFlush]);
-
-  /**
-   * Background-safety reconciliation. Push delivery is fast but unreliable
-   * in occluded BrowserWindows — Chromium can pause RAF / throttle timers
-   * even with `backgroundThrottling: false` once the page has been hidden
-   * long enough. A 1s `getInitial` poll re-syncs whatever the push channel
-   * missed; `seenIdsRef` dedupes against what already arrived live so the
-   * user sees each line exactly once, with at most 1s lag.
-   */
-  useEffect(() => {
-    const handle = window.setInterval(() => {
-      window.api
-        .invoke(IPC_CHANNELS.consoleGetInitial, undefined)
-        .then((payload: ConsoleInitialPayload) => {
-          const session = payload.activeSession;
-          if (session) {
-            setClientTitle(session.clientTitle);
-            setState((prev) =>
-              prev.status === session.state.status && prev.exitCode === session.state.exitCode
-                ? prev
-                : session.state,
-            );
-          }
-          setDroppedCount(payload.droppedCount);
-          const seen = seenIdsRef.current;
-          const fresh = payload.lines.filter((line) => !seen.has(line.id));
-          if (fresh.length === 0) return;
-          if (pausedRef.current) {
-            pendingRef.current.push(...fresh);
-            if (pendingRef.current.length > BUFFER_LIMIT) {
-              pendingRef.current.splice(0, pendingRef.current.length - BUFFER_LIMIT);
-            }
-            return;
-          }
-          pendingRef.current.push(...fresh);
-          scheduleFlush();
-        })
-        .catch(() => {});
-    }, 1000);
-    return () => window.clearInterval(handle);
-  }, [scheduleFlush]);
-
-  // ── scroll tracking + auto-stick to bottom ───────────────────────────────
-  useLayoutEffect(() => {
-    const element = bodyRef.current;
-    if (!element) return;
-    const onScroll = () => {
-      const distanceFromBottom = element.scrollHeight - element.scrollTop - element.clientHeight;
-      isAtBottomRef.current = distanceFromBottom <= SCROLL_BOTTOM_THRESHOLD;
-      setShowJumpButton(!isAtBottomRef.current);
-      setScrollTop(element.scrollTop);
-    };
-    const onResize = () => {
-      setViewportHeight(element.clientHeight);
-    };
-    element.addEventListener('scroll', onScroll, { passive: true });
-    onScroll();
-    onResize();
-    const observer = new ResizeObserver(onResize);
-    observer.observe(element);
-    return () => {
-      element.removeEventListener('scroll', onScroll);
-      observer.disconnect();
-    };
-  }, []);
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: lines.length is the trigger; the body reads only refs
-  useLayoutEffect(() => {
-    const element = bodyRef.current;
-    if (!element) return;
-    if (isAtBottomRef.current) {
-      element.scrollTop = element.scrollHeight;
-    }
-  }, [lines.length]);
-
-  // ── debounced search input → live query ──────────────────────────────────
-  useEffect(() => {
-    const handle = window.setTimeout(() => {
-      setSearchQuery(searchInput);
-      setActiveMatch(0);
-    }, SEARCH_DEBOUNCE_MS);
-    return () => window.clearTimeout(handle);
-  }, [searchInput]);
-
-  useEffect(() => {
-    if (matches.length === 0) {
-      setActiveMatch(0);
-      return;
-    }
-    if (activeMatch >= matches.length) setActiveMatch(matches.length - 1);
-  }, [matches.length, activeMatch]);
-
-  const scrollToRow = useCallback((index: number) => {
-    const element = bodyRef.current;
-    if (!element) return;
-    const target = index * ROW_HEIGHT;
-    if (
-      target < element.scrollTop ||
-      target > element.scrollTop + element.clientHeight - ROW_HEIGHT
-    ) {
-      element.scrollTop = Math.max(0, target - element.clientHeight / 2 + ROW_HEIGHT / 2);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (activeRowIndex == null) return;
-    scrollToRow(activeRowIndex);
-  }, [activeRowIndex, scrollToRow]);
-
-  // ── controls ────────────────────────────────────────────────────────────
   const handleClear = useCallback(() => {
-    void window.api.invoke(IPC_CHANNELS.consoleClear, undefined).catch(() => {});
-    pendingRef.current = [];
-    seenIdsRef.current = new Set();
-    setLines([]);
-    setDroppedCount(0);
-    setSelectedId(null);
-  }, []);
+    stream.clear();
+  }, [stream]);
 
   const flashFeedback = useCallback((setter: (next: CopyFeedback) => void, kind: CopyFeedback) => {
     setter(kind);
@@ -426,69 +169,18 @@ export const ConsoleApp = () => {
     }
   }, [flashFeedback]);
 
-  const handleJumpToBottom = useCallback(() => {
-    const element = bodyRef.current;
-    if (!element) return;
-    element.scrollTop = element.scrollHeight;
-    isAtBottomRef.current = true;
-    setShowJumpButton(false);
-  }, []);
-
-  const goNextMatch = useCallback(() => {
-    if (matches.length === 0) return;
-    setActiveMatch((prev) => (prev + 1) % matches.length);
-  }, [matches.length]);
-
-  const goPrevMatch = useCallback(() => {
-    if (matches.length === 0) return;
-    setActiveMatch((prev) => (prev - 1 + matches.length) % matches.length);
-  }, [matches.length]);
-
-  const handleTogglePause = useCallback(() => setPaused((value) => !value), []);
-
-  const handleSearchClear = useCallback(() => {
-    setSearchInput('');
-    setSearchQuery('');
-    setActiveMatch(0);
-  }, []);
-
-  const focusSearch = useCallback(() => {
-    const input = searchInputRef.current;
-    if (!input) return;
-    input.focus();
-    input.select();
-  }, []);
-
-  useEffect(() => {
-    const handler = (event: KeyboardEvent) => {
-      const isMod = event.ctrlKey || event.metaKey;
-      if (isMod && event.key.toLowerCase() === 'f') {
-        event.preventDefault();
-        focusSearch();
-        return;
-      }
-      const target = event.target as HTMLElement | null;
-      const isInSearch = target === searchInputRef.current;
-      if (!isInSearch && event.key === 'Escape' && searchInput) {
-        event.preventDefault();
-        handleSearchClear();
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [focusSearch, handleSearchClear, searchInput]);
-
-  // ── virtualization slice ────────────────────────────────────────────────
-  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
-  const visibleCount = Math.ceil(viewportHeight / ROW_HEIGHT) + OVERSCAN * 2;
+  const startIndex = Math.max(0, Math.floor(scroll.scrollTop / ROW_HEIGHT) - OVERSCAN);
+  const visibleCount = Math.ceil(scroll.viewportHeight / ROW_HEIGHT) + OVERSCAN * 2;
+  const totalLines = stream.lines.length;
   const endIndex = Math.min(totalLines, startIndex + visibleCount);
-  const visibleLines = lines.slice(startIndex, endIndex);
+  const visibleLines = stream.lines.slice(startIndex, endIndex);
   const offsetY = startIndex * ROW_HEIGHT;
   const totalHeight = totalLines * ROW_HEIGHT;
 
   const selectedLine = useMemo(
-    () => (selectedId == null ? null : (lines.find((line) => line.id === selectedId) ?? null)),
-    [selectedId, lines],
+    () =>
+      selectedId == null ? null : (stream.lines.find((line) => line.id === selectedId) ?? null),
+    [selectedId, stream.lines],
   );
 
   const handleCopyLine = useCallback(async () => {
@@ -504,8 +196,8 @@ export const ConsoleApp = () => {
     }
   }, [selectedLine, t, flashFeedback]);
 
-  const statusLabel = t(`console.status.${state.status}`);
-  const headerSubtitle = clientTitle || '';
+  const statusLabel = t(`console.status.${stream.state.status}`);
+  const headerSubtitle = stream.clientTitle || '';
 
   return (
     <div className="flex h-full flex-col bg-background text-foreground">
@@ -532,10 +224,10 @@ export const ConsoleApp = () => {
           </div>
           <div className="app-region-no-drag flex h-full items-center px-3">
             <span
-              data-status={state.status}
+              data-status={stream.state.status}
               className={cn(
                 'inline-flex h-5 items-center rounded-sm border px-2 text-[9.5px] font-bold uppercase tracking-wider',
-                statusToneClass(state.status),
+                statusToneClass(stream.state.status),
               )}
             >
               {statusLabel}
@@ -552,17 +244,17 @@ export const ConsoleApp = () => {
             aria-hidden="true"
           />
           <Input
-            ref={searchInputRef}
-            value={searchInput}
-            onChange={(event) => setSearchInput(event.target.value)}
+            ref={search.searchInputRef}
+            value={search.searchInput}
+            onChange={(event) => search.setSearchInput(event.target.value)}
             placeholder={t('console.search')}
             aria-label={t('console.search')}
             className="h-8 w-64 px-8 text-xs"
           />
-          {searchInput && (
+          {search.searchInput && (
             <button
               type="button"
-              onClick={handleSearchClear}
+              onClick={search.clear}
               aria-label={t('console.searchClear')}
               className="absolute right-2 flex h-5 w-5 items-center justify-center rounded-sm text-foreground/50 hover:bg-ghost-hover hover:text-foreground"
             >
@@ -570,20 +262,13 @@ export const ConsoleApp = () => {
             </button>
           )}
           <span className="ml-1 min-w-[52px] text-center text-[10.5px] tabular-nums text-foreground/55">
-            {searchQuery
-              ? matches.length > 0
-                ? t('console.matches', {
-                    current: activeMatchIndex + 1,
-                    total: matches.length,
-                  })
-                : t('console.noMatches')
-              : ''}
+            {renderSearchCounter(search, t)}
           </span>
           <Button
             variant="outline"
             size="sm"
-            onClick={goPrevMatch}
-            disabled={matches.length === 0}
+            onClick={search.goPrevMatch}
+            disabled={search.matches.length === 0}
             aria-label={t('console.previousMatch')}
             className="h-7 w-7 px-0"
           >
@@ -592,8 +277,8 @@ export const ConsoleApp = () => {
           <Button
             variant="outline"
             size="sm"
-            onClick={goNextMatch}
-            disabled={matches.length === 0}
+            onClick={search.goNextMatch}
+            disabled={search.matches.length === 0}
             aria-label={t('console.nextMatch')}
             className="h-7 w-7 px-0"
           >
@@ -604,9 +289,14 @@ export const ConsoleApp = () => {
         <div className="flex-1" />
 
         <div className="flex items-center gap-1.5">
-          <Button variant="outline" size="sm" onClick={handleTogglePause} aria-pressed={paused}>
-            {paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
-            {paused ? t('console.resume') : t('console.pause')}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={stream.togglePause}
+            aria-pressed={stream.paused}
+          >
+            {stream.paused ? <Play className="size-3.5" /> : <Pause className="size-3.5" />}
+            {stream.paused ? t('console.resume') : t('console.pause')}
           </Button>
           <Button variant="outline" size="sm" onClick={handleClear}>
             <Trash2 className="size-3.5" />
@@ -623,11 +313,7 @@ export const ConsoleApp = () => {
             )}
           >
             <ClipboardCopy className="size-3.5" />
-            {copyAllFeedback === COPY_FEEDBACKS.SUCCESS
-              ? t('console.copied')
-              : copyAllFeedback === COPY_FEEDBACKS.ERROR
-                ? t('console.copyFailed')
-                : t('console.copyAll')}
+            {copyFeedbackLabel(copyAllFeedback, t('console.copyAll'), t)}
           </Button>
         </div>
       </div>
@@ -642,15 +328,15 @@ export const ConsoleApp = () => {
               {t('console.exitCodeLabel', { exitCode })}
             </span>
           )}
-          {state.message && (
-            <span className="truncate text-foreground/65" title={state.message}>
-              {state.message}
+          {stream.state.message && (
+            <span className="truncate text-foreground/65" title={stream.state.message}>
+              {stream.state.message}
             </span>
           )}
         </output>
       )}
 
-      {paused && (
+      {stream.paused && (
         <div className="border-b border-edge bg-chip px-4 py-1.5 text-center text-[11px] text-foreground/65">
           {t('console.pausedBanner')}
         </div>
@@ -658,12 +344,12 @@ export const ConsoleApp = () => {
 
       <div className="relative flex-1 min-h-0">
         <div
-          ref={bodyRef}
+          ref={scroll.bodyRef}
           className="console-body console-mono absolute inset-0 overflow-auto bg-background text-[12.5px] leading-snug"
         >
-          {droppedCount > 0 && (
+          {stream.droppedCount > 0 && (
             <div className="sticky top-0 z-10 border-b border-edge bg-chip-dark px-4 py-1 text-center text-[11px] text-foreground/55">
-              {t('console.droppedHint', { count: droppedCount })}
+              {t('console.droppedHint', { count: stream.droppedCount })}
             </div>
           )}
           {totalLines === 0 && (
@@ -676,14 +362,14 @@ export const ConsoleApp = () => {
               {visibleLines.map((line, index) => {
                 const absoluteIndex = startIndex + index;
                 const isActiveSearchRow =
-                  activeRowIndex != null && activeRowIndex === absoluteIndex;
+                  search.activeRowIndex != null && search.activeRowIndex === absoluteIndex;
                 const rowStyle: CSSProperties = { height: `${ROW_HEIGHT}px` };
                 const messageNode = line.code ? (
                   t(line.code, line.args ?? {})
                 ) : (
                   <Highlight
                     message={line.message}
-                    query={searchQuery}
+                    query={search.searchQuery}
                     active={isActiveSearchRow}
                   />
                 );
@@ -715,11 +401,11 @@ export const ConsoleApp = () => {
             </div>
           </div>
         </div>
-        {showJumpButton && (
+        {scroll.showJumpButton && (
           <Button
             type="button"
             size="sm"
-            onClick={handleJumpToBottom}
+            onClick={scroll.jumpToBottom}
             className="absolute bottom-3 right-4 z-10 rounded-full px-3"
           >
             <ArrowDown className="size-3.5" />
@@ -749,11 +435,7 @@ export const ConsoleApp = () => {
                 )}
               >
                 <ClipboardCopy className="size-3.5" />
-                {copyLineFeedback === COPY_FEEDBACKS.SUCCESS
-                  ? t('console.copied')
-                  : copyLineFeedback === COPY_FEEDBACKS.ERROR
-                    ? t('console.copyFailed')
-                    : t('console.copyLine')}
+                {copyFeedbackLabel(copyLineFeedback, t('console.copyLine'), t)}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => setSelectedId(null)}>
                 <X className="size-3.5" />
