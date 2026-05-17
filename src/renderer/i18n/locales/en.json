@@ -12,7 +12,6 @@
       "readyTitle": "Update {{version}} ready — click to restart and apply"
     },
     "toast": {
-      "checking": "Checking for updates…",
       "available": "Update {{version}} available — downloading…",
       "availableNoVersion": "Update available — downloading…",
       "notAvailable": "You're on the latest version",
