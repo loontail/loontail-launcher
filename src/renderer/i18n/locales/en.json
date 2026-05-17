@@ -113,6 +113,10 @@
     "back": "Back",
     "openSettings": "Open settings"
   },
+  "appBar": {
+    "alphaTag": "Alpha",
+    "alphaTooltip": "This is an alpha build. Please report any bugs to the developer."
+  },
   "servers": {
     "online": "Online",
     "offline": "All servers offline",
