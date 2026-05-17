@@ -6,6 +6,7 @@ export type {
   IpcEventPayload,
   IpcEventPayloads,
   IpcResult,
+  UpdaterStatusEvent,
 } from './contract';
 export { isIpcError } from './errors';
 export type { IpcError } from './errors';

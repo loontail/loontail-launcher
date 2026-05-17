@@ -3,7 +3,7 @@ import defaultSkin from '@renderer/assets/default-skin.png';
 import { useCurrentUser } from '@renderer/features/auth';
 import { toCachedMediaUrl } from '@renderer/shared/lib/mediaUrl';
 import { DropdownMenu, DropdownMenuItem } from '@renderer/shared/ui/DropdownMenu';
-import type { SkinKind } from '@shared/contracts/skin';
+import { type SkinKind, SkinKinds } from '@shared/contracts/skin';
 import { Loader2, Pencil, Trash2 } from 'lucide-react';
 import { type ChangeEvent, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -60,7 +60,7 @@ export const SkinEditor = ({ width = 200 }: SkinEditorProps) => {
     event.target.value = '';
     if (!file) return;
     const objectUrl = URL.createObjectURL(file);
-    if (kind === 'skin') {
+    if (kind === SkinKinds.SKIN) {
       if (skinBlobRef.current) URL.revokeObjectURL(skinBlobRef.current);
       skinBlobRef.current = objectUrl;
       setSkinUrl(objectUrl);
@@ -76,7 +76,7 @@ export const SkinEditor = ({ width = 200 }: SkinEditorProps) => {
   const handleSave = async () => {
     if (pendingSkin) {
       const buffer = await pendingSkin.arrayBuffer();
-      await upload({ type: 'skin', buffer });
+      await upload({ type: SkinKinds.SKIN, buffer });
       if (skinBlobRef.current) {
         URL.revokeObjectURL(skinBlobRef.current);
         skinBlobRef.current = null;
@@ -85,7 +85,7 @@ export const SkinEditor = ({ width = 200 }: SkinEditorProps) => {
     }
     if (pendingCape) {
       const buffer = await pendingCape.arrayBuffer();
-      await upload({ type: 'cape', buffer });
+      await upload({ type: SkinKinds.CAPE, buffer });
       if (capeBlobRef.current) {
         URL.revokeObjectURL(capeBlobRef.current);
         capeBlobRef.current = null;
@@ -120,14 +120,14 @@ export const SkinEditor = ({ width = 200 }: SkinEditorProps) => {
         type="file"
         accept=".png"
         hidden
-        onChange={handleFileChange('skin')}
+        onChange={handleFileChange(SkinKinds.SKIN)}
       />
       <input
         ref={capeInputRef}
         type="file"
         accept=".png"
         hidden
-        onChange={handleFileChange('cape')}
+        onChange={handleFileChange(SkinKinds.CAPE)}
       />
 
       <div

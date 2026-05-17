@@ -2,11 +2,13 @@ import { QUERY_KEYS } from '@shared/constants';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { fetchCurrentUser, login, logout } from './api';
 
+const CURRENT_USER_STALE_TIME_MS = 5 * 60_000;
+
 export const useCurrentUser = () => {
   const query = useQuery({
     queryKey: QUERY_KEYS.auth.me,
     queryFn: fetchCurrentUser,
-    staleTime: Number.POSITIVE_INFINITY,
+    staleTime: CURRENT_USER_STALE_TIME_MS,
   });
   return { user: query.data, isPending: query.isPending };
 };

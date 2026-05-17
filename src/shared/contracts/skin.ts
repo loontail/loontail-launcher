@@ -1,6 +1,11 @@
 import { z } from 'zod';
 
-export const SKIN_KINDS = ['skin', 'cape'] as const;
+export const SkinKinds = {
+  SKIN: 'skin',
+  CAPE: 'cape',
+} as const;
+
+export const SKIN_KINDS = [SkinKinds.SKIN, SkinKinds.CAPE] as const;
 export type SkinKind = (typeof SKIN_KINDS)[number];
 
 export const SkinKindSchema = z.enum(SKIN_KINDS);

@@ -1,7 +1,7 @@
 import { cn } from '@renderer/shared/lib/cn';
 import { useEffect } from 'react';
 import { useClientsList } from '../hooks';
-import { useActiveClientId, useClientsStore } from '../store';
+import { useActiveClientId, useSetActiveClientId } from '../store';
 import { ClientOverview } from './ClientOverview';
 import { ClientsNavigation } from './ClientsNavigation';
 import { StrapiMedia } from './StrapiMedia';
@@ -9,7 +9,7 @@ import { StrapiMedia } from './StrapiMedia';
 export const ClientsPage = () => {
   const { clients, isPending } = useClientsList();
   const activeClientId = useActiveClientId();
-  const setActiveClientId = useClientsStore((state) => state.setActiveClientId);
+  const setActiveClientId = useSetActiveClientId();
 
   useEffect(() => {
     const first = clients[0];

@@ -4,7 +4,12 @@ import { getStoredAuth, setStoredAuth } from '@main/infra/store';
 import { invalidateMediaCache, prewarmMediaCache } from '@main/services/media/mediaCache';
 import { ERROR_CODES } from '@shared/constants';
 import { type UserId, asUserId } from '@shared/contracts/ids';
-import type { SkinKind, UploadSkinPayload, UploadSkinResult } from '@shared/contracts/skin';
+import {
+  type SkinKind,
+  SkinKinds,
+  type UploadSkinPayload,
+  type UploadSkinResult,
+} from '@shared/contracts/skin';
 import { updateUserSkinFields, uploadSkinFile } from './skinApi';
 
 const logger = scopedLogger('skin');
@@ -21,8 +26,7 @@ const requireUserId = (): UserId => {
 };
 
 const updateStoredUserAsset = (kind: SkinKind, url: string | null) => {
-  // Drop the cached binary for the previous URL so the renderer's cache:// lookup falls
-  // back to the network if the user re-uploads under a different filename.
+  // Drop the cached binary so cache:// falls back to the network if the URL changes.
   const previous = getStoredAuth()?.user?.[kind];
   if (typeof previous === 'string' && previous.length > 0) {
     invalidateMediaCache(previous);
@@ -74,6 +78,6 @@ export const clearSkin = async (): Promise<void> => {
   } catch (error) {
     logger.warn('Failed to clear skin fields on server', error);
   }
-  updateStoredUserAsset('skin', null);
-  updateStoredUserAsset('cape', null);
+  updateStoredUserAsset(SkinKinds.SKIN, null);
+  updateStoredUserAsset(SkinKinds.CAPE, null);
 };

@@ -46,8 +46,12 @@ export type {
   SetClientOverridePayload,
   StorageSettings,
 } from './settings';
-export { DiskInfoSchema, PickedFolderSchema } from './system';
-export type { DiskInfo, PickedFolder } from './system';
+export { NotificationPayloadSchema, NotificationVariants } from './notification';
+export type { NotificationPayload, NotificationVariant } from './notification';
+export { DiskInfoSchema, FolderSizeSchema, PickedFolderSchema } from './system';
+export type { DiskInfo, FolderSize, PickedFolder } from './system';
+export { UpdaterStates } from './updater';
+export type { UpdaterState, UpdaterStatusEvent } from './updater';
 export { SKIN_KINDS, SkinKindSchema, UploadSkinPayloadSchema } from './skin';
 export type { SkinKind, UploadSkinPayload, UploadSkinResult } from './skin';
 export { ClientResponseSchema, KeywordSchema } from './client';

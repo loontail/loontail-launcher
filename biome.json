@@ -29,11 +29,11 @@
       "recommended": true,
       "style": {
         "useImportType": "error",
-        "noNonNullAssertion": "warn"
+        "noNonNullAssertion": "error"
       },
       "suspicious": {
         "noExplicitAny": "error",
-        "noConsole": "warn",
+        "noConsole": "error",
         "noConfusingVoidType": "off"
       },
       "correctness": {
@@ -42,7 +42,22 @@
       },
       "performance": {
         "noDelete": "off"
+      },
+      "nursery": {
+        "noNestedTernary": "error"
       }
     }
-  }
+  },
+  "overrides": [
+    {
+      "include": ["scripts/**"],
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
+    }
+  ]
 }

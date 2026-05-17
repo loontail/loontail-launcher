@@ -1,3 +1,4 @@
+import { isMinecraftKitError } from '@loontail/minecraft-kit';
 import { scopedLogger } from '@main/infra/logger';
 import { ERROR_CODES } from '@shared/constants';
 import type { IpcArgs, IpcContract, IpcError, IpcResult } from '@shared/ipc';
@@ -23,21 +24,30 @@ const logger = scopedLogger('ipc');
 const toIpcError = (code: IpcError['code'], message: string, details?: unknown): IpcError =>
   details === undefined ? { code, message } : { code, message, details };
 
-// Stack traces and raw error values leak source paths and internal state. Keep them
-// inside the launcher process in production; surface them in dev where they help
-// debugging via the renderer's dev tools.
+// Stack traces leak source paths — surface only in dev.
 const isDev = (): boolean => !app.isPackaged;
+
+const devDetailsFor = (error: unknown): Record<string, unknown> | undefined => {
+  if (!isDev()) return undefined;
+  const details: Record<string, unknown> = {};
+  if (error instanceof Error) {
+    details.stack = error.stack;
+  }
+  if (isMinecraftKitError(error)) {
+    details.kitCode = error.code;
+    if (error.context !== undefined) details.kitContext = error.context;
+  }
+  return Object.keys(details).length > 0 ? details : undefined;
+};
 
 const normalizeError = (error: unknown): IpcError => {
   if (typeof error === 'object' && error !== null && 'code' in error && 'message' in error) {
     return error as IpcError;
   }
   if (error instanceof Error) {
-    const details = isDev() ? { stack: error.stack } : undefined;
-    return toIpcError(ERROR_CODES.IpcHandlerFailed, error.message, details);
+    return toIpcError(ERROR_CODES.IpcHandlerFailed, error.message, devDetailsFor(error));
   }
-  const details = isDev() ? { error } : undefined;
-  return toIpcError(ERROR_CODES.Unknown, 'Unknown error', details);
+  return toIpcError(ERROR_CODES.Unknown, 'Unknown error', isDev() ? { error } : undefined);
 };
 
 export const createRouter = (isTrustedSender: SenderValidator): Router => {

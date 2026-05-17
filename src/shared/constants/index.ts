@@ -8,4 +8,9 @@ export {
   RAM_MIN_MB,
   RAM_STEP_MB,
 } from './settings';
-export { STORE_KEY_AUTH, STORE_KEY_LAUNCHER_SETTINGS } from './storeKeys';
+export {
+  CURRENT_SCHEMA_VERSION,
+  STORE_KEY_AUTH,
+  STORE_KEY_LAUNCHER_SETTINGS,
+  STORE_KEY_SCHEMA_VERSION,
+} from './storeKeys';

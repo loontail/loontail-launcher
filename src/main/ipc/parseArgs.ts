@@ -1,12 +1,8 @@
 import { ERROR_CODES } from '@shared/constants';
 import type { IpcError } from '@shared/ipc';
+import { app } from 'electron';
 import type { infer as ZodInfer, ZodTypeAny } from 'zod';
 
-/**
- * Validate IPC handler arguments against a Zod schema.
- * On failure, throws a structured IpcError the router will surface to the
- * renderer — never lets a malformed payload reach the service layer.
- */
 export const parseIpcArgs = <Schema extends ZodTypeAny>(
   schema: Schema,
   rawArgs: unknown,
@@ -17,7 +13,7 @@ export const parseIpcArgs = <Schema extends ZodTypeAny>(
     const error: IpcError = {
       code: ERROR_CODES.IpcInvalidArgs,
       message,
-      details: parsed.error.format(),
+      ...(app.isPackaged ? {} : { details: parsed.error.format() }),
     };
     throw error;
   }

@@ -15,6 +15,7 @@ import type {
   MinecraftProgressEvent,
   MinecraftStatusEvent,
 } from '@shared/contracts/minecraft';
+import type { NotificationPayload } from '@shared/contracts/notification';
 import type { ServerStatus } from '@shared/contracts/serverStatus';
 import type {
   LauncherSettings,
@@ -23,7 +24,10 @@ import type {
 } from '@shared/contracts/settings';
 import type { UploadSkinPayload, UploadSkinResult } from '@shared/contracts/skin';
 import type { StrapiList } from '@shared/contracts/strapi';
-import type { DiskInfo, PickedFolder } from '@shared/contracts/system';
+import type { DiskInfo, FolderSize, PickedFolder } from '@shared/contracts/system';
+import type { UpdaterStatusEvent } from '@shared/contracts/updater';
+
+export type { UpdaterStatusEvent } from '@shared/contracts/updater';
 
 export type IpcContract = {
   'app.getVersion': { args: undefined; result: string };
@@ -40,6 +44,7 @@ export type IpcContract = {
   };
   'system.getRamRange': { args: undefined; result: number[] };
   'system.getDiskSpace': { args: string; result: DiskInfo };
+  'system.getFolderSize': { args: string; result: FolderSize };
   'system.pickInstallFolder': { args: undefined; result: PickedFolder | null };
   'system.openPath': { args: string; result: void };
   'media.uploadSkin': { args: UploadSkinPayload; result: UploadSkinResult };
@@ -62,6 +67,8 @@ export type IpcContract = {
   'console.clear': { args: undefined; result: void };
   'console.copyAll': { args: undefined; result: void };
   'console.copyText': { args: string; result: void };
+  'updater.check': { args: undefined; result: void };
+  'updater.install': { args: undefined; result: void };
 };
 
 export type IpcArgs<TChannel extends keyof IpcContract> = IpcContract[TChannel]['args'];
@@ -72,6 +79,8 @@ export type IpcEventPayloads = {
   'minecraft.progress': MinecraftProgressEvent;
   'minecraft.log': MinecraftLogEvent;
   'minecraft.error': MinecraftErrorEvent;
+  'updater.status': UpdaterStatusEvent;
+  'app.notification': NotificationPayload;
   'console.lines': ConsoleLine[];
   'console.state': ConsoleProcessState;
   'console.bufferReset': null;

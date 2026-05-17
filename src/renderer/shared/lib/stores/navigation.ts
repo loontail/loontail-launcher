@@ -1,6 +1,11 @@
 import { create } from 'zustand';
 
-export type View = 'home' | 'settings';
+export const Views = {
+  HOME: 'home',
+  SETTINGS: 'settings',
+} as const;
+
+export type View = (typeof Views)[keyof typeof Views];
 
 type NavigationState = {
   stack: View[];
@@ -9,7 +14,7 @@ type NavigationState = {
 };
 
 export const useNavigationStore = create<NavigationState>((set) => ({
-  stack: ['home'],
+  stack: [Views.HOME],
   push: (view) =>
     set((state) => ({
       stack: state.stack[state.stack.length - 1] === view ? state.stack : [...state.stack, view],
@@ -21,6 +26,6 @@ export const useNavigationStore = create<NavigationState>((set) => ({
 }));
 
 export const useCurrentView = (): View =>
-  useNavigationStore((state) => state.stack[state.stack.length - 1] ?? 'home');
+  useNavigationStore((state) => state.stack[state.stack.length - 1] ?? Views.HOME);
 
 export const useCanGoBack = (): boolean => useNavigationStore((state) => state.stack.length > 1);

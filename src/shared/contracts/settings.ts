@@ -5,6 +5,8 @@ import type { ClientSlug } from './ids';
 
 export type { LoaderKind as LoaderChoice } from '@loontail/minecraft-kit';
 
+// Mirrors kit's `Loaders` const. Kept local because kit pulls in Node-only
+// modules (yauzl, crypto, fs/promises) that can't be bundled into the renderer.
 export const LoaderChoices = {
   VANILLA: 'vanilla',
   FORGE: 'forge',
@@ -59,9 +61,7 @@ export const LauncherSettingsSchema = z.object({
   memory: MemorySettingsSchema,
   storage: StorageSettingsSchema,
   launch: LaunchSettingsSchema,
-  // Keys are persisted as plain strings; the ClientSlug brand is enforced at
-  // function arg / payload boundaries.
-  clients: z.record(z.string(), ClientSettingsOverrideSchema),
+  clients: z.record(ClientSlugSchema, ClientSettingsOverrideSchema),
 });
 
 export type LauncherSettings = z.infer<typeof LauncherSettingsSchema>;

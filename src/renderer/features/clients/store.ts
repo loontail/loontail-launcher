@@ -1,14 +1,8 @@
+import { createValueStore } from '@renderer/shared/lib/stores/createValueStore';
 import type { ClientId } from '@shared/contracts';
-import { create } from 'zustand';
 
-type ClientsState = {
-  activeClientId: ClientId | null;
-  setActiveClientId: (id: ClientId | null) => void;
-};
+export const useClientsStore = createValueStore<ClientId | null>(null);
 
-export const useClientsStore = create<ClientsState>((set) => ({
-  activeClientId: null,
-  setActiveClientId: (id) => set({ activeClientId: id }),
-}));
-
-export const useActiveClientId = () => useClientsStore((state) => state.activeClientId);
+export const useActiveClientId = (): ClientId | null => useClientsStore.useValue();
+export const useSetActiveClientId = (): ((id: ClientId | null) => void) =>
+  useClientsStore.useSetValue();

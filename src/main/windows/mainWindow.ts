@@ -24,10 +24,8 @@ const safeParseUrl = (raw: string): URL | null => {
   }
 };
 
-// Hosts the launcher is allowed to hand off to the OS browser via shell.openExternal.
-// The Strapi host comes from mainConfig.apiUrl so prod / dev stay aligned without a
-// second source of truth. Extend with extra constants only when a real link target
-// appears in the UI — the default posture is "deny everything else".
+// Allowlist for shell.openExternal targets. Strapi host comes from mainConfig
+// so dev/prod stay aligned; default posture is deny.
 const buildExternalHostAllowlist = (): ReadonlySet<string> => {
   const allowed = new Set<string>();
   const apiUrl = safeParseUrl(mainConfig.apiUrl);
@@ -48,9 +46,8 @@ const isAllowedExternalUrl = (raw: string, allowlist: ReadonlySet<string>): bool
 
 type NavigationGuard = (url: string) => boolean;
 
-// The renderer is always loaded from one origin: either the dev server URL or the
-// local file bundle. Anything else is a navigation attempt away from the app and
-// must be denied.
+// Renderer loads from exactly one origin: dev URL or file://. Anything else
+// is a navigation attempt away from the app and must be denied.
 const buildNavigationGuard = (): NavigationGuard => {
   const devUrl = process.env.ELECTRON_RENDERER_URL;
   if (devUrl) {

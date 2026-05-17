@@ -1,6 +1,9 @@
 import { cn } from '@renderer/shared/lib/cn';
-import { type ReactNode, useEffect } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
+
+const FOCUSABLE_SELECTOR =
+  'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
 type ModalProps = {
   isOpen: boolean;
@@ -19,10 +22,52 @@ export const Modal = ({
   scrollable = false,
   ariaLabel,
 }: ModalProps) => {
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const previouslyFocusedRef = useRef<HTMLElement | null>(null);
+
+  const focusableElements = useCallback((): HTMLElement[] => {
+    const root = dialogRef.current;
+    if (!root) return [];
+    return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
+      (element) => !element.hasAttribute('aria-hidden') && element.offsetParent !== null,
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    previouslyFocusedRef.current = document.activeElement as HTMLElement | null;
+    const [first] = focusableElements();
+    first?.focus();
+    return () => {
+      previouslyFocusedRef.current?.focus();
+      previouslyFocusedRef.current = null;
+    };
+  }, [isOpen, focusableElements]);
+
   useEffect(() => {
     if (!isOpen) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const elements = focusableElements();
+      if (elements.length === 0) {
+        event.preventDefault();
+        return;
+      }
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (!first || !last) return;
+      const active = document.activeElement as HTMLElement | null;
+      if (event.shiftKey && (active === first || !dialogRef.current?.contains(active))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     window.addEventListener('keydown', onKeyDown);
     const previousOverflow = document.body.style.overflow;
@@ -31,7 +76,7 @@ export const Modal = ({
       window.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = previousOverflow;
     };
-  }, [isOpen, onClose]);
+  }, [isOpen, onClose, focusableElements]);
 
   if (!isOpen) return null;
 
@@ -45,8 +90,9 @@ export const Modal = ({
       )}
       onMouseDown={onClose}
     >
-      {/* biome-ignore lint/a11y/useSemanticElements: a <dialog> element requires imperative showModal()/close() that doesn't compose with React's render-driven open state */}
       <div
+        ref={dialogRef}
+        // biome-ignore lint/a11y/useSemanticElements: <dialog> requires imperative showModal/close which doesn't compose with React's render-driven open state
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}

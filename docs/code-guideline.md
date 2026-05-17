@@ -97,6 +97,14 @@ must include a short rationale (**Why**) so they can be revisited later.
 
   Compiler errors when a new variant is added but the switch is not updated.
 
+- **No nested ternaries.** Replace `a ? b : c ? d : e` with `if/else`, a
+  small helper, or a lookup table. Enforced by Biome
+  `lint/nursery/noNestedTernary`. **Why:** nested ternaries hide control
+  flow behind punctuation and are awkward to step through in review and
+  debugger. **How to apply:** if you reach for a second `?` inside a
+  ternary, lift the whole expression into a named helper returning the
+  branch value (string / `ReactNode` / etc.).
+
 ## 2. Naming
 
 - Files — `camelCase` (`bundleManager.ts`, `resolveSettings.ts`).
@@ -420,6 +428,20 @@ constant, not an inline literal.
 - Unexpected exceptions in main are caught via
   `process.on('uncaughtException', …)` and logged; the app does not fail
   silently.
+- **Log level rules** (enforced by review, no static check):
+  - `logger.error` — an operation the user initiated **failed and was not
+    recovered** (install crashed, launch failed, IPC handler threw). The user
+    sees the failure surface in the UI.
+  - `logger.warn` — a failure happened but the launcher **recovered**: stale
+    cache served, default value used, retry-able remote error, optional cleanup
+    skipped, schema migration fallback. Background sweeps that quietly skip
+    also log at warn.
+  - `logger.info` — lifecycle events (service init/dispose, schema migration
+    applied, install/repair phase boundaries).
+  - `logger.debug` — high-volume diagnostics gated behind `--verbose`. Default
+    config drops them in production.
+  - HTTP 4xx/5xx → `warn` (recoverable). Throwable inside an IPC handler →
+    `error` (the renderer sees a popup).
 
 ## 10. Comments
 

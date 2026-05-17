@@ -1,32 +1,43 @@
+import { mainConfig } from '@main/config';
 import { session } from 'electron';
 
-const PROD_CSP = [
+const apiOrigin = new URL(mainConfig.apiUrl).origin;
+
+const baseDirectives = [
   "default-src 'self'",
-  "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https: cache:",
   "font-src 'self' data:",
-  "connect-src 'self' https:",
+  `connect-src 'self' ${apiOrigin}`,
+];
+
+const PROD_CSP = ["script-src 'self'", ...baseDirectives].join('; ');
+
+// Dev: Vite injects HMR client + sourcemaps; needs eval. Connect to localhost dev
+// server is granted via the renderer origin already (script-src 'self' covers it).
+const DEV_CSP = [
+  "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
+  ...baseDirectives.map((directive) =>
+    directive.startsWith('connect-src ')
+      ? `connect-src 'self' ${apiOrigin} ws: http: https:`
+      : directive,
+  ),
 ].join('; ');
 
 const isDevRenderer = (): boolean => process.env.ELECTRON_RENDERER_URL !== undefined;
 
 export const configureSessionSecurity = (): void => {
-  // Deny all renderer permission requests (camera, mic, notifications, clipboard, …).
-  // The launcher never asks for these; opting in would require an explicit allowlist here.
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => {
     callback(false);
   });
-
   session.defaultSession.setPermissionCheckHandler(() => false);
 
-  if (isDevRenderer()) return;
-
+  const csp = isDevRenderer() ? DEV_CSP : PROD_CSP;
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
-        'Content-Security-Policy': [PROD_CSP],
+        'Content-Security-Policy': [csp],
       },
     });
   });

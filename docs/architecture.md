@@ -171,25 +171,36 @@ type Service = {
 };
 ```
 
-`ServiceContext` carries the main window reference, the logger factory,
-and the persistent store. Bootstrap in `main/index.ts` wires services
-in a specific order:
+Services receive their dependencies (router, mainWindow) directly at
+construction time. Bootstrap in `main/index.ts` wires them in init order:
 
 ```
-logger → store → settings → bundle → launch → updater
+app → auth → system → settings → skin → clients → servers → media →
+minecraft → console → updater
 ```
+
+Disposal runs in reverse on `before-quit` via `Promise.allSettled` so a
+slow consumer doesn't block the rest.
 
 A service registers its IPC routes inside `init`. Cross-service calls
 go through direct imports (not IPC); the router is a renderer→main edge,
 not a main-internal bus.
 
-Planned services (initial set):
+Currently shipping services:
 
-- `settings` — load/save `launcherSettings`, resolve per-client overrides.
-- `bundle` — manifest fetch, diff, download, verify, atomic apply,
-  pause/resume/cancel.
-- `launch` — start the Minecraft process with resolved settings.
-- `updater` — auto-update the launcher (electron-updater).
+- `app` — version info.
+- `auth` — Strapi `/auth/local` + `/users/me`, persisted JWT.
+- `system` — RAM range, disk space, folder pick, OS path open.
+- `settings` — `launcherSettings` CRUD + per-client overrides.
+- `skin` — uploads / clears Minecraft skin & cape via skins-registry.
+- `clients` — Strapi `/api/clients` with 30s in-memory cache + in-flight dedup.
+- `servers` — Minecraft SLP ping for server status.
+- `media` — `cache://` protocol handler backed by disk-cached image fetches.
+- `minecraft` — wraps `@loontail/minecraft-kit` for install / launch / repair /
+  uninstall, broadcasts progress / status / error events.
+- `console` — game console window pub/sub; log4j XMLLayout parser.
+- `updater` — `electron-updater` wrapper; `updater.check` IPC + `updater.status`
+  events (`checking`/`available`/`downloading`/`ready`/`error`).
 
 ## 6. Renderer state
 
@@ -207,17 +218,29 @@ There is no global app store. There is no Redux.
 
 ## 7. Persistence
 
-- `electron-store` in `userData/` holds `launcherSettings`
-  (`memory`, `storage`, `launch`, per-client overrides).
-- Bundle files: `{installPath}/{bundleSlug}/`.
-- Local sync manifest (last successful sync): `{installPath}/.cache/manifests/{bundleSlug}.json`.
+- `electron-store` in `userData/` holds:
+  - `auth` — `{ jwt, user }` or `null`.
+  - `launcherSettings` — `memory`, `storage`, `launch`, per-client overrides keyed by `ClientSlug`.
+  - `schemaVersion` — integer; bumped on incompatible schema changes. Each
+    bump adds a step to the `MIGRATIONS` map in `main/infra/store.ts`; an
+    out-of-band stored version aborts startup with a typed error.
+- Client install directories: `{clientsFolder}/{slug}/` (the user-configured
+  folder, or its per-client override). `clientsFolder` lives under
+  `app.getPath('userData')` by default.
+- Cached media (Strapi-served images, prewarmed skin/cape uploads):
+  `userData/cache/media/<sha1>` (registered as the `cache://` protocol).
+- Java runtimes: `userData/runtimes/<component>/`.
 - Logs: `userData/logs/` (rotated by `electron-log`).
 - No SQLite or Drizzle until a real need appears (history, search,
   large structured data).
 
-All file paths are produced by `main/infra/fs.ts` helpers that resolve
-against `app.getPath('userData')` or explicit override folders. No
-relative paths anywhere in services.
+All file paths are produced by `main/infra/{system,cache}.ts` helpers that
+resolve against `app.getPath('userData')` or the user's explicit override
+folder. No relative paths in services.
+
+At startup, `bootstrap/sweepOrphans.ts` fetches the current client list and
+drops `launcherSettings.clients` entries whose slug is no longer in Strapi.
+Best-effort: when Strapi is unreachable the sweep skips silently.
 
 ## 8. External integrations
 

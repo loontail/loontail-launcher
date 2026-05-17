@@ -1,6 +1,11 @@
-import { mainConfig } from '@main/config';
-import { HttpError, buildAuthHeader, buildMediaUrl, httpGet, httpPutVoid } from '@main/infra/http';
-import { API_PATH_PREFIX, API_ROUTES } from '@shared/constants';
+import {
+  buildMediaUrl,
+  httpGet,
+  httpGetBinary,
+  httpPostMultipart,
+  httpPutVoid,
+} from '@main/infra/http';
+import { API_ROUTES } from '@shared/constants';
 import type { UserId } from '@shared/contracts/ids';
 import type { SkinKind } from '@shared/contracts/skin';
 import { z } from 'zod';
@@ -21,17 +26,6 @@ const UploadedAssetSchema = z.object({
   fileUrl: z.string(),
 });
 
-const BODY_PREVIEW_LIMIT = 500;
-
-const readErrorBody = async (response: Response): Promise<string> => {
-  try {
-    const text = await response.text();
-    return text.slice(0, BODY_PREVIEW_LIMIT);
-  } catch {
-    return '';
-  }
-};
-
 export const getUserSkinFields = async (userId: UserId): Promise<SkinFields> => {
   const parsed = await httpGet(API_ROUTES.users.byId(userId), SkinFieldsResponseSchema);
   return { skin: parsed.skin ?? null, cape: parsed.cape ?? null };
@@ -40,7 +34,7 @@ export const getUserSkinFields = async (userId: UserId): Promise<SkinFields> => 
 export const updateUserSkinFields = (userId: UserId, fields: Partial<SkinFields>): Promise<void> =>
   httpPutVoid(API_ROUTES.users.byId(userId), fields);
 
-export const uploadSkinFile = async (
+export const uploadSkinFile = (
   userId: UserId,
   type: SkinKind,
   buffer: Buffer,
@@ -50,26 +44,12 @@ export const uploadSkinFile = async (
   const blob = new Blob([buffer as unknown as ArrayBuffer], { type: 'image/png' });
   formData.append('file', blob, `${type}_${userId}.png`);
   if (username) formData.append('username', username);
-
-  const endpoint = `${mainConfig.apiUrl}${API_PATH_PREFIX}${API_ROUTES.skinsRegistry.upload(type, userId)}`;
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    body: formData,
-    headers: buildAuthHeader(mainConfig.apiToken),
-  });
-  if (!response.ok) {
-    throw new HttpError(response.status, response.statusText, await readErrorBody(response));
-  }
-  const raw: unknown = await response.json();
-  return UploadedAssetSchema.parse(raw);
+  return httpPostMultipart(
+    API_ROUTES.skinsRegistry.upload(type, userId),
+    UploadedAssetSchema,
+    formData,
+  );
 };
 
-export const fetchAssetBytes = async (fileUrl: string): Promise<Buffer> => {
-  const absolute = buildMediaUrl(fileUrl);
-  const response = await fetch(absolute);
-  if (!response.ok) {
-    throw new HttpError(response.status, response.statusText, await readErrorBody(response));
-  }
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
-};
+export const fetchAssetBytes = (fileUrl: string): Promise<Buffer> =>
+  httpGetBinary(buildMediaUrl(fileUrl));

@@ -4,10 +4,12 @@ import type { SkinKind } from '@shared/contracts/skin';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { clearSkin, uploadSkin } from './api';
 
+export type UploadSkinInput = { type: SkinKind; buffer: ArrayBuffer };
+
 export const useUploadSkin = () => {
   const queryClient = useQueryClient();
   const mutation = useMutation({
-    mutationFn: async ({ type, buffer }: { type: SkinKind; buffer: ArrayBuffer }) => {
+    mutationFn: async ({ type, buffer }: UploadSkinInput) => {
       const result = await uploadSkin(type, buffer);
       queryClient.setQueryData<Account | null>(QUERY_KEYS.auth.me, (previous) =>
         previous ? { ...previous, [type]: result.url } : previous,

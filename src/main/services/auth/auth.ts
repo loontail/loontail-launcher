@@ -79,7 +79,7 @@ export const fetchCurrentUser = async (): Promise<Account | null> => {
       logger.warn(`auth.me failed with status ${error.status}`);
       return stored.user;
     }
-    logger.error('auth.me network error', error);
+    logger.warn('auth.me network error — falling back to stored user', error);
     return stored.user;
   }
 };
@@ -88,8 +88,6 @@ export const logout = (): void => {
   clearStoredAuth();
 };
 
-/** Read the locally-stored account without making a network request. Used by
- *  the Minecraft service to derive an offline player name on launch. */
 export const getStoredAccount = (): Account | null => {
   const stored = getStoredAuth();
   return stored?.user ?? null;

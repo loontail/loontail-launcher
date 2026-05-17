@@ -33,8 +33,7 @@ export const buildAuthHeader = (token: string): Record<string, string> => ({
   Authorization: `Bearer ${token}`,
 });
 
-// Use when an error path needs to surface request headers for logging — never
-// the real Authorization value, which leaks the API token.
+// Log paths only — never emit the real bearer token.
 export const redactAuthHeader = (headers: Record<string, string>): Record<string, string> => {
   if (!('Authorization' in headers)) return headers;
   return { ...headers, Authorization: REDACTED_AUTHORIZATION };
@@ -122,4 +121,38 @@ export const httpPutVoid = async (
 ): Promise<void> => {
   const response = await httpRequest(path, { method: 'PUT', payload, ...options });
   if (!response.ok) await throwHttpError(path, 'PUT', response);
+};
+
+export const httpPostMultipart = async <TSchema extends ZodTypeAny>(
+  path: string,
+  schema: TSchema,
+  formData: FormData,
+  options: SchemaCallOptions = {},
+): Promise<z.infer<TSchema>> => {
+  const token = resolveToken(options);
+  const response = await fetch(buildUrl(path), {
+    method: 'POST',
+    body: formData,
+    ...(token ? { headers: buildAuthHeader(token) } : {}),
+    ...(options.signal ? { signal: options.signal } : {}),
+  });
+  if (!response.ok) await throwHttpError(path, 'POST', response);
+  const raw: unknown = await response.json();
+  return schema.parse(raw);
+};
+
+// For binary downloads. Takes a raw url (absolute or media path); skips the
+// API_PATH_PREFIX since callers typically already hold an absolute media URL.
+export const httpGetBinary = async (
+  absoluteUrl: string,
+  options: { signal?: AbortSignal } = {},
+): Promise<Buffer> => {
+  const response = await fetch(absoluteUrl, options.signal ? { signal: options.signal } : {});
+  if (!response.ok) {
+    const bodyPreview = await readBodyPreview(response);
+    logger.warn(`GET ${absoluteUrl} failed: ${response.status} ${response.statusText}`);
+    throw new HttpError(response.status, response.statusText, bodyPreview);
+  }
+  const arrayBuffer = await response.arrayBuffer();
+  return Buffer.from(arrayBuffer);
 };

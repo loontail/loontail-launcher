@@ -1,12 +1,8 @@
 import { consoleHub } from '@main/infra/consoleHub';
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
 
-/**
- * Accept IPC traffic only from a known top-level frame in either the
- * main launcher window or the singleton console window. The console
- * lookup is deferred (the window is created on demand) so a fresh
- * webContents id is recognised each time it reopens.
- */
+// Deferred console lookup so a freshly reopened window is recognised by its
+// current webContents id.
 export const createTrustedSenderCheck =
   (mainWindow: BrowserWindow) =>
   (event: IpcMainInvokeEvent): boolean => {

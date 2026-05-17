@@ -1,4 +1,5 @@
 import {
+  localizeMinecraftError,
   useCancelInstall,
   useClientStatus,
   useInstallClient,
@@ -251,16 +252,27 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
         </ActionBtn>
       );
 
-    case InstallStatuses.ERROR:
+    case InstallStatuses.ERROR: {
+      const errorText = state.error
+        ? localizeMinecraftError(state.error.code, state.error.message, t)
+        : null;
       return (
-        <>
-          <ActionBtn onClick={startOrPickLoader} disabled={!folderReady || install.isPending}>
-            <RotateCcw size={16} />
-            {t('clients.retry')}
-          </ActionBtn>
+        <div className="flex max-w-[480px] flex-col gap-2">
+          {errorText && (
+            <p role="alert" className="text-[12px] leading-snug text-destructive">
+              {errorText}
+            </p>
+          )}
+          <div className="flex items-start gap-3">
+            <ActionBtn onClick={startOrPickLoader} disabled={!folderReady || install.isPending}>
+              <RotateCcw size={16} />
+              {t('clients.retry')}
+            </ActionBtn>
+          </div>
           {loaderModal}
-        </>
+        </div>
       );
+    }
 
     default:
       return (

@@ -28,8 +28,7 @@ export const registerMediaProtocol = (): void => {
     if (!cached) {
       return new Response(null, { status: 502 });
     }
-    // Node's Buffer is BodyInit-compatible at runtime but tsc's main-target lib doesn't
-    // expose BodyInit, so widen via `unknown`.
+    // Buffer is BodyInit-compatible at runtime; widen via `unknown` for tsc's main lib.
     return new Response(cached.body as unknown as ReadableStream<Uint8Array>, {
       status: 200,
       headers: {
