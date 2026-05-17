@@ -38,3 +38,6 @@ linux:
   category: Game
 publish:
   provider: github
+  owner: loontail
+  repo: minecraft-launcher
+  releaseType: release
