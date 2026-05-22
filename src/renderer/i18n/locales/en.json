@@ -30,7 +30,14 @@
     "errorInvalid": "Invalid login or password.",
     "errorNetwork": "Could not reach the server. Check your connection.",
     "errorRateLimited": "Too many sign-in attempts. Please wait a minute and try again.",
-    "errorUnknown": "Something went wrong. Try again later."
+    "errorUnknown": "Something went wrong. Try again later.",
+    "or": "or",
+    "signInWithMicrosoft": "Sign in with Microsoft",
+    "microsoft": {
+      "waiting": "Waiting for browser sign-in…",
+      "cancel": "Cancel",
+      "errorUnknown": "Microsoft sign-in failed. Try again."
+    }
   },
   "clients": {
     "sectionTitle": "Available clients",

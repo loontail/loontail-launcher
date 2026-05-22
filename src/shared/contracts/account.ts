@@ -1,12 +1,33 @@
-import { z } from 'zod';
+import type { AuthProvider, AuthSession } from './auth';
 
-export const AccountSchema = z.object({
-  id: z.number(),
-  username: z.string(),
-  email: z.string().email(),
-  blocked: z.boolean(),
-  skin: z.string().nullable().optional(),
-  cape: z.string().nullable().optional(),
-});
+// Provider-agnostic view of the currently signed-in user. The renderer and
+// the launch path consume this; the rich provider-specific data lives behind
+// `AuthSession`. Strapi-only fields (`email`) are `null` for Mojang sessions.
+export type Account = {
+  provider: AuthProvider;
+  username: string;
+  email: string | null;
+  skin: string | null;
+  cape: string | null;
+};
 
-export type Account = z.infer<typeof AccountSchema>;
+export const accountFromSession = (session: AuthSession): Account => {
+  if (session.provider === 'strapi') {
+    return {
+      provider: 'strapi',
+      username: session.user.username,
+      email: session.user.email,
+      skin: session.user.skin ?? null,
+      cape: session.user.cape ?? null,
+    };
+  }
+  const activeSkin = session.profile.skins.find((s) => s.state === 'ACTIVE');
+  const activeCape = session.profile.capes.find((c) => c.state === 'ACTIVE');
+  return {
+    provider: 'mojang',
+    username: session.profile.username,
+    email: null,
+    skin: activeSkin?.url ?? null,
+    cape: activeCape?.url ?? null,
+  };
+};

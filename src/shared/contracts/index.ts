@@ -1,4 +1,4 @@
-export { AccountSchema } from './account';
+export { accountFromSession } from './account';
 export type { Account } from './account';
 export {
   ConsoleLevels,
@@ -23,8 +23,34 @@ export {
   asUserId,
 } from './ids';
 export type { ClientId, ClientSlug, UserId } from './ids';
-export { LOGIN_ERROR_CODE, LoginPayloadSchema, StrapiAuthOkSchema } from './auth';
-export type { LoginErrorCode, LoginPayload, LoginResult, StrapiAuthOk } from './auth';
+export {
+  AUTH_PROVIDERS,
+  LOGIN_ERROR_CODE,
+  LoginPayloadSchema,
+  MOJANG_ASSET_STATES,
+  MojangCapeSchema,
+  MojangProfileSchema,
+  MojangSkinSchema,
+  SKIN_VARIANTS,
+  StrapiAuthOkSchema,
+  StrapiUserSchema,
+} from './auth';
+export type {
+  AuthProvider,
+  AuthSession,
+  LoginErrorCode,
+  LoginPayload,
+  LoginResult,
+  MojangAssetState,
+  MojangCape,
+  MojangProfile,
+  MojangSession,
+  MojangSkin,
+  SkinVariant,
+  StrapiAuthOk,
+  StrapiSession,
+  StrapiUser,
+} from './auth';
 export {
   ClientRuntimeRefSchema,
   ClientSettingsOverrideSchema,

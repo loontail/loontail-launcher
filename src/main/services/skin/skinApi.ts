@@ -27,12 +27,14 @@ const UploadedAssetSchema = z.object({
 });
 
 export const getUserSkinFields = async (userId: UserId): Promise<SkinFields> => {
-  const parsed = await httpGet(API_ROUTES.users.byId(userId), SkinFieldsResponseSchema);
+  const parsed = await httpGet(API_ROUTES.users.byId(userId), SkinFieldsResponseSchema, {
+    auth: 'session',
+  });
   return { skin: parsed.skin ?? null, cape: parsed.cape ?? null };
 };
 
 export const updateUserSkinFields = (userId: UserId, fields: Partial<SkinFields>): Promise<void> =>
-  httpPutVoid(API_ROUTES.users.byId(userId), fields);
+  httpPutVoid(API_ROUTES.users.byId(userId), fields, { auth: 'session' });
 
 export const uploadSkinFile = (
   userId: UserId,
@@ -48,6 +50,7 @@ export const uploadSkinFile = (
     API_ROUTES.skinsRegistry.upload(type, userId),
     UploadedAssetSchema,
     formData,
+    { auth: 'session' },
   );
 };
 

@@ -44,7 +44,10 @@ export const AccountSection = () => {
           <SettingsRow
             label={t('settings.account.email')}
             right={
-              <span className="truncate text-sm text-muted-foreground" title={user?.email}>
+              <span
+                className="truncate text-sm text-muted-foreground"
+                title={user?.email ?? undefined}
+              >
                 {user?.email ?? '—'}
               </span>
             }

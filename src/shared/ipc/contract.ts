@@ -34,6 +34,8 @@ export type IpcContract = {
   'auth.login': { args: LoginPayload; result: LoginResult };
   'auth.me': { args: undefined; result: Account | null };
   'auth.logout': { args: undefined; result: void };
+  'auth.mojang.signIn': { args: undefined; result: LoginResult };
+  'auth.mojang.cancel': { args: undefined; result: void };
   'settings.get': { args: undefined; result: LauncherSettings };
   'settings.setLauncher': { args: PatchLauncherSettings; result: LauncherSettings };
   'settings.setClientOverride': { args: SetClientOverridePayload; result: LauncherSettings };
@@ -47,6 +49,7 @@ export type IpcContract = {
   'system.getFolderSize': { args: string; result: FolderSize };
   'system.pickInstallFolder': { args: undefined; result: PickedFolder | null };
   'system.openPath': { args: string; result: void };
+  'system.openExternal': { args: string; result: void };
   'media.uploadSkin': { args: UploadSkinPayload; result: UploadSkinResult };
   'media.clearSkin': { args: undefined; result: void };
   'clients.list': { args: { locale?: string } | undefined; result: StrapiList<Client> };

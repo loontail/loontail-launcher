@@ -88,7 +88,10 @@ export const fetchClients = async (
   const parsed = await httpGet(
     API_ROUTES.clients.list(locale ? { locale } : {}),
     ClientListResponseSchema,
-    signal ? { signal } : {},
+    {
+      auth: 'apiToken',
+      ...(signal ? { signal } : {}),
+    },
   );
   const normalized = parsed.data.map(normalizeClient).filter((c): c is Client => c !== null);
   return {

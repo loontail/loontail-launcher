@@ -131,3 +131,20 @@ export const openPath = async (targetPath: string): Promise<void> => {
     logger.warn('Failed to open path', { targetPath, error });
   }
 };
+
+// `shell.openExternal` is the right primitive for `https://` URLs — Electron
+// hands them to the OS default browser. Reject anything non-http(s) so a
+// compromised renderer can't open `file://` or weird protocol handlers.
+export const openExternalUrl = async (url: string): Promise<void> => {
+  if (!url) return;
+  const allowed = url.startsWith('https://') || url.startsWith('http://');
+  if (!allowed) {
+    logger.warn('Refused to open non-http(s) external URL', { url });
+    return;
+  }
+  try {
+    await shell.openExternal(url);
+  } catch (error) {
+    logger.warn('Failed to open external URL', { url, error });
+  }
+};

@@ -85,7 +85,6 @@
   isolation: isolate;
   background-color: hsl(0 0% 0% / 0.55);
   backdrop-filter: blur(24px) saturate(140%);
-  -webkit-backdrop-filter: blur(24px) saturate(140%);
 
   &::before {
     content: "";

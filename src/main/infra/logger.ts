@@ -9,6 +9,12 @@ export const initLogger = (): Logger => {
     log.initialize();
     log.transports.file.level = 'info';
     log.transports.console.level = 'debug';
+    // Route raw console.* calls through electron-log so the launcher's log
+    // file captures output from dependencies that write directly via
+    // `console.warn` / `console.error` (e.g. minecraft-kit's `authDebug`).
+    // Without this, those lines only go to the OS-level stdout and disappear
+    // when the launcher isn't started from a terminal.
+    Object.assign(console, log.functions);
     initialized = true;
   }
   return log.scope('main');

@@ -1,15 +1,27 @@
 import { mainConfig } from '@main/config';
 import { scopedLogger } from '@main/infra/logger';
+import { getStoredAuth } from '@main/infra/store';
 import { API_PATH_PREFIX } from '@shared/constants';
 import type { ZodTypeAny, z } from 'zod';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
+/**
+ * Authorization mode for an HTTP call.
+ *
+ * - `apiToken` — sends the static `API_TOKEN` from env. Use for catalogue
+ *   endpoints, manifests, anything not scoped to a logged-in user.
+ * - `session` — sends the bearer from the stored auth session. Throws
+ *   `MissingSessionError` if no session is stored. Use for account-scoped
+ *   endpoints.
+ * - `none` — no `Authorization` header. Use for login endpoints.
+ */
+export type AuthMode = 'apiToken' | 'session' | 'none';
+
 type RequestOptions = {
   method?: HttpMethod;
   payload?: unknown;
-  withToken?: boolean;
-  bearer?: string;
+  auth: AuthMode;
   signal?: AbortSignal;
 };
 
@@ -29,6 +41,16 @@ export class HttpError extends Error {
   }
 }
 
+// A session-scoped call was attempted without a stored auth session.
+// Surfacing this as a typed error keeps the "account call requires session"
+// invariant loud — callers should never silently fall back to the API token.
+export class MissingSessionError extends Error {
+  constructor() {
+    super('No auth session stored — cannot perform session-scoped HTTP call');
+    this.name = 'MissingSessionError';
+  }
+}
+
 export const buildAuthHeader = (token: string): Record<string, string> => ({
   Authorization: `Bearer ${token}`,
 });
@@ -44,18 +66,29 @@ const buildHeaders = (token: string | undefined): Record<string, string> => ({
   ...(token ? buildAuthHeader(token) : {}),
 });
 
-const resolveToken = (options: RequestOptions): string | undefined => {
-  if (options.bearer !== undefined) return options.bearer;
-  if (options.withToken === false) return undefined;
-  return mainConfig.apiToken;
+// `auth: 'session'` against the Strapi base URL means the Strapi JWT. A
+// Mojang session has no Strapi-side identity, so attempting to use one here
+// is a programming error — Mojang account calls go through a separate HTTP
+// client targeting api.minecraftservices.com.
+const resolveBearer = (auth: AuthMode): string | undefined => {
+  if (auth === 'none') return undefined;
+  if (auth === 'apiToken') return mainConfig.apiToken;
+  const session = getStoredAuth();
+  if (!session) throw new MissingSessionError();
+  if (session.provider !== 'strapi') {
+    throw new Error(
+      `auth: 'session' Strapi call attempted with a ${session.provider} session — use the Mojang HTTP helpers instead`,
+    );
+  }
+  return session.jwt;
 };
 
 const buildUrl = (path: string): string => `${mainConfig.apiUrl}${API_PATH_PREFIX}${path}`;
 
-export const httpRequest = (url: string, options: RequestOptions = {}): Promise<Response> => {
-  const { method = 'GET', payload, signal } = options;
+export const httpRequest = (url: string, options: RequestOptions): Promise<Response> => {
+  const { method = 'GET', payload, signal, auth } = options;
   const hasBody = payload !== undefined && method !== 'GET';
-  const token = resolveToken(options);
+  const token = resolveBearer(auth);
   return fetch(buildUrl(url), {
     method,
     headers: buildHeaders(token),
@@ -88,14 +121,13 @@ const throwHttpError = async (
 
 type SchemaCallOptions = {
   signal?: AbortSignal;
-  bearer?: string;
-  withToken?: boolean;
+  auth: AuthMode;
 };
 
 export const httpGet = async <TSchema extends ZodTypeAny>(
   path: string,
   schema: TSchema,
-  options: SchemaCallOptions = {},
+  options: SchemaCallOptions,
 ): Promise<z.infer<TSchema>> => {
   const response = await httpRequest(path, { method: 'GET', ...options });
   if (!response.ok) await throwHttpError(path, 'GET', response);
@@ -117,7 +149,7 @@ export const httpPost = async <TSchema extends ZodTypeAny>(
 export const httpPutVoid = async (
   path: string,
   payload: unknown,
-  options: SchemaCallOptions = {},
+  options: SchemaCallOptions,
 ): Promise<void> => {
   const response = await httpRequest(path, { method: 'PUT', payload, ...options });
   if (!response.ok) await throwHttpError(path, 'PUT', response);
@@ -127,9 +159,9 @@ export const httpPostMultipart = async <TSchema extends ZodTypeAny>(
   path: string,
   schema: TSchema,
   formData: FormData,
-  options: SchemaCallOptions = {},
+  options: SchemaCallOptions,
 ): Promise<z.infer<TSchema>> => {
-  const token = resolveToken(options);
+  const token = resolveBearer(options.auth);
   const response = await fetch(buildUrl(path), {
     method: 'POST',
     body: formData,
@@ -143,6 +175,8 @@ export const httpPostMultipart = async <TSchema extends ZodTypeAny>(
 
 // For binary downloads. Takes a raw url (absolute or media path); skips the
 // API_PATH_PREFIX since callers typically already hold an absolute media URL.
+// No auth header — media URLs in Strapi are publicly reachable and Mojang
+// texture URLs (textures.minecraft.net) are public too.
 export const httpGetBinary = async (
   absoluteUrl: string,
   options: { signal?: AbortSignal } = {},

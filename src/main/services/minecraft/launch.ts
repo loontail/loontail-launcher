@@ -1,5 +1,6 @@
-import { AuthModes, EventTypes } from '@loontail/minecraft-kit';
+import { AuthModes, EventTypes, type LaunchAuth } from '@loontail/minecraft-kit';
 import { consoleHub } from '@main/infra/consoleHub';
+import { getStoredAuth } from '@main/infra/store';
 import { openConsoleWindow } from '@main/windows/consoleWindow';
 import type { Account } from '@shared/contracts/account';
 import { ConsoleSources, ConsoleStatuses } from '@shared/contracts/console';
@@ -36,6 +37,26 @@ export const endLaunch = (env: ManagerEnv, slug: ClientSlug, error?: unknown): v
   env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
 };
 
+// Pick the kit's auth shape based on the active session. Mojang sessions
+// carry a Minecraft access token — feed it to the game so the user can join
+// premium multiplayer servers. Strapi sessions stay offline-mode (no
+// Mojang-issued token to present).
+const resolveLaunchAuth = (account: Account): LaunchAuth => {
+  const session = getStoredAuth();
+  if (session?.provider === 'mojang') {
+    return {
+      mode: AuthModes.ONLINE,
+      username: session.profile.username,
+      uuid: session.profile.uuid,
+      accessToken: session.accessToken,
+      userType: 'msa',
+      clientId: session.clientId,
+      xuid: session.xuid,
+    };
+  }
+  return { mode: AuthModes.OFFLINE, username: account.username };
+};
+
 export const runLaunch = async (
   env: ManagerEnv,
   slug: ClientSlug,
@@ -45,7 +66,7 @@ export const runLaunch = async (
   env.emitStatus({ slug, status: InstallStatuses.LAUNCHING, paused: false });
   try {
     const composition = await env.kit.launch.compose(ctx.target, {
-      auth: { mode: AuthModes.OFFLINE, username: account.username },
+      auth: resolveLaunchAuth(account),
       ...(ctx.resolved.memory.allocatedRamMb > 0
         ? { memory: { maxMb: ctx.resolved.memory.allocatedRamMb } }
         : {}),

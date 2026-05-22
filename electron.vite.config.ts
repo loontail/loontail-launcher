@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => {
   const mainDefine = {
     'process.env.API_URL': JSON.stringify(env.API_URL ?? ''),
     'process.env.API_TOKEN': JSON.stringify(env.API_TOKEN ?? ''),
+    'process.env.MOJANG_CLIENT_ID': JSON.stringify(env.MOJANG_CLIENT_ID ?? ''),
   };
 
   return {

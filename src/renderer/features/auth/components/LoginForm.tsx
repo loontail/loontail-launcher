@@ -4,7 +4,7 @@ import { LOGIN_ERROR_CODE, type LoginErrorCode } from '@shared/contracts';
 import { Loader2 } from 'lucide-react';
 import { type FormEvent, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useLogin } from '../hooks';
+import { useLogin, useMojangLogin } from '../hooks';
 
 const ERROR_COPY_KEYS: Record<LoginErrorCode, string> = {
   [LOGIN_ERROR_CODE.InvalidCredentials]: 'auth.errorInvalid',
@@ -16,6 +16,7 @@ const ERROR_COPY_KEYS: Record<LoginErrorCode, string> = {
 export const LoginForm = () => {
   const { t } = useTranslation();
   const { submit, isPending } = useLogin();
+  const mojang = useMojangLogin();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [errorCode, setErrorCode] = useState<LoginErrorCode | null>(null);
@@ -29,7 +30,9 @@ export const LoginForm = () => {
     }
   };
 
-  const isDisabled = isPending || identifier.length === 0 || password.length === 0;
+  const isStrapiDisabled = isPending || identifier.length === 0 || password.length === 0;
+  const isMojangBusy = mojang.isPending;
+  const displayedError = errorCode ?? mojang.errorCode;
 
   return (
     <div className="flex h-full items-center justify-center">
@@ -52,7 +55,7 @@ export const LoginForm = () => {
             autoComplete="username"
             value={identifier}
             onChange={(event) => setIdentifier(event.target.value)}
-            disabled={isPending}
+            disabled={isPending || isMojangBusy}
           />
         </div>
 
@@ -66,17 +69,52 @@ export const LoginForm = () => {
             autoComplete="current-password"
             value={password}
             onChange={(event) => setPassword(event.target.value)}
-            disabled={isPending}
+            disabled={isPending || isMojangBusy}
           />
         </div>
 
-        {errorCode !== null && (
-          <p className="text-xs text-destructive">{t(ERROR_COPY_KEYS[errorCode])}</p>
+        {displayedError !== null && displayedError !== undefined && (
+          <p className="text-xs text-destructive">{t(ERROR_COPY_KEYS[displayedError])}</p>
         )}
 
-        <Button type="submit" disabled={isDisabled} className="w-full">
+        <Button type="submit" disabled={isStrapiDisabled || isMojangBusy} className="w-full">
           {isPending ? <Loader2 className="size-4 animate-spin" /> : t('auth.submit')}
         </Button>
+
+        <div className="flex items-center gap-3 text-[10px] uppercase tracking-widest text-muted-foreground">
+          <span className="h-px flex-1 bg-border" />
+          {t('auth.or')}
+          <span className="h-px flex-1 bg-border" />
+        </div>
+
+        {isMojangBusy ? (
+          <div className="flex flex-col gap-2">
+            <Button type="button" variant="outline" disabled className="w-full gap-2">
+              <Loader2 className="size-4 animate-spin" />
+              {t('auth.microsoft.waiting')}
+            </Button>
+            <button
+              type="button"
+              onClick={() => mojang.cancel()}
+              className="self-center text-xs text-muted-foreground underline hover:text-foreground"
+            >
+              {t('auth.microsoft.cancel')}
+            </button>
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isPending}
+            onClick={() => {
+              setErrorCode(null);
+              void mojang.signIn();
+            }}
+            className="w-full gap-2"
+          >
+            {t('auth.signInWithMicrosoft')}
+          </Button>
+        )}
       </form>
     </div>
   );

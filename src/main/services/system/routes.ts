@@ -3,6 +3,7 @@ import {
   getDiskSpace,
   getFolderSize,
   getRamRange,
+  openExternalUrl,
   openPath,
   pickFolderWithSuffix,
 } from '@main/infra/system';
@@ -38,5 +39,10 @@ export const registerSystemRoutes = (router: Router, mainWindow: BrowserWindow):
   router.handle(IPC_CHANNELS.systemOpenPath, async (rawArgs) => {
     const path = parseIpcArgs(PathArgSchema, rawArgs, PATH_ERROR_MESSAGE);
     await openPath(path);
+  });
+
+  router.handle(IPC_CHANNELS.systemOpenExternal, async (rawArgs) => {
+    const url = parseIpcArgs(PathArgSchema, rawArgs, 'url must be a non-empty string');
+    await openExternalUrl(url);
   });
 };

@@ -6,16 +6,13 @@ import {
   STORE_KEY_LAUNCHER_SETTINGS,
   STORE_KEY_SCHEMA_VERSION,
 } from '@shared/constants';
-import type { Account } from '@shared/contracts/account';
+import type { AuthSession, StrapiSession, StrapiUser } from '@shared/contracts/auth';
 import type { LauncherSettings } from '@shared/contracts/settings';
 import { defaultLauncherSettings, normalizeLauncherSettings } from '@shared/domain/settings';
 import Store from 'electron-store';
 
 type LauncherStoreSchema = {
-  [STORE_KEY_AUTH]: {
-    jwt: string;
-    user: Account;
-  } | null;
+  [STORE_KEY_AUTH]: AuthSession | null;
   [STORE_KEY_LAUNCHER_SETTINGS]: LauncherSettings;
   [STORE_KEY_SCHEMA_VERSION]: number;
 };
@@ -70,11 +67,42 @@ const runMigrations = (): void => {
 
 runMigrations();
 
-export const getStoredAuth = (): LauncherStoreSchema[typeof STORE_KEY_AUTH] =>
-  store.get(STORE_KEY_AUTH);
+// One-shot migration of the auth blob from the pre-multi-provider shape
+// (`{ jwt, user }`) to a provider-tagged `AuthSession`. Idempotent — leaves
+// already-tagged sessions and `null` alone.
+type LegacyAuth = { jwt: string; user: StrapiUser };
 
-export const setStoredAuth = (auth: LauncherStoreSchema[typeof STORE_KEY_AUTH]): void => {
-  store.set(STORE_KEY_AUTH, auth);
+const isLegacyAuth = (value: unknown): value is LegacyAuth => {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    !('provider' in candidate) &&
+    typeof candidate.jwt === 'string' &&
+    typeof candidate.user === 'object' &&
+    candidate.user !== null
+  );
+};
+
+const migrateAuth = (): void => {
+  const raw = store.get(STORE_KEY_AUTH) as unknown;
+  if (raw === null) return;
+  if (isLegacyAuth(raw)) {
+    const migrated: StrapiSession = {
+      provider: 'strapi',
+      jwt: raw.jwt,
+      user: raw.user,
+    };
+    store.set(STORE_KEY_AUTH, migrated);
+    logger.info('Migrated stored auth to provider-tagged session');
+  }
+};
+
+migrateAuth();
+
+export const getStoredAuth = (): AuthSession | null => store.get(STORE_KEY_AUTH);
+
+export const setStoredAuth = (session: AuthSession | null): void => {
+  store.set(STORE_KEY_AUTH, session);
 };
 
 export const clearStoredAuth = (): void => {

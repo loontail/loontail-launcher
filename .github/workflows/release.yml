@@ -17,8 +17,9 @@ permissions:
 #                    bypass list and the ruleset requires PRs for direct
 #                    pushes.
 #
-# Loop guard: the bump commit ("chore(release): vX.Y.Z [skip release]") triggers
-# this workflow again; the guard job exits if the marker is present.
+# Loop guard: the bump commit (`chore(release): vX.Y.Z`) triggers this workflow
+# again; the guard job short-circuits when the commit message begins with
+# `chore(release):` so the release does not chain into itself.
 
 jobs:
   guard:
@@ -30,7 +31,7 @@ jobs:
         env:
           MESSAGE: ${{ github.event.head_commit.message }}
         run: |
-          if echo "$MESSAGE" | grep -qE '\[skip release\]|^chore\(release\):'; then
+          if echo "$MESSAGE" | grep -qE '^chore\(release\):'; then
             echo "proceed=false" >> "$GITHUB_OUTPUT"
           else
             echo "proceed=true" >> "$GITHUB_OUTPUT"
@@ -83,7 +84,7 @@ jobs:
           plain="${version#v}"
           tag="v${plain}"
           git add package.json package-lock.json
-          git commit -m "chore(release): ${tag} [skip release]"
+          git commit -m "chore(release): ${tag}"
           git tag "${tag}"
           git push origin HEAD:main
           git push origin "${tag}"

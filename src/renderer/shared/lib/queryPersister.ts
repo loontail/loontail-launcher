@@ -7,7 +7,13 @@ export const QUERY_PERSIST_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const THROTTLE_MS = 1000;
 
 // Roots whose values should always be refetched on launch — never persist them.
-const VOLATILE_QUERY_ROOTS: ReadonlySet<string> = new Set([QUERY_KEY_ROOTS.servers]);
+// `app` must be volatile: Squirrel can swap the binary under us between launches,
+// so the cached version string would otherwise outlive the install it described
+// (e.g. UI keeps showing 0.0.11 after auto-update to 0.0.13).
+const VOLATILE_QUERY_ROOTS: ReadonlySet<string> = new Set([
+  QUERY_KEY_ROOTS.app,
+  QUERY_KEY_ROOTS.servers,
+]);
 
 const persister = createSyncStoragePersister({
   storage: window.localStorage,
