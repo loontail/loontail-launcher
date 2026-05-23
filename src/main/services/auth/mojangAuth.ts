@@ -1,9 +1,4 @@
-import {
-  FetchHttpClient,
-  MinecraftKit,
-  asAzureClientId,
-  isErrorCode,
-} from '@loontail/minecraft-kit';
+import { MinecraftKit, asAzureClientId, isErrorCode } from '@loontail/minecraft-kit';
 import type { MojangSession as KitMojangSession, MinecraftProfile } from '@loontail/minecraft-kit';
 import { mainConfig } from '@main/config';
 import { kitLogger, scopedLogger } from '@main/infra/logger';
@@ -17,11 +12,6 @@ const logger = scopedLogger('auth.mojang');
 // loopback servers.
 let activeController: AbortController | null = null;
 const kit = new MinecraftKit({ logger: kitLogger('kit.auth') });
-// Reused for direct `/minecraft/profile` pings to confirm a cached access
-// token still works without spending a refresh token.
-const http = new FetchHttpClient();
-
-const PROFILE_URL = 'https://api.minecraftservices.com/minecraft/profile';
 
 const requireClientId = () => {
   if (!mainConfig.mojangClientId) {
@@ -110,21 +100,11 @@ export const withRefreshedProfile = (
   },
 });
 
-type RawProfile = {
-  readonly id: string;
-  readonly name: string;
-  readonly skins?: ReadonlyArray<{
-    readonly id: string;
-    readonly url: string;
-    readonly state: 'ACTIVE' | 'INACTIVE';
-    readonly variant: 'CLASSIC' | 'SLIM';
-  }>;
-};
-
 /**
  * Validate a stored Mojang session. Refreshes the access token if it's near
- * expiry, then pings `/minecraft/profile` to confirm the token still works
- * server-side. `expired` clears the session, `offline` keeps the cached copy.
+ * expiry; otherwise asks the kit to read the profile, which exercises the
+ * same Minecraft Services bearer the launcher would use to play. `expired`
+ * clears the session, `offline` keeps the cached copy.
  */
 export const verifyMojangSession = async (
   session: MojangSession,
@@ -139,34 +119,14 @@ export const verifyMojangSession = async (
       });
       return { kind: 'ok', session: fromKitSession(refreshed) };
     }
-    const response = await http.request(PROFILE_URL, {
-      method: 'GET',
-      headers: { authorization: `Bearer ${session.accessToken}` },
-      acceptNonOk: true,
-    });
-    if (response.status === 401) return { kind: 'expired' };
-    if (response.status >= 400) {
-      logger.warn(`Mojang verify: non-OK HTTP ${response.status} — assuming offline`);
-      return { kind: 'offline' };
-    }
-    const raw = (await response.json()) as RawProfile;
-    const next: MojangSession = {
-      ...session,
-      profile: {
-        uuid: session.profile.uuid,
-        username: raw.name,
-        skins:
-          raw.skins?.map((s) => ({
-            id: s.id,
-            url: s.url,
-            state: s.state,
-            variant: s.variant,
-          })) ?? [],
-      },
-    };
-    return { kind: 'ok', session: next };
+    const profile = await kit.auth.profile.read({ accessToken: session.accessToken });
+    return { kind: 'ok', session: withRefreshedProfile(session, profile) };
   } catch (error) {
     if (isErrorCode(error, 'AUTH_REFRESH_FAILED')) return { kind: 'expired' };
+    if (isErrorCode(error, 'AUTH_MINECRAFT_FAILED')) {
+      const httpStatus = (error as { context?: { httpStatus?: number } }).context?.httpStatus;
+      if (httpStatus === 401) return { kind: 'expired' };
+    }
     logger.warn('Mojang verify failed — assuming offline', error);
     return { kind: 'offline' };
   }
