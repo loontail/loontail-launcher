@@ -22,12 +22,11 @@ export const accountFromSession = (session: AuthSession): Account => {
     };
   }
   const activeSkin = session.profile.skins.find((s) => s.state === 'ACTIVE');
-  const activeCape = session.profile.capes.find((c) => c.state === 'ACTIVE');
   return {
     provider: 'mojang',
     username: session.profile.username,
     email: null,
     skin: activeSkin?.url ?? null,
-    cape: activeCape?.url ?? null,
+    cape: null,
   };
 };

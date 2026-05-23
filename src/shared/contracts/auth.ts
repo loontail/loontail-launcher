@@ -1,3 +1,9 @@
+import type {
+  AzureClientId,
+  MicrosoftRefreshToken,
+  MojangProfileSkin,
+  PlayerUuid,
+} from '@loontail/minecraft-kit';
 import { z } from 'zod';
 import type { Account } from './account';
 
@@ -21,38 +27,14 @@ export const StrapiAuthOkSchema = z.object({
 });
 export type StrapiAuthOk = z.infer<typeof StrapiAuthOkSchema>;
 
-// Subset of GET https://api.minecraftservices.com/minecraft/profile that the
-// launcher consumes. The Mojang response carries more fields; capture what's
-// needed and let the rest pass through unparsed.
-export const SKIN_VARIANTS = ['CLASSIC', 'SLIM'] as const;
-export type SkinVariant = (typeof SKIN_VARIANTS)[number];
+// Re-export kit-side literal unions so renderer/IPC code uses a single source of truth.
+export type { MojangAssetState, MojangSkinVariant as SkinVariant } from '@loontail/minecraft-kit';
 
-export const MOJANG_ASSET_STATES = ['ACTIVE', 'INACTIVE'] as const;
-export type MojangAssetState = (typeof MOJANG_ASSET_STATES)[number];
-
-export const MojangSkinSchema = z.object({
-  id: z.string(),
-  url: z.string(),
-  state: z.enum(MOJANG_ASSET_STATES),
-  variant: z.enum(SKIN_VARIANTS),
-});
-export type MojangSkin = z.infer<typeof MojangSkinSchema>;
-
-export const MojangCapeSchema = z.object({
-  id: z.string(),
-  url: z.string(),
-  state: z.enum(MOJANG_ASSET_STATES),
-  alias: z.string().optional(),
-});
-export type MojangCape = z.infer<typeof MojangCapeSchema>;
-
-export const MojangProfileSchema = z.object({
-  uuid: z.string(),
-  username: z.string(),
-  skins: z.array(MojangSkinSchema),
-  capes: z.array(MojangCapeSchema),
-});
-export type MojangProfile = z.infer<typeof MojangProfileSchema>;
+export type MojangProfile = {
+  uuid: PlayerUuid;
+  username: string;
+  skins: MojangProfileSkin[];
+};
 
 // Stored session shapes — discriminated by `provider`.
 export type StrapiSession = {
@@ -65,8 +47,8 @@ export type MojangSession = {
   provider: 'mojang';
   accessToken: string;
   expiresAt: number;
-  refreshToken: string;
-  clientId: string;
+  refreshToken: MicrosoftRefreshToken;
+  clientId: AzureClientId;
   xuid: string;
   profile: MojangProfile;
 };
