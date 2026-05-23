@@ -1,7 +1,9 @@
-import { FetchHttpClient, fetchMinecraftProfile } from '@loontail/minecraft-kit';
+import { MinecraftKit } from '@loontail/minecraft-kit';
+import type { MinecraftProfile, MojangSkinVariant } from '@loontail/minecraft-kit';
 import { buildMediaUrl } from '@main/infra/http';
-import { scopedLogger } from '@main/infra/logger';
+import { kitLogger, scopedLogger } from '@main/infra/logger';
 import { getStoredAuth, setStoredAuth } from '@main/infra/store';
+import { withRefreshedProfile } from '@main/services/auth/mojangAuth';
 import { invalidateMediaCache, prewarmMediaCache } from '@main/services/media/mediaCache';
 import { ERROR_CODES } from '@shared/constants';
 import type { AuthSession, MojangSession, StrapiSession } from '@shared/contracts/auth';
@@ -12,14 +14,13 @@ import {
   type UploadSkinPayload,
   type UploadSkinResult,
 } from '@shared/contracts/skin';
-import { hideMojangCape, resetMojangSkin, uploadMojangSkin } from './mojangSkinApi';
 import { updateUserSkinFields, uploadSkinFile } from './skinApi';
 
 const logger = scopedLogger('skin');
 
-// Re-used for the post-upload `/minecraft/profile` refresh; cheaper than
-// spinning up a fresh kit instance for one request.
-const http = new FetchHttpClient();
+const kit = new MinecraftKit({ logger: kitLogger('kit.skin') });
+
+const DEFAULT_MOJANG_SKIN_VARIANT: MojangSkinVariant = 'CLASSIC';
 
 const requireSession = (): AuthSession => {
   const session = getStoredAuth();
@@ -58,33 +59,8 @@ const updateStoredStrapiUserAsset = (
   });
 };
 
-// Hit /minecraft/profile after a mutation so the renderer's account section
-// reflects the new active skin/cape URL on the next read.
-const refreshStoredMojangProfile = async (session: MojangSession): Promise<MojangSession> => {
-  try {
-    const profile = await fetchMinecraftProfile({ http, accessToken: session.accessToken });
-    const next: MojangSession = {
-      ...session,
-      profile: {
-        uuid: profile.uuid,
-        username: profile.username,
-        skins: [...profile.skins],
-        capes: [...profile.capes],
-      },
-    };
-    setStoredAuth(next);
-    return next;
-  } catch (error) {
-    logger.warn('Failed to refresh Mojang profile after skin mutation', error);
-    return session;
-  }
-};
-
 const activeMojangSkinUrl = (session: MojangSession): string | null =>
   session.profile.skins.find((s) => s.state === 'ACTIVE')?.url ?? null;
-
-const activeMojangCapeUrl = (session: MojangSession): string | null =>
-  session.profile.capes.find((c) => c.state === 'ACTIVE')?.url ?? null;
 
 // Strapi flow: upload to skins-registry, then PUT the user record so
 // /users/me reflects the new asset URL.
@@ -115,9 +91,10 @@ const uploadSkinStrapi = async (
   return { url: uploadedUrl };
 };
 
-// Mojang flow: POST PNG to api.minecraftservices.com/minecraft/profile/skins.
-// Mojang does not accept arbitrary cape uploads (capes are issued by Mojang
-// for events/promotions); only skins can be written.
+// Mojang flow: hand the PNG to `kit.auth.profile.uploadSkin`, which posts
+// it to api.minecraftservices.com/minecraft/profile/skins. Mojang does not
+// accept arbitrary cape uploads (capes are issued by Mojang for
+// events/promotions), so cape uploads are rejected early.
 const uploadSkinMojang = async (
   session: MojangSession,
   payload: UploadSkinPayload,
@@ -129,17 +106,21 @@ const uploadSkinMojang = async (
         'Mojang accounts cannot upload custom capes; only Mojang-issued capes can be activated',
     };
   }
-  const buffer = Buffer.from(payload.buffer);
+  const skin = new Uint8Array(payload.buffer);
+  let profile: MinecraftProfile;
   try {
-    // Default to CLASSIC variant. A future UI surface could expose a
-    // CLASSIC/SLIM toggle; for now this matches the most common case.
-    await uploadMojangSkin(session.accessToken, 'CLASSIC', buffer);
+    profile = await kit.auth.profile.uploadSkin({
+      accessToken: session.accessToken,
+      skin,
+      variant: DEFAULT_MOJANG_SKIN_VARIANT,
+    });
   } catch (error) {
     logger.error('Mojang skin upload failed', error);
-    throwUploadError('Mojang skin upload failed', error);
+    return throwUploadError('Mojang skin upload failed', error);
   }
 
-  const refreshed = await refreshStoredMojangProfile(session);
+  const refreshed = withRefreshedProfile(session, profile);
+  setStoredAuth(refreshed);
   const url = activeMojangSkinUrl(refreshed);
   if (url === null) {
     throw {
@@ -147,7 +128,7 @@ const uploadSkinMojang = async (
       message: 'Mojang accepted the upload but did not return an active skin URL',
     };
   }
-  prewarmMediaCache(url, buffer);
+  prewarmMediaCache(url, Buffer.from(skin));
   return { url };
 };
 
@@ -172,20 +153,13 @@ export const clearSkin = async (): Promise<void> => {
     return;
   }
 
-  // Mojang: reset the active skin and hide the active cape. Failures are
-  // logged but non-fatal — the UI still drops local state to match user
-  // intent, and the next /minecraft/profile refresh will resync.
+  // Mojang: drop the active skin via the kit. Capes are not exposed by the
+  // kit (Mojang does not allow launchers to manage them), so nothing to do
+  // for the cape slot.
   try {
-    await resetMojangSkin(session.accessToken);
+    const profile = await kit.auth.profile.resetSkin({ accessToken: session.accessToken });
+    setStoredAuth(withRefreshedProfile(session, profile));
   } catch (error) {
     logger.warn('Failed to reset Mojang skin', error);
   }
-  if (activeMojangCapeUrl(session) !== null) {
-    try {
-      await hideMojangCape(session.accessToken);
-    } catch (error) {
-      logger.warn('Failed to hide Mojang cape', error);
-    }
-  }
-  await refreshStoredMojangProfile(session);
 };
