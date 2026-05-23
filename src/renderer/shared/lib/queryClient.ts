@@ -1,13 +1,20 @@
 import { toast } from '@renderer/shared/ui/Toast';
 import { isIpcError } from '@shared/ipc';
-import { QueryClient } from '@tanstack/react-query';
+import { MutationCache, QueryClient } from '@tanstack/react-query';
 import { QUERY_PERSIST_MAX_AGE_MS } from './queryPersister';
 
 const DEFAULT_STALE_TIME_MS = 30_000;
 
+// Best-effort string for arbitrary error shapes — covers IpcError ({code,
+// message}), Error instances, and as a last resort anything with a string
+// `message` so plain throw-objects never collapse to "[object Object]".
 const formatError = (error: unknown): string => {
   if (isIpcError(error)) return error.message;
   if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    const maybe = (error as Record<string, unknown>).message;
+    if (typeof maybe === 'string' && maybe.length > 0) return maybe;
+  }
   return String(error);
 };
 
@@ -22,14 +29,14 @@ export const createQueryClient = (): QueryClient =>
         retry: 1,
         refetchOnWindowFocus: false,
       },
-      mutations: {
-        // Anything thrown out of a mutation surfaces as a toast. Mutations that
-        // want to silence this (e.g. login, where the form renders its own
-        // error copy) supply their own `onError` which runs in addition; toasts
-        // can be suppressed by catching there.
-        onError: (error) => {
-          toast.error(formatError(error));
-        },
-      },
     },
+    // v5 routes global mutation handlers through MutationCache. `defaultOptions.
+    // mutations.onError` is per-mutation default that any local onError shadows,
+    // and `mutateAsync` rejections also skip it; MutationCache.onError fires for
+    // every mutation regardless of how the caller awaits it.
+    mutationCache: new MutationCache({
+      onError: (error) => {
+        toast.error(formatError(error));
+      },
+    }),
   });

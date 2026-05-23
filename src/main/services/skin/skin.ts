@@ -1,4 +1,8 @@
-import type { MinecraftProfile, MojangSkinVariant } from '@loontail/minecraft-kit';
+import {
+  type MinecraftProfile,
+  type MojangSkinVariantInput,
+  isMinecraftKitError,
+} from '@loontail/minecraft-kit';
 import { buildMediaUrl } from '@main/infra/http';
 import { scopedLogger } from '@main/infra/logger';
 import { getStoredAuth, setStoredAuth } from '@main/infra/store';
@@ -18,8 +22,6 @@ import { updateUserSkinFields, uploadSkinFile } from './skinApi';
 
 const logger = scopedLogger('skin');
 
-const DEFAULT_MOJANG_SKIN_VARIANT: MojangSkinVariant = 'CLASSIC';
-
 const requireSession = (): AuthSession => {
   const session = getStoredAuth();
   if (!session) {
@@ -37,6 +39,43 @@ const throwUploadError = (prefix: string, error: unknown): never => {
     code: ERROR_CODES.SkinUploadFailed,
     message: `${prefix}: ${message}`,
   };
+};
+
+// Mojang's profile-mutation errors come back as JSON like:
+//   { "path": "...", "details": { "status": "BANNED_SKIN" }, "errorMessage": "Banned skin image" }
+// Pull the human-readable `errorMessage` (preferred) or `details.status` so
+// the toast surfaces "Banned skin image" instead of a raw JSON dump.
+const extractMojangMessage = (error: unknown): string | null => {
+  if (!isMinecraftKitError(error)) return null;
+  const body = error.context.responseBody;
+  if (typeof body !== 'string' || body.trim().length === 0) return null;
+  try {
+    const parsed = JSON.parse(body) as unknown;
+    if (parsed && typeof parsed === 'object') {
+      const obj = parsed as Record<string, unknown>;
+      const message = obj.errorMessage;
+      if (typeof message === 'string' && message.length > 0) return message;
+      const details = obj.details;
+      if (details && typeof details === 'object') {
+        const status = (details as Record<string, unknown>).status;
+        if (typeof status === 'string' && status.length > 0) return status;
+      }
+    }
+  } catch {
+    // Body wasn't JSON — fall through to caller's default.
+  }
+  return null;
+};
+
+const throwMojangUploadError = (error: unknown): never => {
+  const mojangMessage = extractMojangMessage(error);
+  if (mojangMessage !== null) {
+    throw {
+      code: ERROR_CODES.SkinUploadFailed,
+      message: `Mojang: ${mojangMessage}`,
+    };
+  }
+  return throwUploadError('Mojang skin upload failed', error);
 };
 
 // Drop the cached binary so cache:// falls back to the network when the URL
@@ -90,9 +129,10 @@ const uploadSkinStrapi = async (
 };
 
 // Mojang flow: hand the PNG to `kit.auth.profile.uploadSkin`, which posts
-// it to api.minecraftservices.com/minecraft/profile/skins. The renderer
-// gates cape uploads off for Mojang accounts; a CAPE payload reaching here
-// means something bypassed the UI, so we treat it as an invariant break.
+// it to api.minecraftservices.com/minecraft/profile/skins. `"AUTO"` makes
+// the kit detect SLIM vs CLASSIC from the pixels so the renderer never has
+// to ask the user. Kit errors now include Mojang's response body in the
+// message (kit 0.8.8+), so user-visible toasts surface the real reason.
 const uploadSkinMojang = async (
   session: MojangSession,
   payload: UploadSkinPayload,
@@ -104,16 +144,17 @@ const uploadSkinMojang = async (
     };
   }
   const skin = new Uint8Array(payload.buffer);
+  const variant: MojangSkinVariantInput = payload.variant ?? 'AUTO';
   let profile: MinecraftProfile;
   try {
     profile = await kit.auth.profile.uploadSkin({
       accessToken: session.accessToken,
       skin,
-      variant: payload.variant ?? DEFAULT_MOJANG_SKIN_VARIANT,
+      variant,
     });
   } catch (error) {
     logger.error('Mojang skin upload failed', error);
-    return throwUploadError('Mojang skin upload failed', error);
+    return throwMojangUploadError(error);
   }
 
   const refreshed = withRefreshedProfile(session, profile);

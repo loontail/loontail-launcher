@@ -6,7 +6,9 @@ const apiOrigin = new URL(mainConfig.apiUrl).origin;
 const baseDirectives = [
   "default-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: https: cache:",
+  // `blob:` is required so skinview3d can render an unsaved skin/cape
+  // preview from the file the user just picked (URL.createObjectURL).
+  "img-src 'self' data: blob: https: cache:",
   "font-src 'self' data:",
   `connect-src 'self' ${apiOrigin}`,
 ];

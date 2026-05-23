@@ -8,5 +8,5 @@ export type {
   IpcResult,
   UpdaterStatusEvent,
 } from './contract';
-export { isIpcError } from './errors';
+export { IPC_ERROR_SENTINEL, isIpcError, tryUnwrapIpcError } from './errors';
 export type { IpcError } from './errors';

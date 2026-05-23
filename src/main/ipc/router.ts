@@ -1,7 +1,13 @@
 import { isMinecraftKitError } from '@loontail/minecraft-kit';
 import { scopedLogger } from '@main/infra/logger';
 import { ERROR_CODES } from '@shared/constants';
-import type { IpcArgs, IpcContract, IpcError, IpcResult } from '@shared/ipc';
+import {
+  IPC_ERROR_SENTINEL,
+  type IpcArgs,
+  type IpcContract,
+  type IpcError,
+  type IpcResult,
+} from '@shared/ipc';
 import { type IpcMainInvokeEvent, app, ipcMain } from 'electron';
 
 type Handler<TChannel extends keyof IpcContract> = (
@@ -50,6 +56,13 @@ const normalizeError = (error: unknown): IpcError => {
   return toIpcError(ERROR_CODES.Unknown, 'Unknown error', isDev() ? { error } : undefined);
 };
 
+// Electron's IPC drops the structure of any thrown value other than an Error
+// and just forwards `String(value)` ("[object Object]"). Wrap the IpcError in
+// an Error and tag the message with the shared sentinel so the preload can
+// recognise and rehydrate it into a structured `{code, message, details}`.
+const wrapForTransport = (ipcError: IpcError): Error =>
+  new Error(`${IPC_ERROR_SENTINEL}${JSON.stringify(ipcError)}`);
+
 export const createRouter = (isTrustedSender: SenderValidator): Router => {
   const registered: Array<keyof IpcContract> = [];
 
@@ -67,7 +80,7 @@ export const createRouter = (isTrustedSender: SenderValidator): Router => {
       } catch (error) {
         const ipcError = normalizeError(error);
         logger.error(`Channel ${channel} failed`, ipcError);
-        throw ipcError;
+        throw wrapForTransport(ipcError);
       }
     });
     registered.push(channel);
