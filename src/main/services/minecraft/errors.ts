@@ -1,7 +1,5 @@
-import { type MinecraftKitErrorCodes, isMinecraftKitError } from '@loontail/minecraft-kit';
+import { type MinecraftKitErrorCode, isMinecraftKitError } from '@loontail/minecraft-kit';
 import { type MinecraftErrorCode, MinecraftErrorCodes } from '@shared/contracts/minecraft';
-
-type MinecraftKitErrorCode = (typeof MinecraftKitErrorCodes)[keyof typeof MinecraftKitErrorCodes];
 
 export class ManagerError extends Error {
   constructor(
