@@ -1,4 +1,4 @@
-import { Loaders, type TargetResolveInput } from '@loontail/minecraft-kit';
+import { Loaders, type TargetResolveInput, asMinecraftVersionId } from '@loontail/minecraft-kit';
 import type { Client } from '@shared/contracts/client';
 import { type LoaderChoice, LoaderChoices } from '@shared/contracts/settings';
 
@@ -18,7 +18,7 @@ export const clientToTargetInput = (input: {
   return {
     id: targetIdFor(client),
     directory: clientFolder,
-    minecraft: { version: client.minecraftVersion },
+    minecraft: { version: asMinecraftVersionId(client.minecraftVersion) },
     loader: toKitLoader(loader, client),
     runtime: {
       installRoot: runtimeRoot,

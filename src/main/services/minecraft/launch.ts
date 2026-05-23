@@ -1,4 +1,4 @@
-import { AuthModes, EventTypes, type LaunchAuth } from '@loontail/minecraft-kit';
+import { AuthModes, EventTypes, type LaunchAuth, toOnlineAuth } from '@loontail/minecraft-kit';
 import { consoleHub } from '@main/infra/consoleHub';
 import { getStoredAuth } from '@main/infra/store';
 import { openConsoleWindow } from '@main/windows/consoleWindow';
@@ -44,15 +44,20 @@ export const endLaunch = (env: ManagerEnv, slug: ClientSlug, error?: unknown): v
 const resolveLaunchAuth = (account: Account): LaunchAuth => {
   const session = getStoredAuth();
   if (session?.provider === 'mojang') {
-    return {
-      mode: AuthModes.ONLINE,
-      username: session.profile.username,
-      uuid: session.profile.uuid,
-      accessToken: session.accessToken,
-      userType: 'msa',
-      clientId: session.clientId,
-      xuid: session.xuid,
-    };
+    return toOnlineAuth({
+      minecraft: {
+        username: session.profile.username,
+        uuid: session.profile.uuid,
+        accessToken: session.accessToken,
+        expiresAt: session.expiresAt,
+        xuid: session.xuid,
+        skins: session.profile.skins,
+      },
+      microsoft: {
+        refreshToken: session.refreshToken,
+        clientId: session.clientId,
+      },
+    });
   }
   return { mode: AuthModes.OFFLINE, username: account.username };
 };

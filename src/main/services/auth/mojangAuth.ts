@@ -1,12 +1,12 @@
 import {
   FetchHttpClient,
   MinecraftKit,
-  fetchMinecraftProfile,
+  asAzureClientId,
   isErrorCode,
 } from '@loontail/minecraft-kit';
-import type { MojangSession as KitMojangSession } from '@loontail/minecraft-kit';
+import type { MojangSession as KitMojangSession, MinecraftProfile } from '@loontail/minecraft-kit';
 import { mainConfig } from '@main/config';
-import { scopedLogger } from '@main/infra/logger';
+import { kitLogger, scopedLogger } from '@main/infra/logger';
 import type { MojangSession } from '@shared/contracts/auth';
 import { shell } from 'electron';
 
@@ -16,22 +16,24 @@ const logger = scopedLogger('auth.mojang');
 // outstanding aborts the previous attempt so the launcher doesn't leak
 // loopback servers.
 let activeController: AbortController | null = null;
-const kit = new MinecraftKit();
-// Reused for direct `/minecraft/profile` checks (no need to wire a second
-// kit instance just for one method).
+const kit = new MinecraftKit({ logger: kitLogger('kit.auth') });
+// Reused for direct `/minecraft/profile` pings to confirm a cached access
+// token still works without spending a refresh token.
 const http = new FetchHttpClient();
 
-const requireClientId = (): string => {
+const PROFILE_URL = 'https://api.minecraftservices.com/minecraft/profile';
+
+const requireClientId = () => {
   if (!mainConfig.mojangClientId) {
     throw new Error(
       'MOJANG_CLIENT_ID is not configured — Microsoft sign-in is unavailable in this build',
     );
   }
-  return mainConfig.mojangClientId;
+  return asAzureClientId(mainConfig.mojangClientId);
 };
 
 // Project the kit's nested session into the launcher's flat storage shape.
-// The kit now returns skins/capes inline, so no second `/minecraft/profile`
+// The kit returns the active profile inline, so no second `/minecraft/profile`
 // call is needed.
 const fromKitSession = (kitSession: KitMojangSession): MojangSession => ({
   provider: 'mojang',
@@ -44,7 +46,6 @@ const fromKitSession = (kitSession: KitMojangSession): MojangSession => ({
     uuid: kitSession.minecraft.uuid,
     username: kitSession.minecraft.username,
     skins: [...kitSession.minecraft.skins],
-    capes: [...kitSession.minecraft.capes],
   },
 });
 
@@ -93,6 +94,34 @@ export const cancelMojangLogin = (): void => {
 };
 
 /**
+ * Apply a fresh kit-provided profile snapshot to the stored session.
+ * Mojang `profile.*` mutations already return the updated profile, so the
+ * caller passes it in instead of triggering another GET.
+ */
+export const withRefreshedProfile = (
+  session: MojangSession,
+  profile: MinecraftProfile,
+): MojangSession => ({
+  ...session,
+  profile: {
+    uuid: profile.uuid,
+    username: profile.username,
+    skins: [...profile.skins],
+  },
+});
+
+type RawProfile = {
+  readonly id: string;
+  readonly name: string;
+  readonly skins?: ReadonlyArray<{
+    readonly id: string;
+    readonly url: string;
+    readonly state: 'ACTIVE' | 'INACTIVE';
+    readonly variant: 'CLASSIC' | 'SLIM';
+  }>;
+};
+
+/**
  * Validate a stored Mojang session. Refreshes the access token if it's near
  * expiry, then pings `/minecraft/profile` to confirm the token still works
  * server-side. `expired` clears the session, `offline` keeps the cached copy.
@@ -110,35 +139,35 @@ export const verifyMojangSession = async (
       });
       return { kind: 'ok', session: fromKitSession(refreshed) };
     }
-    const profile = await fetchMinecraftProfile({
-      http,
-      accessToken: session.accessToken,
+    const response = await http.request(PROFILE_URL, {
+      method: 'GET',
+      headers: { authorization: `Bearer ${session.accessToken}` },
+      acceptNonOk: true,
     });
-    return {
-      kind: 'ok',
-      session: {
-        ...session,
-        profile: {
-          uuid: profile.uuid,
-          username: profile.username,
-          skins: [...profile.skins],
-          capes: [...profile.capes],
-        },
+    if (response.status === 401) return { kind: 'expired' };
+    if (response.status >= 400) {
+      logger.warn(`Mojang verify: non-OK HTTP ${response.status} — assuming offline`);
+      return { kind: 'offline' };
+    }
+    const raw = (await response.json()) as RawProfile;
+    const next: MojangSession = {
+      ...session,
+      profile: {
+        uuid: session.profile.uuid,
+        username: raw.name,
+        skins:
+          raw.skins?.map((s) => ({
+            id: s.id,
+            url: s.url,
+            state: s.state,
+            variant: s.variant,
+          })) ?? [],
       },
     };
+    return { kind: 'ok', session: next };
   } catch (error) {
-    if (isErrorCode(error, 'AUTH_REFRESH_FAILED') || isMicrosoftUnauthorized(error)) {
-      return { kind: 'expired' };
-    }
+    if (isErrorCode(error, 'AUTH_REFRESH_FAILED')) return { kind: 'expired' };
     logger.warn('Mojang verify failed — assuming offline', error);
     return { kind: 'offline' };
   }
-};
-
-// `fetchMinecraftProfile` reports 401 as `AUTH_MINECRAFT_FAILED`. We treat
-// that as a definitively-revoked token so the orchestrator clears the session.
-const isMicrosoftUnauthorized = (error: unknown): boolean => {
-  if (!isErrorCode(error, 'AUTH_MINECRAFT_FAILED')) return false;
-  const httpStatus = (error as { context?: { httpStatus?: number } }).context?.httpStatus;
-  return httpStatus === 401;
 };
