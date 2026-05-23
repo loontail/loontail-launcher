@@ -90,18 +90,17 @@ const uploadSkinStrapi = async (
 };
 
 // Mojang flow: hand the PNG to `kit.auth.profile.uploadSkin`, which posts
-// it to api.minecraftservices.com/minecraft/profile/skins. Mojang does not
-// accept arbitrary cape uploads (capes are issued by Mojang for
-// events/promotions), so cape uploads are rejected early.
+// it to api.minecraftservices.com/minecraft/profile/skins. The renderer
+// gates cape uploads off for Mojang accounts; a CAPE payload reaching here
+// means something bypassed the UI, so we treat it as an invariant break.
 const uploadSkinMojang = async (
   session: MojangSession,
   payload: UploadSkinPayload,
 ): Promise<UploadSkinResult> => {
-  if (payload.type === SkinKinds.CAPE) {
+  if (payload.type !== SkinKinds.SKIN) {
     throw {
       code: ERROR_CODES.SkinUploadFailed,
-      message:
-        'Mojang accounts cannot upload custom capes; only Mojang-issued capes can be activated',
+      message: 'Mojang accounts cannot upload custom capes',
     };
   }
   const skin = new Uint8Array(payload.buffer);
@@ -110,7 +109,7 @@ const uploadSkinMojang = async (
     profile = await kit.auth.profile.uploadSkin({
       accessToken: session.accessToken,
       skin,
-      variant: DEFAULT_MOJANG_SKIN_VARIANT,
+      variant: payload.variant ?? DEFAULT_MOJANG_SKIN_VARIANT,
     });
   } catch (error) {
     logger.error('Mojang skin upload failed', error);
