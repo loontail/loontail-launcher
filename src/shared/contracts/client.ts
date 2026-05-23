@@ -31,6 +31,11 @@ export const ClientResponseSchema = StrapiEntitySchema.extend({
   fabricVersion: VersionField,
   runtimeVersion: VersionField,
 
+  // Optional pointer to a bundle-registry build whose files are overlaid on top
+  // of the Minecraft install (mods, configs, patched libs). Empty/null → no
+  // bundle phase for this client.
+  bundleSlug: z.union([z.string(), z.null()]).optional(),
+
   servers: z.array(ServerSchema).optional(),
 
   screenshots: z.array(StrapiMediaSchema).default([]),
@@ -63,6 +68,8 @@ export type Client = {
   forgeVersion?: string | null | undefined;
   fabricVersion?: string | null | undefined;
   runtimeVersion?: string | null | undefined;
+
+  bundleSlug?: string | null | undefined;
 
   servers?: Server[] | undefined;
 

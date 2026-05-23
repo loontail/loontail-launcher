@@ -1,0 +1,193 @@
+import { createHash } from 'node:crypto';
+import fs from 'node:fs';
+import fsp from 'node:fs/promises';
+import http, { type ClientRequest, type IncomingMessage } from 'node:http';
+import https from 'node:https';
+import path from 'node:path';
+import { URL } from 'node:url';
+import {
+  BUNDLE_DOWNLOAD_MAX_REDIRECTS,
+  BUNDLE_DOWNLOAD_REQUEST_TIMEOUT_MS,
+} from '@main/constants/bundle';
+import { BundleErrorCodes, type RemoteManifestEntry } from '@shared/contracts/bundle';
+import { BundleError, errorMessage } from './errors';
+
+export type DownloadChunkCallback = (bytes: number) => void;
+
+export type DownloadOptions = {
+  // Set of in-flight requests for the task. The downloader registers/unregisters
+  // itself here so cancelSync can synchronously destroy every active socket.
+  currentRequests: Set<ClientRequest>;
+  signal?: AbortSignal;
+  onChunk?: DownloadChunkCallback;
+};
+
+const HTTPS_PROTOCOL = 'https:';
+
+const requestOnce = (url: string, options: DownloadOptions): Promise<IncomingMessage> =>
+  new Promise<IncomingMessage>((resolve, reject) => {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch (err) {
+      reject(new BundleError(BundleErrorCodes.DOWNLOAD_FAILED, `Invalid URL: ${url}`));
+      void err;
+      return;
+    }
+    const transport = parsed.protocol === HTTPS_PROTOCOL ? https : http;
+    const req = transport.request(
+      {
+        protocol: parsed.protocol,
+        hostname: parsed.hostname,
+        port: parsed.port || undefined,
+        path: `${parsed.pathname}${parsed.search}`,
+        method: 'GET',
+        timeout: BUNDLE_DOWNLOAD_REQUEST_TIMEOUT_MS,
+      },
+      (res) => {
+        resolve(res);
+      },
+    );
+    options.currentRequests.add(req);
+    const onAbort = () => {
+      req.destroy(new BundleError(BundleErrorCodes.ABORTED, 'Download aborted'));
+    };
+    if (options.signal) {
+      if (options.signal.aborted) {
+        onAbort();
+        return;
+      }
+      options.signal.addEventListener('abort', onAbort, { once: true });
+    }
+    req.on('error', (err) => {
+      options.currentRequests.delete(req);
+      options.signal?.removeEventListener('abort', onAbort);
+      reject(err);
+    });
+    req.on('timeout', () => {
+      req.destroy(
+        new BundleError(
+          BundleErrorCodes.DOWNLOAD_FAILED,
+          `Request timed out after ${BUNDLE_DOWNLOAD_REQUEST_TIMEOUT_MS}ms`,
+        ),
+      );
+    });
+    req.on('close', () => {
+      options.currentRequests.delete(req);
+      options.signal?.removeEventListener('abort', onAbort);
+    });
+    req.end();
+  });
+
+// Walk a chain of 3xx redirects up to BUNDLE_DOWNLOAD_MAX_REDIRECTS hops, then
+// hand back the final 200 response stream. Throws on any non-2xx terminal.
+const followRedirects = async (url: string, options: DownloadOptions): Promise<IncomingMessage> => {
+  let current = url;
+  for (let hop = 0; hop <= BUNDLE_DOWNLOAD_MAX_REDIRECTS; hop++) {
+    const res = await requestOnce(current, options);
+    const status = res.statusCode ?? 0;
+    if (status >= 200 && status < 300) return res;
+    if (status >= 300 && status < 400 && res.headers.location) {
+      const next = new URL(res.headers.location, current).toString();
+      res.resume();
+      current = next;
+      continue;
+    }
+    res.resume();
+    throw new BundleError(BundleErrorCodes.DOWNLOAD_FAILED, `HTTP ${status} for ${current}`);
+  }
+  throw new BundleError(BundleErrorCodes.DOWNLOAD_FAILED, `Too many redirects fetching ${url}`);
+};
+
+// Stream the response into `${dest}.tmp`, verify the SHA-256 (when known), and
+// atomically rename into place. On any failure the tmp file is removed so a
+// retry starts clean.
+export const downloadEntry = async (
+  entry: RemoteManifestEntry,
+  destPath: string,
+  options: DownloadOptions,
+): Promise<void> => {
+  if (!entry.url) {
+    throw new BundleError(
+      BundleErrorCodes.DOWNLOAD_FAILED,
+      `Manifest entry ${entry.path} has no URL`,
+    );
+  }
+  await fsp.mkdir(path.dirname(destPath), { recursive: true });
+  const tmpPath = `${destPath}.tmp`;
+  // Defensive: stale tmp from a crashed prior run.
+  await fsp.rm(tmpPath, { force: true });
+
+  const response = await followRedirects(entry.url, options);
+
+  await new Promise<void>((resolve, reject) => {
+    const writeStream = fs.createWriteStream(tmpPath);
+    const hash = createHash('sha256');
+    let settled = false;
+    const fail = (err: unknown) => {
+      if (settled) return;
+      settled = true;
+      response.destroy();
+      writeStream.destroy();
+      reject(err);
+    };
+    response.on('data', (chunk: Buffer) => {
+      hash.update(chunk);
+      options.onChunk?.(chunk.length);
+    });
+    response.on('error', fail);
+    writeStream.on('error', fail);
+    writeStream.on('finish', () => {
+      if (settled) return;
+      settled = true;
+      if (entry.sha256) {
+        const observed = hash.digest('hex');
+        if (observed !== entry.sha256) {
+          reject(
+            new BundleError(
+              BundleErrorCodes.DOWNLOAD_INTEGRITY_FAILED,
+              `SHA-256 mismatch for ${entry.path}: expected ${entry.sha256}, got ${observed}`,
+            ),
+          );
+          return;
+        }
+      }
+      resolve();
+    });
+    if (options.signal) {
+      if (options.signal.aborted) {
+        fail(new BundleError(BundleErrorCodes.ABORTED, 'Download aborted'));
+        return;
+      }
+      options.signal.addEventListener(
+        'abort',
+        () => fail(new BundleError(BundleErrorCodes.ABORTED, 'Download aborted')),
+        { once: true },
+      );
+    }
+    response.pipe(writeStream);
+  }).catch(async (err: unknown) => {
+    await fsp.rm(tmpPath, { force: true }).catch(() => {});
+    if (err instanceof BundleError) throw err;
+    if (options.signal?.aborted) {
+      throw new BundleError(BundleErrorCodes.ABORTED, 'Download aborted');
+    }
+    throw new BundleError(
+      BundleErrorCodes.DOWNLOAD_FAILED,
+      `Failed to download ${entry.path}: ${errorMessage(err)}`,
+    );
+  });
+
+  // Atomic swap. On Windows fs.rename fails when the target exists; remove
+  // first (idempotent on ENOENT) then rename.
+  try {
+    await fsp.rm(destPath, { force: true });
+    await fsp.rename(tmpPath, destPath);
+  } catch (err) {
+    await fsp.rm(tmpPath, { force: true }).catch(() => {});
+    throw new BundleError(
+      BundleErrorCodes.DOWNLOAD_FAILED,
+      `Failed to install ${entry.path}: ${errorMessage(err)}`,
+    );
+  }
+};

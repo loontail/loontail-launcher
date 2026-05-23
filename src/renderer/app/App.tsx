@@ -1,5 +1,6 @@
 import { AppBar } from '@renderer/features/app-bar';
 import { LoginForm, useCurrentUser } from '@renderer/features/auth';
+import { BundleEventsListener } from '@renderer/features/bundle';
 import { ClientsPage } from '@renderer/features/clients';
 import { MinecraftEventsListener } from '@renderer/features/minecraft';
 import { NotificationsListener } from '@renderer/features/notifications';
@@ -55,6 +56,7 @@ export const App = () => {
   return (
     <div className="flex h-full flex-col">
       <MinecraftEventsListener />
+      <BundleEventsListener />
       <UpdaterEventsListener />
       <UpdaterAutoCheck />
       <NotificationsListener />

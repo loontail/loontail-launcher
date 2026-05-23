@@ -27,4 +27,9 @@ export const API_ROUTES = {
       return `/clients?${populate}${localeParam}`;
     },
   },
+  bundleRegistry: {
+    // Plugin route is content-api scoped; `httpRequest` prepends the shared
+    // `/api` prefix, so we omit it here.
+    manifest: (slug: string) => `/bundle-registry/builds/${slug}/manifest`,
+  },
 } as const;

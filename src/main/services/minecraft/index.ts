@@ -7,6 +7,9 @@ import { registerMinecraftRoutes } from './routes';
 export type MinecraftService = {
   init: () => Promise<void>;
   dispose: () => Promise<void>;
+  // Exposed so the bundle service can install a launch hook that runs after
+  // the minecraft-install step and before the game process spawns.
+  manager: MinecraftManager;
 };
 
 export const createMinecraftService = (
@@ -20,5 +23,6 @@ export const createMinecraftService = (
       registerMinecraftRoutes(router, manager);
     },
     dispose: async () => {},
+    manager,
   };
 };

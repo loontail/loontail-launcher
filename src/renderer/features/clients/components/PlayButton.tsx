@@ -1,4 +1,13 @@
 import {
+  isBundleBusy,
+  localizeBundleError,
+  useBundleStatus,
+  useCancelBundle,
+  usePauseBundle,
+  useResumeBundle,
+  useStartBundle,
+} from '@renderer/features/bundle';
+import {
   localizeMinecraftError,
   useCancelInstall,
   useClientStatus,
@@ -10,6 +19,7 @@ import {
 } from '@renderer/features/minecraft';
 import { useLauncherSettings, useResolveFor } from '@renderer/features/settings';
 import { cn } from '@renderer/shared/lib/cn';
+import { BundleSyncStatuses } from '@shared/contracts/bundle';
 import type { Client } from '@shared/contracts/client';
 import { type InstallStage, InstallStages, InstallStatuses } from '@shared/contracts/minecraft';
 import type { LoaderChoice } from '@shared/contracts/settings';
@@ -129,6 +139,7 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
   const { t } = useTranslation();
   const slug = client.slug;
   const state = useClientStatus(slug);
+  const bundle = useBundleStatus(slug);
   const resolved = useResolveFor(slug);
   const { settings } = useLauncherSettings();
 
@@ -138,6 +149,10 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
   const cancel = useCancelInstall();
   const launch = useLaunchClient();
   const stop = useStopClient();
+  const startBundle = useStartBundle();
+  const pauseBundle = usePauseBundle();
+  const resumeBundle = useResumeBundle();
+  const cancelBundle = useCancelBundle();
   const [loaderModalOpen, setLoaderModalOpen] = useState(false);
 
   if (!slug) return null;
@@ -146,6 +161,8 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
   const persistedLoader = settings?.clients[slug]?.loader ?? null;
   const needsLoaderChoice =
     Boolean(client.forgeVersion) && Boolean(client.fabricVersion) && !persistedLoader;
+  const hasBundle = Boolean(client.bundleSlug);
+  const bundleBusy = isBundleBusy(bundle.status);
 
   const beginInstall = (loader?: LoaderChoice): Promise<void> =>
     install.mutateAsync({ slug, ...(loader ? { loader } : {}) });
@@ -160,6 +177,75 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
   };
 
   const stageLabel = state.stage ? t(STAGE_LABEL_KEY[state.stage]) : t('clients.installing');
+
+  // Bundle sync overlays: shown once Minecraft is installed (or idle) and the
+  // bundle is actively syncing. Pre-empts the regular Play/Repair surface so
+  // the user can see why launch is paused.
+  if (
+    hasBundle &&
+    bundleBusy &&
+    state.status !== InstallStatuses.INSTALLING &&
+    state.status !== InstallStatuses.REPAIRING
+  ) {
+    const isPaused = bundle.status === BundleSyncStatuses.PAUSED;
+    const total = bundle.progress?.bytesTotal ?? 0;
+    const done = bundle.progress?.bytesDownloaded ?? 0;
+    const percent = total > 0 ? (done / total) * 100 : 0;
+    const bundleStageLabel = isPaused
+      ? `${t('clients.stage.bundle')} — ${t('clients.paused')}`
+      : t(`clients.bundleStage.${bundle.status}`, { defaultValue: t('clients.stage.bundle') });
+    return (
+      <ProgressCard
+        stageLabel={bundleStageLabel}
+        currentFile={bundle.progress?.currentFile}
+        percent={percent}
+        bytesDownloaded={done}
+        totalBytes={total}
+        controls={
+          <>
+            {isPaused ? (
+              <ActionBtn variant="ghost" onClick={() => void resumeBundle.mutateAsync(slug)}>
+                <Play size={12} />
+                {t('clients.resume')}
+              </ActionBtn>
+            ) : (
+              <ActionBtn variant="ghost" onClick={() => void pauseBundle.mutateAsync(slug)}>
+                <Pause size={12} />
+                {t('clients.pause')}
+              </ActionBtn>
+            )}
+            <ActionBtn variant="danger" onClick={() => void cancelBundle.mutateAsync(slug)}>
+              <X size={12} />
+              {t('clients.cancel')}
+            </ActionBtn>
+          </>
+        }
+      />
+    );
+  }
+
+  if (
+    hasBundle &&
+    bundle.status === BundleSyncStatuses.ERROR &&
+    bundle.error &&
+    state.status === InstallStatuses.INSTALLED
+  ) {
+    const errorText = localizeBundleError(bundle.error.code, bundle.error.message, t);
+    return (
+      <div className="flex max-w-[480px] flex-col gap-2">
+        <p role="alert" className="text-[12px] leading-snug text-destructive">
+          {errorText}
+        </p>
+        <ActionBtn
+          onClick={() => void startBundle.mutateAsync({ slug })}
+          disabled={startBundle.isPending}
+        >
+          <RotateCcw size={16} />
+          {t('clients.retry')}
+        </ActionBtn>
+      </div>
+    );
+  }
 
   const loaderModal = (
     <LoaderChoiceModal

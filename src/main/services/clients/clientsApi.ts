@@ -50,6 +50,14 @@ const absolutizeMedia = (media: StrapiMedia): StrapiMedia => ({
   formats: absolutizeFormats(media.formats),
 });
 
+// Strapi may return an empty string for an unset bundleSlug customField; collapse
+// it (and other empty/falsy forms) to null so the manager treats it uniformly.
+const coerceBundleSlug = (input: unknown): string | null => {
+  if (typeof input !== 'string') return null;
+  const trimmed = input.trim();
+  return trimmed.length > 0 ? trimmed : null;
+};
+
 const normalizeClient = (client: ClientResponse): Client | null => {
   if (!client.slug) {
     // No slug — launcher cannot identify (settings key, folder, IPC). Drop.
@@ -69,6 +77,7 @@ const normalizeClient = (client: ClientResponse): Client | null => {
     forgeVersion: coerceVersionString(client.forgeVersion),
     fabricVersion: coerceVersionString(client.fabricVersion),
     runtimeVersion: coerceVersionString(client.runtimeVersion),
+    bundleSlug: coerceBundleSlug(client.bundleSlug),
     background: absolutizeMedia(client.background),
     poster: absolutizeMedia(client.poster),
     ...(titleImage ? { titleImage } : {}),

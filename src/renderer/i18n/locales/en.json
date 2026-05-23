@@ -63,7 +63,29 @@
       "runtime": "Downloading Java runtime",
       "minecraft": "Downloading Minecraft",
       "loader": "Downloading loader",
-      "finalize": "Finishing up"
+      "finalize": "Finishing up",
+      "bundle": "Syncing bundle"
+    },
+    "bundleStage": {
+      "fetching-manifest": "Fetching bundle manifest",
+      "planning": "Planning bundle changes",
+      "downloading": "Downloading bundle files",
+      "deleting": "Removing obsolete bundle files",
+      "healing": "Verifying Minecraft after bundle update"
+    },
+    "bundleError": {
+      "noBundleSlug": "This client has no bundle attached.",
+      "noClientFolder": "Set the launcher install folder in System settings first.",
+      "manifestFetchFailed": "Failed to fetch the bundle manifest. Check your connection and try again.",
+      "manifestInvalid": "Bundle manifest is malformed. Contact the administrator.",
+      "downloadFailed": "Bundle download failed: {{message}}",
+      "downloadIntegrityFailed": "A downloaded bundle file is corrupt. Retry to refetch.",
+      "deleteFailed": "Failed to remove an obsolete bundle file: {{message}}",
+      "unsafePath": "Bundle manifest references an unsafe path. Contact the administrator.",
+      "healFailed": "Minecraft validation after bundle update failed: {{message}}",
+      "aborted": "Bundle sync cancelled.",
+      "opInFlight": "A bundle sync is already running for this client.",
+      "unknown": "Bundle sync failed: {{message}}"
     },
     "loaderModal": {
       "title": "Choose a loader",

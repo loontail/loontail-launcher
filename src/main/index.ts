@@ -16,8 +16,10 @@ import { createRouter } from '@main/ipc/router';
 import { createTrustedSenderCheck } from '@main/ipc/trustedSender';
 import { createAppService } from '@main/services/app';
 import { createAuthService } from '@main/services/auth';
+import { createBundleService } from '@main/services/bundle';
 import { createClientsService } from '@main/services/clients';
 import { createConsoleService } from '@main/services/console';
+import { kit } from '@main/services/kit';
 import { CACHE_SCHEME, createMediaService } from '@main/services/media';
 import { createMinecraftService } from '@main/services/minecraft';
 import { createServersService } from '@main/services/servers';
@@ -97,6 +99,12 @@ const start = async (): Promise<void> => {
   const serversService = createServersService(router);
   const mediaService = createMediaService();
   const minecraftService = createMinecraftService(router, mainWindow);
+  const bundleService = createBundleService(router, mainWindow, kit);
+  // Wire bundle sync into the launch flow — runs after install, before launch.
+  // No-op for clients without a bundleSlug (handled inside syncForLaunch).
+  minecraftService.manager.attachLaunchHook((slug, signal) =>
+    bundleService.manager.syncForLaunch(slug, signal),
+  );
   const consoleService = createConsoleService(router);
   const updaterService = createUpdaterService(router, mainWindow);
 
@@ -109,6 +117,7 @@ const start = async (): Promise<void> => {
   await serversService.init();
   await mediaService.init();
   await minecraftService.init();
+  await bundleService.init();
   await consoleService.init();
   await updaterService.init();
 
@@ -133,6 +142,7 @@ const start = async (): Promise<void> => {
     await Promise.allSettled([
       updaterService.dispose(),
       consoleService.dispose(),
+      bundleService.dispose(),
       minecraftService.dispose(),
       mediaService.dispose(),
       serversService.dispose(),

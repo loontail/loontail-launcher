@@ -75,6 +75,32 @@ export { SKIN_KINDS, SkinKindSchema, UploadSkinPayloadSchema } from './skin';
 export type { SkinKind, UploadSkinPayload, UploadSkinResult } from './skin';
 export { ClientResponseSchema, KeywordSchema } from './client';
 export type { Client, ClientResponse, Keyword } from './client';
+export {
+  BUSY_BUNDLE_STATUSES,
+  BundleErrorCodes,
+  BundleErrorCodeSchema,
+  BundleErrorEventSchema,
+  BundleProgressEventSchema,
+  BundleStartRequestSchema,
+  BundleStatusEventSchema,
+  BundleSyncStatusSchema,
+  BundleSyncStatuses,
+  RemoteManifestEntrySchema,
+  RemoteManifestSchema,
+} from './bundle';
+export type {
+  BundleErrorCode,
+  BundleErrorEvent,
+  BundleInstallState,
+  BundleProgressEvent,
+  BundleStartRequest,
+  BundleStatusEvent,
+  BundleSyncStatus,
+  LocalManifest,
+  LocalManifestFile,
+  RemoteManifest,
+  RemoteManifestEntry,
+} from './bundle';
 export { ServerStatusSchema } from './serverStatus';
 export type { ServerStatus } from './serverStatus';
 export {

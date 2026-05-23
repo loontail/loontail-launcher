@@ -1,5 +1,12 @@
 import type { Account } from '@shared/contracts/account';
 import type { LoginPayload, LoginResult } from '@shared/contracts/auth';
+import type {
+  BundleErrorEvent,
+  BundleInstallState,
+  BundleProgressEvent,
+  BundleStartRequest,
+  BundleStatusEvent,
+} from '@shared/contracts/bundle';
 import type { Client } from '@shared/contracts/client';
 import type {
   ConsoleInitialPayload,
@@ -66,6 +73,11 @@ export type IpcContract = {
   'minecraft.uninstall': { args: ClientSlug; result: void };
   'minecraft.launch': { args: ClientSlug; result: void };
   'minecraft.stop': { args: ClientSlug; result: void };
+  'bundle.start': { args: BundleStartRequest; result: void };
+  'bundle.pause': { args: ClientSlug; result: void };
+  'bundle.resume': { args: ClientSlug; result: void };
+  'bundle.cancel': { args: ClientSlug; result: void };
+  'bundle.checkStatus': { args: ClientSlug; result: BundleInstallState };
   'console.getInitial': { args: undefined; result: ConsoleInitialPayload };
   'console.clear': { args: undefined; result: void };
   'console.copyAll': { args: undefined; result: void };
@@ -82,6 +94,9 @@ export type IpcEventPayloads = {
   'minecraft.progress': MinecraftProgressEvent;
   'minecraft.log': MinecraftLogEvent;
   'minecraft.error': MinecraftErrorEvent;
+  'bundle.status': BundleStatusEvent;
+  'bundle.progress': BundleProgressEvent;
+  'bundle.error': BundleErrorEvent;
   'updater.status': UpdaterStatusEvent;
   'app.notification': NotificationPayload;
   'console.lines': ConsoleLine[];

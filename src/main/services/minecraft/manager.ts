@@ -28,9 +28,15 @@ import { runUninstall } from './uninstall';
 
 const logger = scopedLogger('minecraft');
 
+// Optional hook the bundle service installs at boot; awaited after the
+// implicit install step in startLaunch so a play click syncs the bundle
+// before the game process is spawned. Untouched when no bundle is wired.
+export type LaunchHook = (slug: ClientSlug, signal?: AbortSignal) => Promise<void>;
+
 export class MinecraftManager {
   private readonly ops = new Map<ClientSlug, Op>();
   private readonly env: ManagerEnv;
+  private launchHook: LaunchHook | null = null;
 
   constructor(broadcaster: Broadcaster) {
     this.env = {
@@ -52,6 +58,13 @@ export class MinecraftManager {
         persistClientOverride(slug, { runtime: undefined });
       },
     };
+  }
+
+  // Called once at boot (after createBundleService) so launches dovetail
+  // through the bundle sync. Replacing a non-null hook is allowed and only
+  // happens in tests; in production it's set exactly once.
+  attachLaunchHook(hook: LaunchHook): void {
+    this.launchHook = hook;
   }
 
   async getStatus(slug: ClientSlug): Promise<{ status: InstallStatus; paused: boolean }> {
@@ -77,12 +90,26 @@ export class MinecraftManager {
     // runInstall handles errors internally (emits via handleInstallFailure) and
     // rethrows for the launch path; in the fire-and-forget case we only need
     // the final INSTALLED status on success.
-    void runInstall(this.env, slug, ctx, op).then(
-      () => this.env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false }),
-      () => {
+    void runInstall(this.env, slug, ctx, op)
+      .then(async () => {
+        // Mark Minecraft itself as installed BEFORE the bundle phase. The UI
+        // listens for INSTALLED to switch the progress card from "downloading
+        // minecraft" to "syncing bundle" (which only renders on top of an
+        // installed client).
+        this.env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
+        if (this.launchHook) {
+          try {
+            await this.launchHook(slug);
+          } catch (error) {
+            // Bundle failures surface via the bundle.error event channel; the
+            // Minecraft install itself is done, so we keep the INSTALLED state.
+            logger.warn(`[${slug}] install: bundle sync after install failed`, error);
+          }
+        }
+      })
+      .catch(() => {
         // Already reported by handleInstallFailure; nothing to do here.
-      },
-    );
+      });
   }
 
   pause(slug: ClientSlug): void {
@@ -153,6 +180,17 @@ export class MinecraftManager {
         await runInstall(this.env, slug, ctx, op);
       } catch (error) {
         if (op.cancelled) return;
+        throw error;
+      }
+    }
+
+    // Chain the bundle sync before launch. The hook resolves immediately for
+    // clients without a bundleSlug, so this is free in the no-bundle path.
+    if (this.launchHook) {
+      try {
+        await this.launchHook(slug);
+      } catch (error) {
+        logger.error(`[${slug}] launch: bundle sync failed`, error);
         throw error;
       }
     }
