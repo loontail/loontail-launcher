@@ -30,7 +30,7 @@
   },
   "dependencies": {
     "@fontsource/nunito": "^5.0.0",
-    "@loontail/minecraft-kit": "^0.8.4",
+    "@loontail/minecraft-kit": "^0.8.6",
     "@splidejs/react-splide": "^0.7.12",
     "@splidejs/splide": "^4.1.4",
     "@tanstack/query-sync-storage-persister": "^5.100.10",
