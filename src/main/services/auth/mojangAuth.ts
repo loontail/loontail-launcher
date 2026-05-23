@@ -1,7 +1,8 @@
-import { MinecraftKit, asAzureClientId, isErrorCode } from '@loontail/minecraft-kit';
+import { asAzureClientId, isErrorCode } from '@loontail/minecraft-kit';
 import type { MojangSession as KitMojangSession, MinecraftProfile } from '@loontail/minecraft-kit';
 import { mainConfig } from '@main/config';
-import { kitLogger, scopedLogger } from '@main/infra/logger';
+import { scopedLogger } from '@main/infra/logger';
+import { kit } from '@main/services/kit';
 import type { MojangSession } from '@shared/contracts/auth';
 import { shell } from 'electron';
 
@@ -11,7 +12,6 @@ const logger = scopedLogger('auth.mojang');
 // outstanding aborts the previous attempt so the launcher doesn't leak
 // loopback servers.
 let activeController: AbortController | null = null;
-const kit = new MinecraftKit({ logger: kitLogger('kit.auth') });
 
 const requireClientId = () => {
   if (!mainConfig.mojangClientId) {

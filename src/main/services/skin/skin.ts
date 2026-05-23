@@ -1,9 +1,9 @@
-import { MinecraftKit } from '@loontail/minecraft-kit';
 import type { MinecraftProfile, MojangSkinVariant } from '@loontail/minecraft-kit';
 import { buildMediaUrl } from '@main/infra/http';
-import { kitLogger, scopedLogger } from '@main/infra/logger';
+import { scopedLogger } from '@main/infra/logger';
 import { getStoredAuth, setStoredAuth } from '@main/infra/store';
 import { withRefreshedProfile } from '@main/services/auth/mojangAuth';
+import { kit } from '@main/services/kit';
 import { invalidateMediaCache, prewarmMediaCache } from '@main/services/media/mediaCache';
 import { ERROR_CODES } from '@shared/constants';
 import type { AuthSession, MojangSession, StrapiSession } from '@shared/contracts/auth';
@@ -17,8 +17,6 @@ import {
 import { updateUserSkinFields, uploadSkinFile } from './skinApi';
 
 const logger = scopedLogger('skin');
-
-const kit = new MinecraftKit({ logger: kitLogger('kit.skin') });
 
 const DEFAULT_MOJANG_SKIN_VARIANT: MojangSkinVariant = 'CLASSIC';
 
