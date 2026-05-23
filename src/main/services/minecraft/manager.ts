@@ -72,7 +72,7 @@ export class MinecraftManager {
 
   async startInstall(slug: ClientSlug, loaderOverride?: LoaderChoice): Promise<void> {
     this.requireIdle(slug);
-    const ctx = await buildContext(kit,slug, loaderOverride);
+    const ctx = await buildContext(kit, slug, loaderOverride);
     const op = beginInstall(this.env, slug, ctx, { fresh: true });
     // runInstall handles errors internally (emits via handleInstallFailure) and
     // rethrows for the launch path; in the fire-and-forget case we only need
@@ -115,7 +115,7 @@ export class MinecraftManager {
 
   async startRepair(slug: ClientSlug): Promise<void> {
     this.requireIdle(slug);
-    const ctx = await buildContext(kit,slug);
+    const ctx = await buildContext(kit, slug);
     if (!(await isAnythingInstalled(ctx.clientFolder))) {
       throw new ManagerError(MinecraftErrorCodes.NOT_INSTALLED, 'Client is not installed');
     }
@@ -141,7 +141,7 @@ export class MinecraftManager {
 
   async startLaunch(slug: ClientSlug, account: Account | null): Promise<void> {
     this.requireIdle(slug);
-    const ctx = await buildContext(kit,slug);
+    const ctx = await buildContext(kit, slug);
     const checkedAccount = requireAccount(account);
 
     if (!(await isTargetReady(ctx.target))) {
