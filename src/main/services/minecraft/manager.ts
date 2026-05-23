@@ -1,5 +1,5 @@
 import { MinecraftKit } from '@loontail/minecraft-kit';
-import { scopedLogger } from '@main/infra/logger';
+import { kitLogger, scopedLogger } from '@main/infra/logger';
 import {
   getSettings,
   setClientOverride as persistClientOverride,
@@ -29,7 +29,7 @@ import { runUninstall } from './uninstall';
 const logger = scopedLogger('minecraft');
 
 export class MinecraftManager {
-  private readonly kit = new MinecraftKit();
+  private readonly kit = new MinecraftKit({ logger: kitLogger('kit.minecraft') });
   private readonly ops = new Map<ClientSlug, Op>();
   private readonly env: ManagerEnv;
 
