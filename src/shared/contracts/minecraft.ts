@@ -1,10 +1,10 @@
-import type { InstallStage } from '@loontail/minecraft-kit';
+import type { ProgressStage } from '@loontail/minecraft-kit';
 import { z } from 'zod';
 import { ConsoleSources } from './console';
 import { ClientSlugSchema } from './ids';
 import { LoaderChoiceSchema } from './settings';
 
-export type { InstallStage } from '@loontail/minecraft-kit';
+export type { ProgressStage } from '@loontail/minecraft-kit';
 
 export const InstallStatuses = {
   UNKNOWN: 'unknown',
@@ -32,20 +32,20 @@ export const InstallStatusSchema = z.enum([
   InstallStatuses.ERROR,
 ]);
 
-export const InstallStages = {
+export const ProgressStages = {
   PREPARE: 'prepare',
   RUNTIME: 'runtime',
   MINECRAFT: 'minecraft',
   LOADER: 'loader',
   FINALIZE: 'finalize',
-} as const satisfies Record<string, InstallStage>;
+} as const satisfies Record<string, ProgressStage>;
 
-export const InstallStageSchema = z.enum([
-  InstallStages.PREPARE,
-  InstallStages.RUNTIME,
-  InstallStages.MINECRAFT,
-  InstallStages.LOADER,
-  InstallStages.FINALIZE,
+export const ProgressStageSchema = z.enum([
+  ProgressStages.PREPARE,
+  ProgressStages.RUNTIME,
+  ProgressStages.MINECRAFT,
+  ProgressStages.LOADER,
+  ProgressStages.FINALIZE,
 ]);
 
 export const MinecraftErrorCodes = {
@@ -91,7 +91,7 @@ export type MinecraftStatusEvent = z.infer<typeof MinecraftStatusEventSchema>;
 
 export const MinecraftProgressEventSchema = z.object({
   slug: ClientSlugSchema,
-  stage: InstallStageSchema,
+  stage: ProgressStageSchema,
   stagePercent: z.number().min(0).max(100),
   overallPercent: z.number().min(0).max(100),
   bytesDownloaded: z.number().int().nonnegative(),

@@ -21,8 +21,9 @@ import { useLauncherSettings, useResolveFor } from '@renderer/features/settings'
 import { cn } from '@renderer/shared/lib/cn';
 import { BundleSyncStatuses } from '@shared/contracts/bundle';
 import type { Client } from '@shared/contracts/client';
-import { type InstallStage, InstallStages, InstallStatuses } from '@shared/contracts/minecraft';
+import { InstallStatuses, type ProgressStage, ProgressStages } from '@shared/contracts/minecraft';
 import type { LoaderChoice } from '@shared/contracts/settings';
+import { isLoaderAvailable } from '@shared/domain/loader';
 import { Download, Loader2, Pause, Play, RotateCcw, Square, X } from 'lucide-react';
 import { type ButtonHTMLAttributes, type ReactNode, forwardRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -73,12 +74,12 @@ const formatBytes = (bytes: number): string => {
   return `${value.toFixed(value < 10 && unit > 0 ? 1 : 0)} ${SIZE_UNITS[unit]}`;
 };
 
-const STAGE_LABEL_KEY: Record<InstallStage, string> = {
-  [InstallStages.PREPARE]: 'clients.stage.prepare',
-  [InstallStages.RUNTIME]: 'clients.stage.runtime',
-  [InstallStages.MINECRAFT]: 'clients.stage.minecraft',
-  [InstallStages.LOADER]: 'clients.stage.loader',
-  [InstallStages.FINALIZE]: 'clients.stage.finalize',
+const STAGE_LABEL_KEY: Record<ProgressStage, string> = {
+  [ProgressStages.PREPARE]: 'clients.stage.prepare',
+  [ProgressStages.RUNTIME]: 'clients.stage.runtime',
+  [ProgressStages.MINECRAFT]: 'clients.stage.minecraft',
+  [ProgressStages.LOADER]: 'clients.stage.loader',
+  [ProgressStages.FINALIZE]: 'clients.stage.finalize',
 };
 
 type ProgressCardProps = {
@@ -158,7 +159,12 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
   if (!slug) return null;
 
   const folderReady = Boolean(resolved?.storage.clientFolder);
-  const persistedLoader = settings?.clients[slug]?.loader ?? null;
+  const rawPersistedLoader = settings?.clients[slug]?.loader ?? null;
+  // Ignore a persisted choice that no longer matches the client's loader fields —
+  // e.g. user picked Forge, then Strapi removed forgeVersion. Without this the
+  // launcher would skip the picker and try to install a loader the client lacks.
+  const persistedLoader =
+    rawPersistedLoader && isLoaderAvailable(client, rawPersistedLoader) ? rawPersistedLoader : null;
   const needsLoaderChoice =
     Boolean(client.forgeVersion) && Boolean(client.fabricVersion) && !persistedLoader;
   const hasBundle = Boolean(client.bundleSlug);

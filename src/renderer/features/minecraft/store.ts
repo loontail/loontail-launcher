@@ -1,16 +1,16 @@
 import type { ClientSlug } from '@shared/contracts/ids';
 import {
-  type InstallStage,
   type InstallStatus,
   InstallStatuses,
   type MinecraftErrorCode,
+  type ProgressStage,
 } from '@shared/contracts/minecraft';
 import { create } from 'zustand';
 
 export type ClientRuntimeState = {
   status: InstallStatus;
   paused: boolean;
-  stage?: InstallStage | undefined;
+  stage?: ProgressStage | undefined;
   stagePercent?: number | undefined;
   overallPercent?: number | undefined;
   bytesDownloaded?: number | undefined;
