@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import {
   type InstallProgressTracker,
+  type MinecraftKitError,
   PauseController,
   type ProgressSnapshot,
   createInstallProgressTracker,
@@ -9,7 +10,7 @@ import type { ClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
 import type { Context } from './context';
 import type { ManagerEnv } from './env';
-import { classifyError, errorMessage } from './errors';
+import { classifyError, errorMessage, tryAsSmartResumeError } from './errors';
 import { type InstallOp, OpKinds } from './ops';
 import { runtimePathFor } from './runtimeFs';
 import { isAnythingInstalled } from './runtimeState';
@@ -96,6 +97,83 @@ const handleInstallFailure = async (
   await emitPostInstallStatus(env, slug, ctx.clientFolder);
 };
 
+// Plan + tracker + run. Reused by both the initial attempt and the
+// smart-resume continuation so they share progress wiring and abort handling.
+const tryInstall = async (
+  env: ManagerEnv,
+  slug: ClientSlug,
+  ctx: Context,
+  op: InstallOp,
+): Promise<void> => {
+  const plan = await env.kit.install.plan(ctx.target, { signal: op.abort.signal });
+  env.logger.info(
+    `[${slug}] install: plan ready — ${plan.totalActions} actions, ${plan.totalBytes} bytes`,
+  );
+  const tracker = createInstallProgressTracker(plan);
+  const unsubscribe = subscribeProgress(env, slug, tracker);
+  try {
+    await env.kit.install.run(plan, {
+      signal: op.abort.signal,
+      pauseController: op.pauseController,
+      onEvent: tracker.onEvent,
+    });
+  } finally {
+    tracker.finish();
+    unsubscribe();
+  }
+};
+
+// One automatic recovery pass for transient install failures kit can derive a
+// focused repair plan from (network jitter, integrity mismatch on a single
+// artefact, partial write, broken forge processor chain). The repair runner
+// is aspect-agnostic — kit feeds the filtered plan into the same install
+// runner internally — so kit.repair.minecraft.run handles plans derived from
+// any aspect's failure (per the RepairFromErrorInput docstring example).
+// Continuation re-runs the install plan; kit's skip-on-correct breezes past
+// already-valid files.
+//
+// Returns true iff the recovery + continuation both succeeded. Any failure
+// inside this path collapses to false, and the caller escalates the *original*
+// install error — the user shouldn't see "smart resume failed", they should
+// see the same error they would have seen without this path.
+const attemptSmartResume = async (
+  env: ManagerEnv,
+  slug: ClientSlug,
+  ctx: Context,
+  op: InstallOp,
+  originalError: MinecraftKitError,
+): Promise<boolean> => {
+  env.logger.info(`[${slug}] install: ${originalError.code} caught — attempting smart resume`);
+  env.emitStatus({ slug, status: InstallStatuses.REPAIRING, paused: false });
+  try {
+    const resumePlan = await env.kit.repair.fromError({
+      error: originalError,
+      target: ctx.target,
+      signal: op.abort.signal,
+    });
+    env.logger.info(
+      `[${slug}] install: resume plan ready — ${resumePlan.totalActions} actions, ${resumePlan.totalBytes} bytes`,
+    );
+    await env.kit.repair.minecraft.run(resumePlan, { signal: op.abort.signal });
+    env.logger.info(`[${slug}] install: resume repair done, continuing install`);
+    env.emitStatus({
+      slug,
+      status: InstallStatuses.INSTALLING,
+      paused: false,
+      loader: ctx.loader,
+    });
+    await tryInstall(env, slug, ctx, op);
+    env.logger.info(`[${slug}] install: smart resume completed install`);
+    return true;
+  } catch (resumeError) {
+    env.logger.warn(
+      `[${slug}] install: smart resume failed, escalating original error`,
+      resumeError,
+    );
+    return false;
+  }
+};
+
 export const runInstall = async (
   env: ManagerEnv,
   slug: ClientSlug,
@@ -104,29 +182,26 @@ export const runInstall = async (
 ): Promise<void> => {
   try {
     env.logger.info(`[${slug}] install: planning…`);
-    const plan = await env.kit.install.plan(ctx.target, { signal: op.abort.signal });
-    env.logger.info(
-      `[${slug}] install: plan ready — ${plan.totalActions} actions, ${plan.totalBytes} bytes`,
-    );
-
-    const tracker = createInstallProgressTracker(plan);
-    const unsubscribe = subscribeProgress(env, slug, tracker);
+    let recovered = false;
     try {
-      await env.kit.install.run(plan, {
-        signal: op.abort.signal,
-        pauseController: op.pauseController,
-        onEvent: tracker.onEvent,
-      });
-    } finally {
-      tracker.finish();
-      unsubscribe();
+      await tryInstall(env, slug, ctx, op);
+    } catch (firstError) {
+      const resumable = tryAsSmartResumeError(firstError, op.abort.signal);
+      if (resumable === null) throw firstError;
+      const ok = await attemptSmartResume(env, slug, ctx, op, resumable);
+      if (!ok) throw firstError;
+      recovered = true;
     }
     // No derivable equivalent for runtime path elsewhere in settings.
     env.persistRuntime(slug, {
       component: ctx.target.runtime.component,
       path: runtimePathFor(ctx.target.runtime.component),
     });
-    env.logger.info(`[${slug}] install: done`);
+    env.logger.info(
+      recovered
+        ? `[${slug}] install: done (recovered via smart resume)`
+        : `[${slug}] install: done`,
+    );
   } catch (error) {
     await handleInstallFailure(env, slug, ctx, op, error);
     throw error;

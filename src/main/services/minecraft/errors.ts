@@ -1,4 +1,9 @@
-import { type MinecraftKitErrorCode, isMinecraftKitError } from '@loontail/minecraft-kit';
+import {
+  type MinecraftKitError,
+  type MinecraftKitErrorCode,
+  RepairFromErrorSupportedCodes,
+  isMinecraftKitError,
+} from '@loontail/minecraft-kit';
 import { type MinecraftErrorCode, MinecraftErrorCodes } from '@shared/contracts/minecraft';
 
 export class ManagerError extends Error {
@@ -35,3 +40,22 @@ export const classifyError = (error: unknown, signal?: AbortSignal): MinecraftEr
 
 export const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
+
+// Kit codes from which kit.repair.fromError can derive a focused repair plan.
+// Sourced directly from kit so adding a new entry upstream auto-extends our
+// smart-resume coverage.
+const SMART_RESUME_CODES: ReadonlySet<MinecraftKitErrorCode> = new Set(
+  Object.values(RepairFromErrorSupportedCodes),
+);
+
+// Returns the narrowed kit error iff smart resume applies, else null.
+// Cancellation short-circuits because we honour the user's intent over silent
+// recovery.
+export const tryAsSmartResumeError = (
+  error: unknown,
+  signal: AbortSignal,
+): MinecraftKitError | null => {
+  if (signal.aborted) return null;
+  if (!isMinecraftKitError(error)) return null;
+  return SMART_RESUME_CODES.has(error.code) ? error : null;
+};
