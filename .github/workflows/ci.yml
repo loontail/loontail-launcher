@@ -23,4 +23,5 @@ jobs:
         env:
           API_URL: ${{ secrets.API_URL }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
+          MOJANG_CLIENT_ID: ${{ secrets.MOJANG_CLIENT_ID }}
         run: npm run verify

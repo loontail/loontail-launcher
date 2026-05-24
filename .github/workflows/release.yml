@@ -8,14 +8,20 @@ permissions:
   contents: write
 
 # Required secrets:
-#   API_URL        — Strapi base URL baked into the build
-#   API_TOKEN      — Strapi token baked into the build
-#   RELEASE_TOKEN  — fine-grained PAT (Contents: read/write) belonging to a
-#                    user in the repo's branch ruleset bypass list. Used by
-#                    the bump job to push the version commit directly to
-#                    `main`, since the default `GITHUB_TOKEN` is not in the
-#                    bypass list and the ruleset requires PRs for direct
-#                    pushes.
+#   API_URL            — Strapi base URL baked into the build
+#   API_TOKEN          — Strapi token baked into the build
+#   RELEASE_TOKEN      — fine-grained PAT (Contents: read/write) belonging to a
+#                        user in the repo's branch ruleset bypass list. Used by
+#                        the bump job to push the version commit directly to
+#                        `main`, since the default `GITHUB_TOKEN` is not in the
+#                        bypass list and the ruleset requires PRs for direct
+#                        pushes.
+#
+# Optional secrets:
+#   MOJANG_CLIENT_ID   — Azure AD application id baked into the build to enable
+#                        the "Sign in with Microsoft" button. Without it, the
+#                        Strapi-account login still works but MS sign-in fails
+#                        with a generic error.
 #
 # Loop guard: the bump commit (`chore(release): vX.Y.Z`) triggers this workflow
 # again; the guard job short-circuits when the commit message begins with
@@ -111,6 +117,7 @@ jobs:
         env:
           API_URL: ${{ secrets.API_URL }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
+          MOJANG_CLIENT_ID: ${{ secrets.MOJANG_CLIENT_ID }}
         run: npm run verify
 
       - name: Build & publish installer
@@ -118,4 +125,5 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           API_URL: ${{ secrets.API_URL }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
+          MOJANG_CLIENT_ID: ${{ secrets.MOJANG_CLIENT_ID }}
         run: npx electron-builder --win --publish always
