@@ -8,6 +8,7 @@ import type { Client } from '@shared/contracts/client';
 import type { ClientSlug } from '@shared/contracts/ids';
 import { MinecraftErrorCodes } from '@shared/contracts/minecraft';
 import type { LoaderChoice } from '@shared/contracts/settings';
+import { isLoaderAvailable } from '@shared/domain/loader';
 import { resolveClientSettings } from '@shared/domain/settings';
 import { ManagerError } from './errors';
 import { getRuntimeRoot } from './runtimeFs';
@@ -42,7 +43,13 @@ export const buildContext = async (
     );
   }
 
-  const persisted = settings.clients[slug]?.loader ?? null;
+  const rawPersisted = settings.clients[slug]?.loader ?? null;
+  const persisted = rawPersisted && isLoaderAvailable(client, rawPersisted) ? rawPersisted : null;
+  if (rawPersisted && !persisted) {
+    // Strapi removed the loader the user once picked — drop the stale override
+    // so future reads (UI, launch) see a clean state.
+    persistClientOverride(slug, { loader: undefined });
+  }
   const resolution = resolveLoader(client, loaderOverride ?? persisted);
   if (resolution.kind === 'ambiguous') {
     throw new ManagerError(

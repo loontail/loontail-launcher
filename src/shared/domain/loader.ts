@@ -7,12 +7,23 @@ type ClientLoaderFields = {
 
 export type LoaderResolution = { kind: 'resolved'; loader: LoaderChoice } | { kind: 'ambiguous' };
 
-/** Honours the user's override; otherwise derives the loader from set version fields. */
+// An override is only meaningful when the client still has the loader version
+// it points to. Without this guard, removing forge/fabric from Strapi has no
+// effect — the stored override keeps the launcher pinned to a missing loader.
+export const isLoaderAvailable = (client: ClientLoaderFields, choice: LoaderChoice): boolean => {
+  if (choice === LoaderChoices.FORGE) return Boolean(client.forgeVersion);
+  if (choice === LoaderChoices.FABRIC) return Boolean(client.fabricVersion);
+  return true;
+};
+
+/** Honours the user's override when valid; otherwise derives the loader from set version fields. */
 export const resolveLoader = (
   client: ClientLoaderFields,
   override: LoaderChoice | null,
 ): LoaderResolution => {
-  if (override) return { kind: 'resolved', loader: override };
+  if (override && isLoaderAvailable(client, override)) {
+    return { kind: 'resolved', loader: override };
+  }
   const hasForge = Boolean(client.forgeVersion);
   const hasFabric = Boolean(client.fabricVersion);
   if (hasForge && hasFabric) return { kind: 'ambiguous' };
