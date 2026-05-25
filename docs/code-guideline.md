@@ -145,7 +145,7 @@ must include a short rationale (**Why**) so they can be revisited later.
 - `renderer` must not import from `main`.
 - `main` must not import from `renderer`.
 - `shared` must not import from `main` or `renderer`.
-- Enforce these with a linter rule (Biome/ESLint), not with conventions alone.
+- Enforce these with a Biome rule, not with conventions alone.
 
 ### 3.3 Where logic must not live
 
@@ -498,7 +498,7 @@ constant, not an inline literal.
 
 - **Build:** electron-vite (main + preload + renderer).
 - **Packaging / auto-update:** electron-builder + electron-updater.
-- **Linter / formatter:** Biome (single config, replaces ESLint + Prettier).
+- **Linter / formatter:** Biome (single config).
 - **Package manager:** npm.
 - **TS:** `tsconfig.base.json` + separate configs for main / preload /
   renderer.
