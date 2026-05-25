@@ -1,4 +1,7 @@
 import {
+  asAzureClientId,
+  asMicrosoftRefreshToken,
+  asPlayerUuid,
   type MinecraftKit,
   MinecraftKitError,
   type MinecraftProfile,
@@ -23,17 +26,16 @@ const baseSession = (): MojangSession => ({
   provider: 'mojang',
   accessToken: 'access',
   expiresAt: FAR_FUTURE,
-  refreshToken: 'refresh',
-  clientId: 'client',
+  refreshToken: asMicrosoftRefreshToken('refresh'),
+  clientId: asAzureClientId('client'),
   xuid: 'xuid',
-  profile: { uuid: 'uuid', username: 'name', skins: [] },
+  profile: { uuid: asPlayerUuid('uuid'), username: 'name', skins: [] },
 });
 
 const fakeProfile = (): MinecraftProfile => ({
-  uuid: 'uuid',
+  uuid: asPlayerUuid('uuid'),
   username: 'name',
   skins: [],
-  capes: [],
 });
 
 // Build a fake kit object that only implements the surface mojangAuth.ts
