@@ -52,9 +52,7 @@
     "cancel": "Скасувати",
     "stop": "Зупинити",
     "retry": "Повторити",
-    "installing": "Встановлення",
     "launching": "Запуск…",
-    "repairing": "Відновлення…",
     "uninstalling": "Видалення…",
     "paused": "пауза",
     "setInstallFolder": "Спочатку оберіть папку клієнтів у налаштуваннях",
@@ -72,6 +70,26 @@
       "downloading": "Завантаження файлів бандла",
       "deleting": "Видалення застарілих файлів бандла",
       "healing": "Перевірка Minecraft після оновлення бандла"
+    },
+    "installSteps": {
+      "header": {
+        "install": "Встановлення клієнта",
+        "repair": "Відновлення клієнта",
+        "bundle": "Синхронізація бандла"
+      },
+      "stepIndicator": "Крок {{current}} з {{total}}",
+      "runtime": {
+        "title": "Java-рантайм"
+      },
+      "minecraft": {
+        "title": "Minecraft"
+      },
+      "loader": {
+        "title": "Лоадер"
+      },
+      "bundle": {
+        "title": "Бандл"
+      }
     },
     "bundleError": {
       "noBundleSlug": "Для цього клієнта не налаштовано бандл.",

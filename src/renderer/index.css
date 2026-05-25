@@ -151,3 +151,16 @@ img {
     transform: scaleX(0);
   }
 }
+
+/* Indeterminate stripe for install/bundle phases without byte progress
+   (bundle FETCHING_MANIFEST, PLANNING, DELETING, HEALING). Slides a fixed
+   piece left→right inside the track so the bar reads as "working" rather
+   than "stalled at zero". */
+@keyframes install-indeterminate {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}

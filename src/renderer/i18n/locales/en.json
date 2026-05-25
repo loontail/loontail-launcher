@@ -52,9 +52,7 @@
     "cancel": "Cancel",
     "stop": "Stop",
     "retry": "Retry",
-    "installing": "Installing",
     "launching": "Launching…",
-    "repairing": "Repairing…",
     "uninstalling": "Removing…",
     "paused": "paused",
     "setInstallFolder": "Pick a client folder in System settings first",
@@ -72,6 +70,26 @@
       "downloading": "Downloading bundle files",
       "deleting": "Removing obsolete bundle files",
       "healing": "Verifying Minecraft after bundle update"
+    },
+    "installSteps": {
+      "header": {
+        "install": "Installing client",
+        "repair": "Repairing client",
+        "bundle": "Syncing content bundle"
+      },
+      "stepIndicator": "Step {{current}} of {{total}}",
+      "runtime": {
+        "title": "Java runtime"
+      },
+      "minecraft": {
+        "title": "Minecraft"
+      },
+      "loader": {
+        "title": "Loader"
+      },
+      "bundle": {
+        "title": "Bundle"
+      }
     },
     "bundleError": {
       "noBundleSlug": "This client has no bundle attached.",
