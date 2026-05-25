@@ -137,6 +137,8 @@ export class MinecraftManager {
       op.abort.abort();
     } else if (op.kind === OpKinds.REPAIR) {
       op.abort.abort();
+    } else if (op.kind === OpKinds.BUNDLE_SYNCING) {
+      op.abort.abort();
     }
   }
 
@@ -186,12 +188,24 @@ export class MinecraftManager {
 
     // Chain the bundle sync before launch. The hook resolves immediately for
     // clients without a bundleSlug, so this is free in the no-bundle path.
+    // Install a BundleSyncingOp so `cancel(slug)` can abort the download
+    // mid-flight — otherwise the launch flow keeps awaiting `syncForLaunch`
+    // long after the user clicked Stop.
     if (this.launchHook) {
+      const bundleOp: Op = { kind: OpKinds.BUNDLE_SYNCING, abort: new AbortController() };
+      this.ops.set(slug, bundleOp);
+      this.env.emitStatus({ slug, status: InstallStatuses.LAUNCHING, paused: false });
       try {
-        await this.launchHook(slug);
+        await this.launchHook(slug, bundleOp.abort.signal);
       } catch (error) {
+        if (bundleOp.abort.signal.aborted) {
+          this.env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
+          return;
+        }
         logger.error(`[${slug}] launch: bundle sync failed`, error);
         throw error;
+      } finally {
+        this.ops.delete(slug);
       }
     }
 

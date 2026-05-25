@@ -81,8 +81,18 @@ export class BundleManager {
   // proceed. No-op when the client has no bundleSlug. Errors propagate so the
   // caller can abort launch.
   async syncForLaunch(slug: ClientSlug, externalSignal?: AbortSignal): Promise<void> {
-    void externalSignal; // Signal pre-empts via cancelSync; not piped through directly.
-    await this.runSync({ slug }, { forLaunch: true });
+    if (externalSignal?.aborted) {
+      throw new BundleError(BundleErrorCodes.ABORTED, 'Sync aborted before start');
+    }
+    const onExternalAbort = () => {
+      this.cancelSync(slug);
+    };
+    externalSignal?.addEventListener('abort', onExternalAbort, { once: true });
+    try {
+      await this.runSync({ slug }, { forLaunch: true });
+    } finally {
+      externalSignal?.removeEventListener('abort', onExternalAbort);
+    }
   }
 
   pauseSync(slug: ClientSlug): void {
