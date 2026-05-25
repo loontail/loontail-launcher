@@ -227,6 +227,17 @@ class ConsoleHub {
     }, FLUSH_INTERVAL_MS);
   }
 
+  // Push any pending lines to the renderer immediately and tear down the flush
+  // timer. Called on app shutdown so the last batch isn't lost between the
+  // last setTimeout and process exit.
+  flushPending(): void {
+    this.clearFlushTimer();
+    const batch = this.pending;
+    this.pending = [];
+    if (batch.length === 0) return;
+    this.sendToWindow(IPC_EVENTS.consoleLines, batch);
+  }
+
   private clearFlushTimer(): void {
     if (!this.flushTimer) return;
     clearTimeout(this.flushTimer);

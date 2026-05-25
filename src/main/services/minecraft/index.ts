@@ -22,7 +22,9 @@ export const createMinecraftService = (
     init: async () => {
       registerMinecraftRoutes(router, manager);
     },
-    dispose: async () => {},
+    dispose: async () => {
+      manager.cancelAll();
+    },
     manager,
   };
 };

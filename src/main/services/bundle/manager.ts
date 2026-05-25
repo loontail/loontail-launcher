@@ -482,6 +482,18 @@ export class BundleManager {
     return new Error(String(err));
   }
 
+  // Called on app shutdown to abort every active sync — cooperative pause/cancel
+  // doesn't stop the underlying sockets unless the runner sees the abort, so we
+  // also destroy current requests synchronously and wait a short grace window
+  // so the runner's finally blocks (tmp cleanup, manifest writes) can land.
+  async cancelAll(graceMs = 250): Promise<void> {
+    const slugs = [...this.activeSyncs.keys()];
+    for (const slug of slugs) this.cancelSync(slug);
+    if (graceMs > 0 && slugs.length > 0) {
+      await new Promise((resolve) => setTimeout(resolve, graceMs));
+    }
+  }
+
   // Called by MinecraftManager.uninstall to wipe the local manifest sidecar
   // file when the client folder isn't fully removed.
   async resetForUninstall(slug: ClientSlug): Promise<void> {

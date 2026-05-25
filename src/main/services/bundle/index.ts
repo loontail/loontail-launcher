@@ -25,7 +25,9 @@ export const createBundleService = (
     init: async () => {
       registerBundleRoutes(router, manager);
     },
-    dispose: async () => {},
+    dispose: async () => {
+      await manager.cancelAll();
+    },
     manager,
   };
 };

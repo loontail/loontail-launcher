@@ -203,6 +203,20 @@ export class MinecraftManager {
     if (op?.kind === OpKinds.LAUNCH) op.session.abort('user-stop');
   }
 
+  // Called on app shutdown so install/repair ops are told to abort before the
+  // process exits. Launching ops are left alone — kit owns the spawned game
+  // session and killing it from here would interrupt the user's actual play.
+  cancelAll(): void {
+    const slugs = [...this.ops.keys()];
+    for (const slug of slugs) {
+      const op = this.ops.get(slug);
+      if (!op) continue;
+      if (op.kind === OpKinds.INSTALL || op.kind === OpKinds.REPAIR) {
+        this.cancel(slug);
+      }
+    }
+  }
+
   private clientFolderOrNull(slug: ClientSlug): string | null {
     return resolveClientSettings(getSettings(), slug).storage.clientFolder || null;
   }

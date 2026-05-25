@@ -126,6 +126,28 @@ describe('BundleManager pause cleanup', () => {
     });
   });
 
+  it('cancelAll aborts every active sync and frees all slots', async () => {
+    vi.useRealTimers();
+    const broadcaster = makeBroadcaster();
+    const manager = new BundleManager(broadcaster, makeHealer());
+    const rejected: Error[] = [];
+    seedPausedActive(manager, {
+      resolve: () => {
+        throw new Error('should not resolve');
+      },
+      reject: (err) => rejected.push(err),
+    });
+    const internals = manager as unknown as {
+      activeSyncs: Map<ClientSlug, ActiveSyncShape>;
+    };
+    expect(internals.activeSyncs.size).toBe(1);
+
+    await manager.cancelAll(0);
+
+    expect(internals.activeSyncs.size).toBe(0);
+    expect(rejected).toHaveLength(1);
+  });
+
   it('idle timeout drops paused entry and rejects awaiters', async () => {
     const broadcaster = makeBroadcaster();
     const manager = new BundleManager(broadcaster, makeHealer());

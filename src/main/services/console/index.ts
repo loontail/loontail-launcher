@@ -30,6 +30,8 @@ export const createConsoleService = (router: Router): ConsoleService => ({
     });
   },
   dispose: async () => {
-    /* nothing to dispose — router.dispose() clears handlers */
+    // Flush any pending lines and clear the batching timer so the last batch
+    // is not lost between the next setTimeout fire and process exit.
+    consoleHub.flushPending();
   },
 });
