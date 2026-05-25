@@ -91,14 +91,36 @@ export const runLaunch = async (
     if (consoleEnabled) openConsoleWindow();
     const session = env.kit.launch.run(composition, {
       onEvent: (event) => {
-        if (event.type !== EventTypes.LAUNCH_STDOUT && event.type !== EventTypes.LAUNCH_STDERR)
-          return;
-        const stream =
-          event.type === EventTypes.LAUNCH_STDOUT ? ConsoleSources.STDOUT : ConsoleSources.STDERR;
-        consoleHub.recordMinecraft(slug, stream, event.line);
-        // Keep the legacy `minecraft.log` IPC event for external subscribers.
-        if (consoleEnabled) {
-          env.broadcaster.log({ slug, stream, line: event.line });
+        switch (event.type) {
+          case EventTypes.LAUNCH_STARTING:
+            env.logger.info(`[${slug}] launch: starting ${event.command} (cwd ${event.cwd})`);
+            return;
+          case EventTypes.LAUNCH_STARTED:
+            env.logger.info(`[${slug}] launch: started pid=${event.pid}`);
+            return;
+          case EventTypes.LAUNCH_EXITED:
+            env.logger.info(
+              `[${slug}] launch: exited code=${event.code ?? 'null'} signal=${event.signal ?? 'null'}`,
+            );
+            return;
+          case EventTypes.LAUNCH_ABORTED:
+            env.logger.info(`[${slug}] launch: aborted (${event.reason})`);
+            return;
+          case EventTypes.LAUNCH_STDOUT:
+          case EventTypes.LAUNCH_STDERR: {
+            const stream =
+              event.type === EventTypes.LAUNCH_STDOUT
+                ? ConsoleSources.STDOUT
+                : ConsoleSources.STDERR;
+            consoleHub.recordMinecraft(slug, stream, event.line);
+            // Keep the legacy `minecraft.log` IPC event for external subscribers.
+            if (consoleEnabled) {
+              env.broadcaster.log({ slug, stream, line: event.line });
+            }
+            return;
+          }
+          default:
+            return;
         }
       },
     });
