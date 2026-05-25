@@ -1,5 +1,5 @@
 import { cn } from '@renderer/shared/lib/cn';
-import { IPC_CHANNELS } from '@shared/ipc';
+import { copyText } from '@renderer/shared/lib/systemApi';
 import { Check, Copy } from 'lucide-react';
 import {
   type ButtonHTMLAttributes,
@@ -13,12 +13,6 @@ import {
 import { useTranslation } from 'react-i18next';
 
 const FEEDBACK_MS = 1500;
-
-// Writes via main-process `clipboard.writeText` (system.copyText IPC channel).
-// `navigator.clipboard.writeText` is denied by Electron's default permission
-// handler in this app, so going through main is the path that actually works.
-const writeText = (text: string): Promise<void> =>
-  window.api.invoke(IPC_CHANNELS.systemCopyText, text);
 
 // Hook for non-button contexts (e.g. toasts, custom UI). Manages the
 // "just copied" flash so callers don't have to wire timers themselves.
@@ -35,7 +29,7 @@ export const useCopyText = () => {
 
   const copy = useCallback(async (text: string): Promise<boolean> => {
     try {
-      await writeText(text);
+      await copyText(text);
       setCopied(true);
       if (timerRef.current !== null) window.clearTimeout(timerRef.current);
       timerRef.current = window.setTimeout(() => setCopied(false), FEEDBACK_MS);

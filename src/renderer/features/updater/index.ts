@@ -1,3 +1,4 @@
+export { triggerInstall } from './api';
 export {
   UpdaterAutoCheck,
   UpdaterEventsListener,

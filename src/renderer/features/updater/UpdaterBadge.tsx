@@ -1,11 +1,11 @@
 import { cn } from '@renderer/shared/lib/cn';
-import { IPC_CHANNELS } from '@shared/ipc';
 import { ArrowDownToLine, Loader2, RotateCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { triggerInstall } from './api';
 import { useUpdaterStatus } from './store';
 
 const handleRestart = () => {
-  void window.api.invoke(IPC_CHANNELS.updaterInstall, undefined);
+  triggerInstall();
 };
 
 export const UpdaterBadge = () => {

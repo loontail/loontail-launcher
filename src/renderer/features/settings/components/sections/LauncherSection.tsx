@@ -1,6 +1,7 @@
 import { useAppVersion } from '@renderer/features/app';
 import {
   markUserInitiatedCheck,
+  triggerInstall,
   triggerUpdaterCheck,
   useUpdaterStatus,
 } from '@renderer/features/updater';
@@ -10,7 +11,6 @@ import { SettingsRow } from '@renderer/shared/ui/SettingsRow';
 import { toast } from '@renderer/shared/ui/Toast';
 import { QUERY_KEY_ROOTS } from '@shared/constants';
 import { UpdaterStates } from '@shared/contracts/updater';
-import { IPC_CHANNELS } from '@shared/ipc';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -51,7 +51,7 @@ export const LauncherSection = () => {
   };
 
   const handleInstall = () => {
-    void window.api.invoke(IPC_CHANNELS.updaterInstall, undefined);
+    triggerInstall();
   };
 
   return (
