@@ -211,8 +211,14 @@ Three explicit zones, no overlap.
   in the feature touches `window.api` directly.
 - **Local UI state of a feature** → `useState` / `useReducer` inside
   components.
-- **Global UI state** (active modal, selected client, current view) →
-  Zustand stores, one per semantic area, in `renderer/shared/lib/stores/`.
+- **Cross-feature UI state** (navigation, generic value stores) → Zustand
+  stores in `renderer/shared/lib/stores/`. Today: `navigation.ts`,
+  `createValueStore.ts`.
+- **Feature-scoped runtime state mirroring main-process events** (install
+  progress, bundle status, updater state) → Zustand store next to the
+  feature's `events.ts`, at `features/<name>/store.ts`. Today: `bundle`,
+  `minecraft`, `clients`, `updater`. The store consumes the feature's
+  IPC events and exposes selectors to the feature's components.
 
 There is no global app store. There is no Redux.
 
