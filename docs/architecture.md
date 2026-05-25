@@ -193,7 +193,7 @@ Currently shipping services:
 - `system` — RAM range, disk space, folder pick, OS path open.
 - `settings` — `launcherSettings` CRUD + per-client overrides.
 - `skin` — uploads / clears Minecraft skin & cape via skins-registry.
-- `clients` — Strapi `/api/clients` with 30s in-memory cache + in-flight dedup.
+- `clients` — Strapi `/api/clients` with on-disk snapshot fallback + in-flight dedup.
 - `servers` — Minecraft SLP ping for server status.
 - `media` — `cache://` protocol handler backed by disk-cached image fetches.
 - `minecraft` — wraps `@loontail/minecraft-kit` for install / launch / repair /
