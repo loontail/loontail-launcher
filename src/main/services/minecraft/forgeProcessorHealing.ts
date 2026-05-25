@@ -2,7 +2,10 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import {
+  type DownloadAction,
+  type InstallAction,
   InstallActionKinds,
+  type InstallPlan,
   Loaders,
   type MinecraftKit,
   type RunForgeProcessorAction,
@@ -79,33 +82,43 @@ export const repairMissingForgeProcessorOutputs = async (
   );
   if (processors.length === 0) return { ranProcessors: false, reranCount: 0 };
 
-  let firstBroken: RunForgeProcessorAction | null = null;
+  const brokenIndices = new Set<number>();
   for (const action of processors) {
-    if (!(await processorOutputsOk(action))) {
-      firstBroken = action;
-      break;
-    }
+    if (!(await processorOutputsOk(action))) brokenIndices.add(action.index);
   }
 
-  if (firstBroken === null) {
+  if (brokenIndices.size === 0) {
     logger.info(`[${slug}] processor outputs clean (checked ${processors.length})`);
     return { ranProcessors: false, reranCount: 0 };
   }
 
-  // Forge processors have implicit input→output dependencies (e.g. the
-  // jarsplitter step reads mappings-merged.txt produced by an earlier MCP
-  // step). They also depend on install-time libraries that kit.repair.forge
-  // doesn't track — verify.forge only inspects the Forge *version.json*
-  // libraries, not the install_profile.json libraries (where processor JARs
-  // like installertools live). So when something's missing we run the full
-  // plan: downloads are skip-on-correct (cheap when files exist), and the
-  // processor chain re-runs end-to-end with all its classpath libs guaranteed
-  // present.
+  // Forge processors depend on install-time libraries (install_profile.json
+  // classpath entries like installertools) that kit.verify.forge does not
+  // track — verify.forge only inspects the Forge *version.json* libraries.
+  // So we keep every non-processor action (downloads, extracts, version/log
+  // writes): they are skip-on-correct, so present files cost only a SHA
+  // check, while any missing classpath lib is repaired before the broken
+  // processor runs. Processor actions with outputs already on disk and
+  // SHA-matching are dropped — their outputs satisfy downstream inputs.
+  const focusedActions: readonly InstallAction[] = plan.actions.filter(
+    (action) =>
+      action.kind !== InstallActionKinds.RUN_FORGE_PROCESSOR || brokenIndices.has(action.index),
+  );
+  const focusedBytes = focusedActions
+    .filter((action): action is DownloadAction => action.kind === InstallActionKinds.DOWNLOAD_FILE)
+    .reduce((sum, action) => sum + (action.expectedSize ?? 0), 0);
+  const focusedPlan: InstallPlan = {
+    ...plan,
+    actions: focusedActions,
+    totalActions: focusedActions.length,
+    totalBytes: focusedBytes,
+  };
+
   logger.info(
-    `[${slug}] processor output ${firstBroken.index} broken — re-running full forge install plan (${plan.actions.length} actions, ${processors.length} processor(s))`,
+    `[${slug}] ${brokenIndices.size}/${processors.length} processor output(s) broken — re-running focused plan (${focusedActions.length}/${plan.actions.length} actions)`,
   );
 
-  await kit.install.run(plan, signal ? { signal } : undefined);
+  await kit.install.run(focusedPlan, signal ? { signal } : undefined);
 
-  return { ranProcessors: true, reranCount: processors.length };
+  return { ranProcessors: true, reranCount: brokenIndices.size };
 };
