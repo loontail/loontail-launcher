@@ -1,4 +1,5 @@
 import type { ClientRequest } from 'node:http';
+import { EventTypes, type ProgressListener } from '@loontail/minecraft-kit';
 import { BUNDLE_PAUSED_SYNC_MAX_IDLE_MS } from '@main/constants/bundle';
 import { scopedLogger } from '@main/infra/logger';
 import { getClient } from '@main/services/clients';
@@ -26,6 +27,67 @@ import { type SyncPlan, buildPlan } from './plan';
 import { type EmitProgress, type SyncTask, runSyncPhases } from './runner';
 
 const logger = scopedLogger('bundle.manager');
+
+const HEAL_PROGRESS_THROTTLE_MS = 100;
+
+// Wrap kit verify/repair events into the manager's emit() so the renderer
+// sees the HEALING status with live file counts (during verify) and a moving
+// byte total (during repair). The kit does not announce verify totals up-front;
+// we surface `verifiedFiles` as `processedFiles` and leave `totalFiles` at the
+// task's last known value, mirroring how DELETING phase reuses task totals.
+const createHealProgressListener = (slug: ClientSlug, emit: EmitProgress): ProgressListener => {
+  let verifiedFiles = 0;
+  let bytesDownloaded = 0;
+  let totalBytes = 0;
+  let currentFile: string | undefined;
+  let lastEmittedAt = 0;
+  let pendingFlush: NodeJS.Timeout | null = null;
+
+  const flush = (): void => {
+    lastEmittedAt = Date.now();
+    pendingFlush = null;
+    emit(slug, BundleSyncStatuses.HEALING, {
+      processedFiles: verifiedFiles,
+      ...(totalBytes > 0 ? { bytesDownloaded, bytesTotal: totalBytes } : {}),
+      ...(currentFile !== undefined ? { currentFile } : {}),
+    });
+  };
+
+  const scheduleFlush = (): void => {
+    const elapsed = Date.now() - lastEmittedAt;
+    if (elapsed >= HEAL_PROGRESS_THROTTLE_MS) {
+      if (pendingFlush !== null) {
+        clearTimeout(pendingFlush);
+        pendingFlush = null;
+      }
+      flush();
+    } else if (pendingFlush === null) {
+      pendingFlush = setTimeout(flush, HEAL_PROGRESS_THROTTLE_MS - elapsed);
+    }
+  };
+
+  return (event) => {
+    switch (event.type) {
+      case EventTypes.VERIFY_FILE_CHECKED:
+        verifiedFiles += 1;
+        currentFile = event.file.path;
+        scheduleFlush();
+        return;
+      case EventTypes.DOWNLOAD_STARTED:
+        currentFile = event.file.target;
+        scheduleFlush();
+        return;
+      case EventTypes.DOWNLOAD_PROGRESS:
+        bytesDownloaded = event.bytesDownloaded;
+        totalBytes = event.totalBytes;
+        currentFile = event.file.target;
+        scheduleFlush();
+        return;
+      default:
+        return;
+    }
+  };
+};
 
 type ActiveSync = {
   task: SyncTask;
@@ -300,7 +362,10 @@ export class BundleManager {
       // additions/replacements can't reduce vanilla coverage.
       if (deletedAny) {
         this.emitStatus(slug, BundleSyncStatuses.HEALING);
-        await this.healer.healAfterDeletes(slug, plan.bundleOwnedRelativePaths, abort.signal);
+        await this.healer.healAfterDeletes(slug, plan.bundleOwnedRelativePaths, {
+          signal: abort.signal,
+          onEvent: createHealProgressListener(slug, emit),
+        });
       }
 
       await this.persistLocalManifest(active, clientFolder);
@@ -382,11 +447,10 @@ export class BundleManager {
       const { deletedAny } = await runSyncPhases(task, emit);
       if (deletedAny) {
         this.emitStatus(task.slug, BundleSyncStatuses.HEALING);
-        await this.healer.healAfterDeletes(
-          task.slug,
-          plan.bundleOwnedRelativePaths,
-          task.abort.signal,
-        );
+        await this.healer.healAfterDeletes(task.slug, plan.bundleOwnedRelativePaths, {
+          signal: task.abort.signal,
+          onEvent: createHealProgressListener(task.slug, emit),
+        });
       }
       await this.persistLocalManifest(active, task.clientFolder);
       this.emitStatus(task.slug, BundleSyncStatuses.COMPLETED);

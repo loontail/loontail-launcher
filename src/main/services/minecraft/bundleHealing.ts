@@ -1,6 +1,7 @@
 import path from 'node:path';
 import type {
   MinecraftKit,
+  ProgressListener,
   VerificationFileResult,
   VerificationResult,
 } from '@loontail/minecraft-kit';
@@ -39,16 +40,30 @@ const filterIssues = (
     return !bundleOwnedPaths.has(key);
   });
 
+type VerifyAndRepairOptions = {
+  signal?: AbortSignal;
+  // Forwarded to both `kit.verify.minecraft.run` and `kit.repair.minecraft.run`
+  // so callers can surface live progress (verify file counts + repair bytes).
+  onEvent?: ProgressListener;
+};
+
+const opOptions = (
+  options: VerifyAndRepairOptions | undefined,
+): { signal?: AbortSignal; onEvent?: ProgressListener } => ({
+  ...(options?.signal ? { signal: options.signal } : {}),
+  ...(options?.onEvent ? { onEvent: options.onEvent } : {}),
+});
+
 // Run kit.verify.minecraft, drop any issues for paths the bundle owns, then
 // repair only what's left. No-op when the filtered set is empty.
 export const verifyAndRepairExceptBundle = async (
   kit: MinecraftKit,
   slug: ClientSlug,
   bundleOwnedPaths: ReadonlySet<string>,
-  signal?: AbortSignal,
+  options?: VerifyAndRepairOptions,
 ): Promise<HealOutcome> => {
   const ctx = await buildContext(kit, slug);
-  const result = await kit.verify.minecraft.run(ctx.target, signal ? { signal } : undefined);
+  const result = await kit.verify.minecraft.run(ctx.target, opOptions(options));
 
   const filtered = filterIssues(result, ctx.clientFolder, bundleOwnedPaths);
   const ignoredByBundle = result.issues.length - filtered.length;
@@ -78,9 +93,9 @@ export const verifyAndRepairExceptBundle = async (
 
   const plan = await kit.repair.minecraft.plan(ctx.target, {
     from: syntheticResult,
-    ...(signal ? { signal } : {}),
+    ...(options?.signal ? { signal: options.signal } : {}),
   });
-  await kit.repair.minecraft.run(plan, signal ? { signal } : undefined);
+  await kit.repair.minecraft.run(plan, opOptions(options));
 
   return {
     ignoredByBundle,
