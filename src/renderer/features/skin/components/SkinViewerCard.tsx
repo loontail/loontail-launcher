@@ -1,5 +1,6 @@
 import { cn } from '@renderer/shared/lib/cn';
-import { WalkingAnimation } from 'skinview3d';
+import { useCallback } from 'react';
+import { type SkinViewer as SkinView3d, WalkingAnimation } from 'skinview3d';
 import { SkinViewer } from './SkinViewer';
 
 type SkinViewerCardProps = {
@@ -19,25 +20,29 @@ export const SkinViewerCard = ({
   skinUrl,
   capeUrl,
   className,
-}: SkinViewerCardProps) => (
-  <div
-    className={cn(
-      'relative shrink-0 overflow-hidden rounded-md border border-border bg-card',
-      className,
-    )}
-    style={{ width, height }}
-  >
-    <SkinViewer
-      width={width}
-      height={height}
-      skinUrl={skinUrl}
-      capeUrl={capeUrl}
-      options={{ zoom: 0.85 }}
-      onReady={({ viewer }) => {
-        viewer.animation = new WalkingAnimation();
-        viewer.autoRotate = true;
-        viewer.autoRotateSpeed = 0.4;
-      }}
-    />
-  </div>
-);
+}: SkinViewerCardProps) => {
+  const handleReady = useCallback(({ viewer }: { viewer: SkinView3d }) => {
+    viewer.animation = new WalkingAnimation();
+    viewer.autoRotate = true;
+    viewer.autoRotateSpeed = 0.4;
+  }, []);
+
+  return (
+    <div
+      className={cn(
+        'relative shrink-0 overflow-hidden rounded-md border border-border bg-card',
+        className,
+      )}
+      style={{ width, height }}
+    >
+      <SkinViewer
+        width={width}
+        height={height}
+        skinUrl={skinUrl}
+        capeUrl={capeUrl}
+        options={{ zoom: 0.85 }}
+        onReady={handleReady}
+      />
+    </div>
+  );
+};
