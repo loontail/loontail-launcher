@@ -132,6 +132,7 @@
       "runtimeError": "Java runtime is missing or unsupported on this platform.",
       "launchFailed": "Failed to launch the game process. See console for details.",
       "kitError": "Minecraft runtime error: {{message}}",
+      "uninstallLocked": "Close the game window and try again. Some files are still in use.",
       "unknown": "Unknown error: {{message}}"
     }
   },

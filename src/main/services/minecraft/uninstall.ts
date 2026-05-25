@@ -5,6 +5,7 @@ import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraf
 import type { ManagerEnv } from './env';
 import { ManagerError, errorMessage } from './errors';
 import { OpKinds } from './ops';
+import { isAnythingInstalled } from './runtimeState';
 
 // Guard before recursive rm: reject anything not strictly under clientsRoot
 // (no `..` escapes, no absolute paths).
@@ -34,8 +35,21 @@ export const runUninstall = async (
     env.emitStatus({ slug, status: InstallStatuses.NOT_INSTALLED, paused: false });
   } catch (error) {
     env.logger.error(`[${slug}] uninstall failed`, error);
-    env.emitError(slug, MinecraftErrorCodes.UNKNOWN, errorMessage(error));
-    env.emitStatus({ slug, status: InstallStatuses.ERROR, paused: false });
+    // Best-effort second pass on just the markers `isAnythingInstalled` checks.
+    // A file lock elsewhere in the tree shouldn't leave the user staring at an
+    // ERROR + INSTALLED flicker if the version/runtime markers did come off.
+    await Promise.allSettled([
+      fs.rm(path.join(folder, 'versions'), { recursive: true, force: true }),
+      fs.rm(path.join(folder, 'runtime'), { recursive: true, force: true }),
+    ]);
+    if (!(await isAnythingInstalled(folder))) {
+      env.logger.warn(`[${slug}] uninstall: residual files remain but markers are gone`);
+      env.clearRuntimeOverride(slug);
+      env.emitStatus({ slug, status: InstallStatuses.NOT_INSTALLED, paused: false });
+    } else {
+      env.emitError(slug, MinecraftErrorCodes.UNINSTALL_LOCKED, errorMessage(error));
+      env.emitStatus({ slug, status: InstallStatuses.ERROR, paused: false });
+    }
   } finally {
     env.ops.delete(slug);
   }

@@ -13,6 +13,7 @@ const KEY_BY_CODE: Record<MinecraftErrorCode, string> = {
   [MinecraftErrorCodes.RUNTIME_ERROR]: 'clients.error.runtimeError',
   [MinecraftErrorCodes.LAUNCH_FAILED]: 'clients.error.launchFailed',
   [MinecraftErrorCodes.KIT_ERROR]: 'clients.error.kitError',
+  [MinecraftErrorCodes.UNINSTALL_LOCKED]: 'clients.error.uninstallLocked',
   [MinecraftErrorCodes.UNKNOWN]: 'clients.error.unknown',
 };
 

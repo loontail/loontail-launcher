@@ -60,6 +60,7 @@ export const MinecraftErrorCodes = {
   RUNTIME_ERROR: 'runtimeError',
   LAUNCH_FAILED: 'launchFailed',
   KIT_ERROR: 'kitError',
+  UNINSTALL_LOCKED: 'uninstallLocked',
   UNKNOWN: 'unknown',
 } as const;
 
@@ -77,6 +78,7 @@ export const MinecraftErrorCodeSchema = z.enum([
   MinecraftErrorCodes.RUNTIME_ERROR,
   MinecraftErrorCodes.LAUNCH_FAILED,
   MinecraftErrorCodes.KIT_ERROR,
+  MinecraftErrorCodes.UNINSTALL_LOCKED,
   MinecraftErrorCodes.UNKNOWN,
 ]);
 
