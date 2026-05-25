@@ -1,10 +1,10 @@
 import {
-  asAzureClientId,
-  asMicrosoftRefreshToken,
-  asPlayerUuid,
   type MinecraftKit,
   MinecraftKitError,
   type MinecraftProfile,
+  asAzureClientId,
+  asMicrosoftRefreshToken,
+  asPlayerUuid,
 } from '@loontail/minecraft-kit';
 import type { MojangSession } from '@shared/contracts/auth';
 import { describe, expect, it, vi } from 'vitest';
