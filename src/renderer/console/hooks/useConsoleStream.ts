@@ -182,7 +182,11 @@ export const useConsoleStream = (
           if (pausedRef.current) return;
           scheduleFlush();
         })
-        .catch(() => {});
+        .catch(() => {
+          // Background reconcile poll — a transient IPC failure here will be
+          // retried on the next tick. Surfacing it would add noise to a flow
+          // the user did not trigger.
+        });
     }, RECONCILE_INTERVAL_MS);
     return () => window.clearInterval(handle);
   }, [scheduleFlush, appendPending]);
@@ -190,7 +194,11 @@ export const useConsoleStream = (
   const togglePause = useCallback(() => setPaused((value) => !value), []);
 
   const clear = useCallback(() => {
-    void window.api.invoke(IPC_CHANNELS.consoleClear, undefined).catch(() => {});
+    void window.api.invoke(IPC_CHANNELS.consoleClear, undefined).catch(() => {
+      // User-driven clear: local buffer is already wiped below. An IPC failure
+      // only means the main-side mirror survives a tick longer; the next
+      // reconcile poll will reseed it.
+    });
     pendingRef.current = [];
     seenIdsRef.current = new Set();
     setLines([]);

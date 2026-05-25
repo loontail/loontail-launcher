@@ -9,8 +9,11 @@ import {
   BUNDLE_DOWNLOAD_MAX_REDIRECTS,
   BUNDLE_DOWNLOAD_REQUEST_TIMEOUT_MS,
 } from '@main/constants/bundle';
+import { scopedLogger } from '@main/infra/logger';
 import { BundleErrorCodes, type RemoteManifestEntry } from '@shared/contracts/bundle';
 import { BundleError, errorMessage } from './errors';
+
+const logger = scopedLogger('bundle.download');
 
 export type DownloadChunkCallback = (bytes: number) => void;
 
@@ -167,7 +170,12 @@ export const downloadEntry = async (
     }
     response.pipe(writeStream);
   }).catch(async (err: unknown) => {
-    await fsp.rm(tmpPath, { force: true }).catch(() => {});
+    // Best-effort tmp cleanup — antivirus or another process may still hold
+    // the handle on Windows. Worst case is a stale .tmp picked up on the next
+    // sync; warn so operators can spot a persistent leak.
+    await fsp
+      .rm(tmpPath, { force: true })
+      .catch((rmErr: unknown) => logger.warn(`Failed to remove tmp ${tmpPath}`, rmErr));
     if (err instanceof BundleError) throw err;
     if (options.signal?.aborted) {
       throw new BundleError(BundleErrorCodes.ABORTED, 'Download aborted');
@@ -184,7 +192,11 @@ export const downloadEntry = async (
     await fsp.rm(destPath, { force: true });
     await fsp.rename(tmpPath, destPath);
   } catch (err) {
-    await fsp.rm(tmpPath, { force: true }).catch(() => {});
+    // Same best-effort cleanup as the network-failure branch above; surface a
+    // warn so a persistent locking issue is visible in the log.
+    await fsp
+      .rm(tmpPath, { force: true })
+      .catch((rmErr: unknown) => logger.warn(`Failed to remove tmp ${tmpPath}`, rmErr));
     throw new BundleError(
       BundleErrorCodes.DOWNLOAD_FAILED,
       `Failed to install ${entry.path}: ${errorMessage(err)}`,
