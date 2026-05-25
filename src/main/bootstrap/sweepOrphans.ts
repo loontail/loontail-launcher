@@ -1,16 +1,17 @@
 import { scopedLogger } from '@main/infra/logger';
-import { getClientsCached } from '@main/services/clients';
+import { getClients } from '@main/services/clients';
 import { getSettings, writeSettings } from '@main/services/settings/settings';
 import { pruneClientOverrides } from '@shared/domain/settings';
 
 const logger = scopedLogger('sweep-orphans');
 
-// Best-effort: if Strapi is unreachable on startup, skip silently. The sweep
-// rerun is harmless on the next successful launch.
+// Best-effort: if Strapi is unreachable AND no disk snapshot exists, skip
+// silently. With a snapshot, cachedFetch returns the last known list so the
+// sweep stays accurate even on startup with no network.
 export const sweepOrphanClientOverrides = async (): Promise<void> => {
-  let list: Awaited<ReturnType<typeof getClientsCached>>;
+  let list: Awaited<ReturnType<typeof getClients>>;
   try {
-    list = await getClientsCached();
+    list = await getClients();
   } catch (error) {
     logger.warn('skipping orphan sweep — clients fetch failed', error);
     return;

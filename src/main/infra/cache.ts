@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { app } from 'electron';
+import { HttpError } from './http';
 import { scopedLogger } from './logger';
 
 const logger = scopedLogger('cache');
@@ -58,5 +59,49 @@ export const clearNamespace = (namespace: string): void => {
     rmSync(dir, { recursive: true, force: true });
   } catch (error) {
     logger.warn('Failed to clear cache namespace', { namespace, error });
+  }
+};
+
+// HTTP 4xx is a valid server response (auth/not-found/etc.) — pass it through.
+// Anything else (network / DNS / timeout / abort / 5xx) means the API is unreachable.
+const defaultIsOfflineError = (error: unknown): boolean => {
+  if (error instanceof HttpError) return error.status >= 500;
+  return true;
+};
+
+export type CachedFetchOptions<T> = {
+  namespace: string;
+  key: string;
+  fetcher: () => Promise<T>;
+  isOfflineError?: (error: unknown) => boolean;
+};
+
+/**
+ * Network-first JSON cache with on-disk fallback.
+ *
+ * Online: call `fetcher`, persist its JSON to disk, return the live value.
+ * Offline (network/5xx by default): return the last persisted JSON from disk.
+ * If the API returned 4xx, or disk has no snapshot, the original error is rethrown.
+ */
+export const cachedFetch = async <T>(options: CachedFetchOptions<T>): Promise<T> => {
+  const isOffline = options.isOfflineError ?? defaultIsOfflineError;
+  try {
+    const value = await options.fetcher();
+    writeBuffer(options.namespace, options.key, Buffer.from(JSON.stringify(value), 'utf8'));
+    return value;
+  } catch (error) {
+    if (!isOffline(error)) throw error;
+    const cached = readBuffer(options.namespace, options.key);
+    if (!cached) throw error;
+    try {
+      return JSON.parse(cached.toString('utf8')) as T;
+    } catch (parseError) {
+      logger.warn('Corrupt cache entry; rethrowing fetcher error', {
+        namespace: options.namespace,
+        key: options.key,
+        parseError,
+      });
+      throw error;
+    }
   }
 };
