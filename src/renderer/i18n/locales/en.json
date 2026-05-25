@@ -171,7 +171,11 @@
     "cancel": "Cancel",
     "close": "Close",
     "copy": "Copy to clipboard",
-    "copied": "Copied"
+    "copied": "Copied",
+    "carousel": {
+      "previous": "Previous slide",
+      "next": "Next slide"
+    }
   },
   "navigation": {
     "back": "Back",

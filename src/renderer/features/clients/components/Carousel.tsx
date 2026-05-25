@@ -3,6 +3,7 @@ import { Splide, SplideSlide } from '@splidejs/react-splide';
 import type { Splide as SplideInstance } from '@splidejs/splide';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Children, type ReactNode, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 const AUTOPLAY_INTERVAL_MS = 5000;
 
@@ -25,6 +26,7 @@ export const Carousel = ({
   loop = true,
   speed = 700,
 }: CarouselProps) => {
+  const { t } = useTranslation();
   const splideRef = useRef<SplideInstance | null>(null);
   const slides = Children.toArray(children);
   const showNavigation = slides.length > 1;
@@ -63,7 +65,7 @@ export const Carousel = ({
             type="button"
             onClick={() => splideRef.current?.go('<')}
             className={navButtonClass}
-            aria-label="Previous slide"
+            aria-label={t('common.carousel.previous')}
           >
             <ChevronLeft className="size-3.5" />
           </button>
@@ -71,7 +73,7 @@ export const Carousel = ({
             type="button"
             onClick={() => splideRef.current?.go('>')}
             className={navButtonClass}
-            aria-label="Next slide"
+            aria-label={t('common.carousel.next')}
           >
             <ChevronRight className="size-3.5" />
           </button>
