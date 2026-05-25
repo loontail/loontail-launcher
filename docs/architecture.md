@@ -236,7 +236,8 @@ There is no global app store. There is no Redux.
 - Cached media (Strapi-served images, prewarmed skin/cape uploads):
   `userData/cache/media/<sha1>` (registered as the `cache://` protocol).
 - Java runtimes: `userData/runtimes/<component>/`.
-- Logs: `userData/logs/` (rotated by `electron-log`).
+- Logs: `userData/logs/` (rotated by `electron-log`, 5 MB per file with
+  one archived `*.old.log`, so on-disk log size stays around 10 MB).
 - No SQLite or Drizzle until a real need appears (history, search,
   large structured data).
 
