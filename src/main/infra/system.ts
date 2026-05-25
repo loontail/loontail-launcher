@@ -64,12 +64,42 @@ export const getDiskSpace = async (path: string): Promise<DiskInfo> => {
   }
 };
 
+// Cap concurrent fs ops on libuv: a Minecraft install can hold tens of
+// thousands of files, and unbounded Promise.all would queue every stat at
+// once and starve other main-process fs/dns work behind a busy thread pool.
+const WALK_CONCURRENCY = 16;
+
+const createLimiter = (max: number) => {
+  let active = 0;
+  const queue: Array<() => void> = [];
+  const next = (): void => {
+    if (active >= max) return;
+    const task = queue.shift();
+    if (!task) return;
+    active += 1;
+    task();
+  };
+  return <T>(fn: () => Promise<T>): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+      queue.push(() => {
+        fn()
+          .then(resolve, reject)
+          .finally(() => {
+            active -= 1;
+            next();
+          });
+      });
+      next();
+    });
+};
+
 const walkDirectorySize = async (root: string): Promise<number> => {
   let total = 0;
+  const limit = createLimiter(WALK_CONCURRENCY);
   const walk = async (dir: string): Promise<void> => {
     let entries: Dirent[];
     try {
-      entries = await readdir(dir, { withFileTypes: true });
+      entries = await limit(() => readdir(dir, { withFileTypes: true }));
     } catch {
       return;
     }
@@ -80,7 +110,7 @@ const walkDirectorySize = async (root: string): Promise<number> => {
           await walk(full);
         } else if (entry.isFile()) {
           try {
-            const info = await stat(full);
+            const info = await limit(() => stat(full));
             total += info.size;
           } catch {
             // skip unreadable file
