@@ -47,6 +47,10 @@
   "clients": {
     "sectionTitle": "Доступні клієнти",
     "empty": "Немає доступних клієнтів",
+    "versionChip": {
+      "full": "Minecraft {{version}}",
+      "short": "MC {{version}}"
+    },
     "screenshots": "Скриншоти",
     "about": "Про клієнт",
     "servers": "Доступні сервери",

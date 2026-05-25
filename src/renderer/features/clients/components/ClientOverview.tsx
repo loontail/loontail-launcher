@@ -79,7 +79,7 @@ export const ClientOverview = ({ client }: ClientOverviewProps) => {
               <div className="flex flex-wrap gap-1.5">
                 {minecraftVersion && (
                   <span className="rounded-full border border-edge-md bg-chip-dark px-2.5 py-1 text-[11px] font-semibold tracking-wide text-glass/85 backdrop-blur-sm">
-                    Minecraft {minecraftVersion}
+                    {t('clients.versionChip.full', { version: minecraftVersion })}
                   </span>
                 )}
                 {keywords?.map((keyword) => (

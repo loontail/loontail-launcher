@@ -47,6 +47,10 @@
   "clients": {
     "sectionTitle": "Available clients",
     "empty": "No clients available",
+    "versionChip": {
+      "full": "Minecraft {{version}}",
+      "short": "MC {{version}}"
+    },
     "screenshots": "Screenshots",
     "about": "About",
     "servers": "Available servers",
