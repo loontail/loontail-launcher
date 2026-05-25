@@ -28,7 +28,7 @@ import { createSkinService } from '@main/services/skin';
 import { createSystemService } from '@main/services/system';
 import { createUpdaterService } from '@main/services/updater';
 import { createMainWindow } from '@main/windows/mainWindow';
-import { BrowserWindow, app, protocol } from 'electron';
+import { BrowserWindow, app, dialog, protocol } from 'electron';
 
 initLogger();
 const logger = scopedLogger('bootstrap');
@@ -169,5 +169,6 @@ const start = async (): Promise<void> => {
 
 start().catch((error: unknown) => {
   logger.error('Failed to start launcher', error);
+  dialog.showErrorBox('Launcher failed to start', summarize(error));
   app.quit();
 });
