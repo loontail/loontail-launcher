@@ -2,9 +2,6 @@ import {
   type MinecraftKit,
   MinecraftKitError,
   type MinecraftProfile,
-  asAzureClientId,
-  asMicrosoftRefreshToken,
-  asPlayerUuid,
 } from '@loontail/minecraft-kit';
 import type { MojangSession } from '@shared/contracts/auth';
 import { describe, expect, it, vi } from 'vitest';
@@ -22,21 +19,26 @@ import { createMojangAuth } from '@main/services/auth/mojangAuth';
 
 const FAR_FUTURE = Date.UTC(2099, 0, 1);
 
-const baseSession = (): MojangSession => ({
-  provider: 'mojang',
-  accessToken: 'access',
-  expiresAt: FAR_FUTURE,
-  refreshToken: asMicrosoftRefreshToken('refresh'),
-  clientId: asAzureClientId('client'),
-  xuid: 'xuid',
-  profile: { uuid: asPlayerUuid('uuid'), username: 'name', skins: [] },
-});
+// The mojang `as*` helpers validate GUID/UUID shape at runtime; the test never
+// goes near the refresh path so we cast a plain literal session — the verify
+// path only consumes `accessToken`.
+const baseSession = (): MojangSession =>
+  ({
+    provider: 'mojang',
+    accessToken: 'access',
+    expiresAt: FAR_FUTURE,
+    refreshToken: 'refresh',
+    clientId: 'client',
+    xuid: 'xuid',
+    profile: { uuid: 'uuid', username: 'name', skins: [] },
+  }) as unknown as MojangSession;
 
-const fakeProfile = (): MinecraftProfile => ({
-  uuid: asPlayerUuid('uuid'),
-  username: 'name',
-  skins: [],
-});
+const fakeProfile = (): MinecraftProfile =>
+  ({
+    uuid: 'uuid',
+    username: 'name',
+    skins: [],
+  }) as unknown as MinecraftProfile;
 
 // Build a fake kit object that only implements the surface mojangAuth.ts
 // uses. Lets the test swap in a fake without going through `vi.mock` on
