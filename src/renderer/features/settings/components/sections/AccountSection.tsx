@@ -2,20 +2,22 @@ import { useCurrentUser, useLogout } from '@renderer/features/auth';
 import { SkinViewerCard, useSkinEditor } from '@renderer/features/skin';
 import { cn } from '@renderer/shared/lib/cn';
 import { Button } from '@renderer/shared/ui/Button';
+import { CopyButton } from '@renderer/shared/ui/CopyButton';
+import { SettingsGroup } from '@renderer/shared/ui/SettingsGroup';
 import { CapeUploadIcon } from '@renderer/shared/ui/icons/CapeUploadIcon';
 import { SkinUploadIcon } from '@renderer/shared/ui/icons/SkinUploadIcon';
 import type { AuthProvider } from '@shared/contracts/auth';
-import { Check, Copy, Loader2, LogOut, RotateCcw, X } from 'lucide-react';
-import { Suspense, useEffect, useState } from 'react';
+import { Check, Loader2, LogOut, RotateCcw, X } from 'lucide-react';
+import { Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const VIEWER_WIDTH = 200;
-const VIEWER_HEIGHT = 280;
-const COPY_FEEDBACK_MS = 1500;
+const VIEWER_WIDTH = 180;
+const VIEWER_HEIGHT = 220;
 
-// Compact one-card account view — header / body / footer all in a single
-// border. Sized to fit in the Settings viewport without scrolling.
-//   • Header: PLAYER eyebrow + provider chip
+// Compact one-card account view rendered through the shared SettingsGroup
+// (title left + provider chip via rightSlot + toolbar via footer) so the
+// surface matches every other settings section visually.
+//   • Header: PLAYER eyebrow (title) + provider chip (rightSlot)
 //   • Body: viewer (left) + identity column (username + copy + spec list
 //           + logout pinned to bottom-right)
 //   • Footer: action toolbar (Upload skin / Upload cape / Reset icon)
@@ -42,82 +44,84 @@ export const AccountSection = () => {
     provider === 'mojang' ? t('settings.account.helperMojang') : t('settings.account.helperStrapi');
 
   return (
-    <section className="overflow-hidden rounded-lg border border-border bg-card">
+    <SettingsGroup
+      title={t('settings.account.heroEyebrow')}
+      rightSlot={provider ? <ProviderChip provider={provider} /> : undefined}
+      bodyClassName="flex items-stretch gap-5 p-4"
+      footer={
+        <div className="flex flex-wrap items-center gap-2">
+          {editor.hasPending ? (
+            <PendingToolbar editor={editor} />
+          ) : (
+            <IdleToolbar editor={editor} showCape={showCape} />
+          )}
+        </div>
+      }
+    >
       <input {...editor.skinInputProps} />
       <input {...editor.capeInputProps} />
 
-      <div className="flex items-center justify-between gap-4 border-b border-border px-5 py-3">
-        <span className="text-[10px] font-semibold uppercase tracking-eyebrow text-muted-foreground">
-          {t('settings.account.heroEyebrow')}
-        </span>
-        {provider && <ProviderChip provider={provider} />}
-      </div>
-
-      <div className="flex items-stretch gap-5 p-5">
-        <Suspense
-          fallback={
-            <div
-              className="flex shrink-0 items-center justify-center rounded-md border border-border bg-background"
-              style={{ width: VIEWER_WIDTH, height: VIEWER_HEIGHT }}
-            >
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
-            </div>
-          }
-        >
-          <SkinViewerCard
-            width={VIEWER_WIDTH}
-            height={VIEWER_HEIGHT}
-            skinUrl={editor.previewSkinUrl}
-            capeUrl={viewerCapeUrl}
-            className="bg-background"
-          />
-        </Suspense>
-
-        <div className="flex min-w-0 flex-1 flex-col gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <h1
-              className="selectable min-w-0 truncate text-2xl font-semibold leading-tight text-foreground"
-              title={username ?? undefined}
-            >
-              {username ?? '—'}
-            </h1>
-            {username !== null && <CopyUsernameButton username={username} />}
+      <Suspense
+        fallback={
+          <div
+            className="flex shrink-0 items-center justify-center rounded-md border border-border bg-background"
+            style={{ width: VIEWER_WIDTH, height: VIEWER_HEIGHT }}
+          >
+            <Loader2 className="size-5 animate-spin text-muted-foreground" />
           </div>
+        }
+      >
+        <SkinViewerCard
+          width={VIEWER_WIDTH}
+          height={VIEWER_HEIGHT}
+          skinUrl={editor.previewSkinUrl}
+          capeUrl={viewerCapeUrl}
+          className="bg-background"
+        />
+      </Suspense>
 
-          <dl className="flex flex-col gap-1.5 rounded-md border border-edge bg-surface/40 px-3 py-2 text-xs">
-            <SpecRow term={t('settings.account.skinLabel')} value={skinSpec} />
-            {showCape && <SpecRow term={t('settings.account.capeLabel')} value={capeSpec} />}
-          </dl>
+      <div className="flex min-w-0 flex-1 flex-col gap-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <h1
+            className="selectable min-w-0 truncate text-2xl font-semibold leading-tight text-foreground"
+            title={username ?? undefined}
+          >
+            {username ?? '—'}
+          </h1>
+          {username !== null && (
+            <CopyButton
+              text={username}
+              copyLabel={t('settings.account.copyUsername')}
+              copiedLabel={t('settings.account.usernameCopied')}
+            />
+          )}
+        </div>
 
-          <p className="text-xs leading-relaxed text-muted-foreground">{helper}</p>
+        <dl className="flex flex-col gap-1.5 rounded-md border border-edge bg-surface/40 px-3 py-2 text-xs">
+          <SpecRow term={t('settings.account.skinLabel')} value={skinSpec} />
+          {showCape && <SpecRow term={t('settings.account.capeLabel')} value={capeSpec} />}
+        </dl>
 
-          <div className="mt-auto flex justify-end">
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => void logout()}
-              disabled={isLoggingOut}
-              className="gap-1.5 whitespace-nowrap"
-            >
-              {isLoggingOut ? (
-                <Loader2 className="size-3.5 animate-spin" />
-              ) : (
-                <LogOut className="size-3.5" />
-              )}
-              {t('settings.launcher.logOut')}
-            </Button>
-          </div>
+        <p className="text-xs leading-relaxed text-muted-foreground">{helper}</p>
+
+        <div className="mt-auto flex justify-end">
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => void logout()}
+            disabled={isLoggingOut}
+            className="gap-1.5 whitespace-nowrap"
+          >
+            {isLoggingOut ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <LogOut className="size-3.5" />
+            )}
+            {t('settings.launcher.logOut')}
+          </Button>
         </div>
       </div>
-
-      <div className="flex flex-wrap items-center gap-2 border-t border-border bg-background/40 px-5 py-3">
-        {editor.hasPending ? (
-          <PendingToolbar editor={editor} />
-        ) : (
-          <IdleToolbar editor={editor} showCape={showCape} />
-        )}
-      </div>
-    </section>
+    </SettingsGroup>
   );
 };
 
@@ -211,50 +215,6 @@ const PendingToolbar = ({ editor }: ToolbarProps) => {
         {t('settings.account.save')}
       </Button>
     </>
-  );
-};
-
-type CopyUsernameButtonProps = { username: string };
-
-const CopyUsernameButton = ({ username }: CopyUsernameButtonProps) => {
-  const { t } = useTranslation();
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    if (!copied) return;
-    const id = setTimeout(() => setCopied(false), COPY_FEEDBACK_MS);
-    return () => clearTimeout(id);
-  }, [copied]);
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(username);
-      setCopied(true);
-    } catch {
-      // Clipboard write can fail (permissions, no DOM focus); swallowing
-      // keeps the UI calm — the truncated h1 is still selectable.
-    }
-  };
-
-  const ariaLabel = copied
-    ? t('settings.account.usernameCopied')
-    : t('settings.account.copyUsername');
-
-  return (
-    <button
-      type="button"
-      onClick={() => void handleCopy()}
-      className={cn(
-        'inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted-foreground transition-colors',
-        'hover:bg-ghost-hover hover:text-foreground',
-        copied && 'border-success/40 bg-success/10 text-success',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-card',
-      )}
-      title={ariaLabel}
-      aria-label={ariaLabel}
-    >
-      {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-    </button>
   );
 };
 

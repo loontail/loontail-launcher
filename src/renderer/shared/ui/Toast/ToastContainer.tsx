@@ -1,4 +1,5 @@
 import { cn } from '@renderer/shared/lib/cn';
+import { useCopyText } from '@renderer/shared/ui/CopyButton';
 import { AlertTriangle, CheckCircle2, Copy, Info, X, XCircle } from 'lucide-react';
 import {
   type CSSProperties,
@@ -25,7 +26,6 @@ const STACK_SCALE_STEP = 0.05;
 const STACK_OPACITY_STEP = 0.25;
 const STACK_VISIBLE = 3;
 const GAP = 10;
-const COPY_RESET_MS = 1500;
 
 const VARIANT_STYLES: Record<ToastVariant, { icon: string; Icon: typeof Info; progress: string }> =
   {
@@ -63,11 +63,10 @@ const ToastItem = ({ entry, style, paused, onClose, onHeight }: ToastItemProps) 
   const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const [expanded, setExpanded] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const { copy, copied } = useCopyText();
   const timerRef = useRef<number | null>(null);
   const remainingRef = useRef(AUTO_CLOSE_MS);
   const startedAtRef = useRef(0);
-  const copyResetRef = useRef<number | null>(null);
 
   useLayoutEffect(() => {
     const node = ref.current;
@@ -114,23 +113,9 @@ const ToastItem = ({ entry, style, paused, onClose, onHeight }: ToastItemProps) 
     };
   }, [paused, entry.closing, onClose]);
 
-  useEffect(
-    () => () => {
-      if (copyResetRef.current !== null) window.clearTimeout(copyResetRef.current);
-    },
-    [],
-  );
-
-  const handleCopy = async (event: MouseEvent<HTMLButtonElement>) => {
+  const handleCopy = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
-    try {
-      await navigator.clipboard.writeText(entry.message);
-      setCopied(true);
-      if (copyResetRef.current !== null) window.clearTimeout(copyResetRef.current);
-      copyResetRef.current = window.setTimeout(() => setCopied(false), COPY_RESET_MS);
-    } catch {
-      /* clipboard may be unavailable (permission/focus); ignore quietly */
-    }
+    void copy(entry.message);
   };
 
   const handleDismiss = (event: MouseEvent<HTMLButtonElement>) => {
@@ -170,11 +155,15 @@ const ToastItem = ({ entry, style, paused, onClose, onHeight }: ToastItemProps) 
             {showCopy && (
               <button
                 type="button"
-                onClick={(event) => void handleCopy(event)}
+                onClick={handleCopy}
                 aria-label={t('toast.copyMessage')}
-                className="cursor-pointer rounded-md p-1 text-glass/55 transition-colors hover:bg-ghost-hover hover:text-glass"
+                title={t('toast.copyMessage')}
+                className={cn(
+                  'cursor-pointer rounded-md p-1 transition-colors hover:bg-ghost-hover hover:text-glass',
+                  copied ? 'text-success' : 'text-glass/55',
+                )}
               >
-                {copied ? <CheckCircle2 size={14} className="text-success" /> : <Copy size={14} />}
+                {copied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
               </button>
             )}
             <button

@@ -5,6 +5,7 @@ import { ClientsPage } from '@renderer/features/clients';
 import { MinecraftEventsListener } from '@renderer/features/minecraft';
 import { NotificationsListener } from '@renderer/features/notifications';
 import { SettingsPage } from '@renderer/features/settings';
+import { SetupPage, useNeedsSetup } from '@renderer/features/setup';
 import { UpdaterAutoCheck, UpdaterEventsListener } from '@renderer/features/updater';
 import { cn } from '@renderer/shared/lib/cn';
 import {
@@ -49,9 +50,11 @@ const NavigationButton = () => {
 };
 
 export const App = () => {
-  const { user, isPending } = useCurrentUser();
+  const { user, isPending: isAuthPending } = useCurrentUser();
+  const { needsSetup, isPending: isSetupPending } = useNeedsSetup();
   const view = useCurrentView();
-  const isAuthenticated = !isPending && user !== null && user !== undefined;
+  const isAuthenticated = !isAuthPending && user !== null && user !== undefined;
+  const isBootstrapping = isSetupPending || (!needsSetup && isAuthPending);
 
   return (
     <div className="flex h-full flex-col">
@@ -60,16 +63,23 @@ export const App = () => {
       <UpdaterEventsListener />
       <UpdaterAutoCheck />
       <NotificationsListener />
-      {hasCustomTitleBar && <AppBar actions={isAuthenticated ? <NavigationButton /> : null} />}
+      {hasCustomTitleBar && (
+        <AppBar actions={!needsSetup && isAuthenticated ? <NavigationButton /> : null} />
+      )}
       <main className="flex flex-1 flex-col overflow-hidden">
-        {isPending && (
+        {isBootstrapping && (
           <div className="flex flex-1 items-center justify-center">
             <Loader2 className="size-6 animate-spin text-muted-foreground" />
           </div>
         )}
-        {!isPending && user === null && <LoginForm />}
-        {isAuthenticated && view === Views.HOME && <ClientsPage />}
-        {isAuthenticated && view === Views.SETTINGS && <SettingsPage />}
+        {!isBootstrapping && needsSetup && <SetupPage />}
+        {!isBootstrapping && !needsSetup && user === null && <LoginForm />}
+        {!isBootstrapping && !needsSetup && isAuthenticated && view === Views.HOME && (
+          <ClientsPage />
+        )}
+        {!isBootstrapping && !needsSetup && isAuthenticated && view === Views.SETTINGS && (
+          <SettingsPage />
+        )}
       </main>
       <ToastContainer />
     </div>

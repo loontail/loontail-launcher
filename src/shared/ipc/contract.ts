@@ -55,8 +55,10 @@ export type IpcContract = {
   'system.getDiskSpace': { args: string; result: DiskInfo };
   'system.getFolderSize': { args: string; result: FolderSize };
   'system.pickInstallFolder': { args: undefined; result: PickedFolder | null };
+  'system.getDefaultInstallFolder': { args: undefined; result: string };
   'system.openPath': { args: string; result: void };
   'system.openExternal': { args: string; result: void };
+  'system.copyText': { args: string; result: void };
   'media.uploadSkin': { args: UploadSkinPayload; result: UploadSkinResult };
   'media.clearSkin': { args: undefined; result: void };
   'clients.list': { args: { locale?: string } | undefined; result: StrapiList<Client> };

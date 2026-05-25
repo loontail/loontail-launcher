@@ -13,5 +13,8 @@ export const getFolderSize = (path: string): Promise<FolderSize> =>
 export const pickInstallFolder = (): Promise<PickedFolder | null> =>
   window.api.invoke(IPC_CHANNELS.systemPickInstallFolder, undefined);
 
+export const getDefaultInstallFolder = (): Promise<string> =>
+  window.api.invoke(IPC_CHANNELS.systemGetDefaultInstallFolder, undefined);
+
 export const openPath = (path: string): Promise<void> =>
   window.api.invoke(IPC_CHANNELS.systemOpenPath, path);

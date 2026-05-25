@@ -20,6 +20,11 @@
       "error": "Update check failed: {{message}}"
     }
   },
+  "setup": {
+    "title": "Welcome",
+    "subtitle": "Pick a folder where Minecraft clients will be installed",
+    "finish": "Get started"
+  },
   "auth": {
     "signIn": "Sign in",
     "description": "Use your Loontail account to launch the game.",
@@ -164,7 +169,9 @@
   },
   "common": {
     "cancel": "Cancel",
-    "close": "Close"
+    "close": "Close",
+    "copy": "Copy to clipboard",
+    "copied": "Copied"
   },
   "navigation": {
     "back": "Back",
