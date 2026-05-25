@@ -1,4 +1,5 @@
 import {
+  type MinecraftKit,
   type MinecraftProfile,
   type MojangSkinVariantInput,
   isMinecraftKitError,
@@ -7,7 +8,6 @@ import { buildMediaUrl } from '@main/infra/http';
 import { scopedLogger } from '@main/infra/logger';
 import { getStoredAuth, setStoredAuth } from '@main/infra/store';
 import { withRefreshedProfile } from '@main/services/auth/mojangAuth';
-import { kit } from '@main/services/kit';
 import { invalidateMediaCache, prewarmMediaCache } from '@main/services/media/mediaCache';
 import { ERROR_CODES } from '@shared/constants';
 import type { AuthSession, MojangSession, StrapiSession } from '@shared/contracts/auth';
@@ -120,75 +120,87 @@ const uploadSkinStrapi = async (
   return { url: uploadedUrl };
 };
 
-// Mojang flow: hand the PNG to `kit.auth.profile.uploadSkin`, which posts
-// it to api.minecraftservices.com/minecraft/profile/skins. `"AUTO"` makes
-// the kit detect SLIM vs CLASSIC from the pixels so the renderer never has
-// to ask the user. Kit errors now include Mojang's response body in the
-// message (kit 0.8.8+), so user-visible toasts surface the real reason.
-const uploadSkinMojang = async (
-  session: MojangSession,
-  payload: UploadSkinPayload,
-): Promise<UploadSkinResult> => {
-  if (payload.type !== SkinKinds.SKIN) {
-    throw new SkinError(ERROR_CODES.SkinUploadFailed, 'Mojang accounts cannot upload custom capes');
-  }
-  const skin = new Uint8Array(payload.buffer);
-  const variant: MojangSkinVariantInput = payload.variant ?? 'AUTO';
-  let profile: MinecraftProfile;
-  try {
-    profile = await kit.auth.profile.uploadSkin({
-      accessToken: session.accessToken,
-      skin,
-      variant,
-    });
-  } catch (error) {
-    logger.error('Mojang skin upload failed', error);
-    return throwMojangUploadError(error);
-  }
-
-  const refreshed = withRefreshedProfile(session, profile);
-  setStoredAuth(refreshed);
-  const url = activeMojangSkinUrl(refreshed);
-  if (url === null) {
-    throw new SkinError(
-      ERROR_CODES.SkinUploadFailed,
-      'Mojang accepted the upload but did not return an active skin URL',
-    );
-  }
-  await prewarmMediaCache(url, Buffer.from(skin));
-  return { url };
+export type SkinHandlers = {
+  uploadSkin: (payload: UploadSkinPayload) => Promise<UploadSkinResult>;
+  clearSkin: () => Promise<void>;
 };
 
-export const uploadSkin = async (payload: UploadSkinPayload): Promise<UploadSkinResult> => {
-  const session = requireSession();
-  if (session.provider === 'strapi') return uploadSkinStrapi(session, payload);
-  return uploadSkinMojang(session, payload);
-};
-
-export const clearSkin = async (): Promise<void> => {
-  const session = requireSession();
-  if (session.provider === 'strapi') {
-    const userId = asUserId(session.user.id);
+export const createSkinHandlers = (kit: MinecraftKit): SkinHandlers => {
+  // Mojang flow: hand the PNG to `kit.auth.profile.uploadSkin`, which posts
+  // it to api.minecraftservices.com/minecraft/profile/skins. `"AUTO"` makes
+  // the kit detect SLIM vs CLASSIC from the pixels so the renderer never has
+  // to ask the user. Kit errors now include Mojang's response body in the
+  // message (kit 0.8.8+), so user-visible toasts surface the real reason.
+  const uploadSkinMojang = async (
+    session: MojangSession,
+    payload: UploadSkinPayload,
+  ): Promise<UploadSkinResult> => {
+    if (payload.type !== SkinKinds.SKIN) {
+      throw new SkinError(
+        ERROR_CODES.SkinUploadFailed,
+        'Mojang accounts cannot upload custom capes',
+      );
+    }
+    const skin = new Uint8Array(payload.buffer);
+    const variant: MojangSkinVariantInput = payload.variant ?? 'AUTO';
+    let profile: MinecraftProfile;
     try {
-      await updateUserSkinFields(userId, { skin: null, cape: null });
+      profile = await kit.auth.profile.uploadSkin({
+        accessToken: session.accessToken,
+        skin,
+        variant,
+      });
     } catch (error) {
-      logger.warn('Failed to clear Strapi skin fields on server', error);
+      logger.error('Mojang skin upload failed', error);
+      return throwMojangUploadError(error);
     }
-    await updateStoredStrapiUserAsset(session, SkinKinds.SKIN, null);
-    const after = getStoredAuth();
-    if (after?.provider === 'strapi') {
-      await updateStoredStrapiUserAsset(after, SkinKinds.CAPE, null);
-    }
-    return;
-  }
 
-  // Mojang: drop the active skin via the kit. Capes are not exposed by the
-  // kit (Mojang does not allow launchers to manage them), so nothing to do
-  // for the cape slot.
-  try {
-    const profile = await kit.auth.profile.resetSkin({ accessToken: session.accessToken });
-    setStoredAuth(withRefreshedProfile(session, profile));
-  } catch (error) {
-    logger.warn('Failed to reset Mojang skin', error);
-  }
+    const refreshed = withRefreshedProfile(session, profile);
+    setStoredAuth(refreshed);
+    const url = activeMojangSkinUrl(refreshed);
+    if (url === null) {
+      throw new SkinError(
+        ERROR_CODES.SkinUploadFailed,
+        'Mojang accepted the upload but did not return an active skin URL',
+      );
+    }
+    await prewarmMediaCache(url, Buffer.from(skin));
+    return { url };
+  };
+
+  const uploadSkin = async (payload: UploadSkinPayload): Promise<UploadSkinResult> => {
+    const session = requireSession();
+    if (session.provider === 'strapi') return uploadSkinStrapi(session, payload);
+    return uploadSkinMojang(session, payload);
+  };
+
+  const clearSkin = async (): Promise<void> => {
+    const session = requireSession();
+    if (session.provider === 'strapi') {
+      const userId = asUserId(session.user.id);
+      try {
+        await updateUserSkinFields(userId, { skin: null, cape: null });
+      } catch (error) {
+        logger.warn('Failed to clear Strapi skin fields on server', error);
+      }
+      await updateStoredStrapiUserAsset(session, SkinKinds.SKIN, null);
+      const after = getStoredAuth();
+      if (after?.provider === 'strapi') {
+        await updateStoredStrapiUserAsset(after, SkinKinds.CAPE, null);
+      }
+      return;
+    }
+
+    // Mojang: drop the active skin via the kit. Capes are not exposed by the
+    // kit (Mojang does not allow launchers to manage them), so nothing to do
+    // for the cape slot.
+    try {
+      const profile = await kit.auth.profile.resetSkin({ accessToken: session.accessToken });
+      setStoredAuth(withRefreshedProfile(session, profile));
+    } catch (error) {
+      logger.warn('Failed to reset Mojang skin', error);
+    }
+  };
+
+  return { uploadSkin, clearSkin };
 };

@@ -1,3 +1,4 @@
+import type { MinecraftKit } from '@loontail/minecraft-kit';
 import type { Router } from '@main/ipc/router';
 import type { BrowserWindow } from 'electron';
 import { createBroadcaster } from './broadcast';
@@ -15,9 +16,10 @@ export type MinecraftService = {
 export const createMinecraftService = (
   router: Router,
   mainWindow: BrowserWindow,
+  kit: MinecraftKit,
 ): MinecraftService => {
   const broadcaster = createBroadcaster(mainWindow);
-  const manager = new MinecraftManager(broadcaster);
+  const manager = new MinecraftManager(broadcaster, kit);
   return {
     init: async () => {
       registerMinecraftRoutes(router, manager);

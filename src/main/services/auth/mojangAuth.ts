@@ -1,17 +1,15 @@
 import { asAzureClientId, isErrorCode } from '@loontail/minecraft-kit';
-import type { MojangSession as KitMojangSession, MinecraftProfile } from '@loontail/minecraft-kit';
+import type {
+  MojangSession as KitMojangSession,
+  MinecraftKit,
+  MinecraftProfile,
+} from '@loontail/minecraft-kit';
 import { mainConfig } from '@main/config';
 import { scopedLogger } from '@main/infra/logger';
-import { kit } from '@main/services/kit';
 import type { MojangSession } from '@shared/contracts/auth';
 import { shell } from 'electron';
 
 const logger = scopedLogger('auth.mojang');
-
-// One in-flight sign-in at a time. A second click while the browser flow is
-// outstanding aborts the previous attempt so the launcher doesn't leak
-// loopback servers.
-let activeController: AbortController | null = null;
 
 const requireClientId = () => {
   if (!mainConfig.mojangClientId) {
@@ -39,48 +37,15 @@ const fromKitSession = (kitSession: KitMojangSession): MojangSession => ({
   },
 });
 
-/**
- * Run the OAuth Authorization Code + PKCE flow end-to-end via the kit. The kit
- * binds a temporary loopback HTTP server, we hand it `shell.openExternal` as the
- * browser opener, and the call blocks until the user finishes signing in or
- * cancels. One concurrent flow at a time — a fresh call aborts the prior one.
- */
-export const signInWithMojang = async (): Promise<MojangSession> => {
-  const clientId = requireClientId();
-  activeController?.abort();
-  const controller = new AbortController();
-  activeController = controller;
-  const startedAt = Date.now();
-  logger.info('Mojang sign-in: started');
-  try {
-    const kitSession = await kit.auth.authorizationCode.run({
-      clientId,
-      onOpenBrowser: (url) => {
-        void shell.openExternal(url);
-      },
-      signal: controller.signal,
-    });
-    const session = fromKitSession(kitSession);
-    logger.info(
-      `Mojang sign-in: signed in as ${session.profile.username} in ${Date.now() - startedAt}ms`,
-    );
-    return session;
-  } catch (error) {
-    if (isErrorCode(error, 'AUTH_CANCELLED')) {
-      logger.info(`Mojang sign-in: cancelled after ${Date.now() - startedAt}ms`);
-    } else {
-      logger.warn(`Mojang sign-in: failed after ${Date.now() - startedAt}ms`, error);
-    }
-    throw error;
-  } finally {
-    if (activeController === controller) activeController = null;
-  }
-};
+export type VerifyMojangResult =
+  | { kind: 'ok'; session: MojangSession }
+  | { kind: 'expired' }
+  | { kind: 'offline' };
 
-/** Aborts the in-flight `signInWithMojang` flow, if any. Idempotent. */
-export const cancelMojangLogin = (): void => {
-  activeController?.abort();
-  activeController = null;
+export type MojangAuth = {
+  signInWithMojang: () => Promise<MojangSession>;
+  cancelMojangLogin: () => void;
+  verifyMojangSession: (session: MojangSession) => Promise<VerifyMojangResult>;
 };
 
 /**
@@ -100,34 +65,85 @@ export const withRefreshedProfile = (
   },
 });
 
-/**
- * Validate a stored Mojang session. Refreshes the access token if it's near
- * expiry; otherwise asks the kit to read the profile, which exercises the
- * same Minecraft Services bearer the launcher would use to play. `expired`
- * clears the session, `offline` keeps the cached copy.
- */
-export const verifyMojangSession = async (
-  session: MojangSession,
-): Promise<{ kind: 'ok'; session: MojangSession } | { kind: 'expired' } | { kind: 'offline' }> => {
-  const safetyWindowMs = 60_000;
-  const needsRefresh = Date.now() > session.expiresAt - safetyWindowMs;
+export const createMojangAuth = (kit: MinecraftKit): MojangAuth => {
+  // One in-flight sign-in at a time. A second click while the browser flow is
+  // outstanding aborts the previous attempt so the launcher doesn't leak
+  // loopback servers.
+  let activeController: AbortController | null = null;
 
-  try {
-    if (needsRefresh) {
-      const refreshed = await kit.auth.refresh(session.refreshToken, {
-        clientId: session.clientId,
+  /**
+   * Run the OAuth Authorization Code + PKCE flow end-to-end via the kit. The kit
+   * binds a temporary loopback HTTP server, we hand it `shell.openExternal` as the
+   * browser opener, and the call blocks until the user finishes signing in or
+   * cancels. One concurrent flow at a time — a fresh call aborts the prior one.
+   */
+  const signInWithMojang = async (): Promise<MojangSession> => {
+    const clientId = requireClientId();
+    activeController?.abort();
+    const controller = new AbortController();
+    activeController = controller;
+    const startedAt = Date.now();
+    logger.info('Mojang sign-in: started');
+    try {
+      const kitSession = await kit.auth.authorizationCode.run({
+        clientId,
+        onOpenBrowser: (url) => {
+          void shell.openExternal(url);
+        },
+        signal: controller.signal,
       });
-      return { kind: 'ok', session: fromKitSession(refreshed) };
+      const session = fromKitSession(kitSession);
+      logger.info(
+        `Mojang sign-in: signed in as ${session.profile.username} in ${Date.now() - startedAt}ms`,
+      );
+      return session;
+    } catch (error) {
+      if (isErrorCode(error, 'AUTH_CANCELLED')) {
+        logger.info(`Mojang sign-in: cancelled after ${Date.now() - startedAt}ms`);
+      } else {
+        logger.warn(`Mojang sign-in: failed after ${Date.now() - startedAt}ms`, error);
+      }
+      throw error;
+    } finally {
+      if (activeController === controller) activeController = null;
     }
-    const profile = await kit.auth.profile.read({ accessToken: session.accessToken });
-    return { kind: 'ok', session: withRefreshedProfile(session, profile) };
-  } catch (error) {
-    if (isErrorCode(error, 'AUTH_REFRESH_FAILED')) return { kind: 'expired' };
-    if (isErrorCode(error, 'AUTH_MINECRAFT_FAILED')) {
-      const httpStatus = (error as { context?: { httpStatus?: number } }).context?.httpStatus;
-      if (httpStatus === 401) return { kind: 'expired' };
+  };
+
+  /** Aborts the in-flight `signInWithMojang` flow, if any. Idempotent. */
+  const cancelMojangLogin = (): void => {
+    activeController?.abort();
+    activeController = null;
+  };
+
+  /**
+   * Validate a stored Mojang session. Refreshes the access token if it's near
+   * expiry; otherwise asks the kit to read the profile, which exercises the
+   * same Minecraft Services bearer the launcher would use to play. `expired`
+   * clears the session, `offline` keeps the cached copy.
+   */
+  const verifyMojangSession = async (session: MojangSession): Promise<VerifyMojangResult> => {
+    const safetyWindowMs = 60_000;
+    const needsRefresh = Date.now() > session.expiresAt - safetyWindowMs;
+
+    try {
+      if (needsRefresh) {
+        const refreshed = await kit.auth.refresh(session.refreshToken, {
+          clientId: session.clientId,
+        });
+        return { kind: 'ok', session: fromKitSession(refreshed) };
+      }
+      const profile = await kit.auth.profile.read({ accessToken: session.accessToken });
+      return { kind: 'ok', session: withRefreshedProfile(session, profile) };
+    } catch (error) {
+      if (isErrorCode(error, 'AUTH_REFRESH_FAILED')) return { kind: 'expired' };
+      if (isErrorCode(error, 'AUTH_MINECRAFT_FAILED')) {
+        const httpStatus = (error as { context?: { httpStatus?: number } }).context?.httpStatus;
+        if (httpStatus === 401) return { kind: 'expired' };
+      }
+      logger.warn('Mojang verify failed — assuming offline', error);
+      return { kind: 'offline' };
     }
-    logger.warn('Mojang verify failed — assuming offline', error);
-    return { kind: 'offline' };
-  }
+  };
+
+  return { signInWithMojang, cancelMojangLogin, verifyMojangSession };
 };

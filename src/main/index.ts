@@ -19,7 +19,7 @@ import { createAuthService } from '@main/services/auth';
 import { createBundleService } from '@main/services/bundle';
 import { createClientsService } from '@main/services/clients';
 import { createConsoleService } from '@main/services/console';
-import { kit } from '@main/services/kit';
+import { createKit } from '@main/services/kit';
 import { CACHE_SCHEME, createMediaService } from '@main/services/media';
 import { createMinecraftService } from '@main/services/minecraft';
 import { createServersService } from '@main/services/servers';
@@ -90,15 +90,16 @@ const start = async (): Promise<void> => {
   attachNotifier(mainWindow);
   const router = createRouter(createTrustedSenderCheck(mainWindow));
 
+  const kit = createKit();
   const appService = createAppService(router);
-  const authService = createAuthService(router);
+  const authService = createAuthService(router, kit);
   const systemService = createSystemService(router, mainWindow);
   const settingsService = createSettingsService(router, mainWindow);
-  const skinService = createSkinService(router);
+  const skinService = createSkinService(router, kit);
   const clientsService = createClientsService(router);
   const serversService = createServersService(router);
   const mediaService = createMediaService();
-  const minecraftService = createMinecraftService(router, mainWindow);
+  const minecraftService = createMinecraftService(router, mainWindow, kit);
   const bundleService = createBundleService(router, mainWindow, kit);
   // Wire bundle sync into the launch flow — runs after install, before launch.
   // No-op for clients without a bundleSlug (handled inside syncForLaunch).

@@ -1,6 +1,7 @@
 import { clearStoredAuth, getStoredAuth, setStoredAuth } from '@main/infra/store';
 import { type Account, accountFromSession } from '@shared/contracts/account';
 import type { LoginPayload, LoginResult } from '@shared/contracts/auth';
+import type { MojangAuth } from './mojangAuth';
 import { loginStrapi } from './strapiAuth';
 import { verifySession } from './verify';
 
@@ -11,7 +12,8 @@ export const login = async (payload: LoginPayload): Promise<LoginResult> => {
   return { ok: true, user: accountFromSession(result.session) };
 };
 
-export const fetchCurrentUser = (): Promise<Account | null> => verifySession();
+export const fetchCurrentUser = (mojangAuth: MojangAuth): Promise<Account | null> =>
+  verifySession(mojangAuth);
 
 export const logout = (): void => {
   clearStoredAuth();

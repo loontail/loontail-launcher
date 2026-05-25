@@ -1,4 +1,6 @@
+import type { MinecraftKit } from '@loontail/minecraft-kit';
 import type { Router } from '@main/ipc/router';
+import { createMojangAuth } from './mojangAuth';
 import { registerAuthRoutes } from './routes';
 
 export type AuthService = {
@@ -6,9 +8,12 @@ export type AuthService = {
   dispose: () => Promise<void>;
 };
 
-export const createAuthService = (router: Router): AuthService => ({
-  init: async () => {
-    registerAuthRoutes(router);
-  },
-  dispose: async () => {},
-});
+export const createAuthService = (router: Router, kit: MinecraftKit): AuthService => {
+  const mojangAuth = createMojangAuth(kit);
+  return {
+    init: async () => {
+      registerAuthRoutes(router, mojangAuth);
+    },
+    dispose: async () => {},
+  };
+};

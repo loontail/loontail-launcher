@@ -1,5 +1,5 @@
+import type { MinecraftKit } from '@loontail/minecraft-kit';
 import { scopedLogger } from '@main/infra/logger';
-import { kit } from '@main/services/kit';
 import {
   getSettings,
   setClientOverride as persistClientOverride,
@@ -36,9 +36,11 @@ export type LaunchHook = (slug: ClientSlug, signal?: AbortSignal) => Promise<voi
 export class MinecraftManager {
   private readonly ops = new Map<ClientSlug, Op>();
   private readonly env: ManagerEnv;
+  private readonly kit: MinecraftKit;
   private launchHook: LaunchHook | null = null;
 
-  constructor(broadcaster: Broadcaster) {
+  constructor(broadcaster: Broadcaster, kit: MinecraftKit) {
+    this.kit = kit;
     this.env = {
       kit,
       broadcaster,
@@ -85,7 +87,7 @@ export class MinecraftManager {
 
   async startInstall(slug: ClientSlug, loaderOverride?: LoaderChoice): Promise<void> {
     this.requireIdle(slug);
-    const ctx = await buildContext(kit, slug, loaderOverride);
+    const ctx = await buildContext(this.kit, slug, loaderOverride);
     const op = beginInstall(this.env, slug, ctx, { fresh: true });
     // runInstall handles errors internally (emits via handleInstallFailure) and
     // rethrows for the launch path; in the fire-and-forget case we only need
@@ -144,7 +146,7 @@ export class MinecraftManager {
 
   async startRepair(slug: ClientSlug): Promise<void> {
     this.requireIdle(slug);
-    const ctx = await buildContext(kit, slug);
+    const ctx = await buildContext(this.kit, slug);
     if (!(await isAnythingInstalled(ctx.clientFolder))) {
       throw new ManagerError(MinecraftErrorCodes.NOT_INSTALLED, 'Client is not installed');
     }
@@ -170,7 +172,7 @@ export class MinecraftManager {
 
   async startLaunch(slug: ClientSlug, account: Account | null): Promise<void> {
     this.requireIdle(slug);
-    const ctx = await buildContext(kit, slug);
+    const ctx = await buildContext(this.kit, slug);
     const checkedAccount = requireAccount(account);
 
     if (!(await isTargetReady(ctx.target))) {

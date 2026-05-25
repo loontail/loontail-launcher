@@ -11,7 +11,7 @@ import {
 } from '@shared/contracts/auth';
 import { IPC_CHANNELS } from '@shared/ipc';
 import { fetchCurrentUser, login, logout } from './auth';
-import { cancelMojangLogin, signInWithMojang } from './mojangAuth';
+import type { MojangAuth } from './mojangAuth';
 
 // Map a kit-side sign-in failure to the renderer's `LoginErrorCode`. The
 // renderer's own `cancelledRef` already suppresses the user-cancel case, so we
@@ -24,13 +24,13 @@ const mojangFailureCode = (error: unknown): LoginErrorCode => {
   return LOGIN_ERROR_CODE.Unknown;
 };
 
-export const registerAuthRoutes = (router: Router): void => {
+export const registerAuthRoutes = (router: Router, mojangAuth: MojangAuth): void => {
   router.handle(IPC_CHANNELS.authLogin, async (rawArgs) => {
     const payload = parseIpcArgs(LoginPayloadSchema, rawArgs, 'Invalid login payload');
     return login(payload);
   });
 
-  router.handle(IPC_CHANNELS.authMe, () => fetchCurrentUser());
+  router.handle(IPC_CHANNELS.authMe, () => fetchCurrentUser(mojangAuth));
 
   router.handle(IPC_CHANNELS.authLogout, () => {
     logout();
@@ -38,7 +38,7 @@ export const registerAuthRoutes = (router: Router): void => {
 
   router.handle(IPC_CHANNELS.authMojangSignIn, async (): Promise<LoginResult> => {
     try {
-      const session = await signInWithMojang();
+      const session = await mojangAuth.signInWithMojang();
       setStoredAuth(session);
       return { ok: true, user: accountFromSession(session) };
     } catch (error) {
@@ -47,6 +47,6 @@ export const registerAuthRoutes = (router: Router): void => {
   });
 
   router.handle(IPC_CHANNELS.authMojangCancel, () => {
-    cancelMojangLogin();
+    mojangAuth.cancelMojangLogin();
   });
 };
