@@ -11,14 +11,20 @@ export const useBundleStatus = (slug: ClientSlug | null | undefined): BundleRunt
     if (!slug) return;
     // Live events are source of truth — only seed if the store has no entry yet.
     if (useBundleStore.getState().entries[slug]) return;
-    api.checkStatus(slug).then((data) => {
-      if (useBundleStore.getState().entries[slug]) return;
-      useBundleStore.getState().patch(slug, {
-        installed: data.installed,
-        signatureMatches: data.signatureMatches,
-        progress: data.progress,
+    void api
+      .checkStatus(slug)
+      .then((data) => {
+        if (useBundleStore.getState().entries[slug]) return;
+        useBundleStore.getState().patch(slug, {
+          installed: data.installed,
+          signatureMatches: data.signatureMatches,
+          progress: data.progress,
+        });
+      })
+      .catch((error: unknown) => {
+        // biome-ignore lint/suspicious/noConsole: best-effort seed — main logger unreachable from renderer
+        console.warn('[bundle] failed to seed status', error);
       });
-    });
   }, [slug]);
 
   return state;

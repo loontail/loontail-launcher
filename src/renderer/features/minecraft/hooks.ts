@@ -13,10 +13,16 @@ export const useClientStatus = (slug: ClientSlug | null | undefined): ClientRunt
     // Only seed when the store has no entry for this slug yet. Live IPC events
     // are the source of truth — never let a stale fetch clobber them.
     if (useMinecraftStore.getState().entries[slug]) return;
-    api.getStatus(slug).then((data) => {
-      if (useMinecraftStore.getState().entries[slug]) return;
-      useMinecraftStore.getState().patch(slug, data);
-    });
+    void api
+      .getStatus(slug)
+      .then((data) => {
+        if (useMinecraftStore.getState().entries[slug]) return;
+        useMinecraftStore.getState().patch(slug, data);
+      })
+      .catch((error: unknown) => {
+        // biome-ignore lint/suspicious/noConsole: best-effort seed — main logger unreachable from renderer
+        console.warn('[minecraft] failed to seed status', error);
+      });
   }, [slug]);
 
   return state;
