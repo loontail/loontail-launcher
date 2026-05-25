@@ -1,11 +1,8 @@
-import {
-  type AzureClientId,
-  type MicrosoftRefreshToken,
-  type MojangProfileSkin,
-  type PlayerUuid,
-  asAzureClientId,
-  asMicrosoftRefreshToken,
-  asPlayerUuid,
+import type {
+  AzureClientId,
+  MicrosoftRefreshToken,
+  MojangProfileSkin,
+  PlayerUuid,
 } from '@loontail/minecraft-kit';
 import { z } from 'zod';
 import type { Account } from './account';
@@ -43,11 +40,14 @@ const MojangProfileSkinSchema: z.ZodType<MojangProfileSkin> = z.object({
   textureKey: z.string().optional(),
 });
 
-const PlayerUuidSchema = z.string().transform((value): PlayerUuid => asPlayerUuid(value));
-const AzureClientIdSchema = z.string().transform((value): AzureClientId => asAzureClientId(value));
+// The kit's `as*` brand validators are runtime imports that drag yauzl/stream
+// into the renderer bundle. Shared code can only carry types; the kit will
+// reject malformed values at the point of use.
+const PlayerUuidSchema = z.string().transform((value): PlayerUuid => value as PlayerUuid);
+const AzureClientIdSchema = z.string().transform((value): AzureClientId => value as AzureClientId);
 const MicrosoftRefreshTokenSchema = z
   .string()
-  .transform((value): MicrosoftRefreshToken => asMicrosoftRefreshToken(value));
+  .transform((value): MicrosoftRefreshToken => value as MicrosoftRefreshToken);
 
 export const MojangProfileSchema = z.object({
   uuid: PlayerUuidSchema,

@@ -123,7 +123,10 @@ describe('StrapiSessionSchema', () => {
 });
 
 describe('MojangSessionSchema', () => {
-  // Canonical 8-4-4-4-12 UUIDs as required by kit's asAzureClientId / asPlayerUuid.
+  // The shared schema brands strings without validating their format — kit's
+  // runtime `as*` guards can't be imported into shared (they drag Node-only
+  // modules into the renderer bundle), so brand checks live at the kit-call
+  // boundary in main instead.
   const clientId = '11111111-2222-3333-4444-555555555555';
   const playerUuid = '00000000-1111-2222-3333-444444444444';
 
@@ -153,21 +156,17 @@ describe('MojangSessionSchema', () => {
     expect(parsed.profile.skins[0]?.state).toBe('ACTIVE');
   });
 
-  it('throws when the Azure client id is not a canonical GUID', () => {
-    // clientId is `z.string().transform(asAzureClientId)`. asAzureClientId is a
-    // brand guard that throws synchronously on a bad GUID, so parse() rethrows
-    // rather than producing a safeParse failure.
-    expect(() =>
-      MojangSessionSchema.parse({
-        provider: 'mojang',
-        accessToken: 'token',
-        expiresAt: 0,
-        refreshToken: 'refresh',
-        clientId: 'not-a-guid',
-        xuid: 'xuid',
-        profile: { uuid: playerUuid, username: 'p', skins: [] },
-      }),
-    ).toThrow(/Azure AD client id/);
+  it('rejects a non-string client id', () => {
+    const result = MojangSessionSchema.safeParse({
+      provider: 'mojang',
+      accessToken: 'token',
+      expiresAt: 0,
+      refreshToken: 'refresh',
+      clientId: 12345,
+      xuid: 'xuid',
+      profile: { uuid: playerUuid, username: 'p', skins: [] },
+    });
+    expect(result.success).toBe(false);
   });
 
   it('rejects an unknown skin variant', () => {
