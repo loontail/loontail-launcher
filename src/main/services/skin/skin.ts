@@ -18,6 +18,7 @@ import {
   type UploadSkinPayload,
   type UploadSkinResult,
 } from '@shared/contracts/skin';
+import { SkinError } from './errors';
 import { updateUserSkinFields, uploadSkinFile } from './skinApi';
 
 const logger = scopedLogger('skin');
@@ -25,20 +26,14 @@ const logger = scopedLogger('skin');
 const requireSession = (): AuthSession => {
   const session = getStoredAuth();
   if (!session) {
-    throw {
-      code: ERROR_CODES.SkinNotAuthenticated,
-      message: 'No authenticated user',
-    };
+    throw new SkinError(ERROR_CODES.SkinNotAuthenticated, 'No authenticated user');
   }
   return session;
 };
 
 const throwUploadError = (prefix: string, error: unknown): never => {
   const message = error instanceof Error ? error.message : 'Unknown error';
-  throw {
-    code: ERROR_CODES.SkinUploadFailed,
-    message: `${prefix}: ${message}`,
-  };
+  throw new SkinError(ERROR_CODES.SkinUploadFailed, `${prefix}: ${message}`);
 };
 
 // Mojang's profile-mutation errors come back as JSON like:
@@ -70,10 +65,7 @@ const extractMojangMessage = (error: unknown): string | null => {
 const throwMojangUploadError = (error: unknown): never => {
   const mojangMessage = extractMojangMessage(error);
   if (mojangMessage !== null) {
-    throw {
-      code: ERROR_CODES.SkinUploadFailed,
-      message: `Mojang: ${mojangMessage}`,
-    };
+    throw new SkinError(ERROR_CODES.SkinUploadFailed, `Mojang: ${mojangMessage}`);
   }
   return throwUploadError('Mojang skin upload failed', error);
 };
@@ -138,10 +130,7 @@ const uploadSkinMojang = async (
   payload: UploadSkinPayload,
 ): Promise<UploadSkinResult> => {
   if (payload.type !== SkinKinds.SKIN) {
-    throw {
-      code: ERROR_CODES.SkinUploadFailed,
-      message: 'Mojang accounts cannot upload custom capes',
-    };
+    throw new SkinError(ERROR_CODES.SkinUploadFailed, 'Mojang accounts cannot upload custom capes');
   }
   const skin = new Uint8Array(payload.buffer);
   const variant: MojangSkinVariantInput = payload.variant ?? 'AUTO';
@@ -161,10 +150,10 @@ const uploadSkinMojang = async (
   setStoredAuth(refreshed);
   const url = activeMojangSkinUrl(refreshed);
   if (url === null) {
-    throw {
-      code: ERROR_CODES.SkinUploadFailed,
-      message: 'Mojang accepted the upload but did not return an active skin URL',
-    };
+    throw new SkinError(
+      ERROR_CODES.SkinUploadFailed,
+      'Mojang accepted the upload but did not return an active skin URL',
+    );
   }
   await prewarmMediaCache(url, Buffer.from(skin));
   return { url };
