@@ -1,4 +1,5 @@
 import type { ClientRequest } from 'node:http';
+import { BUNDLE_PAUSED_SYNC_MAX_IDLE_MS } from '@main/constants/bundle';
 import { scopedLogger } from '@main/infra/logger';
 import { getClient } from '@main/services/clients';
 import { getSettings } from '@main/services/settings/settings';
@@ -42,6 +43,9 @@ type ActiveSync = {
   // Pending launch promise (resolved/rejected when the sync terminates so
   // syncForLaunch callers can await termination).
   awaiters: Array<{ resolve: () => void; reject: (err: Error) => void }>;
+  // Idle timer armed while the sync is paused; clears the activeSyncs slot if
+  // the user never resumes/cancels. Cleared on resume, cancel, or expiry.
+  pauseIdleTimer: NodeJS.Timeout | null;
 };
 
 const flattenRemote = (
@@ -90,6 +94,7 @@ export class BundleManager {
     // because task.paused === true, and exit cleanly leaving partial state.
     active.task.abort.abort();
     this.emitStatus(slug, BundleSyncStatuses.PAUSED);
+    this.armPauseIdleTimer(slug, active);
   }
 
   resumeSync(slug: ClientSlug): void {
@@ -103,6 +108,7 @@ export class BundleManager {
     }
     if (active.task.cancelled) return;
     if (!active.task.paused) return;
+    this.clearPauseIdleTimer(active);
     // Re-plan from current disk state — if files were finished before pause,
     // they're now hash-matched and will be skipped.
     void this.continuePausedSync(active).catch((err) => {
@@ -113,6 +119,8 @@ export class BundleManager {
   cancelSync(slug: ClientSlug): void {
     const active = this.activeSyncs.get(slug);
     if (!active) return;
+    this.clearPauseIdleTimer(active);
+    const wasPaused = active.task.paused;
     active.task.cancelled = true;
     active.task.abort.abort();
     // Destroy any sockets the runner might still hold (defensive — abort()
@@ -121,7 +129,17 @@ export class BundleManager {
       req.destroy();
     }
     active.task.currentRequests.clear();
-    // Status emission + activeSyncs cleanup happen in the runSync `finally`.
+    // If the sync was paused, runSync has already exited and won't run its
+    // finally cleanup again — handle the rejection + map deletion inline.
+    // Otherwise the runSync finally block does it.
+    if (wasPaused) {
+      this.emitStatus(slug, BundleSyncStatuses.CANCELLED);
+      this.rejectAwaiters(
+        active,
+        new BundleError(BundleErrorCodes.ABORTED, 'Sync cancelled while paused'),
+      );
+      this.activeSyncs.delete(slug);
+    }
   }
 
   async getInstallState(slug: ClientSlug): Promise<BundleInstallState> {
@@ -220,6 +238,7 @@ export class BundleManager {
       bundleSlug,
       forLaunch: options.forLaunch,
       awaiters: [],
+      pauseIdleTimer: null,
     };
     this.activeSyncs.set(slug, active);
 
@@ -426,6 +445,36 @@ export class BundleManager {
   private rejectAwaiters(active: ActiveSync, err: Error): void {
     const waiters = active.awaiters.splice(0, active.awaiters.length);
     for (const w of waiters) w.reject(err);
+  }
+
+  private armPauseIdleTimer(slug: ClientSlug, active: ActiveSync): void {
+    this.clearPauseIdleTimer(active);
+    const timer = setTimeout(() => {
+      this.expirePausedSync(slug);
+    }, BUNDLE_PAUSED_SYNC_MAX_IDLE_MS);
+    // Allow the process to exit even if a paused sync is still parked.
+    if (typeof timer.unref === 'function') timer.unref();
+    active.pauseIdleTimer = timer;
+  }
+
+  private clearPauseIdleTimer(active: ActiveSync): void {
+    if (active.pauseIdleTimer) {
+      clearTimeout(active.pauseIdleTimer);
+      active.pauseIdleTimer = null;
+    }
+  }
+
+  private expirePausedSync(slug: ClientSlug): void {
+    const active = this.activeSyncs.get(slug);
+    if (!active || !active.task.paused) return;
+    active.pauseIdleTimer = null;
+    logger.info(`[${slug}] paused sync idle timeout reached — auto-cancelling`);
+    this.emitStatus(slug, BundleSyncStatuses.CANCELLED);
+    this.rejectAwaiters(
+      active,
+      new BundleError(BundleErrorCodes.ABORTED, 'Paused sync expired before resume'),
+    );
+    this.activeSyncs.delete(slug);
   }
 
   private toError(err: unknown): Error {

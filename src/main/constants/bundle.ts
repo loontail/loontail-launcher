@@ -17,3 +17,8 @@ export const BUNDLE_DOWNLOAD_SPEED_WINDOW_MS = 1000;
 
 // Per-request safety net so a stalled socket doesn't hang a sync forever.
 export const BUNDLE_DOWNLOAD_REQUEST_TIMEOUT_MS = 60_000;
+
+// How long a paused sync may sit idle before the manager auto-cancels it and
+// frees the activeSyncs slot. Without this, "pause then never resume" wedges
+// the slug for the rest of the session.
+export const BUNDLE_PAUSED_SYNC_MAX_IDLE_MS = 5 * 60_000;
