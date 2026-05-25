@@ -1,10 +1,11 @@
 import { useCurrentUser, useLogout } from '@renderer/features/auth';
 import { SkinViewerCard, useSkinEditor } from '@renderer/features/skin';
-import { cn } from '@renderer/shared/lib/cn';
 import { Button } from '@renderer/shared/ui/Button';
 import { CopyButton } from '@renderer/shared/ui/CopyButton';
 import { SettingsGroup } from '@renderer/shared/ui/SettingsGroup';
 import { CapeUploadIcon } from '@renderer/shared/ui/icons/CapeUploadIcon';
+import { LoontailMarkIcon } from '@renderer/shared/ui/icons/LoontailMarkIcon';
+import { MicrosoftIcon } from '@renderer/shared/ui/icons/MicrosoftIcon';
 import { SkinUploadIcon } from '@renderer/shared/ui/icons/SkinUploadIcon';
 import type { AuthProvider } from '@shared/contracts/auth';
 import { Check, Loader2, LogOut, RotateCcw, X } from 'lucide-react';
@@ -15,11 +16,10 @@ const VIEWER_WIDTH = 180;
 const VIEWER_HEIGHT = 220;
 
 // Compact one-card account view rendered through the shared SettingsGroup
-// (title left + provider chip via rightSlot + toolbar via footer) so the
-// surface matches every other settings section visually.
-//   • Header: PLAYER eyebrow (title) + provider chip (rightSlot)
-//   • Body: viewer (left) + identity column (username + copy + spec list
-//           + logout pinned to bottom-right)
+// so the surface matches every other settings section visually.
+//   • Header: PLAYER eyebrow only — kept identical to Game/System/Launcher.
+//   • Body: viewer (left) + identity column (username + copy + provider
+//           chip + spec list + logout pinned to bottom-right)
 //   • Footer: action toolbar (Upload skin / Upload cape / Reset icon)
 //
 // Email and password are intentionally absent — neither the Strapi nor
@@ -46,16 +46,14 @@ export const AccountSection = () => {
   return (
     <SettingsGroup
       title={t('settings.account.heroEyebrow')}
-      rightSlot={provider ? <ProviderChip provider={provider} /> : undefined}
       bodyClassName="flex items-stretch gap-5 p-4"
+      footerClassName="flex flex-wrap items-center gap-2 border-t border-border bg-background/40 px-4 py-3"
       footer={
-        <div className="flex flex-wrap items-center gap-2">
-          {editor.hasPending ? (
-            <PendingToolbar editor={editor} />
-          ) : (
-            <IdleToolbar editor={editor} showCape={showCape} />
-          )}
-        </div>
+        editor.hasPending ? (
+          <PendingToolbar editor={editor} />
+        ) : (
+          <IdleToolbar editor={editor} showCape={showCape} />
+        )
       }
     >
       <input {...editor.skinInputProps} />
@@ -81,7 +79,7 @@ export const AccountSection = () => {
       </Suspense>
 
       <div className="flex min-w-0 flex-1 flex-col gap-3">
-        <div className="flex min-w-0 items-center gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <h1
             className="selectable min-w-0 truncate text-2xl font-semibold leading-tight text-foreground"
             title={username ?? undefined}
@@ -95,6 +93,7 @@ export const AccountSection = () => {
               copiedLabel={t('settings.account.usernameCopied')}
             />
           )}
+          {provider !== null && <ProviderChip provider={provider} />}
         </div>
 
         <dl className="flex flex-col gap-1.5 rounded-md border border-edge bg-surface/40 px-3 py-2 text-xs">
@@ -140,9 +139,9 @@ const SpecRow = ({ term, value }: SpecRowProps) => (
 
 type ToolbarProps = { editor: ReturnType<typeof useSkinEditor> };
 
-// Reset is rendered icon-only with title/aria-label so the row stays on a
-// single line even with the longest localised Upload label ("Завантажити
-// скін / плащ"). Reset's `ml-auto` keeps it right-aligned.
+// Upload actions cluster on the left so the toolbar reads as one unit.
+// Reset is pushed to the right with `ml-auto` and styled as a muted ghost
+// — it's a secondary/destructive control that should fade until hovered.
 const IdleToolbar = ({ editor, showCape }: ToolbarProps & { showCape: boolean }) => {
   const { t } = useTranslation();
   return (
@@ -174,7 +173,7 @@ const IdleToolbar = ({ editor, showCape }: ToolbarProps & { showCape: boolean })
         size="sm"
         onClick={() => void editor.resetAll()}
         disabled={editor.isBusy || !editor.canReset}
-        className="ml-auto gap-1.5 whitespace-nowrap"
+        className="ml-auto gap-1.5 whitespace-nowrap text-muted-foreground hover:text-foreground"
         title={t('settings.account.resetToDefault')}
       >
         <RotateCcw className="size-3.5" />
@@ -220,6 +219,10 @@ const PendingToolbar = ({ editor }: ToolbarProps) => {
 
 type ProviderChipProps = { provider: AuthProvider };
 
+// Compact "signed in via X" badge. Sits next to the username (not in the
+// section header) so it doesn't inflate the eyebrow row beyond the height
+// used by every other settings section. Brand mark conveys provider; the
+// label stays subtle and lowercase to avoid competing with the username.
 const ProviderChip = ({ provider }: ProviderChipProps) => {
   const { t } = useTranslation();
   const label =
@@ -227,20 +230,12 @@ const ProviderChip = ({ provider }: ProviderChipProps) => {
       ? t('settings.account.providerMojang')
       : t('settings.account.providerStrapi');
   return (
-    <span
-      className={cn(
-        'inline-flex w-fit items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-eyebrow',
-        provider === 'mojang'
-          ? 'border-success/40 bg-success/10 text-success'
-          : 'border-border bg-muted text-foreground',
+    <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-edge bg-surface px-2 text-[11px] font-medium text-foreground/80">
+      {provider === 'mojang' ? (
+        <MicrosoftIcon className="size-3" />
+      ) : (
+        <LoontailMarkIcon className="size-3 text-glass/80" />
       )}
-    >
-      <span
-        className={cn(
-          'inline-block size-1.5 rounded-full',
-          provider === 'mojang' ? 'bg-success' : 'bg-foreground/60',
-        )}
-      />
       {label}
     </span>
   );

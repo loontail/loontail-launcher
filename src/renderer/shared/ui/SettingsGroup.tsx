@@ -1,6 +1,8 @@
 import { cn } from '@renderer/shared/lib/cn';
 import type { ReactNode } from 'react';
 
+const DEFAULT_FOOTER_CLASS = 'border-t border-border bg-background/40 px-4 py-3';
+
 type SettingsGroupProps = {
   title?: string | undefined;
   // Optional content rendered on the right side of the header row — e.g. a
@@ -14,6 +16,10 @@ type SettingsGroupProps = {
   // which matches stacked `SettingsRow`s; pass a custom layout class (e.g.
   // `p-5` with arbitrary internal markup) when the body isn't a row list.
   bodyClassName?: string | undefined;
+  // Override the footer wrapper className. Defaults to a divider + tinted
+  // strip with comfortable `py-3` padding. Pass a custom value when the
+  // footer hosts compact controls that need tighter spacing.
+  footerClassName?: string | undefined;
   children: ReactNode;
 };
 
@@ -22,6 +28,7 @@ export const SettingsGroup = ({
   rightSlot,
   footer,
   bodyClassName = 'divide-y divide-border',
+  footerClassName = DEFAULT_FOOTER_CLASS,
   children,
 }: SettingsGroupProps) => {
   const hasHeader = title !== undefined || rightSlot !== undefined;
@@ -40,9 +47,7 @@ export const SettingsGroup = ({
         </div>
       )}
       <div className={cn(bodyClassName)}>{children}</div>
-      {footer !== undefined && (
-        <div className="border-t border-border bg-background/40 px-4 py-3">{footer}</div>
-      )}
+      {footer !== undefined && <div className={cn(footerClassName)}>{footer}</div>}
     </section>
   );
 };
