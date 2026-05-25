@@ -57,7 +57,7 @@ export const ClientsNavigation = ({
   return (
     <aside className="relative flex h-full flex-col before:pointer-events-none before:absolute before:inset-y-0 before:left-0 before:w-px before:bg-glass/15 before:[mask-image:linear-gradient(to_bottom,transparent,black_20%,black_80%,transparent)]">
       <div className="px-5 pb-3 pt-6">
-        <p className="text-[10px] font-bold uppercase tracking-eyebrow text-glass/35">
+        <p className="text-microlabel font-bold uppercase tracking-eyebrow text-glass/35">
           {t('clients.sectionTitle')}
         </p>
       </div>

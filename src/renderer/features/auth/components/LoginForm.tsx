@@ -81,7 +81,7 @@ export const LoginForm = () => {
           {isPending ? <Loader2 className="size-4 animate-spin" /> : t('auth.submit')}
         </Button>
 
-        <div className="flex items-center gap-3 text-[10px] uppercase tracking-widest text-muted-foreground">
+        <div className="flex items-center gap-3 text-microlabel uppercase tracking-widest text-muted-foreground">
           <span className="h-px flex-1 bg-border" />
           {t('auth.or')}
           <span className="h-px flex-1 bg-border" />

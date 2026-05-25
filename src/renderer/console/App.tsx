@@ -207,14 +207,14 @@ export const ConsoleApp = () => {
             <span className="flex h-4 w-4 items-center justify-center text-glass/55">
               <Terminal className="size-3.5" />
             </span>
-            <span className="text-[11px] font-bold uppercase tracking-eyebrow text-glass/55">
+            <span className="text-eyebrow font-bold uppercase tracking-eyebrow text-glass/55">
               {t('console.header')}
             </span>
             {headerSubtitle && (
               <>
                 <span className="h-3 w-px bg-edge-md" aria-hidden="true" />
                 <span
-                  className="max-w-[260px] truncate text-[12px] font-semibold text-glass/85"
+                  className="max-w-[260px] truncate text-caption font-semibold text-glass/85"
                   title={headerSubtitle}
                 >
                   {headerSubtitle}
@@ -319,7 +319,7 @@ export const ConsoleApp = () => {
       </div>
 
       {isCrashed && (
-        <output className="flex flex-wrap items-center gap-2 border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-[12px] text-destructive">
+        <output className="flex flex-wrap items-center gap-2 border-b border-destructive/40 bg-destructive/10 px-4 py-2 text-caption text-destructive">
           <AlertTriangle size={14} aria-hidden="true" />
           <strong className="font-semibold">{statusLabel}</strong>
           <span className="text-foreground/70">{t('console.crashHint')}</span>
@@ -337,7 +337,7 @@ export const ConsoleApp = () => {
       )}
 
       {stream.paused && (
-        <div className="border-b border-edge bg-chip px-4 py-1.5 text-center text-[11px] text-foreground/65">
+        <div className="border-b border-edge bg-chip px-4 py-1.5 text-center text-eyebrow text-foreground/65">
           {t('console.pausedBanner')}
         </div>
       )}
@@ -348,12 +348,12 @@ export const ConsoleApp = () => {
           className="console-body console-mono absolute inset-0 overflow-auto bg-background text-[12.5px] leading-snug"
         >
           {stream.droppedCount > 0 && (
-            <div className="sticky top-0 z-10 border-b border-edge bg-chip-dark px-4 py-1 text-center text-[11px] text-foreground/55">
+            <div className="sticky top-0 z-10 border-b border-edge bg-chip-dark px-4 py-1 text-center text-eyebrow text-foreground/55">
               {t('console.droppedHint', { count: stream.droppedCount })}
             </div>
           )}
           {totalLines === 0 && (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-[12px] text-foreground/40">
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-caption text-foreground/40">
               {t('console.empty')}
             </div>
           )}
@@ -417,7 +417,7 @@ export const ConsoleApp = () => {
       {selectedLine && (
         <div className="flex max-h-[30%] flex-col border-t border-edge bg-background">
           <div className="flex items-center justify-between border-b border-edge px-4 py-2">
-            <span className="text-[11px] font-bold uppercase tracking-eyebrow text-foreground/55">
+            <span className="text-eyebrow font-bold uppercase tracking-eyebrow text-foreground/55">
               {t('console.detailHeader')}
             </span>
             <div className="flex items-center gap-1.5">
@@ -443,7 +443,7 @@ export const ConsoleApp = () => {
               </Button>
             </div>
           </div>
-          <pre className="console-mono selectable flex-1 overflow-auto whitespace-pre-wrap break-words px-4 py-3 text-[12px] leading-snug">
+          <pre className="console-mono selectable flex-1 overflow-auto whitespace-pre-wrap break-words px-4 py-3 text-caption leading-snug">
             {selectedLine.code
               ? t(selectedLine.code, selectedLine.args ?? {})
               : selectedLine.message}

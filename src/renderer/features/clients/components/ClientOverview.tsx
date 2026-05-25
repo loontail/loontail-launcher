@@ -30,7 +30,9 @@ const SETTINGS_DISABLED_STATUSES: ReadonlySet<InstallStatus> = new Set([
 ]);
 
 const SectionLabel = ({ children }: { children: ReactNode }) => (
-  <p className="mb-3 text-[10px] font-bold uppercase tracking-eyebrow text-glass/40">{children}</p>
+  <p className="mb-3 text-microlabel font-bold uppercase tracking-eyebrow text-glass/40">
+    {children}
+  </p>
 );
 
 export const ClientOverview = ({ client }: ClientOverviewProps) => {
@@ -78,14 +80,14 @@ export const ClientOverview = ({ client }: ClientOverviewProps) => {
             {(minecraftVersion || (keywords?.length ?? 0) > 0) && (
               <div className="flex flex-wrap gap-1.5">
                 {minecraftVersion && (
-                  <span className="rounded-full border border-edge-md bg-chip-dark px-2.5 py-1 text-[11px] font-semibold tracking-wide text-glass/85 backdrop-blur-sm">
+                  <span className="rounded-full border border-edge-md bg-chip-dark px-2.5 py-1 text-eyebrow font-semibold tracking-wide text-glass/85 backdrop-blur-sm">
                     {t('clients.versionChip.full', { version: minecraftVersion })}
                   </span>
                 )}
                 {keywords?.map((keyword) => (
                   <span
                     key={keyword.id}
-                    className="rounded-full border border-edge bg-chip px-2.5 py-1 text-[11px] font-medium text-glass/55 backdrop-blur-sm"
+                    className="rounded-full border border-edge bg-chip px-2.5 py-1 text-eyebrow font-medium text-glass/55 backdrop-blur-sm"
                   >
                     {keyword.title}
                   </span>

@@ -44,7 +44,7 @@ export const ClientListCard = ({
         >
           {title}
         </span>
-        <div className="flex items-center gap-1.5 text-[11px] text-glass/40">
+        <div className="flex items-center gap-1.5 text-eyebrow text-glass/40">
           {minecraftVersion && (
             <span className="tabular-nums">
               {t('clients.versionChip.short', { version: minecraftVersion })}

@@ -17,7 +17,7 @@ export const AppBar = ({ actions }: AppBarProps) => {
           <span className="flex h-4 w-4 items-center justify-center">
             <span className="h-2 w-2 rotate-45 rounded-xs bg-glass/80 shadow-[0_0_8px_var(--color-glow-glass)]" />
           </span>
-          <span className="text-[11px] font-bold uppercase tracking-eyebrow text-glass/55">
+          <span className="text-eyebrow font-bold uppercase tracking-eyebrow text-glass/55">
             {APP_BRAND}
           </span>
           <span className="group relative inline-flex">
@@ -26,7 +26,7 @@ export const AppBar = ({ actions }: AppBarProps) => {
             </span>
             <span
               role="tooltip"
-              className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-[280px] -translate-x-1/2 whitespace-normal rounded-md bg-popover px-3 py-2 text-[11px] font-medium leading-snug text-popover-foreground opacity-0 shadow-md ring-1 ring-edge-md transition-opacity duration-150 group-hover:opacity-100"
+              className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-[280px] -translate-x-1/2 whitespace-normal rounded-md bg-popover px-3 py-2 text-eyebrow font-medium leading-snug text-popover-foreground opacity-0 shadow-md ring-1 ring-edge-md transition-opacity duration-150 group-hover:opacity-100"
             >
               {t('appBar.alphaTooltip')}
             </span>

@@ -11,10 +11,10 @@ const VARIANT_CLASSES: Record<ActionVariant, string> = {
     'shadow-[0_8px_24px_-6px_var(--color-glow-overlay-md)] ' +
     'hover:scale-[1.02] hover:shadow-[0_10px_28px_-6px_var(--color-glow-overlay-lg)] active:scale-[0.97]',
   ghost:
-    'h-9 px-4 text-[12px] border border-edge-md bg-ghost text-glass/75 ' +
+    'h-9 px-4 text-caption border border-edge-md bg-ghost text-glass/75 ' +
     'hover:border-edge-xl hover:bg-ghost-hover hover:text-glass active:scale-[0.97]',
   danger:
-    'h-9 px-4 text-[12px] border border-destructive/30 bg-destructive/10 text-destructive/85 ' +
+    'h-9 px-4 text-caption border border-destructive/30 bg-destructive/10 text-destructive/85 ' +
     'hover:border-destructive/40 hover:bg-destructive/15 hover:text-destructive active:scale-[0.97]',
 };
 

@@ -92,7 +92,7 @@ const StepBadge = ({ step, indexInRender, isFirst, prevDone }: StepBadgeProps) =
       )}
       <div
         className={cn(
-          'relative z-10 flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold leading-none transition-colors',
+          'relative z-10 flex h-6 w-6 items-center justify-center rounded-full text-microlabel font-bold leading-none transition-colors',
           isDone && 'bg-primary text-primary-foreground',
           isActive && !isPaused && 'bg-primary text-primary-foreground',
           isPaused && 'border border-edge-xl bg-ghost text-glass/75',
@@ -105,7 +105,7 @@ const StepBadge = ({ step, indexInRender, isFirst, prevDone }: StepBadgeProps) =
       </div>
       <span
         className={cn(
-          'truncate text-center text-[11px] font-semibold tracking-wide transition-colors',
+          'truncate text-center text-eyebrow font-semibold tracking-wide transition-colors',
           isActive && 'text-glass',
           isPaused && 'text-glass/75',
           isDone && 'text-glass/80',
@@ -230,7 +230,7 @@ const ProgressBody = ({ active, paused, controls, slug }: ProgressBodyProps) => 
       <div className="flex items-baseline justify-between gap-4">
         <p className="min-w-0 flex-1 truncate text-[13px] font-semibold text-glass">
           {paused && (
-            <span className="mr-2 inline-flex items-center gap-1 rounded-full bg-glass/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-glass/70">
+            <span className="mr-2 inline-flex items-center gap-1 rounded-full bg-glass/15 px-2 py-0.5 text-microlabel font-bold uppercase tracking-wide text-glass/70">
               <Pause size={9} />
               {t('clients.paused')}
             </span>
@@ -275,12 +275,12 @@ const ProgressBody = ({ active, paused, controls, slug }: ProgressBodyProps) => 
         */}
         <p
           dir="rtl"
-          className="min-w-0 flex-1 truncate text-left text-[11px] text-glass/60"
+          className="min-w-0 flex-1 truncate text-left text-eyebrow text-glass/60"
           title={active.currentFile ?? ''}
         >
           <bdi>{active.currentFile || ' '}</bdi>
         </p>
-        <div className="flex shrink-0 items-center gap-2 tabular-nums text-[11px] text-glass/55">
+        <div className="flex shrink-0 items-center gap-2 tabular-nums text-eyebrow text-glass/55">
           {speedText && <span>{speedText}</span>}
           {showBytes && speedText && <span className="text-glass/25">·</span>}
           {showBytes && (
@@ -323,7 +323,7 @@ export const InstallProgress = ({ slug, view }: InstallProgressProps) => {
       aria-atomic="true"
       className="flex w-full flex-col gap-4 rounded-2xl border border-edge bg-surface p-5 backdrop-blur-md"
     >
-      <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-glass/55">
+      <p className="text-microlabel font-bold uppercase tracking-[0.22em] text-glass/55">
         {t(HEADER_KEY_BY_MODE[mode])}
         {stepIndicator && <span className="ml-2 text-glass/40">· {stepIndicator}</span>}
       </p>

@@ -76,13 +76,13 @@ export const ServersInfo = ({ servers }: ServersInfoProps) => {
                 <span className="truncate text-[13px] font-semibold leading-5 text-glass">
                   {displayName}
                 </span>
-                <span className="truncate text-[11px] leading-4 text-glass/45">
+                <span className="truncate text-eyebrow leading-4 text-glass/45">
                   {server.address}
                 </span>
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2 text-[11px]">
+            <div className="flex shrink-0 items-center gap-2 text-eyebrow">
               {hasPlayerCount && status.players && (
                 <>
                   <span className="tabular-nums text-glass/75">

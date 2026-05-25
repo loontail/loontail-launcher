@@ -59,6 +59,10 @@
   --radius-lg: 1.25rem;
 
   --tracking-eyebrow: 0.22em;
+
+  --text-eyebrow: 11px;
+  --text-caption: 12px;
+  --text-microlabel: 10px;
 }
 
 @utility app-region-drag {

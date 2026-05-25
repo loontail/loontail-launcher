@@ -66,7 +66,7 @@ const renderLoaderKindControl = (args: {
               disabled={isSavingOverride || active}
               onClick={() => switchLoader(option)}
               className={cn(
-                'px-3 py-1 text-[11px] font-semibold transition-colors rounded-full',
+                'px-3 py-1 text-eyebrow font-semibold transition-colors rounded-full',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glass/40',
                 active ? 'bg-primary text-primary-foreground' : 'text-glass/65 hover:text-glass',
               )}
@@ -80,12 +80,12 @@ const renderLoaderKindControl = (args: {
   }
   if (effectiveLoader) {
     return (
-      <span className="text-[12px] font-semibold text-glass/85">
+      <span className="text-caption font-semibold text-glass/85">
         {t(`clientSettings.loader.${effectiveLoader}`)}
       </span>
     );
   }
-  return <span className="text-[12px] font-semibold text-glass/55">—</span>;
+  return <span className="text-caption font-semibold text-glass/55">—</span>;
 };
 
 export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsModalProps) => {
@@ -255,7 +255,7 @@ export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsM
               <SettingsRow
                 label={t('clientSettings.loader.minecraftVersion')}
                 right={
-                  <span className="select-text text-[11px] font-medium tabular-nums text-glass/70">
+                  <span className="select-text text-eyebrow font-medium tabular-nums text-glass/70">
                     {client.minecraftVersion || '—'}
                   </span>
                 }
@@ -264,7 +264,7 @@ export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsM
                 <SettingsRow
                   label={t('clientSettings.loader.version')}
                   right={
-                    <span className="select-text text-[11px] font-medium tabular-nums text-glass/70">
+                    <span className="select-text text-eyebrow font-medium tabular-nums text-glass/70">
                       {loaderVersion}
                     </span>
                   }
@@ -280,7 +280,7 @@ export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsM
               label={t('clientSettings.runtime.component')}
               description={t('clientSettings.runtime.componentDesc')}
               right={
-                <span className="select-text text-[11px] font-medium tabular-nums text-glass/70">
+                <span className="select-text text-eyebrow font-medium tabular-nums text-glass/70">
                   {resolved.runtime.component}
                 </span>
               }
@@ -289,7 +289,7 @@ export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsM
               label={t('clientSettings.runtime.path')}
               description={
                 <span
-                  className="block max-w-full select-text truncate font-mono text-[10px] text-glass/60"
+                  className="block max-w-full select-text truncate font-mono text-microlabel text-glass/60"
                   title={resolved.runtime.path}
                   dir="rtl"
                 >

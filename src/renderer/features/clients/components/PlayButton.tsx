@@ -90,7 +90,7 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
     const errorText = localizeBundleError(bundle.error.code, bundle.error.message, t);
     return (
       <div className="flex max-w-[480px] flex-col gap-2">
-        <p role="alert" className="text-[12px] leading-snug text-destructive">
+        <p role="alert" className="text-caption leading-snug text-destructive">
           {errorText}
         </p>
         <ActionBtn
@@ -147,7 +147,7 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
       return (
         <div className="flex max-w-[480px] flex-col gap-2">
           {errorText && (
-            <p role="alert" className="text-[12px] leading-snug text-destructive">
+            <p role="alert" className="text-caption leading-snug text-destructive">
               {errorText}
             </p>
           )}

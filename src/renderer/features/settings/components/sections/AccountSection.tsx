@@ -128,7 +128,7 @@ type SpecRowProps = { term: string; value: string };
 
 const SpecRow = ({ term, value }: SpecRowProps) => (
   <div className="flex items-baseline gap-3">
-    <dt className="w-12 shrink-0 text-[10px] font-semibold uppercase tracking-eyebrow text-muted-foreground">
+    <dt className="w-12 shrink-0 text-microlabel font-semibold uppercase tracking-eyebrow text-muted-foreground">
       {term}
     </dt>
     <dd className="min-w-0 truncate text-foreground" title={value}>
@@ -230,7 +230,7 @@ const ProviderChip = ({ provider }: ProviderChipProps) => {
       ? t('settings.account.providerMojang')
       : t('settings.account.providerStrapi');
   return (
-    <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-edge bg-surface px-2 text-[11px] font-medium text-foreground/80">
+    <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-edge bg-surface px-2 text-eyebrow font-medium text-foreground/80">
       {provider === 'mojang' ? (
         <MicrosoftIcon className="size-3" />
       ) : (
