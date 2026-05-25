@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { app } from 'electron';
 import { HttpError } from './http';
@@ -11,52 +11,55 @@ const safeKey = (key: string): string => Buffer.from(key, 'utf8').toString('base
 const namespaceDir = (namespace: string): string =>
   join(app.getPath('userData'), 'cache', namespace);
 
-const ensureNamespace = (namespace: string): string => {
+const ensureNamespace = async (namespace: string): Promise<string> => {
   const dir = namespaceDir(namespace);
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
+  await mkdir(dir, { recursive: true });
   return dir;
 };
 
-export const readBuffer = (namespace: string, key: string): Buffer | null => {
+const isEnoent = (error: unknown): boolean =>
+  typeof error === 'object' && error !== null && (error as NodeJS.ErrnoException).code === 'ENOENT';
+
+export const readBuffer = async (namespace: string, key: string): Promise<Buffer | null> => {
   const dir = namespaceDir(namespace);
   const file = join(dir, safeKey(key));
-  if (!existsSync(file)) return null;
   try {
-    return readFileSync(file);
+    return await readFile(file);
   } catch (error) {
+    if (isEnoent(error)) return null;
     logger.warn('Failed to read cache entry', { namespace, key, error });
     return null;
   }
 };
 
-export const writeBuffer = (namespace: string, key: string, buffer: Buffer): void => {
-  const dir = ensureNamespace(namespace);
-  const file = join(dir, safeKey(key));
+export const writeBuffer = async (
+  namespace: string,
+  key: string,
+  buffer: Buffer,
+): Promise<void> => {
   try {
-    writeFileSync(file, buffer);
+    const dir = await ensureNamespace(namespace);
+    const file = join(dir, safeKey(key));
+    await writeFile(file, buffer);
   } catch (error) {
     logger.warn('Failed to write cache entry', { namespace, key, error });
   }
 };
 
-export const deleteBuffer = (namespace: string, key: string): void => {
+export const deleteBuffer = async (namespace: string, key: string): Promise<void> => {
   const dir = namespaceDir(namespace);
   const file = join(dir, safeKey(key));
-  if (!existsSync(file)) return;
   try {
-    rmSync(file);
+    await rm(file, { force: true });
   } catch (error) {
     logger.warn('Failed to delete cache entry', { namespace, key, error });
   }
 };
 
-export const clearNamespace = (namespace: string): void => {
+export const clearNamespace = async (namespace: string): Promise<void> => {
   const dir = namespaceDir(namespace);
-  if (!existsSync(dir)) return;
   try {
-    rmSync(dir, { recursive: true, force: true });
+    await rm(dir, { recursive: true, force: true });
   } catch (error) {
     logger.warn('Failed to clear cache namespace', { namespace, error });
   }
@@ -87,11 +90,11 @@ export const cachedFetch = async <T>(options: CachedFetchOptions<T>): Promise<T>
   const isOffline = options.isOfflineError ?? defaultIsOfflineError;
   try {
     const value = await options.fetcher();
-    writeBuffer(options.namespace, options.key, Buffer.from(JSON.stringify(value), 'utf8'));
+    await writeBuffer(options.namespace, options.key, Buffer.from(JSON.stringify(value), 'utf8'));
     return value;
   } catch (error) {
     if (!isOffline(error)) throw error;
-    const cached = readBuffer(options.namespace, options.key);
+    const cached = await readBuffer(options.namespace, options.key);
     if (!cached) throw error;
     try {
       return JSON.parse(cached.toString('utf8')) as T;

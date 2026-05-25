@@ -80,14 +80,14 @@ const throwMojangUploadError = (error: unknown): never => {
 
 // Drop the cached binary so cache:// falls back to the network when the URL
 // changes (Strapi-flavoured asset URL contains a hash that flips on upload).
-const updateStoredStrapiUserAsset = (
+const updateStoredStrapiUserAsset = async (
   session: StrapiSession,
   kind: SkinKind,
   url: string | null,
-): void => {
+): Promise<void> => {
   const previous = session.user[kind];
   if (typeof previous === 'string' && previous.length > 0) {
-    invalidateMediaCache(previous);
+    await invalidateMediaCache(previous);
   }
   setStoredAuth({
     provider: 'strapi',
@@ -123,8 +123,8 @@ const uploadSkinStrapi = async (
     throwUploadError('Update user skin field failed', error);
   }
 
-  updateStoredStrapiUserAsset(session, payload.type, uploadedUrl);
-  prewarmMediaCache(uploadedUrl, buffer);
+  await updateStoredStrapiUserAsset(session, payload.type, uploadedUrl);
+  await prewarmMediaCache(uploadedUrl, buffer);
   return { url: uploadedUrl };
 };
 
@@ -166,7 +166,7 @@ const uploadSkinMojang = async (
       message: 'Mojang accepted the upload but did not return an active skin URL',
     };
   }
-  prewarmMediaCache(url, Buffer.from(skin));
+  await prewarmMediaCache(url, Buffer.from(skin));
   return { url };
 };
 
@@ -185,9 +185,11 @@ export const clearSkin = async (): Promise<void> => {
     } catch (error) {
       logger.warn('Failed to clear Strapi skin fields on server', error);
     }
-    updateStoredStrapiUserAsset(session, SkinKinds.SKIN, null);
+    await updateStoredStrapiUserAsset(session, SkinKinds.SKIN, null);
     const after = getStoredAuth();
-    if (after?.provider === 'strapi') updateStoredStrapiUserAsset(after, SkinKinds.CAPE, null);
+    if (after?.provider === 'strapi') {
+      await updateStoredStrapiUserAsset(after, SkinKinds.CAPE, null);
+    }
     return;
   }
 

@@ -39,7 +39,7 @@ const fetchAndStore = async (sourceUrl: string, cacheKey: string): Promise<Cache
       return null;
     }
     const buffer = Buffer.from(await response.arrayBuffer());
-    writeBuffer(CACHE_NAMESPACE, cacheKey, buffer);
+    await writeBuffer(CACHE_NAMESPACE, cacheKey, buffer);
     return {
       body: buffer,
       mimeType: response.headers.get('content-type') ?? guessMimeFromUrl(sourceUrl),
@@ -52,7 +52,7 @@ const fetchAndStore = async (sourceUrl: string, cacheKey: string): Promise<Cache
 
 export const fetchCachedMedia = async (sourceUrl: string): Promise<CachedMedia | null> => {
   const cacheKey = hashUrl(sourceUrl);
-  const cached = readBuffer(CACHE_NAMESPACE, cacheKey);
+  const cached = await readBuffer(CACHE_NAMESPACE, cacheKey);
   if (cached) {
     return { body: cached, mimeType: guessMimeFromUrl(sourceUrl) };
   }
@@ -68,10 +68,10 @@ export const fetchCachedMedia = async (sourceUrl: string): Promise<CachedMedia |
   return promise;
 };
 
-export const prewarmMediaCache = (sourceUrl: string, body: Buffer): void => {
-  writeBuffer(CACHE_NAMESPACE, hashUrl(sourceUrl), body);
+export const prewarmMediaCache = async (sourceUrl: string, body: Buffer): Promise<void> => {
+  await writeBuffer(CACHE_NAMESPACE, hashUrl(sourceUrl), body);
 };
 
-export const invalidateMediaCache = (sourceUrl: string): void => {
-  deleteBuffer(CACHE_NAMESPACE, hashUrl(sourceUrl));
+export const invalidateMediaCache = async (sourceUrl: string): Promise<void> => {
+  await deleteBuffer(CACHE_NAMESPACE, hashUrl(sourceUrl));
 };

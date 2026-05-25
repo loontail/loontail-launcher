@@ -54,13 +54,13 @@ describe('cachedFetch', () => {
 
     expect(value).toEqual({ hello: 'world' });
     expect(fetcher).toHaveBeenCalledTimes(1);
-    const onDisk = readBuffer(NAMESPACE, KEY);
+    const onDisk = await readBuffer(NAMESPACE, KEY);
     expect(onDisk).not.toBeNull();
     expect(JSON.parse(onDisk?.toString('utf8') ?? '')).toEqual({ hello: 'world' });
   });
 
   it('falls back to disk on a network error when a snapshot exists', async () => {
-    writeBuffer(NAMESPACE, KEY, Buffer.from(JSON.stringify({ from: 'disk' }), 'utf8'));
+    await writeBuffer(NAMESPACE, KEY, Buffer.from(JSON.stringify({ from: 'disk' }), 'utf8'));
     const fetcher = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
 
     const value = await cachedFetch({ namespace: NAMESPACE, key: KEY, fetcher });
@@ -78,7 +78,7 @@ describe('cachedFetch', () => {
   });
 
   it('treats HttpError 5xx as offline', async () => {
-    writeBuffer(NAMESPACE, KEY, Buffer.from(JSON.stringify({ from: 'disk' }), 'utf8'));
+    await writeBuffer(NAMESPACE, KEY, Buffer.from(JSON.stringify({ from: 'disk' }), 'utf8'));
     const fetcher = vi.fn().mockRejectedValue(new HttpError(503, 'Service Unavailable'));
 
     const value = await cachedFetch({ namespace: NAMESPACE, key: KEY, fetcher });
@@ -87,7 +87,7 @@ describe('cachedFetch', () => {
   });
 
   it('rethrows HttpError 4xx without consulting disk', async () => {
-    writeBuffer(NAMESPACE, KEY, Buffer.from(JSON.stringify({ from: 'disk' }), 'utf8'));
+    await writeBuffer(NAMESPACE, KEY, Buffer.from(JSON.stringify({ from: 'disk' }), 'utf8'));
     const httpError = new HttpError(404, 'Not Found');
     const fetcher = vi.fn().mockRejectedValue(httpError);
 
@@ -95,7 +95,7 @@ describe('cachedFetch', () => {
   });
 
   it('respects a custom isOfflineError predicate', async () => {
-    writeBuffer(NAMESPACE, KEY, Buffer.from(JSON.stringify({ from: 'disk' }), 'utf8'));
+    await writeBuffer(NAMESPACE, KEY, Buffer.from(JSON.stringify({ from: 'disk' }), 'utf8'));
     const httpError = new HttpError(404, 'Not Found');
     const fetcher = vi.fn().mockRejectedValue(httpError);
 
@@ -110,7 +110,7 @@ describe('cachedFetch', () => {
   });
 
   it('rethrows the fetcher error when the on-disk snapshot is corrupt JSON', async () => {
-    writeBuffer(NAMESPACE, KEY, Buffer.from('{not valid json', 'utf8'));
+    await writeBuffer(NAMESPACE, KEY, Buffer.from('{not valid json', 'utf8'));
     const networkError = new TypeError('fetch failed');
     const fetcher = vi.fn().mockRejectedValue(networkError);
 
