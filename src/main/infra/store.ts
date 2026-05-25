@@ -6,8 +6,13 @@ import {
   STORE_KEY_LAUNCHER_SETTINGS,
   STORE_KEY_SCHEMA_VERSION,
 } from '@shared/constants';
-import type { AuthSession, StrapiSession, StrapiUser } from '@shared/contracts/auth';
-import type { LauncherSettings } from '@shared/contracts/settings';
+import {
+  type AuthSession,
+  AuthSessionSchema,
+  type StrapiSession,
+  type StrapiUser,
+} from '@shared/contracts/auth';
+import { type LauncherSettings, LauncherSettingsSchema } from '@shared/contracts/settings';
 import { defaultLauncherSettings, normalizeLauncherSettings } from '@shared/domain/settings';
 import Store from 'electron-store';
 
@@ -99,7 +104,14 @@ const migrateAuth = (): void => {
 
 migrateAuth();
 
-export const getStoredAuth = (): AuthSession | null => store.get(STORE_KEY_AUTH);
+export const getStoredAuth = (): AuthSession | null => {
+  const raw = store.get(STORE_KEY_AUTH);
+  if (raw === null || raw === undefined) return null;
+  const parsed = AuthSessionSchema.safeParse(raw);
+  if (parsed.success) return parsed.data;
+  logger.warn('Stored auth session failed validation; forcing a fresh sign-in', parsed.error);
+  return null;
+};
 
 export const setStoredAuth = (session: AuthSession | null): void => {
   store.set(STORE_KEY_AUTH, session);
@@ -109,8 +121,13 @@ export const clearStoredAuth = (): void => {
   store.set(STORE_KEY_AUTH, null);
 };
 
-export const getStoredLauncherSettings = (): LauncherSettings =>
-  normalizeLauncherSettings(store.get(STORE_KEY_LAUNCHER_SETTINGS));
+export const getStoredLauncherSettings = (): LauncherSettings => {
+  const raw = store.get(STORE_KEY_LAUNCHER_SETTINGS);
+  const parsed = LauncherSettingsSchema.safeParse(raw);
+  if (parsed.success) return normalizeLauncherSettings(parsed.data);
+  logger.warn('Stored launcher settings failed validation; falling back to defaults', parsed.error);
+  return buildDefaultSettings();
+};
 
 export const setStoredLauncherSettings = (settings: LauncherSettings): LauncherSettings => {
   const normalized = normalizeLauncherSettings(settings);
