@@ -268,6 +268,14 @@ Best-effort: when Strapi is unreachable the sweep skips silently.
 - The process is supervised: stdout/stderr piped to scoped logger,
   exit code reported back to renderer via an event.
 
+### 8.3 `@loontail/minecraft-kit`
+
+- Pinned to an exact version in `package.json` (no caret). The kit is
+  owned by the same team, but the launcher reaches into kit-internal
+  contracts (`InstallActionKinds`, `RepairFromErrorSupportedCodes`,
+  `EventTypes`), so version bumps are deliberate PRs — not implicit
+  through semver-flavoured ranges on a `0.x` line.
+
 ## 9. Error model
 
 - IPC errors cross the bridge as structured `IpcError` objects
