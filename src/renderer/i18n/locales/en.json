@@ -246,7 +246,7 @@
     "launcher": {
       "maintenance": "Maintenance",
       "clearCache": "Clear cache",
-      "clearCacheDesc": "Remove all cached images and data",
+      "clearCacheDesc": "Remove cached images and data on disk ({{size}})",
       "clear": "Clear",
       "updates": "Updates",
       "updatesDesc": "Check for a new launcher version",

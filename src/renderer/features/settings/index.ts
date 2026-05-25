@@ -9,9 +9,11 @@ export { RamControl } from './components/RamControl';
 export {
   useChooseClientFolder,
   useClearClientOverrides,
+  useClearMediaCache,
   useDiskSpace,
   useFolderSize,
   useLauncherSettings,
+  useMediaCacheSize,
   usePickInstallFolder,
   useRamRange,
   useResolveFor,

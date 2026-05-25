@@ -61,6 +61,8 @@ export type IpcContract = {
   'system.copyText': { args: string; result: void };
   'media.uploadSkin': { args: UploadSkinPayload; result: UploadSkinResult };
   'media.clearSkin': { args: undefined; result: void };
+  'media.clearCache': { args: undefined; result: void };
+  'media.getCacheSize': { args: undefined; result: number };
   'clients.list': { args: { locale?: string } | undefined; result: StrapiList<Client> };
   'servers.getStatuses': { args: string[]; result: ServerStatus[] };
   'minecraft.getStatus': {

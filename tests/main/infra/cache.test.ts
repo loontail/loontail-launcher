@@ -26,7 +26,13 @@ vi.mock('@main/infra/logger', () => ({
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { cachedFetch, readBuffer, writeBuffer } from '@main/infra/cache';
+import {
+  cachedFetch,
+  enforceSizeBound,
+  getNamespaceSize,
+  readBuffer,
+  writeBuffer,
+} from '@main/infra/cache';
 import { HttpError } from '@main/infra/http';
 
 const NAMESPACE = 'test/namespace';
@@ -117,5 +123,39 @@ describe('cachedFetch', () => {
     await expect(cachedFetch({ namespace: NAMESPACE, key: KEY, fetcher })).rejects.toBe(
       networkError,
     );
+  });
+});
+
+describe('enforceSizeBound', () => {
+  const writeWithMtime = async (key: string, size: number, mtime: Date): Promise<void> => {
+    await writeBuffer(NAMESPACE, key, Buffer.alloc(size, 1));
+    const file = path.join(namespaceDir(), Buffer.from(key, 'utf8').toString('base64url'));
+    fs.utimesSync(file, mtime, mtime);
+  };
+
+  it('no-ops when the namespace fits under the bound', async () => {
+    await writeWithMtime('a', 100, new Date(1000));
+    await writeWithMtime('b', 100, new Date(2000));
+
+    await enforceSizeBound(NAMESPACE, 1024);
+
+    expect(await getNamespaceSize(NAMESPACE)).toBe(200);
+  });
+
+  it('prunes oldest entries by mtime until the total fits under the bound', async () => {
+    await writeWithMtime('old', 400, new Date(1000));
+    await writeWithMtime('mid', 400, new Date(2000));
+    await writeWithMtime('new', 400, new Date(3000));
+
+    await enforceSizeBound(NAMESPACE, 500);
+
+    expect(await readBuffer(NAMESPACE, 'old')).toBeNull();
+    expect(await readBuffer(NAMESPACE, 'mid')).toBeNull();
+    expect(await readBuffer(NAMESPACE, 'new')).not.toBeNull();
+    expect(await getNamespaceSize(NAMESPACE)).toBeLessThanOrEqual(500);
+  });
+
+  it('silently returns when the namespace does not exist yet', async () => {
+    await expect(enforceSizeBound('does/not/exist', 1024)).resolves.toBeUndefined();
   });
 });

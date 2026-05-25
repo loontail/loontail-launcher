@@ -1,4 +1,5 @@
 import { useAppVersion } from '@renderer/features/app';
+import { useClearMediaCache, useMediaCacheSize } from '@renderer/features/settings';
 import {
   markUserInitiatedCheck,
   triggerInstall,
@@ -16,6 +17,13 @@ import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { LanguageSwitcher } from '../LanguageSwitcher';
 
+const BYTES_PER_MB = 1024 * 1024;
+const formatCacheSize = (bytes: number | undefined): string => {
+  if (bytes === undefined) return '…';
+  if (bytes < BYTES_PER_MB) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / BYTES_PER_MB).toFixed(1)} MB`;
+};
+
 const VersionRow = () => {
   const versionQuery = useAppVersion();
   return (
@@ -29,19 +37,26 @@ export const LauncherSection = () => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const updateStatus = useUpdaterStatus();
+  const { bytes: cacheBytes } = useMediaCacheSize();
+  const { mutate: clearMediaCache, isPending: isClearingCache } = useClearMediaCache();
   const isReady = updateStatus?.state === UpdaterStates.READY;
   const isBusy =
     updateStatus?.state === UpdaterStates.CHECKING ||
     updateStatus?.state === UpdaterStates.AVAILABLE ||
     updateStatus?.state === UpdaterStates.DOWNLOADING;
 
-  const handleClearCache = () => {
+  const handleClearCache = async () => {
     queryClient.removeQueries({
       predicate: (query) => {
         const [first] = query.queryKey;
-        return first !== QUERY_KEY_ROOTS.auth;
+        return first !== QUERY_KEY_ROOTS.auth && first !== QUERY_KEY_ROOTS.media;
       },
     });
+    try {
+      await clearMediaCache();
+    } catch {
+      // Disk cache clear is best-effort; the in-memory churn still happened.
+    }
     toast.success(t('settings.launcher.cacheClearedToast'));
   };
 
@@ -59,10 +74,20 @@ export const LauncherSection = () => {
       <SettingsGroup title={t('settings.launcher.maintenance')}>
         <SettingsRow
           label={t('settings.launcher.clearCache')}
-          description={t('settings.launcher.clearCacheDesc')}
+          description={t('settings.launcher.clearCacheDesc', { size: formatCacheSize(cacheBytes) })}
           right={
-            <Button variant="outline" size="sm" onClick={handleClearCache}>
-              {t('settings.launcher.clear')}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleClearCache()}
+              disabled={isClearingCache}
+              aria-busy={isClearingCache}
+            >
+              {isClearingCache ? (
+                <Loader2 className="size-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                t('settings.launcher.clear')
+              )}
             </Button>
           }
         />

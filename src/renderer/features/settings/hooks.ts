@@ -13,6 +13,7 @@ import {
   setClientOverride,
   setLauncher,
 } from './api';
+import { clearMediaCache, getMediaCacheSize } from './mediaApi';
 import { getDiskSpace, getFolderSize, getRamRange, pickInstallFolder } from './systemApi';
 
 const DISK_SPACE_STALE_TIME_MS = 30_000;
@@ -135,4 +136,26 @@ export const useFolderSize = (path: string | undefined | null) => {
 export const useResolveFor = (slug: ClientSlug | null | undefined) => {
   const { settings } = useLauncherSettings();
   return settings ? resolveClientSettings(settings, slug) : null;
+};
+
+const MEDIA_CACHE_SIZE_STALE_TIME_MS = 30_000;
+
+export const useMediaCacheSize = () => {
+  const query = useQuery({
+    queryKey: QUERY_KEYS.media.cacheSize,
+    queryFn: getMediaCacheSize,
+    staleTime: MEDIA_CACHE_SIZE_STALE_TIME_MS,
+  });
+  return { bytes: query.data, isPending: query.isPending };
+};
+
+export const useClearMediaCache = () => {
+  const queryClient = useQueryClient();
+  const mutation = useMutation({
+    mutationFn: clearMediaCache,
+    onSuccess: () => {
+      queryClient.setQueryData(QUERY_KEYS.media.cacheSize, 0);
+    },
+  });
+  return { mutate: mutation.mutateAsync, isPending: mutation.isPending };
 };

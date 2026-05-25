@@ -22,6 +22,8 @@ export const IPC_CHANNELS = {
   systemCopyText: 'system.copyText',
   mediaUploadSkin: 'media.uploadSkin',
   mediaClearSkin: 'media.clearSkin',
+  mediaClearCache: 'media.clearCache',
+  mediaGetCacheSize: 'media.getCacheSize',
   clientsList: 'clients.list',
   serversGetStatuses: 'servers.getStatuses',
   minecraftGetStatus: 'minecraft.getStatus',

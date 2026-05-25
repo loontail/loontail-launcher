@@ -98,7 +98,7 @@ const start = async (): Promise<void> => {
   const skinService = createSkinService(router, kit);
   const clientsService = createClientsService(router);
   const serversService = createServersService(router);
-  const mediaService = createMediaService();
+  const mediaService = createMediaService(router);
   const minecraftService = createMinecraftService(router, mainWindow, kit);
   const bundleService = createBundleService(router, mainWindow, kit);
   // Wire bundle sync into the launch flow — runs after install, before launch.

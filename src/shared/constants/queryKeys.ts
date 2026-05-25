@@ -21,6 +21,9 @@ export const QUERY_KEYS = {
     folderSizeRoot: ['system', 'folderSize'] as const,
     folderSize: (path: string) => ['system', 'folderSize', path] as const,
   },
+  media: {
+    cacheSize: ['media', 'cacheSize'] as const,
+  },
 } as const;
 
 export const QUERY_KEY_ROOTS = {
@@ -30,4 +33,5 @@ export const QUERY_KEY_ROOTS = {
   servers: 'servers',
   settings: 'settings',
   system: 'system',
+  media: 'media',
 } as const satisfies Record<string, string>;

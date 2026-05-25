@@ -1,4 +1,5 @@
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import type { Dirent, Stats } from 'node:fs';
+import { mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { app } from 'electron';
 import { HttpError } from './http';
@@ -62,6 +63,69 @@ export const clearNamespace = async (namespace: string): Promise<void> => {
     await rm(dir, { recursive: true, force: true });
   } catch (error) {
     logger.warn('Failed to clear cache namespace', { namespace, error });
+  }
+};
+
+type NamespaceEntry = { file: string; size: number; mtimeMs: number };
+
+const listNamespaceFiles = async (dir: string): Promise<NamespaceEntry[]> => {
+  let entries: Dirent[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch (error) {
+    if (isEnoent(error)) return [];
+    throw error;
+  }
+  const results: NamespaceEntry[] = [];
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    const file = join(dir, entry.name);
+    let info: Stats;
+    try {
+      info = await stat(file);
+    } catch (error) {
+      if (isEnoent(error)) continue;
+      throw error;
+    }
+    results.push({ file, size: info.size, mtimeMs: info.mtimeMs });
+  }
+  return results;
+};
+
+export const getNamespaceSize = async (namespace: string): Promise<number> => {
+  try {
+    const files = await listNamespaceFiles(namespaceDir(namespace));
+    return files.reduce((sum, entry) => sum + entry.size, 0);
+  } catch (error) {
+    logger.warn('Failed to compute cache namespace size', { namespace, error });
+    return 0;
+  }
+};
+
+/**
+ * Prune the oldest files in `namespace` (by mtime) until the total on-disk
+ * footprint is `<= maxBytes`. No-op when already under the bound or when the
+ * directory does not exist yet. Errors are swallowed: cache eviction is a
+ * best-effort housekeeping job, not a critical path.
+ */
+export const enforceSizeBound = async (namespace: string, maxBytes: number): Promise<void> => {
+  if (maxBytes < 0) return;
+  try {
+    const files = await listNamespaceFiles(namespaceDir(namespace));
+    let total = files.reduce((sum, entry) => sum + entry.size, 0);
+    if (total <= maxBytes) return;
+    files.sort((a, b) => a.mtimeMs - b.mtimeMs);
+    for (const entry of files) {
+      if (total <= maxBytes) break;
+      try {
+        await rm(entry.file, { force: true });
+        total -= entry.size;
+      } catch (error) {
+        logger.warn('Failed to evict cache entry', { namespace, file: entry.file, error });
+      }
+    }
+  } catch (error) {
+    logger.warn('Failed to enforce cache size bound', { namespace, error });
   }
 };
 
