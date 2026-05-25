@@ -18,6 +18,10 @@ import { getDiskSpace, getFolderSize, getRamRange, pickInstallFolder } from './s
 const DISK_SPACE_STALE_TIME_MS = 30_000;
 const DISK_SPACE_DEBOUNCE_MS = 300;
 const FOLDER_SIZE_STALE_TIME_MS = 60_000;
+// Main-side mutations (e.g. `persistRuntime` after install) bypass the IPC
+// mutation channel that calls `setQueryData`. Refetch periodically so the
+// renderer eventually picks them up without a manual reload.
+const LAUNCHER_SETTINGS_STALE_TIME_MS = 5 * 60 * 1000;
 
 // Common settings-mutation pattern. `extract` lets a mutation return a wrapper
 // shape and still feed only the settings part into the cache.
@@ -41,7 +45,7 @@ export const useLauncherSettings = () => {
   const query = useQuery({
     queryKey: QUERY_KEYS.settings.root,
     queryFn: getSettings,
-    staleTime: Number.POSITIVE_INFINITY,
+    staleTime: LAUNCHER_SETTINGS_STALE_TIME_MS,
   });
   return { settings: query.data, isPending: query.isPending };
 };
