@@ -4,22 +4,16 @@ import {
   type MojangSkinVariantInput,
   isMinecraftKitError,
 } from '@loontail/minecraft-kit';
-import { buildMediaUrl } from '@main/infra/http';
+import { SkinVariants, validatePngBuffer } from '@loontail/yggdrasil-core';
 import { scopedLogger } from '@main/infra/logger';
 import { getStoredAuth, setStoredAuth } from '@main/infra/store';
 import { withRefreshedProfile } from '@main/services/auth/mojangAuth';
+import { getYggdrasilClient } from '@main/services/auth/yggdrasilClient';
 import { invalidateMediaCache, prewarmMediaCache } from '@main/services/media/mediaCache';
 import { ERROR_CODES } from '@shared/constants';
-import type { AuthSession, MojangSession, StrapiSession } from '@shared/contracts/auth';
-import { type UserId, asUserId } from '@shared/contracts/ids';
-import {
-  type SkinKind,
-  SkinKinds,
-  type UploadSkinPayload,
-  type UploadSkinResult,
-} from '@shared/contracts/skin';
+import type { AuthSession, MojangSession, YggdrasilSession } from '@shared/contracts/auth';
+import { SkinKinds, type UploadSkinPayload, type UploadSkinResult } from '@shared/contracts/skin';
 import { SkinError } from './errors';
-import { updateUserSkinFields, uploadSkinFile } from './skinApi';
 
 const logger = scopedLogger('skin');
 
@@ -70,54 +64,59 @@ const throwMojangUploadError = (error: unknown): never => {
   return throwUploadError('Mojang skin upload failed', error);
 };
 
-// Drop the cached binary so cache:// falls back to the network when the URL
-// changes (Strapi-flavoured asset URL contains a hash that flips on upload).
-const updateStoredStrapiUserAsset = async (
-  session: StrapiSession,
-  kind: SkinKind,
-  url: string | null,
-): Promise<void> => {
-  const previous = session.user[kind];
-  if (typeof previous === 'string' && previous.length > 0) {
-    await invalidateMediaCache(previous);
-  }
-  setStoredAuth({
-    provider: 'strapi',
-    jwt: session.jwt,
-    user: { ...session.user, [kind]: url },
-  });
-};
-
 const activeMojangSkinUrl = (session: MojangSession): string | null =>
   session.profile.skins.find((s) => s.state === 'ACTIVE')?.url ?? null;
 
-// Strapi flow: upload to skins-registry, then PUT the user record so
-// /users/me reflects the new asset URL.
-const uploadSkinStrapi = async (
-  session: StrapiSession,
+const readTextureUrl = (
+  textures: { skin: { url: string } | null; cape: { url: string } | null },
+  kind: typeof SkinKinds.SKIN | typeof SkinKinds.CAPE,
+): string | null => (kind === SkinKinds.SKIN ? textures.skin?.url : textures.cape?.url) ?? null;
+
+// Yggdrasil flow: the launcher-side session already carries the access token
+// the merged Yggdrasil plugin needs to authorise the upload. The server
+// identifies the owner from the token; we only have to push the PNG and
+// later fetch the new URL for media-cache pre-warming.
+const uploadSkinYggdrasil = async (
+  session: YggdrasilSession,
   payload: UploadSkinPayload,
 ): Promise<UploadSkinResult> => {
-  const userId: UserId = asUserId(session.user.id);
-  const username = session.user.username;
+  const client = getYggdrasilClient();
   const buffer = Buffer.from(payload.buffer);
 
-  const uploadedUrl = await uploadSkinFile(userId, payload.type, buffer, username)
-    .then((uploaded) => buildMediaUrl(uploaded.fileUrl))
-    .catch((error: unknown) => {
-      logger.error('Skin upload (file) failed', { kind: payload.type, error });
-      return throwUploadError('Upload to skins-registry failed', error);
-    });
+  // Capture the previous URL before the upload so we can invalidate the
+  // launcher's media cache once the new revision lands. Failures here are
+  // not fatal — worst case the old PNG lingers in the cache until TTL.
+  const previousTextures = await client.getTextures(session.profile.uuid).catch(() => null);
+  const previousUrl = previousTextures ? readTextureUrl(previousTextures, payload.type) : null;
 
   try {
-    await updateUserSkinFields(userId, { [payload.type]: uploadedUrl });
+    if (payload.type === SkinKinds.SKIN) {
+      await client.uploadSkin({
+        accessToken: session.accessToken,
+        file: buffer,
+        variant: payload.variant ?? SkinVariants.CLASSIC,
+      });
+    } else {
+      await client.uploadCape({ accessToken: session.accessToken, file: buffer });
+    }
   } catch (error) {
-    logger.error('Skin upload (update user) failed', { kind: payload.type, error });
-    throwUploadError('Update user skin field failed', error);
+    logger.error('Yggdrasil texture upload failed', { kind: payload.type, error });
+    return throwUploadError('Upload to Yggdrasil failed', error);
   }
 
-  await updateStoredStrapiUserAsset(session, payload.type, uploadedUrl);
-  await prewarmMediaCache(uploadedUrl, buffer);
-  return { url: uploadedUrl };
+  const updatedTextures = await client.getTextures(session.profile.uuid).catch(() => null);
+  const updatedUrl = updatedTextures ? readTextureUrl(updatedTextures, payload.type) : null;
+  if (!updatedUrl) {
+    throw new SkinError(
+      ERROR_CODES.SkinUploadFailed,
+      'Server accepted the upload but did not return an URL',
+    );
+  }
+  await prewarmMediaCache(updatedUrl, buffer);
+  if (previousUrl && previousUrl !== updatedUrl) {
+    await invalidateMediaCache(previousUrl);
+  }
+  return { url: updatedUrl };
 };
 
 export type SkinHandlers = {
@@ -169,25 +168,31 @@ export const createSkinHandlers = (kit: MinecraftKit): SkinHandlers => {
   };
 
   const uploadSkin = async (payload: UploadSkinPayload): Promise<UploadSkinResult> => {
+    const verdict = validatePngBuffer(payload.buffer, payload.type);
+    if (!verdict.ok) {
+      throw new SkinError(ERROR_CODES.SkinUploadFailed, verdict.reason);
+    }
     const session = requireSession();
-    if (session.provider === 'strapi') return uploadSkinStrapi(session, payload);
+    if (session.provider === 'yggdrasil') return uploadSkinYggdrasil(session, payload);
     return uploadSkinMojang(session, payload);
   };
 
   const clearSkin = async (): Promise<void> => {
     const session = requireSession();
-    if (session.provider === 'strapi') {
-      const userId = asUserId(session.user.id);
+    if (session.provider === 'yggdrasil') {
+      const client = getYggdrasilClient();
+      // Snapshot the URLs before deleting so we can invalidate the cache.
+      const before = await client.getTextures(session.profile.uuid).catch(() => null);
       try {
-        await updateUserSkinFields(userId, { skin: null, cape: null });
+        await Promise.all([
+          client.deleteSkin({ accessToken: session.accessToken }),
+          client.deleteCape({ accessToken: session.accessToken }),
+        ]);
       } catch (error) {
-        logger.warn('Failed to clear Strapi skin fields on server', error);
+        logger.warn('Failed to clear textures on Yggdrasil server', error);
       }
-      await updateStoredStrapiUserAsset(session, SkinKinds.SKIN, null);
-      const after = getStoredAuth();
-      if (after?.provider === 'strapi') {
-        await updateStoredStrapiUserAsset(after, SkinKinds.CAPE, null);
-      }
+      if (before?.skin?.url) await invalidateMediaCache(before.skin.url);
+      if (before?.cape?.url) await invalidateMediaCache(before.cape.url);
       return;
     }
 
