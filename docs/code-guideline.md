@@ -233,16 +233,12 @@ Aligned with the official Electron security checklist; non-negotiable.
 
 **Remote content:**
 
-- Only HTTPS / WSS for remote endpoints. No HTTP / WS, ever.
-- Define a restrictive CSP, e.g.:
-
-  ```
-  default-src 'self';
-  script-src 'self';
-  style-src 'self' 'unsafe-inline';
-  img-src 'self' data: https:;
-  connect-src 'self' https://api.elixir.tld;
-  ```
+- HTTPS / WSS for any non-loopback remote endpoint. Plain HTTP / WS is
+  only acceptable for `localhost` / `127.0.0.1` in development.
+- Define a restrictive CSP. `connect-src` is built from the resolved
+  `mainConfig.apiUrl` so the dev origin (`http://localhost:1337`) and the
+  prod origin (`https://api.elixir.tld`) both work without editing the
+  CSP file. See `src/main/infra/session.ts` for the live definitions.
 
 **Permissions:**
 

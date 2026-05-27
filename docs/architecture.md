@@ -52,7 +52,7 @@ Non-goals (by design):
 │  └────────────────────────────────────────────────────────┘    │
 └────────────────────────────────────────────────────────────────┘
                      ▲                              ▲
-                     │ HTTPS (Zod-validated)        │ child_process
+                     │ HTTP(S) (Zod-validated)      │ child_process
                      ▼                              ▼
               ┌──────────────┐               ┌─────────────┐
               │    Strapi    │               │  Minecraft  │
