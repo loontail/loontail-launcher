@@ -2,9 +2,10 @@ import {
   type MinecraftKit,
   type MinecraftProfile,
   type MojangSkinVariantInput,
+  detectMojangSkinVariant,
   isMinecraftKitError,
 } from '@loontail/minecraft-kit';
-import { SkinVariants, validatePngBuffer } from '@loontail/yggdrasil-core';
+import { validatePngBuffer } from '@loontail/yggdrasil-core';
 import { scopedLogger } from '@main/infra/logger';
 import { getStoredAuth, setStoredAuth } from '@main/infra/store';
 import { withRefreshedProfile } from '@main/services/auth/mojangAuth';
@@ -91,10 +92,15 @@ const uploadSkinYggdrasil = async (
 
   try {
     if (payload.type === SkinKinds.SKIN) {
+      // Match the Mojang branch's "AUTO" behaviour: if the renderer did not
+      // declare a variant, detect it from the pixels via the kit instead of
+      // silently defaulting to CLASSIC. Without this, every SLIM skin was
+      // stored as CLASSIC and rendered with 4-pixel arms.
+      const variant = payload.variant ?? detectMojangSkinVariant(new Uint8Array(payload.buffer));
       await client.uploadSkin({
         accessToken: session.accessToken,
         file: buffer,
-        variant: payload.variant ?? SkinVariants.CLASSIC,
+        variant,
       });
     } else {
       await client.uploadCape({ accessToken: session.accessToken, file: buffer });
