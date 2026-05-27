@@ -14,6 +14,16 @@ files:
   - "!**/.vscode/*"
   - "!**/{.eslintrc*,.prettierrc*,.editorconfig,.gitignore,.gitattributes}"
   - "!**/{tsconfig*,biome.json,vitest.config*}"
+# Ship the bundled `authlib-injector` jar alongside the app so the launch
+# path can resolve it at `process.resourcesPath/authlib-injector/`. The jar
+# itself lives in `@loontail/yggdrasil-client/vendor/`; electron-builder
+# copies it verbatim — version drift is owned by the yggdrasil-client
+# package, which exports `AUTHLIB_INJECTOR_VERSION`.
+extraResources:
+  - from: node_modules/@loontail/yggdrasil-client/vendor
+    to: authlib-injector
+    filter:
+      - "*.jar"
 electronFuses:
   runAsNode: false
   enableCookieEncryption: true

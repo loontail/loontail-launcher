@@ -1,5 +1,21 @@
-import { AuthModes, EventTypes, type LaunchAuth, toOnlineAuth } from '@loontail/minecraft-kit';
+import path from 'node:path';
+import {
+  AuthModes,
+  EventTypes,
+  type LaunchAuth,
+  asAzureClientId,
+  asPlayerUuid,
+  toOnlineAuth,
+} from '@loontail/minecraft-kit';
+import {
+  AUTHLIB_INJECTOR_VERSION,
+  buildAuthlibInjectorJvmArg,
+  resolveAuthlibInjectorJarPath,
+} from '@loontail/yggdrasil-client';
+import { dashUuid } from '@loontail/yggdrasil-core';
+import { mainConfig } from '@main/config';
 import { consoleHub } from '@main/infra/consoleHub';
+import { scopedLogger } from '@main/infra/logger';
 import { getStoredAuth } from '@main/infra/store';
 import { openConsoleWindow } from '@main/windows/consoleWindow';
 import type { Account } from '@shared/contracts/account';
@@ -11,6 +27,25 @@ import type { Context } from './context';
 import type { ManagerEnv } from './env';
 import { ManagerError, classifyError, errorMessage } from './errors';
 import { OpKinds } from './ops';
+
+const launchLogger = scopedLogger('minecraft.launch');
+
+// Placeholder Azure AD client id used to satisfy the kit's `OnlineAuth` shape
+// for Yggdrasil sessions. authlib-injector intercepts the Mojang authlib calls
+// at JVM init, so the game never contacts Microsoft — but the kit still
+// validates the field shape, hence a real-looking zero GUID.
+const YGGDRASIL_PLACEHOLDER_CLIENT_ID = asAzureClientId('00000000-0000-0000-0000-000000000000');
+
+const resolveAuthlibInjectorJar = (): string => {
+  if (app.isPackaged) {
+    return path.join(
+      process.resourcesPath,
+      'authlib-injector',
+      `authlib-injector-${AUTHLIB_INJECTOR_VERSION}.jar`,
+    );
+  }
+  return resolveAuthlibInjectorJarPath();
+};
 
 export const endLaunch = (env: ManagerEnv, slug: ClientSlug, error?: unknown): void => {
   env.ops.delete(slug);
@@ -37,29 +72,56 @@ export const endLaunch = (env: ManagerEnv, slug: ClientSlug, error?: unknown): v
   env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
 };
 
-// Pick the kit's auth shape based on the active session. Mojang sessions
-// carry a Minecraft access token — feed it to the game so the user can join
-// premium multiplayer servers. Strapi sessions stay offline-mode (no
-// Mojang-issued token to present).
-const resolveLaunchAuth = (account: Account): LaunchAuth => {
+type ResolvedLaunchAuth = {
+  readonly auth: LaunchAuth;
+  readonly extraJvmArgs: readonly string[];
+};
+
+// Pick the kit's auth shape based on the active session. Yggdrasil sessions
+// run the game in ONLINE mode using the Yggdrasil-issued access token, with a
+// `-javaagent` JVM arg pointing the JVM at authlib-injector so the game's
+// own auth/profile calls hit the launcher's Yggdrasil server. Mojang sessions
+// pass the upstream Microsoft session through unchanged. No session → offline.
+const resolveLaunchAuth = (account: Account): ResolvedLaunchAuth => {
   const session = getStoredAuth();
   if (session?.provider === 'mojang') {
-    return toOnlineAuth({
-      minecraft: {
-        username: session.profile.username,
-        uuid: session.profile.uuid,
-        accessToken: session.accessToken,
-        expiresAt: session.expiresAt,
-        xuid: session.xuid,
-        skins: session.profile.skins,
-      },
-      microsoft: {
-        refreshToken: session.refreshToken,
-        clientId: session.clientId,
-      },
-    });
+    return {
+      auth: toOnlineAuth({
+        minecraft: {
+          username: session.profile.username,
+          uuid: session.profile.uuid,
+          accessToken: session.accessToken,
+          expiresAt: session.expiresAt,
+          xuid: session.xuid,
+          skins: session.profile.skins,
+        },
+        microsoft: {
+          refreshToken: session.refreshToken,
+          clientId: session.clientId,
+        },
+      }),
+      extraJvmArgs: [],
+    };
   }
-  return { mode: AuthModes.OFFLINE, username: account.username };
+  if (session?.provider === 'yggdrasil') {
+    const jarPath = resolveAuthlibInjectorJar();
+    return {
+      auth: {
+        mode: AuthModes.ONLINE,
+        username: session.profile.name,
+        uuid: asPlayerUuid(dashUuid(session.profile.uuid)),
+        accessToken: session.accessToken,
+        userType: 'msa',
+        clientId: YGGDRASIL_PLACEHOLDER_CLIENT_ID,
+        xuid: '',
+      },
+      extraJvmArgs: [buildAuthlibInjectorJvmArg({ jarPath, apiRoot: mainConfig.yggdrasilApiRoot })],
+    };
+  }
+  return {
+    auth: { mode: AuthModes.OFFLINE, username: account.username },
+    extraJvmArgs: [],
+  };
 };
 
 export const runLaunch = async (
@@ -70,8 +132,13 @@ export const runLaunch = async (
 ): Promise<void> => {
   env.emitStatus({ slug, status: InstallStatuses.LAUNCHING, paused: false });
   try {
+    const resolved = resolveLaunchAuth(account);
+    if (resolved.extraJvmArgs.length > 0) {
+      launchLogger.info(`[${slug}] launch: injecting authlib-injector (yggdrasil session)`);
+    }
     const composition = await env.kit.launch.compose(ctx.target, {
-      auth: resolveLaunchAuth(account),
+      auth: resolved.auth,
+      ...(resolved.extraJvmArgs.length > 0 ? { extraJvmArgs: resolved.extraJvmArgs } : {}),
       ...(ctx.resolved.memory.allocatedRamMb > 0
         ? { memory: { maxMb: ctx.resolved.memory.allocatedRamMb } }
         : {}),
