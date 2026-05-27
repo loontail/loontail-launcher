@@ -115,9 +115,7 @@ const resolveLaunchAuth = (account: Account): ResolvedLaunchAuth => {
         clientId: YGGDRASIL_PLACEHOLDER_CLIENT_ID,
         xuid: '',
       },
-      extraJvmArgs: [
-        buildAuthlibInjectorJvmArg({ jarPath, apiRoot: mainConfig.yggdrasilGameApiRoot }),
-      ],
+      extraJvmArgs: [buildAuthlibInjectorJvmArg({ jarPath, apiRoot: mainConfig.yggdrasilApiRoot })],
     };
   }
   return {
