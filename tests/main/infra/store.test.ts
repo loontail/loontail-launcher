@@ -95,33 +95,44 @@ describe('getStoredAuth', () => {
   it('returns the persisted session when the shape is valid', async () => {
     writeStore({
       [STORE_KEY_AUTH]: {
-        provider: 'strapi',
-        jwt: 'a.b.c',
-        user: {
-          id: 1,
-          username: 'someone',
-          email: 'someone@example.com',
-          blocked: false,
-        },
+        provider: 'yggdrasil',
+        accessToken: 'access',
+        clientToken: 'client',
+        profile: { uuid: '0123456789abcdef0123456789abcdef', name: 'someone' },
       },
       [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
     });
 
     const { getStoredAuth } = await loadStoreModule();
     const session = getStoredAuth();
-    expect(session).toMatchObject({ provider: 'strapi', jwt: 'a.b.c' });
+    expect(session).toMatchObject({ provider: 'yggdrasil', accessToken: 'access' });
     expect(loggerMocks.warn).not.toHaveBeenCalled();
   });
 
   it('returns null and warns when the persisted blob is malformed', async () => {
     writeStore({
-      [STORE_KEY_AUTH]: { provider: 'strapi', jwt: 123, user: 'not-an-object' },
+      [STORE_KEY_AUTH]: { provider: 'yggdrasil', accessToken: 1, clientToken: 'c' },
       [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
     });
 
     const { getStoredAuth } = await loadStoreModule();
     expect(getStoredAuth()).toBeNull();
     expect(loggerMocks.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('purges legacy strapi-tagged sessions on first load', async () => {
+    writeStore({
+      [STORE_KEY_AUTH]: {
+        provider: 'strapi',
+        jwt: 'a.b.c',
+        user: { id: 1, username: 'someone', email: 'someone@example.com', blocked: false },
+      },
+      [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
+    });
+
+    const { getStoredAuth } = await loadStoreModule();
+    expect(getStoredAuth()).toBeNull();
+    expect(loggerMocks.warn).toHaveBeenCalled();
   });
 });
 

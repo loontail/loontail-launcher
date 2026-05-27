@@ -12,6 +12,7 @@ import {
 import { IPC_CHANNELS } from '@shared/ipc';
 import { fetchCurrentUser, login, logout } from './auth';
 import type { MojangAuth } from './mojangAuth';
+import type { YggdrasilAuth } from './yggdrasilAuth';
 
 // Map a kit-side sign-in failure to the renderer's `LoginErrorCode`. The
 // renderer's own `cancelledRef` already suppresses the user-cancel case, so we
@@ -24,17 +25,19 @@ const mojangFailureCode = (error: unknown): LoginErrorCode => {
   return LOGIN_ERROR_CODE.Unknown;
 };
 
-export const registerAuthRoutes = (router: Router, mojangAuth: MojangAuth): void => {
+export const registerAuthRoutes = (
+  router: Router,
+  yggdrasilAuth: YggdrasilAuth,
+  mojangAuth: MojangAuth,
+): void => {
   router.handle(IPC_CHANNELS.authLogin, async (rawArgs) => {
     const payload = parseIpcArgs(LoginPayloadSchema, rawArgs, 'Invalid login payload');
-    return login(payload);
+    return login(yggdrasilAuth, payload);
   });
 
-  router.handle(IPC_CHANNELS.authMe, () => fetchCurrentUser(mojangAuth));
+  router.handle(IPC_CHANNELS.authMe, () => fetchCurrentUser(yggdrasilAuth, mojangAuth));
 
-  router.handle(IPC_CHANNELS.authLogout, () => {
-    logout();
-  });
+  router.handle(IPC_CHANNELS.authLogout, () => logout(yggdrasilAuth));
 
   router.handle(IPC_CHANNELS.authMojangSignIn, async (): Promise<LoginResult> => {
     try {

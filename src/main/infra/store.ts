@@ -6,12 +6,7 @@ import {
   STORE_KEY_LAUNCHER_SETTINGS,
   STORE_KEY_SCHEMA_VERSION,
 } from '@shared/constants';
-import {
-  type AuthSession,
-  AuthSessionSchema,
-  type StrapiSession,
-  type StrapiUser,
-} from '@shared/contracts/auth';
+import { type AuthSession, AuthSessionSchema } from '@shared/contracts/auth';
 import { type LauncherSettings, LauncherSettingsSchema } from '@shared/contracts/settings';
 import { defaultLauncherSettings, normalizeLauncherSettings } from '@shared/domain/settings';
 import Store from 'electron-store';
@@ -72,37 +67,19 @@ const runMigrations = (): void => {
 
 runMigrations();
 
-// One-shot migration of the auth blob from the pre-multi-provider shape
-// (`{ jwt, user }`) to a provider-tagged `AuthSession`. Idempotent — leaves
-// already-tagged sessions and `null` alone.
-type LegacyAuth = { jwt: string; user: StrapiUser };
-
-const isLegacyAuth = (value: unknown): value is LegacyAuth => {
-  if (typeof value !== 'object' || value === null) return false;
-  const candidate = value as Record<string, unknown>;
-  return (
-    !('provider' in candidate) &&
-    typeof candidate.jwt === 'string' &&
-    typeof candidate.user === 'object' &&
-    candidate.user !== null
-  );
-};
-
-const migrateAuth = (): void => {
+// Drop legacy sessions whose `provider` value is no longer recognised by the
+// current discriminated union — old strapi-JWT sessions (`provider:'strapi'`)
+// and the very-old pre-tagged shape (`{jwt, user}` with no provider) both
+// fall here. Idempotent — `null` and already-valid sessions pass through.
+const purgeLegacyAuth = (): void => {
   const raw = store.get(STORE_KEY_AUTH) as unknown;
-  if (raw === null) return;
-  if (isLegacyAuth(raw)) {
-    const migrated: StrapiSession = {
-      provider: 'strapi',
-      jwt: raw.jwt,
-      user: raw.user,
-    };
-    store.set(STORE_KEY_AUTH, migrated);
-    logger.info('Migrated stored auth to provider-tagged session');
-  }
+  if (raw === null || raw === undefined) return;
+  if (AuthSessionSchema.safeParse(raw).success) return;
+  logger.warn('Dropping legacy auth session from store; user must sign in again');
+  store.set(STORE_KEY_AUTH, null);
 };
 
-migrateAuth();
+purgeLegacyAuth();
 
 export const getStoredAuth = (): AuthSession | null => {
   const raw = store.get(STORE_KEY_AUTH);

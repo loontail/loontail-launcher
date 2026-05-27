@@ -2,7 +2,11 @@ import type { AuthProvider, AuthSession } from './auth';
 
 // Provider-agnostic view of the currently signed-in user. The renderer and
 // the launch path consume this; the rich provider-specific data lives behind
-// `AuthSession`. Strapi-only fields (`email`) are `null` for Mojang sessions.
+// `AuthSession`.
+//
+// For Yggdrasil sessions, `email`/`skin`/`cape` are filled by the auth
+// service via a separate API_TOKEN-backed Strapi user lookup; the
+// `accountFromSession` helper alone returns them as `null`.
 export type Account = {
   provider: AuthProvider;
   username: string;
@@ -12,13 +16,13 @@ export type Account = {
 };
 
 export const accountFromSession = (session: AuthSession): Account => {
-  if (session.provider === 'strapi') {
+  if (session.provider === 'yggdrasil') {
     return {
-      provider: 'strapi',
-      username: session.user.username,
-      email: session.user.email,
-      skin: session.user.skin ?? null,
-      cape: session.user.cape ?? null,
+      provider: 'yggdrasil',
+      username: session.profile.name,
+      email: null,
+      skin: null,
+      cape: null,
     };
   }
   const activeSkin = session.profile.skins.find((s) => s.state === 'ACTIVE');

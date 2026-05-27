@@ -30,7 +30,7 @@ export const LoginForm = () => {
     }
   };
 
-  const isStrapiDisabled = isPending || identifier.length === 0 || password.length === 0;
+  const isCredentialsDisabled = isPending || identifier.length === 0 || password.length === 0;
   const isMojangBusy = mojang.isPending;
   const displayedError = errorCode ?? mojang.errorCode;
 
@@ -77,7 +77,7 @@ export const LoginForm = () => {
           <p className="text-xs text-destructive">{t(ERROR_COPY_KEYS[displayedError])}</p>
         )}
 
-        <Button type="submit" disabled={isStrapiDisabled || isMojangBusy} className="w-full">
+        <Button type="submit" disabled={isCredentialsDisabled || isMojangBusy} className="w-full">
           {isPending ? <Loader2 className="size-4 animate-spin" /> : t('auth.submit')}
         </Button>
 

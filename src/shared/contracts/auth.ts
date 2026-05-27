@@ -4,28 +4,12 @@ import type {
   MojangProfileSkin,
   PlayerUuid,
 } from '@loontail/minecraft-kit';
+import { isUuidUndashed } from '@loontail/yggdrasil-core';
 import { z } from 'zod';
 import type { Account } from './account';
 
-export const AUTH_PROVIDERS = ['strapi', 'mojang'] as const;
+export const AUTH_PROVIDERS = ['yggdrasil', 'mojang'] as const;
 export type AuthProvider = (typeof AUTH_PROVIDERS)[number];
-
-// Strapi-side user as returned by /api/auth/local and /api/users/me.
-export const StrapiUserSchema = z.object({
-  id: z.number(),
-  username: z.string(),
-  email: z.string().email(),
-  blocked: z.boolean(),
-  skin: z.string().nullable().optional(),
-  cape: z.string().nullable().optional(),
-});
-export type StrapiUser = z.infer<typeof StrapiUserSchema>;
-
-export const StrapiAuthOkSchema = z.object({
-  jwt: z.string().min(1),
-  user: StrapiUserSchema,
-});
-export type StrapiAuthOk = z.infer<typeof StrapiAuthOkSchema>;
 
 // Re-export kit-side literal unions so renderer/IPC code uses a single source of truth.
 export type { MojangAssetState, MojangSkinVariant as SkinVariant } from '@loontail/minecraft-kit';
@@ -57,14 +41,30 @@ export const MojangProfileSchema = z.object({
 
 export type MojangProfile = z.infer<typeof MojangProfileSchema>;
 
+// `selectedProfile.id` from the Yggdrasil server is the 32-char undashed hex
+// UUID (per the Mojang/Yggdrasil spec). The launcher dashes it before handing
+// it to the kit's launch composer.
+export const YggdrasilProfileSchema = z.object({
+  uuid: z.string().refine(isUuidUndashed, 'profile id must be 32-char undashed hex'),
+  name: z.string().min(1),
+});
+export type YggdrasilProfile = z.infer<typeof YggdrasilProfileSchema>;
+
 // Stored session shapes — discriminated by `provider`.
-export const StrapiSessionSchema = z.object({
-  provider: z.literal('strapi'),
-  jwt: z.string().min(1),
-  user: StrapiUserSchema,
+//
+// `YggdrasilSession` carries only what the Yggdrasil protocol provides:
+// the access/client token pair and the selected profile. Anything that lives
+// outside the protocol (Strapi numeric user id, email, current skin/cape URLs)
+// is fetched separately via the launcher's static API_TOKEN, not via the
+// Yggdrasil session.
+export const YggdrasilSessionSchema = z.object({
+  provider: z.literal('yggdrasil'),
+  accessToken: z.string().min(1),
+  clientToken: z.string().min(1),
+  profile: YggdrasilProfileSchema,
 });
 
-export type StrapiSession = z.infer<typeof StrapiSessionSchema>;
+export type YggdrasilSession = z.infer<typeof YggdrasilSessionSchema>;
 
 export const MojangSessionSchema = z.object({
   provider: z.literal('mojang'),
@@ -79,13 +79,13 @@ export const MojangSessionSchema = z.object({
 export type MojangSession = z.infer<typeof MojangSessionSchema>;
 
 export const AuthSessionSchema = z.discriminatedUnion('provider', [
-  StrapiSessionSchema,
+  YggdrasilSessionSchema,
   MojangSessionSchema,
 ]);
 
 export type AuthSession = z.infer<typeof AuthSessionSchema>;
 
-// Login (Strapi local provider). Mojang has its own IPC flow added later.
+// Login (Yggdrasil authserver). Mojang has its own IPC flow.
 export const LoginPayloadSchema = z.object({
   identifier: z.string().min(1),
   password: z.string().min(1),

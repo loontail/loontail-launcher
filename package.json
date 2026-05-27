@@ -13,8 +13,7 @@
     "url": "git+https://github.com/loontail/minecraft-launcher.git"
   },
   "scripts": {
-    "dev": "node scripts/dev.mjs",
-    "dev:raw": "electron-vite dev",
+    "dev": "electron-vite dev",
     "build": "electron-vite build",
     "build:win": "electron-vite build && electron-builder --win",
     "build:mac": "electron-vite build && electron-builder --mac",
@@ -32,8 +31,8 @@
   "dependencies": {
     "@fontsource/nunito": "^5.0.0",
     "@loontail/minecraft-kit": "0.8.9",
-    "@loontail/yggdrasil-client": "^0.0.3",
-    "@loontail/yggdrasil-core": "^0.0.3",
+    "@loontail/yggdrasil-client": "^0.0.4",
+    "@loontail/yggdrasil-core": "^0.0.4",
     "@splidejs/react-splide": "^0.7.12",
     "@splidejs/splide": "^4.1.4",
     "@tanstack/query-sync-storage-persister": "^5.100.10",

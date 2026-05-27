@@ -23,13 +23,7 @@ export {
   asUserId,
 } from './ids';
 export type { ClientId, ClientSlug, UserId } from './ids';
-export {
-  AUTH_PROVIDERS,
-  LOGIN_ERROR_CODE,
-  LoginPayloadSchema,
-  StrapiAuthOkSchema,
-  StrapiUserSchema,
-} from './auth';
+export { AUTH_PROVIDERS, LOGIN_ERROR_CODE, LoginPayloadSchema } from './auth';
 export type {
   AuthProvider,
   AuthSession,
@@ -40,9 +34,8 @@ export type {
   MojangProfile,
   MojangSession,
   SkinVariant,
-  StrapiAuthOk,
-  StrapiSession,
-  StrapiUser,
+  YggdrasilProfile,
+  YggdrasilSession,
 } from './auth';
 export {
   ClientRuntimeRefSchema,

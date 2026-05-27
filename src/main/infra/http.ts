@@ -1,6 +1,5 @@
 import { mainConfig } from '@main/config';
 import { scopedLogger } from '@main/infra/logger';
-import { getStoredAuth } from '@main/infra/store';
 import { API_PATH_PREFIX } from '@shared/constants';
 import type { ZodTypeAny, z } from 'zod';
 
@@ -10,13 +9,18 @@ type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
  * Authorization mode for an HTTP call.
  *
  * - `apiToken` — sends the static `API_TOKEN` from env. Use for catalogue
- *   endpoints, manifests, anything not scoped to a logged-in user.
- * - `session` — sends the bearer from the stored auth session. Throws
- *   `MissingSessionError` if no session is stored. Use for account-scoped
- *   endpoints.
- * - `none` — no `Authorization` header. Use for login endpoints.
+ *   endpoints, manifests, skin reads/writes, anything that doesn't require
+ *   a per-user identity. The token must have the required permission on the
+ *   target content-type / plugin route.
+ * - `none` — no `Authorization` header. Use for login-equivalent endpoints
+ *   and the Yggdrasil API root (`@loontail/yggdrasil-client` calls go
+ *   directly via `fetch` without this helper).
+ *
+ * The launcher's session token (Yggdrasil access token) is **not** a valid
+ * bearer for the Strapi content API — Yggdrasil endpoints are reached
+ * directly through {@link YggdrasilClient}, not this helper.
  */
-export type AuthMode = 'apiToken' | 'session' | 'none';
+export type AuthMode = 'apiToken' | 'none';
 
 type RequestOptions = {
   method?: HttpMethod;
@@ -41,16 +45,6 @@ export class HttpError extends Error {
   }
 }
 
-// A session-scoped call was attempted without a stored auth session.
-// Surfacing this as a typed error keeps the "account call requires session"
-// invariant loud — callers should never silently fall back to the API token.
-export class MissingSessionError extends Error {
-  constructor() {
-    super('No auth session stored — cannot perform session-scoped HTTP call');
-    this.name = 'MissingSessionError';
-  }
-}
-
 export const buildAuthHeader = (token: string): Record<string, string> => ({
   Authorization: `Bearer ${token}`,
 });
@@ -66,21 +60,9 @@ const buildHeaders = (token: string | undefined): Record<string, string> => ({
   ...(token ? buildAuthHeader(token) : {}),
 });
 
-// `auth: 'session'` against the Strapi base URL means the Strapi JWT. A
-// Mojang session has no Strapi-side identity, so attempting to use one here
-// is a programming error — Mojang account calls go through a separate HTTP
-// client targeting api.minecraftservices.com.
 const resolveBearer = (auth: AuthMode): string | undefined => {
   if (auth === 'none') return undefined;
-  if (auth === 'apiToken') return mainConfig.apiToken;
-  const session = getStoredAuth();
-  if (!session) throw new MissingSessionError();
-  if (session.provider !== 'strapi') {
-    throw new Error(
-      `auth: 'session' Strapi call attempted with a ${session.provider} session — use the Mojang HTTP helpers instead`,
-    );
-  }
-  return session.jwt;
+  return mainConfig.apiToken;
 };
 
 const buildUrl = (path: string): string => `${mainConfig.apiUrl}${API_PATH_PREFIX}${path}`;

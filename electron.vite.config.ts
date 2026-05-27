@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => {
     'process.env.API_URL': JSON.stringify(env.API_URL ?? ''),
     'process.env.API_TOKEN': JSON.stringify(env.API_TOKEN ?? ''),
     'process.env.MOJANG_CLIENT_ID': JSON.stringify(env.MOJANG_CLIENT_ID ?? ''),
+    'process.env.YGGDRASIL_API_ROOT': JSON.stringify(env.YGGDRASIL_API_ROOT ?? ''),
   };
 
   return {

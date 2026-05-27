@@ -1,4 +1,4 @@
-import { MojangSessionSchema, StrapiSessionSchema, StrapiUserSchema } from '@shared/contracts/auth';
+import { MojangSessionSchema, YggdrasilSessionSchema } from '@shared/contracts/auth';
 import { asClientSlug } from '@shared/contracts/ids';
 import { LauncherSettingsSchema, LoaderChoices } from '@shared/contracts/settings';
 import { describe, expect, it } from 'vitest';
@@ -76,47 +76,47 @@ describe('LauncherSettingsSchema', () => {
   });
 });
 
-describe('StrapiSessionSchema', () => {
+describe('YggdrasilSessionSchema', () => {
+  const undashedUuid = '0123456789abcdef0123456789abcdef';
+
   it('round-trips a valid session', () => {
     const session = {
-      provider: 'strapi' as const,
-      jwt: 'a.b.c',
-      user: {
-        id: 1,
-        username: 'someone',
-        email: 'someone@example.com',
-        blocked: false,
-      },
+      provider: 'yggdrasil' as const,
+      accessToken: 'access',
+      clientToken: 'client',
+      profile: { uuid: undashedUuid, name: 'someone' },
     };
-    const parsed = StrapiSessionSchema.parse(session);
-    expect(parsed.provider).toBe('strapi');
-    expect(parsed.user.email).toBe('someone@example.com');
+    const parsed = YggdrasilSessionSchema.parse(session);
+    expect(parsed.provider).toBe('yggdrasil');
+    expect(parsed.profile.name).toBe('someone');
   });
 
-  it('rejects an empty jwt', () => {
-    const result = StrapiSessionSchema.safeParse({
-      provider: 'strapi',
-      jwt: '',
-      user: { id: 1, username: 'a', email: 'a@b.c', blocked: false },
+  it('rejects empty tokens', () => {
+    const result = YggdrasilSessionSchema.safeParse({
+      provider: 'yggdrasil',
+      accessToken: '',
+      clientToken: 'client',
+      profile: { uuid: undashedUuid, name: 'a' },
     });
     expect(result.success).toBe(false);
   });
 
-  it('rejects an invalid email', () => {
-    const result = StrapiUserSchema.safeParse({
-      id: 1,
-      username: 'a',
-      email: 'not-an-email',
-      blocked: false,
+  it('rejects a dashed profile uuid', () => {
+    const result = YggdrasilSessionSchema.safeParse({
+      provider: 'yggdrasil',
+      accessToken: 'access',
+      clientToken: 'client',
+      profile: { uuid: '01234567-89ab-cdef-0123-456789abcdef', name: 'a' },
     });
     expect(result.success).toBe(false);
   });
 
   it('rejects the wrong provider literal', () => {
-    const result = StrapiSessionSchema.safeParse({
+    const result = YggdrasilSessionSchema.safeParse({
       provider: 'mojang',
-      jwt: 'a.b.c',
-      user: { id: 1, username: 'a', email: 'a@b.c', blocked: false },
+      accessToken: 'access',
+      clientToken: 'client',
+      profile: { uuid: undashedUuid, name: 'a' },
     });
     expect(result.success).toBe(false);
   });
