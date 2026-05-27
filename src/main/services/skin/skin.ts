@@ -9,7 +9,7 @@ import { validatePngBuffer } from '@loontail/yggdrasil-core';
 import { scopedLogger } from '@main/infra/logger';
 import { getStoredAuth, setStoredAuth } from '@main/infra/store';
 import { withRefreshedProfile } from '@main/services/auth/mojangAuth';
-import { getYggdrasilClient } from '@main/services/auth/yggdrasilClient';
+import { fetchTextures, getYggdrasilClient } from '@main/services/auth/yggdrasilClient';
 import { invalidateMediaCache, prewarmMediaCache } from '@main/services/media/mediaCache';
 import { ERROR_CODES } from '@shared/constants';
 import type { AuthSession, MojangSession, YggdrasilSession } from '@shared/contracts/auth';
@@ -87,7 +87,7 @@ const uploadSkinYggdrasil = async (
   // Capture the previous URL before the upload so we can invalidate the
   // launcher's media cache once the new revision lands. Failures here are
   // not fatal — worst case the old PNG lingers in the cache until TTL.
-  const previousTextures = await client.getTextures(session.profile.uuid).catch(() => null);
+  const previousTextures = await fetchTextures(session.profile.uuid).catch(() => null);
   const previousUrl = previousTextures ? readTextureUrl(previousTextures, payload.type) : null;
 
   try {
@@ -110,7 +110,7 @@ const uploadSkinYggdrasil = async (
     return throwUploadError('Upload to Yggdrasil failed', error);
   }
 
-  const updatedTextures = await client.getTextures(session.profile.uuid).catch(() => null);
+  const updatedTextures = await fetchTextures(session.profile.uuid).catch(() => null);
   const updatedUrl = updatedTextures ? readTextureUrl(updatedTextures, payload.type) : null;
   if (!updatedUrl) {
     throw new SkinError(

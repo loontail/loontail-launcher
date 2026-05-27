@@ -4,7 +4,7 @@ import { type Account, accountFromSession } from '@shared/contracts/account';
 import type { YggdrasilSession } from '@shared/contracts/auth';
 import type { MojangAuth } from './mojangAuth';
 import type { YggdrasilAuth } from './yggdrasilAuth';
-import { getYggdrasilClient } from './yggdrasilClient';
+import { fetchTextures } from './yggdrasilClient';
 
 const logger = scopedLogger('auth.verify');
 
@@ -22,8 +22,7 @@ export const enrichYggdrasilAccount = async (
   fallback: Account,
 ): Promise<Account> => {
   try {
-    const client = getYggdrasilClient();
-    const textures = await client.getTextures(session.profile.uuid);
+    const textures = await fetchTextures(session.profile.uuid);
     return {
       ...fallback,
       skin: textures.skin?.url ?? null,
