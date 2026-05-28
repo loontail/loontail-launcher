@@ -2,7 +2,6 @@ import {
   type ConsoleInitialPayload,
   type ConsoleLevel,
   ConsoleLevels,
-  type ConsoleLine,
   type ConsoleLineArgs,
   type ConsoleProcessState,
   type ConsoleSource,
@@ -11,6 +10,8 @@ import {
 import type { ClientSlug } from '@shared/contracts/ids';
 import { IPC_EVENTS } from '@shared/ipc';
 import type { BrowserWindow } from 'electron';
+import { ConsoleBuffer, type ConsoleLineInput } from './consoleBuffer';
+import { ConsoleWindowSink } from './consoleWindowSink';
 import { type Log4jEvent, Log4jStreamParser, formatLog4jLine, mapLog4jLevel } from './log4jStream';
 
 const BUFFER_LIMIT = 10000;
@@ -45,54 +46,43 @@ export type SessionInfo = {
 };
 
 class ConsoleHub {
-  private window: BrowserWindow | null = null;
-  private buffer: ConsoleLine[] = [];
-  private pending: ConsoleLine[] = [];
+  private readonly buffer = new ConsoleBuffer({ limit: BUFFER_LIMIT });
+  private readonly sink = new ConsoleWindowSink(() => {
+    this.clearFlushTimer();
+    this.buffer.clearPending();
+  });
   private flushTimer: NodeJS.Timeout | null = null;
-  private nextId = 0;
-  private droppedCount = 0;
   private activeSession: SessionInfo | null = null;
   private readonly log4j = new Log4jStreamParser();
 
   attach(window: BrowserWindow): void {
-    this.window = window;
-    window.on('closed', () => {
-      // Older window's close event after a quick reopen would otherwise wipe
-      // the freshly attached one.
-      if (this.window !== window) return;
-      this.clearFlushTimer();
-      this.pending = [];
-      this.window = null;
-    });
+    this.sink.attach(window);
   }
 
   hasWindow(): boolean {
-    return this.window != null && !this.window.isDestroyed();
+    return this.sink.hasWindow();
   }
 
   getWindow(): BrowserWindow | null {
-    if (!this.window || this.window.isDestroyed()) return null;
-    return this.window;
+    return this.sink.getWindow();
   }
 
   getInitial(): ConsoleInitialPayload {
     return {
       activeSession: this.activeSession ? { ...this.activeSession } : null,
-      lines: this.buffer.slice(),
-      droppedCount: this.droppedCount,
+      lines: this.buffer.getLines(),
+      droppedCount: this.buffer.getDroppedCount(),
     };
   }
 
   clear(): void {
     this.clearFlushTimer();
-    this.buffer = [];
-    this.pending = [];
-    this.droppedCount = 0;
+    this.buffer.clear();
     this.sendToWindow(IPC_EVENTS.consoleBufferReset, null);
   }
 
   copyAll(): string {
-    return this.buffer.map((line) => line.message).join('\n');
+    return this.buffer.copyAll();
   }
 
   recordMinecraft(
@@ -145,7 +135,7 @@ class ConsoleHub {
 
   setActiveSession(session: SessionInfo | null): void {
     // Drain partial XML left from the previous session before the parser is
-    // reset — a trailing fragment would otherwise leak into the new session.
+    // reset; a trailing fragment would otherwise leak into the new session.
     if (this.activeSession) {
       for (const stream of [ConsoleSources.STDOUT, ConsoleSources.STDERR] as const) {
         for (const chunk of this.log4j.flush(stream)) {
@@ -191,27 +181,17 @@ class ConsoleHub {
     const segments = cleaned.split(/\r?\n/).filter((segment) => segment.trim().length > 0);
     if (segments.length === 0) return;
 
-    const now = Date.now();
-    for (const segment of segments) {
+    const lines: ConsoleLineInput[] = segments.map((segment) => {
       const level: ConsoleLevel = forcedLevel ?? guessLevel(source, segment);
-      const line: ConsoleLine = {
-        id: this.nextId++,
-        timestamp: now,
+      return {
         level,
         source,
         message: segment,
         ...(slug ? { slug } : {}),
         ...(code ? (lineArgs ? { code, args: lineArgs } : { code }) : {}),
       };
-      this.buffer.push(line);
-      this.pending.push(line);
-    }
-
-    if (this.buffer.length > BUFFER_LIMIT) {
-      const overflow = this.buffer.length - BUFFER_LIMIT;
-      this.buffer.splice(0, overflow);
-      this.droppedCount += overflow;
-    }
+    });
+    this.buffer.append(lines);
 
     if (this.hasWindow()) this.scheduleFlush();
   }
@@ -220,8 +200,7 @@ class ConsoleHub {
     if (this.flushTimer) return;
     this.flushTimer = setTimeout(() => {
       this.flushTimer = null;
-      const batch = this.pending;
-      this.pending = [];
+      const batch = this.buffer.consumePending();
       if (batch.length === 0) return;
       this.sendToWindow(IPC_EVENTS.consoleLines, batch);
     }, FLUSH_INTERVAL_MS);
@@ -232,8 +211,7 @@ class ConsoleHub {
   // last setTimeout and process exit.
   flushPending(): void {
     this.clearFlushTimer();
-    const batch = this.pending;
-    this.pending = [];
+    const batch = this.buffer.consumePending();
     if (batch.length === 0) return;
     this.sendToWindow(IPC_EVENTS.consoleLines, batch);
   }
@@ -245,13 +223,7 @@ class ConsoleHub {
   }
 
   private sendToWindow(channel: string, payload: unknown): void {
-    const window = this.window;
-    if (!window || window.isDestroyed()) return;
-    try {
-      window.webContents.send(channel, payload);
-    } catch {
-      /* renderer torn down between checks — drop the push */
-    }
+    this.sink.send(channel, payload);
   }
 }
 
