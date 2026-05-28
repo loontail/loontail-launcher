@@ -1,8 +1,7 @@
 import {
   type MinecraftKit,
   type MinecraftProfile,
-  type MojangSkinVariantInput,
-  detectMojangSkinVariant,
+  detectSkinVariant,
   isMinecraftKitError,
 } from '@loontail/minecraft-kit';
 import { validatePngBuffer } from '@loontail/yggdrasil-core';
@@ -92,11 +91,7 @@ const uploadSkinYggdrasil = async (
 
   try {
     if (payload.type === SkinKinds.SKIN) {
-      // Match the Mojang branch's "AUTO" behaviour: if the renderer did not
-      // declare a variant, detect it from the pixels via the kit instead of
-      // silently defaulting to CLASSIC. Without this, every SLIM skin was
-      // stored as CLASSIC and rendered with 4-pixel arms.
-      const variant = payload.variant ?? detectMojangSkinVariant(new Uint8Array(payload.buffer));
+      const variant = detectSkinVariant(new Uint8Array(payload.buffer));
       await client.uploadSkin({
         accessToken: session.accessToken,
         file: buffer,
@@ -132,10 +127,9 @@ export type SkinHandlers = {
 
 export const createSkinHandlers = (kit: MinecraftKit): SkinHandlers => {
   // Mojang flow: hand the PNG to `kit.auth.profile.uploadSkin`, which posts
-  // it to api.minecraftservices.com/minecraft/profile/skins. `"AUTO"` makes
-  // the kit detect SLIM vs CLASSIC from the pixels so the renderer never has
-  // to ask the user. Kit errors now include Mojang's response body in the
-  // message (kit 0.8.8+), so user-visible toasts surface the real reason.
+  // it to api.minecraftservices.com/minecraft/profile/skins. Kit errors now
+  // include Mojang's response body in the message (kit 0.8.8+), so
+  // user-visible toasts surface the real reason.
   const uploadSkinMojang = async (
     session: MojangSession,
     payload: UploadSkinPayload,
@@ -147,7 +141,7 @@ export const createSkinHandlers = (kit: MinecraftKit): SkinHandlers => {
       );
     }
     const skin = new Uint8Array(payload.buffer);
-    const variant: MojangSkinVariantInput = payload.variant ?? 'AUTO';
+    const variant = 'AUTO' as const;
     let profile: MinecraftProfile;
     try {
       profile = await kit.auth.profile.uploadSkin({

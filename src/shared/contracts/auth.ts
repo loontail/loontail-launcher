@@ -12,7 +12,7 @@ export const AUTH_PROVIDERS = ['yggdrasil', 'mojang'] as const;
 export type AuthProvider = (typeof AUTH_PROVIDERS)[number];
 
 // Re-export kit-side literal unions so renderer/IPC code uses a single source of truth.
-export type { MojangAssetState, MojangSkinVariant as SkinVariant } from '@loontail/minecraft-kit';
+export type { MojangAssetState, SkinVariant } from '@loontail/minecraft-kit';
 
 // Mirror of kit's `MojangProfileSkin` shape; kept here so the persisted-store
 // Zod schema can validate it without pulling kit's runtime into shared/.

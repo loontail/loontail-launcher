@@ -124,6 +124,38 @@ const flattenRemote = (
   return { files };
 };
 
+const makeProgressEvent = (
+  task: SyncTask,
+  slug: ClientSlug,
+  status: BundleSyncStatus,
+  patch?: Partial<BundleProgressEvent>,
+): BundleProgressEvent => ({
+  slug,
+  status,
+  processedFiles: patch?.processedFiles ?? task.processedFiles,
+  totalFiles: patch?.totalFiles ?? task.totalFiles,
+  toDownload: patch?.toDownload ?? task.plan.toDownload.length + task.plan.toUpdate.length,
+  toUpdate: patch?.toUpdate ?? task.plan.toUpdate.length,
+  toDelete: patch?.toDelete ?? task.plan.toDelete.length,
+  toSkip: patch?.toSkip ?? task.plan.toSkip.length,
+  bytesDownloaded: patch?.bytesDownloaded ?? task.bytesDownloaded,
+  bytesTotal: patch?.bytesTotal ?? task.plan.bytesTotal,
+  speedBytesPerSec: patch?.speedBytesPerSec ?? 0,
+  ...(patch?.currentFile ? { currentFile: patch.currentFile } : {}),
+});
+
+const createEmit = (
+  active: ActiveSync,
+  task: SyncTask,
+  emitProgress: (event: BundleProgressEvent) => void,
+): EmitProgress => {
+  return (slug, status, patch) => {
+    const event = makeProgressEvent(task, slug, status, patch);
+    active.lastProgress = event;
+    emitProgress(event);
+  };
+};
+
 export class BundleManager {
   private readonly activeSyncs = new Map<ClientSlug, ActiveSync>();
 
@@ -314,24 +346,9 @@ export class BundleManager {
     };
     this.activeSyncs.set(slug, active);
 
-    const emit: EmitProgress = (s, status, patch) => {
-      const event: BundleProgressEvent = {
-        slug: s,
-        status,
-        processedFiles: patch?.processedFiles ?? task.processedFiles,
-        totalFiles: patch?.totalFiles ?? task.totalFiles,
-        toDownload: patch?.toDownload ?? task.plan.toDownload.length + task.plan.toUpdate.length,
-        toUpdate: patch?.toUpdate ?? task.plan.toUpdate.length,
-        toDelete: patch?.toDelete ?? task.plan.toDelete.length,
-        toSkip: patch?.toSkip ?? task.plan.toSkip.length,
-        bytesDownloaded: patch?.bytesDownloaded ?? task.bytesDownloaded,
-        bytesTotal: patch?.bytesTotal ?? task.plan.bytesTotal,
-        speedBytesPerSec: patch?.speedBytesPerSec ?? 0,
-        ...(patch?.currentFile ? { currentFile: patch.currentFile } : {}),
-      };
-      active.lastProgress = event;
+    const emit: EmitProgress = createEmit(active, task, (event) => {
       this.broadcaster.progress(event);
-    };
+    });
 
     try {
       this.emitStatus(slug, BundleSyncStatuses.FETCHING_MANIFEST);
@@ -407,24 +424,9 @@ export class BundleManager {
     task.speedWindowStart = Date.now();
     task.speedWindowBytes = 0;
 
-    const emit: EmitProgress = (s, status, patch) => {
-      const event: BundleProgressEvent = {
-        slug: s,
-        status,
-        processedFiles: patch?.processedFiles ?? task.processedFiles,
-        totalFiles: patch?.totalFiles ?? task.totalFiles,
-        toDownload: patch?.toDownload ?? task.plan.toDownload.length + task.plan.toUpdate.length,
-        toUpdate: patch?.toUpdate ?? task.plan.toUpdate.length,
-        toDelete: patch?.toDelete ?? task.plan.toDelete.length,
-        toSkip: patch?.toSkip ?? task.plan.toSkip.length,
-        bytesDownloaded: patch?.bytesDownloaded ?? task.bytesDownloaded,
-        bytesTotal: patch?.bytesTotal ?? task.plan.bytesTotal,
-        speedBytesPerSec: patch?.speedBytesPerSec ?? 0,
-        ...(patch?.currentFile ? { currentFile: patch.currentFile } : {}),
-      };
-      active.lastProgress = event;
+    const emit: EmitProgress = createEmit(active, task, (event) => {
       this.broadcaster.progress(event);
-    };
+    });
 
     try {
       this.emitStatus(task.slug, BundleSyncStatuses.PLANNING);

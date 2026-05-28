@@ -4,23 +4,53 @@ import { useCurrentUser } from '@renderer/features/auth';
 import { toCachedMediaUrl } from '@renderer/shared/lib/mediaUrl';
 import { QUERY_KEYS } from '@shared/constants';
 import type { Account } from '@shared/contracts/account';
-import type { SkinVariant } from '@shared/contracts/auth';
 import { type SkinKind, SkinKinds } from '@shared/contracts/skin';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { clearSkin, uploadSkin } from './api';
 
+// Decodes any browser-supported format (PNG, WebP, JPEG, etc.) via Canvas and
+// re-encodes as a clean PNG. Fixes files that carry the wrong MIME metadata
+// (for example, a WebP saved with a .png extension).
+const normalizeTextureToPng = async (objectUrl: string): Promise<ArrayBuffer> => {
+  const img = new Image();
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error('Failed to decode texture image'));
+    img.src = objectUrl;
+  });
+  const canvas = document.createElement('canvas');
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+
+  const context = canvas.getContext('2d');
+  if (!context) {
+    throw new Error('Failed to initialize 2D canvas context');
+  }
+  context.drawImage(img, 0, 0);
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((blobValue) => {
+      if (blobValue === null) {
+        reject(new Error('PNG encoding failed'));
+      } else {
+        resolve(blobValue);
+      }
+    }, 'image/png');
+  });
+  return blob.arrayBuffer();
+};
+
 export type UploadSkinInput = {
   type: SkinKind;
   buffer: ArrayBuffer;
-  variant?: SkinVariant;
 };
 
 export const useUploadSkin = () => {
   const queryClient = useQueryClient();
   const mutation = useMutation({
-    mutationFn: async ({ type, buffer, variant }: UploadSkinInput) => {
-      const result = await uploadSkin(type, buffer, variant);
+    mutationFn: async ({ type, buffer }: UploadSkinInput) => {
+      const result = await uploadSkin(type, buffer);
       queryClient.setQueryData<Account | null>(QUERY_KEYS.auth.me, (previous) =>
         previous ? { ...previous, [type]: result.url } : previous,
       );
@@ -42,7 +72,7 @@ export const useClearSkin = () => {
   return { mutate: mutation.mutateAsync, isPending: mutation.isPending };
 };
 
-type PendingFile = { file: File; objectUrl: string };
+type PendingFile = { objectUrl: string };
 
 /**
  * Owns the skin/cape file pickers, the unsaved-preview state, and the
@@ -86,7 +116,7 @@ export const useSkinEditor = () => {
       event.target.value = '';
       if (!file) return;
       if (skinPending) URL.revokeObjectURL(skinPending.objectUrl);
-      setSkinPending({ file, objectUrl: URL.createObjectURL(file) });
+      setSkinPending({ objectUrl: URL.createObjectURL(file) });
     },
     [skinPending],
   );
@@ -97,7 +127,7 @@ export const useSkinEditor = () => {
       event.target.value = '';
       if (!file) return;
       if (capePending) URL.revokeObjectURL(capePending.objectUrl);
-      setCapePending({ file, objectUrl: URL.createObjectURL(file) });
+      setCapePending({ objectUrl: URL.createObjectURL(file) });
     },
     [capePending],
   );
@@ -107,16 +137,24 @@ export const useSkinEditor = () => {
 
   const saveAll = useCallback(async () => {
     if (skinPending) {
-      const buffer = await skinPending.file.arrayBuffer();
-      await upload.mutate({ type: SkinKinds.SKIN, buffer });
-      URL.revokeObjectURL(skinPending.objectUrl);
-      setSkinPending(null);
+      const { objectUrl } = skinPending;
+      try {
+        const buffer = await normalizeTextureToPng(objectUrl);
+        await upload.mutate({ type: SkinKinds.SKIN, buffer });
+        setSkinPending(null);
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
     }
     if (capePending) {
-      const buffer = await capePending.file.arrayBuffer();
-      await upload.mutate({ type: SkinKinds.CAPE, buffer });
-      URL.revokeObjectURL(capePending.objectUrl);
-      setCapePending(null);
+      const { objectUrl } = capePending;
+      try {
+        const buffer = await normalizeTextureToPng(objectUrl);
+        await upload.mutate({ type: SkinKinds.CAPE, buffer });
+        setCapePending(null);
+      } finally {
+        URL.revokeObjectURL(objectUrl);
+      }
     }
   }, [skinPending, capePending, upload]);
 
