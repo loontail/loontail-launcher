@@ -7,7 +7,6 @@ import {
   type ConsoleSource,
   ConsoleStatuses,
 } from '@shared/contracts/console';
-import { IPC_CHANNELS } from '@shared/ipc';
 import {
   AlertTriangle,
   ArrowDown,
@@ -30,6 +29,7 @@ import {
   useState,
 } from 'react';
 import { useTranslation } from 'react-i18next';
+import { copyAll, copyText } from './api';
 import { useConsoleScroll } from './hooks/useConsoleScroll';
 import { type ConsoleSearchApi, useConsoleSearch } from './hooks/useConsoleSearch';
 import { useConsoleStream } from './hooks/useConsoleStream';
@@ -162,7 +162,7 @@ export const ConsoleApp = () => {
 
   const handleCopyAll = useCallback(async () => {
     try {
-      await window.api.invoke(IPC_CHANNELS.consoleCopyAll, undefined);
+      await copyAll();
       flashFeedback(setCopyAllFeedback, COPY_FEEDBACKS.SUCCESS);
     } catch {
       flashFeedback(setCopyAllFeedback, COPY_FEEDBACKS.ERROR);
@@ -189,7 +189,7 @@ export const ConsoleApp = () => {
       ? t(selectedLine.code, selectedLine.args ?? {})
       : selectedLine.message;
     try {
-      await window.api.invoke(IPC_CHANNELS.consoleCopyText, text);
+      await copyText(text);
       flashFeedback(setCopyLineFeedback, COPY_FEEDBACKS.SUCCESS);
     } catch {
       flashFeedback(setCopyLineFeedback, COPY_FEEDBACKS.ERROR);

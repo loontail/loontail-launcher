@@ -5,8 +5,8 @@ import {
   ConsoleStatuses,
 } from '@shared/contracts/console';
 import type { ClientSlug } from '@shared/contracts/ids';
-import { IPC_CHANNELS, IPC_EVENTS } from '@shared/ipc';
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { clear as clearConsole, getInitial, onBufferReset, onLines, onState } from '../api';
 
 const INITIAL_STATE: ConsoleProcessState = {
   slug: '' as ClientSlug,
@@ -65,8 +65,7 @@ export const useConsoleStream = (
 
   const refreshInitial = useCallback(() => {
     let cancelled = false;
-    window.api
-      .invoke(IPC_CHANNELS.consoleGetInitial, undefined)
+    getInitial()
       .then((payload: ConsoleInitialPayload) => {
         if (cancelled) return;
         if (payload.activeSession) {
@@ -129,16 +128,16 @@ export const useConsoleStream = (
   }, [flushPending]);
 
   useEffect(() => {
-    const offLines = window.api.on(IPC_EVENTS.consoleLines, (incoming) => {
+    const offLines = onLines((incoming) => {
       appendPending(incoming);
       if (pausedRef.current) return;
       scheduleFlush();
     });
-    const offState = window.api.on(IPC_EVENTS.consoleState, (event) => {
+    const offState = onState((event) => {
       setState(event);
       if (event.clientTitle !== undefined) setClientTitle(event.clientTitle);
     });
-    const offReset = window.api.on(IPC_EVENTS.consoleBufferReset, () => {
+    const offReset = onBufferReset(() => {
       pendingRef.current = [];
       seenIdsRef.current = new Set();
       onResetSelection();
@@ -162,8 +161,7 @@ export const useConsoleStream = (
   // pushes the live channel missed. seenIdsRef dedupes live arrivals.
   useEffect(() => {
     const handle = window.setInterval(() => {
-      window.api
-        .invoke(IPC_CHANNELS.consoleGetInitial, undefined)
+      getInitial()
         .then((payload: ConsoleInitialPayload) => {
           const session = payload.activeSession;
           if (session) {
@@ -194,7 +192,7 @@ export const useConsoleStream = (
   const togglePause = useCallback(() => setPaused((value) => !value), []);
 
   const clear = useCallback(() => {
-    void window.api.invoke(IPC_CHANNELS.consoleClear, undefined).catch(() => {
+    void clearConsole().catch(() => {
       // User-driven clear: local buffer is already wiped below. An IPC failure
       // only means the main-side mirror survives a tick longer; the next
       // reconcile poll will reseed it.
