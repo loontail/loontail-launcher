@@ -11,6 +11,7 @@ import {
   type BundleSyncStatus,
   BundleSyncStatuses,
   type LocalManifest,
+  type RemoteManifest,
 } from '@shared/contracts/bundle';
 import type { ClientSlug } from '@shared/contracts/ids';
 import { resolveClientSettings } from '@shared/domain/settings';
@@ -26,6 +27,11 @@ import { type EmitProgress, type SyncTask, runSyncPhases } from './runner';
 import { type ActiveSync, createActiveSync, createSyncTask, resetTaskForResume } from './syncState';
 
 const logger = scopedLogger('bundle.manager');
+
+type PreparedPlanSource = {
+  force: boolean;
+  loadRemoteManifest: () => RemoteManifest | Promise<RemoteManifest>;
+};
 
 const makeProgressEvent = (
   task: SyncTask,
@@ -136,9 +142,8 @@ export class BundleManager {
       req.destroy();
     }
     active.task.currentRequests.clear();
-    // If the sync was paused, runSync has already exited and won't run its
-    // finally cleanup again — handle the rejection + map deletion inline.
-    // Otherwise the runSync finally block does it.
+    // If the sync was paused, the execution path has already exited and won't
+    // run its finally cleanup again.
     if (wasPaused) {
       this.emitStatus(slug, BundleSyncStatuses.CANCELLED);
       this.rejectAwaiters(
@@ -214,68 +219,16 @@ export class BundleManager {
     const active = createActiveSync(task, bundleSlug, options.forLaunch);
     this.activeSyncs.set(slug, active);
 
-    const emit: EmitProgress = createEmit(active, task, (event) => {
-      this.broadcaster.progress(event);
+    await this.executePreparedSync(active, task, {
+      force: req.force === true,
+      loadRemoteManifest: async () => {
+        this.emitStatus(slug, BundleSyncStatuses.FETCHING_MANIFEST);
+        const { manifest, manifestHash } = await fetchRemoteManifest(bundleSlug, task.abort.signal);
+        active.remoteManifest = manifest;
+        active.remoteManifestHash = manifestHash;
+        return manifest;
+      },
     });
-
-    try {
-      this.emitStatus(slug, BundleSyncStatuses.FETCHING_MANIFEST);
-      const { manifest, manifestHash } = await fetchRemoteManifest(bundleSlug, task.abort.signal);
-      active.remoteManifest = manifest;
-      active.remoteManifestHash = manifestHash;
-
-      this.emitStatus(slug, BundleSyncStatuses.PLANNING);
-      const local = await loadLocalManifest(clientFolder);
-      const plan = await buildPlan(manifest, local, clientFolder, { force: req.force === true });
-      task.plan = plan;
-      task.pendingDownloads = [...plan.toDownload, ...plan.toUpdate];
-      task.pendingDeletes = [...plan.toDelete];
-      task.totalFiles = task.pendingDownloads.length + task.pendingDeletes.length;
-
-      // Nothing to do — short-circuit to up-to-date so renderer drops progress
-      // UI immediately.
-      if (task.totalFiles === 0) {
-        await this.persistLocalManifest(active, clientFolder);
-        this.emitStatus(slug, BundleSyncStatuses.UP_TO_DATE);
-        this.resolveAwaiters(active);
-        return;
-      }
-
-      const { deletedAny } = await runSyncPhases(task, emit);
-
-      // Defensive heal — only fires when we actually removed files, since
-      // additions/replacements can't reduce vanilla coverage.
-      if (deletedAny) {
-        this.emitStatus(slug, BundleSyncStatuses.HEALING);
-        await this.healer.healAfterDeletes(slug, plan.bundleOwnedRelativePaths, {
-          signal: task.abort.signal,
-          onEvent: createHealProgressListener(slug, emit),
-        });
-      }
-
-      await this.persistLocalManifest(active, clientFolder);
-      this.emitStatus(slug, BundleSyncStatuses.COMPLETED);
-      this.resolveAwaiters(active);
-    } catch (err) {
-      const code = classifyBundleError(err, task.abort.signal);
-      if (code === BundleErrorCodes.ABORTED && task.cancelled) {
-        this.emitStatus(slug, BundleSyncStatuses.CANCELLED);
-        this.rejectAwaiters(active, this.toError(err));
-        return;
-      }
-      if (code === BundleErrorCodes.ABORTED && task.paused) {
-        // Paused mid-flight; status already emitted by pauseSync. Don't
-        // reject awaiters — they'll be resolved when resume completes.
-        return;
-      }
-      this.emitError(slug, code, errorMessage(err));
-      this.emitStatus(slug, BundleSyncStatuses.ERROR);
-      this.rejectAwaiters(active, this.toError(err));
-    } finally {
-      if (!task.paused || task.cancelled) {
-        this.activeSyncs.delete(slug);
-      }
-    }
   }
 
   private async continuePausedSync(active: ActiveSync): Promise<void> {
@@ -284,15 +237,27 @@ export class BundleManager {
     // skipped via the sha256 fast-path.
     resetTaskForResume(task);
 
+    await this.executePreparedSync(active, task, {
+      force: false,
+      loadRemoteManifest: () => active.remoteManifest,
+    });
+  }
+
+  private async executePreparedSync(
+    active: ActiveSync,
+    task: SyncTask,
+    planSource: PreparedPlanSource,
+  ): Promise<void> {
     const emit: EmitProgress = createEmit(active, task, (event) => {
       this.broadcaster.progress(event);
     });
 
     try {
+      const remoteManifest = await planSource.loadRemoteManifest();
       this.emitStatus(task.slug, BundleSyncStatuses.PLANNING);
       const local = await loadLocalManifest(task.clientFolder);
-      const plan = await buildPlan(active.remoteManifest, local, task.clientFolder, {
-        force: false,
+      const plan = await buildPlan(remoteManifest, local, task.clientFolder, {
+        force: planSource.force,
       });
       task.plan = plan;
       task.pendingDownloads = [...plan.toDownload, ...plan.toUpdate];
@@ -300,9 +265,7 @@ export class BundleManager {
       task.totalFiles = task.pendingDownloads.length + task.pendingDeletes.length;
 
       if (task.totalFiles === 0) {
-        await this.persistLocalManifest(active, task.clientFolder);
-        this.emitStatus(task.slug, BundleSyncStatuses.UP_TO_DATE);
-        this.resolveAwaiters(active);
+        await this.completePreparedSync(active, BundleSyncStatuses.UP_TO_DATE);
         return;
       }
 
@@ -314,9 +277,7 @@ export class BundleManager {
           onEvent: createHealProgressListener(task.slug, emit),
         });
       }
-      await this.persistLocalManifest(active, task.clientFolder);
-      this.emitStatus(task.slug, BundleSyncStatuses.COMPLETED);
-      this.resolveAwaiters(active);
+      await this.completePreparedSync(active, BundleSyncStatuses.COMPLETED);
     } catch (err) {
       const code = classifyBundleError(err, task.abort.signal);
       if (code === BundleErrorCodes.ABORTED && task.cancelled) {
@@ -335,6 +296,12 @@ export class BundleManager {
         this.activeSyncs.delete(task.slug);
       }
     }
+  }
+
+  private async completePreparedSync(active: ActiveSync, status: BundleSyncStatus): Promise<void> {
+    await this.persistLocalManifest(active, active.task.clientFolder);
+    this.emitStatus(active.task.slug, status);
+    this.resolveAwaiters(active);
   }
 
   private async persistLocalManifest(active: ActiveSync, clientFolder: string): Promise<void> {

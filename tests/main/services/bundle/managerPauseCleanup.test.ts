@@ -1,21 +1,54 @@
 import type { ClientRequest } from 'node:http';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.hoisted(() => {
+const managerMocks = vi.hoisted(() => {
   process.env.API_URL ??= 'http://test.invalid';
   process.env.API_TOKEN ??= 'test-token';
+  return {
+    buildPlan: vi.fn(),
+    clearLocalManifest: vi.fn(),
+    fetchRemoteManifest: vi.fn(),
+    getClient: vi.fn(),
+    getSettings: vi.fn(),
+    loadLocalManifest: vi.fn(),
+    saveLocalManifest: vi.fn(),
+  };
 });
 
 import { BUNDLE_PAUSED_SYNC_MAX_IDLE_MS } from '@main/constants/bundle';
 import type { BundleBroadcaster } from '@main/services/bundle/broadcast';
 import type { Healer } from '@main/services/bundle/healer';
 import { BundleManager } from '@main/services/bundle/manager';
+import type { SyncPlan } from '@main/services/bundle/plan';
 import type { SyncTask } from '@main/services/bundle/runner';
 import { BundleErrorCodes, BundleSyncStatuses } from '@shared/contracts/bundle';
 import type { ClientSlug } from '@shared/contracts/ids';
+import type { LauncherSettings } from '@shared/contracts/settings';
 
 vi.mock('@main/infra/logger', () => ({
   scopedLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+}));
+
+vi.mock('@main/services/clients', () => ({
+  getClient: managerMocks.getClient,
+}));
+
+vi.mock('@main/services/settings/settings', () => ({
+  getSettings: managerMocks.getSettings,
+}));
+
+vi.mock('@main/services/bundle/api', () => ({
+  fetchRemoteManifest: managerMocks.fetchRemoteManifest,
+}));
+
+vi.mock('@main/services/bundle/manifestRepo', () => ({
+  clearLocalManifest: managerMocks.clearLocalManifest,
+  loadLocalManifest: managerMocks.loadLocalManifest,
+  saveLocalManifest: managerMocks.saveLocalManifest,
+}));
+
+vi.mock('@main/services/bundle/plan', () => ({
+  buildPlan: managerMocks.buildPlan,
 }));
 
 type Awaiter = { resolve: () => void; reject: (err: Error) => void };
@@ -32,6 +65,26 @@ type ActiveSyncShape = {
 };
 
 const SLUG = 'test-client' as ClientSlug;
+const BUNDLE_SLUG = 'bundle-x';
+const CLIENT_FOLDER = '/tmp/client';
+
+const EMPTY_PLAN: SyncPlan = {
+  toDownload: [],
+  toUpdate: [],
+  toDelete: [],
+  toSkip: [],
+  bundleOwnedRelativePaths: new Set(),
+  bytesTotal: 0,
+};
+
+const launcherSettings = (): LauncherSettings => ({
+  memory: { allocatedRamMb: 0 },
+  storage: { clientsFolder: '/tmp/clients' },
+  launch: { console: false, fullscreen: false },
+  clients: {
+    [SLUG]: { storage: { clientFolder: CLIENT_FOLDER } },
+  },
+});
 
 const makeBroadcaster = (): BundleBroadcaster => ({
   status: vi.fn(),
@@ -50,7 +103,7 @@ const seedPausedActive = (
 ): { activeSyncs: Map<ClientSlug, ActiveSyncShape> } => {
   const task: SyncTask = {
     slug: SLUG,
-    clientFolder: '/tmp/client',
+    clientFolder: CLIENT_FOLDER,
     plan: {
       toDownload: [],
       toUpdate: [],
@@ -77,7 +130,7 @@ const seedPausedActive = (
     lastProgress: null,
     remoteManifestHash: '',
     remoteManifest: {},
-    bundleSlug: 'bundle-x',
+    bundleSlug: BUNDLE_SLUG,
     forLaunch: true,
     awaiters: [awaiter],
     pauseIdleTimer: null,
@@ -91,9 +144,34 @@ const seedPausedActive = (
   return { activeSyncs: internals.activeSyncs };
 };
 
+const resetManagerMocks = (): void => {
+  managerMocks.buildPlan.mockReset();
+  managerMocks.clearLocalManifest.mockReset();
+  managerMocks.fetchRemoteManifest.mockReset();
+  managerMocks.getClient.mockReset();
+  managerMocks.getSettings.mockReset();
+  managerMocks.loadLocalManifest.mockReset();
+  managerMocks.saveLocalManifest.mockReset();
+
+  managerMocks.buildPlan.mockResolvedValue(EMPTY_PLAN);
+  managerMocks.clearLocalManifest.mockResolvedValue(undefined);
+  managerMocks.fetchRemoteManifest.mockResolvedValue({
+    manifest: {},
+    manifestHash: 'empty-manifest-hash',
+  });
+  managerMocks.getClient.mockResolvedValue(null);
+  managerMocks.getSettings.mockReturnValue(launcherSettings());
+  managerMocks.loadLocalManifest.mockResolvedValue(null);
+  managerMocks.saveLocalManifest.mockResolvedValue(undefined);
+};
+
+const statusEvents = (broadcaster: BundleBroadcaster) =>
+  vi.mocked(broadcaster.status).mock.calls.map(([event]) => event.status);
+
 describe('BundleManager pause cleanup', () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    resetManagerMocks();
   });
 
   afterEach(() => {
@@ -172,5 +250,43 @@ describe('BundleManager pause cleanup', () => {
       slug: SLUG,
       status: BundleSyncStatuses.CANCELLED,
     });
+  });
+
+  it('resume emits the same terminal status as a fresh sync for an empty plan', async () => {
+    vi.useRealTimers();
+    managerMocks.getClient.mockResolvedValue({ bundleSlug: BUNDLE_SLUG });
+
+    const freshBroadcaster = makeBroadcaster();
+    const freshManager = new BundleManager(freshBroadcaster, makeHealer());
+
+    await freshManager.startSync({ slug: SLUG });
+
+    const freshStatuses = statusEvents(freshBroadcaster);
+    expect(freshStatuses).toEqual([
+      BundleSyncStatuses.FETCHING_MANIFEST,
+      BundleSyncStatuses.PLANNING,
+      BundleSyncStatuses.UP_TO_DATE,
+    ]);
+
+    const resumeBroadcaster = makeBroadcaster();
+    const resumeManager = new BundleManager(resumeBroadcaster, makeHealer());
+    const resolved: string[] = [];
+    const { activeSyncs } = seedPausedActive(resumeManager, {
+      resolve: () => resolved.push('resolved'),
+      reject: (err) => {
+        throw err;
+      },
+    });
+
+    resumeManager.resumeSync(SLUG);
+
+    await vi.waitFor(() => {
+      expect(activeSyncs.has(SLUG)).toBe(false);
+    });
+
+    const resumeStatuses = statusEvents(resumeBroadcaster);
+    expect(resumeStatuses).toEqual([BundleSyncStatuses.PLANNING, BundleSyncStatuses.UP_TO_DATE]);
+    expect(resumeStatuses.at(-1)).toBe(freshStatuses.at(-1));
+    expect(resolved).toEqual(['resolved']);
   });
 });
