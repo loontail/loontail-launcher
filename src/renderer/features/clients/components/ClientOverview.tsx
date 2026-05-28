@@ -3,13 +3,17 @@ import type { Client } from '@shared/contracts/client';
 import { type InstallStatus, InstallStatuses } from '@shared/contracts/minecraft';
 import { Settings2 } from 'lucide-react';
 import { marked } from 'marked';
-import { type ReactNode, useMemo, useState } from 'react';
+import { type ReactNode, Suspense, lazy, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Carousel } from './Carousel';
-import { ClientSettingsModal } from './ClientSettingsModal';
 import { PlayButton } from './PlayButton';
 import { ServersInfo } from './ServersInfo';
 import { StrapiMedia } from './StrapiMedia';
+
+const Carousel = lazy(() => import('./Carousel').then((module) => ({ default: module.Carousel })));
+
+const ClientSettingsModal = lazy(() =>
+  import('./ClientSettingsModal').then((module) => ({ default: module.ClientSettingsModal })),
+);
 
 type ClientOverviewProps = {
   client: Client;
@@ -35,6 +39,14 @@ const SectionLabel = ({ children }: { children: ReactNode }) => (
   </p>
 );
 
+type Screenshot = Client['screenshots'][number];
+
+const CarouselFallback = ({ screenshot }: { screenshot: Screenshot }) => (
+  <div className="relative aspect-[16/9] w-full overflow-hidden rounded-lg border border-edge">
+    <StrapiMedia media={screenshot} className="h-full w-full object-cover" />
+  </div>
+);
+
 export const ClientOverview = ({ client }: ClientOverviewProps) => {
   const { t } = useTranslation();
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -54,7 +66,8 @@ export const ClientOverview = ({ client }: ClientOverviewProps) => {
 
   const parsedDescription = useMemo(() => marked.parse(description ?? '') as string, [description]);
 
-  const hasScreenshots = (screenshots?.length ?? 0) > 0;
+  const firstScreenshot = screenshots[0] ?? null;
+  const hasScreenshots = firstScreenshot !== null;
   const hasAbout = Boolean(description);
   const hasServers = Boolean(servers?.length);
   const hasBelow = hasScreenshots || hasAbout;
@@ -140,16 +153,18 @@ export const ClientOverview = ({ client }: ClientOverviewProps) => {
             {hasScreenshots && screenshots && (
               <section>
                 <SectionLabel>{t('clients.screenshots')}</SectionLabel>
-                <Carousel autoPlay>
-                  {screenshots.map((screenshot) => (
-                    <div
-                      key={screenshot.id}
-                      className="relative aspect-[16/9] w-full overflow-hidden rounded-lg border border-edge"
-                    >
-                      <StrapiMedia media={screenshot} className="h-full w-full object-cover" />
-                    </div>
-                  ))}
-                </Carousel>
+                <Suspense fallback={<CarouselFallback screenshot={firstScreenshot} />}>
+                  <Carousel autoPlay>
+                    {screenshots.map((screenshot) => (
+                      <div
+                        key={screenshot.id}
+                        className="relative aspect-[16/9] w-full overflow-hidden rounded-lg border border-edge"
+                      >
+                        <StrapiMedia media={screenshot} className="h-full w-full object-cover" />
+                      </div>
+                    ))}
+                  </Carousel>
+                </Suspense>
               </section>
             )}
 
@@ -167,11 +182,15 @@ export const ClientOverview = ({ client }: ClientOverviewProps) => {
         )}
       </div>
 
-      <ClientSettingsModal
-        isOpen={settingsOpen}
-        client={client}
-        onClose={() => setSettingsOpen(false)}
-      />
+      {settingsOpen && (
+        <Suspense fallback={null}>
+          <ClientSettingsModal
+            isOpen={settingsOpen}
+            client={client}
+            onClose={() => setSettingsOpen(false)}
+          />
+        </Suspense>
+      )}
     </>
   );
 };

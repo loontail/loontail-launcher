@@ -4,7 +4,6 @@ import { BundleEventsListener } from '@renderer/features/bundle';
 import { ClientsPage } from '@renderer/features/clients';
 import { MinecraftEventsListener } from '@renderer/features/minecraft';
 import { NotificationsListener } from '@renderer/features/notifications';
-import { SettingsPage } from '@renderer/features/settings';
 import { SetupPage, useNeedsSetup } from '@renderer/features/setup';
 import { UpdaterAutoCheck, UpdaterEventsListener } from '@renderer/features/updater';
 import { cn } from '@renderer/shared/lib/cn';
@@ -16,9 +15,13 @@ import {
 } from '@renderer/shared/lib/stores/navigation';
 import { ToastContainer } from '@renderer/shared/ui/Toast';
 import { ArrowLeft, Loader2, Settings } from 'lucide-react';
+import { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const hasCustomTitleBar = window.api.platform !== 'linux';
+const SettingsPage = lazy(() =>
+  import('@renderer/features/settings').then((module) => ({ default: module.SettingsPage })),
+);
 
 const NavigationButton = () => {
   const { t } = useTranslation();
@@ -78,7 +81,15 @@ export const App = () => {
           <ClientsPage />
         )}
         {!isBootstrapping && !needsSetup && isAuthenticated && view === Views.SETTINGS && (
-          <SettingsPage />
+          <Suspense
+            fallback={
+              <div className="flex flex-1 items-center justify-center">
+                <Loader2 className="size-6 animate-spin text-muted-foreground" />
+              </div>
+            }
+          >
+            <SettingsPage />
+          </Suspense>
         )}
       </main>
       <ToastContainer />
