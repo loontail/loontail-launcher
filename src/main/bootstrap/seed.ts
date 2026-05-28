@@ -1,7 +1,7 @@
 import { computeDefaultRamMb, ensureDirectory } from '@main/infra/system';
 import { getSettings, writeSettings } from '@main/services/settings/settings';
 
-export const seedLauncherSettings = (): void => {
+export const seedLauncherSettings = async (): Promise<void> => {
   const current = getSettings();
   let next = current;
 
@@ -17,6 +17,6 @@ export const seedLauncherSettings = (): void => {
   }
 
   if (next.storage.clientsFolder) {
-    ensureDirectory(next.storage.clientsFolder);
+    await ensureDirectory(next.storage.clientsFolder);
   }
 };

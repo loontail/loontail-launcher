@@ -43,7 +43,7 @@ export const registerSystemRoutes = (router: Router, mainWindow: BrowserWindow):
 
   router.handle(IPC_CHANNELS.systemPickInstallFolder, async () => {
     const picked = await pickFolderWithSuffix(mainWindow, null);
-    if (picked) ensureDirectory(picked.path);
+    if (picked) await ensureDirectory(picked.path);
     return picked;
   });
 

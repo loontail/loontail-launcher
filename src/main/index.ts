@@ -122,7 +122,7 @@ const start = async (): Promise<void> => {
   await consoleService.init();
   await updaterService.init();
 
-  seedLauncherSettings();
+  await seedLauncherSettings();
   void sweepOrphanClientOverrides();
 
   app.on('window-all-closed', () => {

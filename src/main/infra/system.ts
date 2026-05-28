@@ -1,5 +1,5 @@
-import { type Dirent, existsSync, mkdirSync, readdirSync } from 'node:fs';
-import { readdir, realpath, stat } from 'node:fs/promises';
+import type { Dirent } from 'node:fs';
+import { mkdir, readdir, realpath, stat } from 'node:fs/promises';
 import { totalmem } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { scopedLogger } from '@main/infra/logger';
@@ -29,19 +29,20 @@ export const computeDefaultRamMb = (): number => {
   return Math.max(...lower);
 };
 
-export const ensureDirectory = (path: string): void => {
+export const ensureDirectory = async (path: string): Promise<void> => {
   if (!path) return;
   try {
-    mkdirSync(path, { recursive: true });
+    await mkdir(path, { recursive: true });
   } catch (error) {
     logger.warn('Failed to create directory', { path, error });
   }
 };
 
-export const directoryHasEntries = (path: string): boolean => {
-  if (!path || !existsSync(path)) return false;
+export const directoryHasEntries = async (path: string): Promise<boolean> => {
+  if (!path) return false;
   try {
-    return readdirSync(path).length > 0;
+    const entries = await readdir(path);
+    return entries.length > 0;
   } catch {
     return false;
   }
@@ -124,7 +125,12 @@ const walkDirectorySize = async (root: string): Promise<number> => {
 };
 
 export const getFolderSize = async (path: string): Promise<FolderSize> => {
-  if (!path || !existsSync(path)) return { path, bytes: null };
+  if (!path) return { path, bytes: null };
+  try {
+    await stat(path);
+  } catch {
+    return { path, bytes: null };
+  }
   try {
     const bytes = await walkDirectorySize(path);
     return { path, bytes };

@@ -44,7 +44,7 @@ export const registerSettingsRoutes = (router: Router, mainWindow: BrowserWindow
     const picked = await pickFolderWithSuffix(mainWindow, slug);
     if (!picked) return null;
     const next = setClientOverride(slug, { storage: { clientFolder: picked.path } });
-    const installed = directoryHasEntries(picked.path);
+    const installed = await directoryHasEntries(picked.path);
     return { settings: next, installed };
   });
 };
