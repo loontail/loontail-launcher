@@ -57,7 +57,6 @@ export type IpcContract = {
   'system.pickInstallFolder': { args: undefined; result: PickedFolder | null };
   'system.getDefaultInstallFolder': { args: undefined; result: string };
   'system.openPath': { args: string; result: void };
-  'system.openExternal': { args: string; result: void };
   'system.copyText': { args: string; result: void };
   'media.uploadSkin': { args: UploadSkinPayload; result: UploadSkinResult };
   'media.clearSkin': { args: undefined; result: void };

@@ -3,7 +3,9 @@ import { type ButtonHTMLAttributes, forwardRef } from 'react';
 
 export type ActionVariant = 'primary' | 'ghost' | 'danger';
 
-export type ActionBtnProps = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: ActionVariant };
+export type ActionButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: ActionVariant;
+};
 
 const VARIANT_CLASSES: Record<ActionVariant, string> = {
   primary:
@@ -18,7 +20,7 @@ const VARIANT_CLASSES: Record<ActionVariant, string> = {
     'hover:border-destructive/40 hover:bg-destructive/15 hover:text-destructive active:scale-[0.97]',
 };
 
-export const ActionBtn = forwardRef<HTMLButtonElement, ActionBtnProps>(
+export const ActionButton = forwardRef<HTMLButtonElement, ActionButtonProps>(
   ({ className, variant = 'primary', type = 'button', children, ...rest }, ref) => (
     <button
       ref={ref}
@@ -36,4 +38,4 @@ export const ActionBtn = forwardRef<HTMLButtonElement, ActionBtnProps>(
     </button>
   ),
 );
-ActionBtn.displayName = 'ActionBtn';
+ActionButton.displayName = 'ActionButton';

@@ -1,5 +1,3 @@
-import type { ClientRequest } from 'node:http';
-import { EventTypes, type ProgressListener } from '@loontail/minecraft-kit';
 import { BUNDLE_PAUSED_SYNC_MAX_IDLE_MS } from '@main/constants/bundle';
 import { scopedLogger } from '@main/infra/logger';
 import { getClient } from '@main/services/clients';
@@ -13,116 +11,21 @@ import {
   type BundleSyncStatus,
   BundleSyncStatuses,
   type LocalManifest,
-  type RemoteManifest,
 } from '@shared/contracts/bundle';
 import type { ClientSlug } from '@shared/contracts/ids';
 import { resolveClientSettings } from '@shared/domain/settings';
 import { fetchRemoteManifest } from './api';
 import type { BundleBroadcaster } from './broadcast';
 import { BundleError, classifyBundleError, errorMessage } from './errors';
+import { createHealProgressListener } from './healProgress';
 import type { Healer } from './healer';
 import { clearLocalManifest, loadLocalManifest, saveLocalManifest } from './manifestRepo';
-import { normalizePathForSet } from './paths';
+import { flattenRemote } from './manifestSnapshot';
 import { type SyncPlan, buildPlan } from './plan';
 import { type EmitProgress, type SyncTask, runSyncPhases } from './runner';
+import { type ActiveSync, createActiveSync, createSyncTask, resetTaskForResume } from './syncState';
 
 const logger = scopedLogger('bundle.manager');
-
-const HEAL_PROGRESS_THROTTLE_MS = 100;
-
-// Wrap kit verify/repair events into the manager's emit() so the renderer
-// sees the HEALING status with live file counts (during verify) and a moving
-// byte total (during repair). The kit does not announce verify totals up-front;
-// we surface `verifiedFiles` as `processedFiles` and leave `totalFiles` at the
-// task's last known value, mirroring how DELETING phase reuses task totals.
-const createHealProgressListener = (slug: ClientSlug, emit: EmitProgress): ProgressListener => {
-  let verifiedFiles = 0;
-  let bytesDownloaded = 0;
-  let totalBytes = 0;
-  let currentFile: string | undefined;
-  let lastEmittedAt = 0;
-  let pendingFlush: NodeJS.Timeout | null = null;
-
-  const flush = (): void => {
-    lastEmittedAt = Date.now();
-    pendingFlush = null;
-    emit(slug, BundleSyncStatuses.HEALING, {
-      processedFiles: verifiedFiles,
-      ...(totalBytes > 0 ? { bytesDownloaded, bytesTotal: totalBytes } : {}),
-      ...(currentFile !== undefined ? { currentFile } : {}),
-    });
-  };
-
-  const scheduleFlush = (): void => {
-    const elapsed = Date.now() - lastEmittedAt;
-    if (elapsed >= HEAL_PROGRESS_THROTTLE_MS) {
-      if (pendingFlush !== null) {
-        clearTimeout(pendingFlush);
-        pendingFlush = null;
-      }
-      flush();
-    } else if (pendingFlush === null) {
-      pendingFlush = setTimeout(flush, HEAL_PROGRESS_THROTTLE_MS - elapsed);
-    }
-  };
-
-  return (event) => {
-    switch (event.type) {
-      case EventTypes.VERIFY_FILE_CHECKED:
-        verifiedFiles += 1;
-        currentFile = event.file.path;
-        scheduleFlush();
-        return;
-      case EventTypes.DOWNLOAD_STARTED:
-        currentFile = event.file.target;
-        scheduleFlush();
-        return;
-      case EventTypes.DOWNLOAD_PROGRESS:
-        bytesDownloaded = event.bytesDownloaded;
-        totalBytes = event.totalBytes;
-        currentFile = event.file.target;
-        scheduleFlush();
-        return;
-      default:
-        return;
-    }
-  };
-};
-
-type ActiveSync = {
-  task: SyncTask;
-  // Latest progress snapshot — surfaced to renderer via checkStatus.
-  lastProgress: BundleProgressEvent | null;
-  // Last fetched remote manifest hash (used to write local manifest on success).
-  remoteManifestHash: string;
-  // Last fetched remote manifest (used by healer + local manifest writer).
-  remoteManifest: RemoteManifest;
-  // Snapshot of bundle slug for diagnostics.
-  bundleSlug: string;
-  // True when this op was triggered as the implicit pre-launch sync; surfaces
-  // through syncForLaunch resolution semantics.
-  forLaunch: boolean;
-  // Pending launch promise (resolved/rejected when the sync terminates so
-  // syncForLaunch callers can await termination).
-  awaiters: Array<{ resolve: () => void; reject: (err: Error) => void }>;
-  // Idle timer armed while the sync is paused; clears the activeSyncs slot if
-  // the user never resumes/cancels. Cleared on resume, cancel, or expiry.
-  pauseIdleTimer: NodeJS.Timeout | null;
-};
-
-const flattenRemote = (
-  manifest: RemoteManifest,
-): { files: Record<string, { sha256: string; size: number }> } => {
-  const files: Record<string, { sha256: string; size: number }> = {};
-  for (const entries of Object.values(manifest)) {
-    for (const entry of entries) {
-      if (entry.isDir) continue;
-      if (!entry.sha256) continue;
-      files[normalizePathForSet(entry.path)] = { sha256: entry.sha256, size: entry.size };
-    }
-  }
-  return { files };
-};
 
 const makeProgressEvent = (
   task: SyncTask,
@@ -307,43 +210,8 @@ export class BundleManager {
         'Set the launcher install folder in System settings first',
       );
     }
-    const abort = new AbortController();
-    const currentRequests = new Set<ClientRequest>();
-    const task: SyncTask = {
-      slug,
-      clientFolder,
-      // Filled in after the planning step below.
-      plan: {
-        toDownload: [],
-        toUpdate: [],
-        toDelete: [],
-        toSkip: [],
-        bundleOwnedRelativePaths: new Set(),
-        bytesTotal: 0,
-      },
-      abort,
-      currentRequests,
-      paused: false,
-      cancelled: false,
-      bytesDownloaded: 0,
-      speedWindowStart: Date.now(),
-      speedWindowBytes: 0,
-      processedFiles: 0,
-      totalFiles: 0,
-      lastEmittedAt: 0,
-      pendingDownloads: [],
-      pendingDeletes: [],
-    };
-    const active: ActiveSync = {
-      task,
-      lastProgress: null,
-      remoteManifestHash: '',
-      remoteManifest: {},
-      bundleSlug,
-      forLaunch: options.forLaunch,
-      awaiters: [],
-      pauseIdleTimer: null,
-    };
+    const task = createSyncTask(slug, clientFolder);
+    const active = createActiveSync(task, bundleSlug, options.forLaunch);
     this.activeSyncs.set(slug, active);
 
     const emit: EmitProgress = createEmit(active, task, (event) => {
@@ -352,7 +220,7 @@ export class BundleManager {
 
     try {
       this.emitStatus(slug, BundleSyncStatuses.FETCHING_MANIFEST);
-      const { manifest, manifestHash } = await fetchRemoteManifest(bundleSlug, abort.signal);
+      const { manifest, manifestHash } = await fetchRemoteManifest(bundleSlug, task.abort.signal);
       active.remoteManifest = manifest;
       active.remoteManifestHash = manifestHash;
 
@@ -380,7 +248,7 @@ export class BundleManager {
       if (deletedAny) {
         this.emitStatus(slug, BundleSyncStatuses.HEALING);
         await this.healer.healAfterDeletes(slug, plan.bundleOwnedRelativePaths, {
-          signal: abort.signal,
+          signal: task.abort.signal,
           onEvent: createHealProgressListener(slug, emit),
         });
       }
@@ -389,7 +257,7 @@ export class BundleManager {
       this.emitStatus(slug, BundleSyncStatuses.COMPLETED);
       this.resolveAwaiters(active);
     } catch (err) {
-      const code = classifyBundleError(err, abort.signal);
+      const code = classifyBundleError(err, task.abort.signal);
       if (code === BundleErrorCodes.ABORTED && task.cancelled) {
         this.emitStatus(slug, BundleSyncStatuses.CANCELLED);
         this.rejectAwaiters(active, this.toError(err));
@@ -414,15 +282,7 @@ export class BundleManager {
     const { task } = active;
     // Re-plan from current disk state so files completed before pause are
     // skipped via the sha256 fast-path.
-    task.paused = false;
-    task.cancelled = false;
-    task.abort = new AbortController();
-    task.currentRequests = new Set<ClientRequest>();
-    task.bytesDownloaded = 0;
-    task.processedFiles = 0;
-    task.lastEmittedAt = 0;
-    task.speedWindowStart = Date.now();
-    task.speedWindowBytes = 0;
+    resetTaskForResume(task);
 
     const emit: EmitProgress = createEmit(active, task, (event) => {
       this.broadcaster.progress(event);

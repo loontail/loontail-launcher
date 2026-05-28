@@ -1,5 +1,5 @@
-export { ActionBtn } from './ActionBtn';
-export type { ActionBtnProps, ActionVariant } from './ActionBtn';
+export { ActionButton } from './ActionButton';
+export type { ActionButtonProps, ActionVariant } from './ActionButton';
 export { InstallProgress } from './InstallProgress';
 export type { InstallProgressProps } from './InstallProgress';
 export { selectInstallProgress } from './installSteps';

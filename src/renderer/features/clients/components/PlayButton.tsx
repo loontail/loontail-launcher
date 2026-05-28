@@ -15,7 +15,7 @@ import { Download, Loader2, Play, RotateCcw, Square } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LoaderChoiceModal } from './LoaderChoiceModal';
-import { ActionBtn, InstallProgress, useInstallProgress } from './install';
+import { ActionButton, InstallProgress, useInstallProgress } from './install';
 
 type PlayButtonProps = { client: Client };
 
@@ -93,13 +93,13 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
         <p role="alert" className="text-caption leading-snug text-destructive">
           {errorText}
         </p>
-        <ActionBtn
+        <ActionButton
           onClick={() => void startBundle.mutateAsync({ slug })}
           disabled={startBundle.isPending}
         >
           <RotateCcw size={16} />
           {t('clients.retry')}
-        </ActionBtn>
+        </ActionButton>
       </div>
     );
   }
@@ -107,37 +107,37 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
   switch (state.status) {
     case InstallStatuses.UNINSTALLING:
       return (
-        <ActionBtn disabled>
+        <ActionButton disabled>
           <Loader2 size={16} className="animate-spin" />
           {t('clients.uninstalling')}
-        </ActionBtn>
+        </ActionButton>
       );
 
     case InstallStatuses.LAUNCHING:
       return (
-        <ActionBtn disabled>
+        <ActionButton disabled>
           <Loader2 size={16} className="animate-spin" />
           {t('clients.launching')}
-        </ActionBtn>
+        </ActionButton>
       );
 
     case InstallStatuses.RUNNING:
       return (
-        <ActionBtn
+        <ActionButton
           onClick={() => void stop.mutateAsync(slug)}
           className="bg-destructive text-destructive-foreground"
         >
           <Square size={16} />
           {t('clients.stop')}
-        </ActionBtn>
+        </ActionButton>
       );
 
     case InstallStatuses.INSTALLED:
       return (
-        <ActionBtn onClick={() => void launch.mutateAsync(slug)} disabled={launch.isPending}>
+        <ActionButton onClick={() => void launch.mutateAsync(slug)} disabled={launch.isPending}>
           <Play size={16} />
           {t('clients.play')}
-        </ActionBtn>
+        </ActionButton>
       );
 
     case InstallStatuses.ERROR: {
@@ -152,10 +152,10 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
             </p>
           )}
           <div className="flex items-start gap-3">
-            <ActionBtn onClick={startOrPickLoader} disabled={!folderReady || install.isPending}>
+            <ActionButton onClick={startOrPickLoader} disabled={!folderReady || install.isPending}>
               <RotateCcw size={16} />
               {t('clients.retry')}
-            </ActionBtn>
+            </ActionButton>
           </div>
           {loaderModal}
         </div>
@@ -165,14 +165,14 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
     default:
       return (
         <>
-          <ActionBtn
+          <ActionButton
             onClick={startOrPickLoader}
             disabled={!folderReady || install.isPending}
             title={folderReady ? undefined : t('clients.setInstallFolder')}
           >
             <Download size={16} />
             {t('clients.download')}
-          </ActionBtn>
+          </ActionButton>
           {loaderModal}
         </>
       );

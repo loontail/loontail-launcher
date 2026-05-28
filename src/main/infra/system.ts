@@ -1,7 +1,7 @@
 import { type Dirent, existsSync, mkdirSync, readdirSync } from 'node:fs';
-import { readdir, stat } from 'node:fs/promises';
+import { readdir, realpath, stat } from 'node:fs/promises';
 import { totalmem } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import { scopedLogger } from '@main/infra/logger';
 import { RAM_MIN_MB, RAM_STEP_MB } from '@shared/constants';
 import type { DiskInfo, FolderSize, PickedFolder } from '@shared/contracts/system';
@@ -153,28 +153,53 @@ export const pickFolderWithSuffix = async (
   };
 };
 
-export const openPath = async (targetPath: string): Promise<void> => {
-  if (!targetPath) return;
+const comparablePath = (targetPath: string): string =>
+  process.platform === 'win32' ? targetPath.toLowerCase() : targetPath;
+
+const isSameOrDescendantPath = (root: string, targetPath: string): boolean => {
+  const normalizedRoot = comparablePath(resolve(root));
+  const normalizedTarget = comparablePath(resolve(targetPath));
+  const rel = relative(normalizedRoot, normalizedTarget);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+};
+
+const canonicalizePath = async (targetPath: string): Promise<string | null> => {
   try {
-    await shell.openPath(targetPath);
-  } catch (error) {
-    logger.warn('Failed to open path', { targetPath, error });
+    return await realpath(targetPath);
+  } catch {
+    return null;
   }
 };
 
-// `shell.openExternal` is the right primitive for `https://` URLs — Electron
-// hands them to the OS default browser. Reject anything non-http(s) so a
-// compromised renderer can't open `file://` or weird protocol handlers.
-export const openExternalUrl = async (url: string): Promise<void> => {
-  if (!url) return;
-  const allowed = url.startsWith('https://') || url.startsWith('http://');
-  if (!allowed) {
-    logger.warn('Refused to open non-http(s) external URL', { url });
+export const openPath = async (
+  targetPath: string,
+  allowedRoots: readonly string[],
+): Promise<void> => {
+  if (!targetPath) return;
+  const canonicalTarget = await canonicalizePath(targetPath);
+  if (!canonicalTarget) {
+    logger.warn('Refused to open unavailable path', { targetPath });
     return;
   }
+
+  const canonicalRoots = (
+    await Promise.all(allowedRoots.filter(Boolean).map((root) => canonicalizePath(root)))
+  ).filter((root): root is string => root !== null);
+
+  const isAllowed = canonicalRoots.some((root) => isSameOrDescendantPath(root, canonicalTarget));
+  if (!isAllowed) {
+    logger.warn('Refused to open path outside launcher-owned roots', {
+      targetPath,
+      canonicalTarget,
+    });
+    return;
+  }
+
   try {
-    await shell.openExternal(url);
+    const errorMessage = await shell.openPath(canonicalTarget);
+    if (errorMessage)
+      logger.warn('Failed to open path', { targetPath: canonicalTarget, errorMessage });
   } catch (error) {
-    logger.warn('Failed to open external URL', { url, error });
+    logger.warn('Failed to open path', { targetPath: canonicalTarget, error });
   }
 };

@@ -18,7 +18,6 @@ export const IPC_CHANNELS = {
   systemPickInstallFolder: 'system.pickInstallFolder',
   systemGetDefaultInstallFolder: 'system.getDefaultInstallFolder',
   systemOpenPath: 'system.openPath',
-  systemOpenExternal: 'system.openExternal',
   systemCopyText: 'system.copyText',
   mediaUploadSkin: 'media.uploadSkin',
   mediaClearSkin: 'media.clearSkin',
