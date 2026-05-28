@@ -204,6 +204,24 @@ describe('setClientOverride / clearClientOverrides', () => {
     expect(next.clients[slug]).toBeUndefined();
   });
 
+  it('compacts default-equivalent folder and launch overrides', () => {
+    const settings: LauncherSettings = {
+      ...baseSettings(),
+      clients: {
+        [slug]: {
+          storage: { clientFolder: '/custom/path' },
+          launch: { console: true, fullscreen: true },
+          loader: LoaderChoices.FORGE,
+        },
+      },
+    };
+    const next = setClientOverride(settings, slug, {
+      storage: { clientFolder: '/games/survival' },
+      launch: { console: false, fullscreen: false },
+    });
+    expect(next.clients[slug]).toEqual({ loader: LoaderChoices.FORGE });
+  });
+
   it('clears all overrides but preserves the runtime ref', () => {
     const settings: LauncherSettings = {
       ...baseSettings(),

@@ -24,19 +24,14 @@ const FOLDER_SIZE_STALE_TIME_MS = 60_000;
 // renderer eventually picks them up without a manual reload.
 const LAUNCHER_SETTINGS_STALE_TIME_MS = 5 * 60 * 1000;
 
-// Common settings-mutation pattern. `extract` lets a mutation return a wrapper
-// shape and still feed only the settings part into the cache.
-const useLauncherSettingsMutation = <TInput, TResult>(
-  mutationFn: (input: TInput) => Promise<TResult>,
-  extract: (result: TResult) => LauncherSettings | null = (result) =>
-    result as unknown as LauncherSettings,
+const useLauncherSettingsMutation = <TInput>(
+  mutationFn: (input: TInput) => Promise<LauncherSettings>,
 ) => {
   const queryClient = useQueryClient();
   const mutation = useMutation({
     mutationFn,
-    onSuccess: (result) => {
-      const next = extract(result);
-      if (next) queryClient.setQueryData(QUERY_KEYS.settings.root, next);
+    onSuccess: (next) => {
+      queryClient.setQueryData(QUERY_KEYS.settings.root, next);
     },
   });
   return { mutate: mutation.mutateAsync, isPending: mutation.isPending };
