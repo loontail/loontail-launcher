@@ -6,7 +6,6 @@
   "updater": {
     "badge": {
       "available": "Завантаження {{version}}…",
-      "availableNoVersion": "Завантаження оновлення…",
       "downloading": "Завантаження {{percent}}%",
       "ready": "Перезапустити",
       "readyTitle": "Оновлення {{version}} готове — натисніть, щоб перезапустити"
@@ -31,7 +30,6 @@
     "identifier": "Логін або email",
     "password": "Пароль",
     "submit": "Увійти",
-    "submitting": "Вхід…",
     "errorInvalid": "Невірний логін або пароль.",
     "errorNetwork": "Не вдається зʼєднатися із сервером. Перевірте підключення.",
     "errorRateLimited": "Забагато спроб входу. Зачекайте хвилину і спробуйте знову.",
@@ -40,8 +38,7 @@
     "signInWithMicrosoft": "Увійти через Microsoft",
     "microsoft": {
       "waiting": "Чекаємо на вхід у браузері…",
-      "cancel": "Скасувати",
-      "errorUnknown": "Вхід через Microsoft не вдався. Спробуйте ще раз."
+      "cancel": "Скасувати"
     }
   },
   "clients": {

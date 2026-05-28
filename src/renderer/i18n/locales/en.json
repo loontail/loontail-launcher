@@ -6,7 +6,6 @@
   "updater": {
     "badge": {
       "available": "Downloading {{version}}…",
-      "availableNoVersion": "Downloading update…",
       "downloading": "Downloading {{percent}}%",
       "ready": "Restart now",
       "readyTitle": "Update {{version}} ready — click to restart and apply"
@@ -31,7 +30,6 @@
     "identifier": "Username or email",
     "password": "Password",
     "submit": "Sign in",
-    "submitting": "Signing in…",
     "errorInvalid": "Invalid login or password.",
     "errorNetwork": "Could not reach the server. Check your connection.",
     "errorRateLimited": "Too many sign-in attempts. Please wait a minute and try again.",
@@ -40,8 +38,7 @@
     "signInWithMicrosoft": "Sign in with Microsoft",
     "microsoft": {
       "waiting": "Waiting for browser sign-in…",
-      "cancel": "Cancel",
-      "errorUnknown": "Microsoft sign-in failed. Try again."
+      "cancel": "Cancel"
     }
   },
   "clients": {
