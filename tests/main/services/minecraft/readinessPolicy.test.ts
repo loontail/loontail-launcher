@@ -1,6 +1,3 @@
-import { Loaders, type MinecraftKit, type Target } from '@loontail/minecraft-kit';
-import type { Context } from '@main/services/minecraft/context';
-import { resolveClientInstallPresence } from '@main/services/minecraft/readinessPolicy';
 import { asClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
 import type { LauncherSettings } from '@shared/contracts/settings';
@@ -10,19 +7,14 @@ const policyMocks = vi.hoisted(() => {
   process.env.API_URL ??= 'http://test.invalid';
   process.env.API_TOKEN ??= 'test-token';
   return {
-    buildContext: vi.fn(),
     getSettings: vi.fn(),
-    hasCurrentTargetInstallManifest: vi.fn(),
+    loadTargetInstallManifest: vi.fn(),
     isAnythingInstalled: vi.fn(),
   };
 });
 
-vi.mock('@main/services/minecraft/context', () => ({
-  buildContext: policyMocks.buildContext,
-}));
-
 vi.mock('@main/services/minecraft/installManifest', () => ({
-  hasCurrentTargetInstallManifest: policyMocks.hasCurrentTargetInstallManifest,
+  loadTargetInstallManifest: policyMocks.loadTargetInstallManifest,
 }));
 
 vi.mock('@main/services/minecraft/runtimeState', () => ({
@@ -33,39 +25,25 @@ vi.mock('@main/services/settings/settings', () => ({
   getSettings: policyMocks.getSettings,
 }));
 
+import { resolveClientInstallPresence } from '@main/services/minecraft/readinessPolicy';
+
 const SLUG = asClientSlug('test-client');
 const CLIENT_FOLDER = 'Z:/clients/test-client';
 
-const launcherSettings = (): LauncherSettings => ({
+const launcherSettings = (clientsFolder = 'Z:/clients'): LauncherSettings => ({
   memory: { allocatedRamMb: 0 },
-  storage: { clientsFolder: 'Z:/clients' },
+  storage: { clientsFolder },
   launch: { console: false, fullscreen: false },
   clients: {},
 });
 
-const target = (loader: Target['loader']['type'] = Loaders.VANILLA): Target =>
-  ({
-    id: 'target-id',
-    directory: CLIENT_FOLDER,
-    loader: { type: loader },
-  }) as unknown as Target;
-
-const context = (loader: Target['loader']['type'] = Loaders.VANILLA): Context =>
-  ({
-    client: { slug: SLUG },
-    clientFolder: CLIENT_FOLDER,
-    target: target(loader),
-  }) as unknown as Context;
-
 const resetPolicyMocks = (): void => {
-  policyMocks.buildContext.mockReset();
   policyMocks.getSettings.mockReset();
-  policyMocks.hasCurrentTargetInstallManifest.mockReset();
+  policyMocks.loadTargetInstallManifest.mockReset();
   policyMocks.isAnythingInstalled.mockReset();
 
-  policyMocks.buildContext.mockResolvedValue(context());
   policyMocks.getSettings.mockReturnValue(launcherSettings());
-  policyMocks.hasCurrentTargetInstallManifest.mockResolvedValue(true);
+  policyMocks.loadTargetInstallManifest.mockResolvedValue({ targetId: 'target-id' });
   policyMocks.isAnythingInstalled.mockResolvedValue(true);
 };
 
@@ -74,30 +52,31 @@ describe('resolveClientInstallPresence', () => {
     resetPolicyMocks();
   });
 
-  it('seeds installed from local state (manifest + on-disk files)', async () => {
-    policyMocks.hasCurrentTargetInstallManifest.mockResolvedValue(true);
-    policyMocks.isAnythingInstalled.mockResolvedValue(true);
-
-    await expect(resolveClientInstallPresence({} as MinecraftKit, SLUG)).resolves.toBe(
-      InstallStatuses.INSTALLED,
-    );
+  it('seeds installed from local files (durable manifest + on-disk version)', async () => {
+    await expect(resolveClientInstallPresence(SLUG)).resolves.toBe(InstallStatuses.INSTALLED);
+    // Fully offline: only local files are read — no kit, no target resolve.
+    expect(policyMocks.loadTargetInstallManifest).toHaveBeenCalledWith(CLIENT_FOLDER);
+    expect(policyMocks.isAnythingInstalled).toHaveBeenCalledWith(CLIENT_FOLDER);
   });
 
-  it('seeds not-installed when no current install manifest is present', async () => {
-    policyMocks.hasCurrentTargetInstallManifest.mockResolvedValue(false);
+  it('seeds unverified for a legacy install with on-disk files but no durable manifest', async () => {
+    policyMocks.loadTargetInstallManifest.mockResolvedValue(null);
     policyMocks.isAnythingInstalled.mockResolvedValue(true);
 
-    await expect(resolveClientInstallPresence({} as MinecraftKit, SLUG)).resolves.toBe(
-      InstallStatuses.NOT_INSTALLED,
-    );
+    await expect(resolveClientInstallPresence(SLUG)).resolves.toBe(InstallStatuses.UNVERIFIED);
   });
 
-  it('seeds unverified when context cannot be built but old files exist', async () => {
-    policyMocks.buildContext.mockRejectedValue(new Error('Client is not resolvable'));
-    policyMocks.isAnythingInstalled.mockResolvedValue(true);
+  it('seeds not-installed when no version files are present', async () => {
+    policyMocks.isAnythingInstalled.mockResolvedValue(false);
 
-    await expect(resolveClientInstallPresence({} as MinecraftKit, SLUG)).resolves.toBe(
-      InstallStatuses.UNVERIFIED,
-    );
+    await expect(resolveClientInstallPresence(SLUG)).resolves.toBe(InstallStatuses.NOT_INSTALLED);
+  });
+
+  it('seeds not-installed without reading files when no client folder is configured', async () => {
+    policyMocks.getSettings.mockReturnValue(launcherSettings(''));
+
+    await expect(resolveClientInstallPresence(SLUG)).resolves.toBe(InstallStatuses.NOT_INSTALLED);
+    expect(policyMocks.loadTargetInstallManifest).not.toHaveBeenCalled();
+    expect(policyMocks.isAnythingInstalled).not.toHaveBeenCalled();
   });
 });

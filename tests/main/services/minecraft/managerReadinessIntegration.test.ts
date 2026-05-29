@@ -206,6 +206,32 @@ describe('MinecraftManager readiness integration', () => {
     });
   });
 
+  it('seeds status without touching the kit (no verify, no target resolve on open)', async () => {
+    const resolvedTarget = target();
+    resetMocks(resolvedTarget);
+    // Opening the launcher must resolve installability from local files alone:
+    // any access to kit.verify or kit.targets during the status seed is a
+    // regression (hashing or network on open).
+    const throwOnUse = (surface: string): unknown =>
+      new Proxy(
+        {},
+        {
+          get() {
+            throw new Error(`getStatus must not use kit.${surface}`);
+          },
+        },
+      );
+    const guardedKit = {
+      verify: throwOnUse('verify'),
+      targets: throwOnUse('targets'),
+    } as unknown as MinecraftKit;
+
+    await expect(new MinecraftManager(broadcaster(), guardedKit).getStatus(SLUG)).resolves.toEqual({
+      status: InstallStatuses.NOT_INSTALLED,
+      paused: false,
+    });
+  });
+
   it('launches without an implicit reinstall — the lenient preflight guards launchability', async () => {
     const resolvedTarget = target();
     resetMocks(resolvedTarget);

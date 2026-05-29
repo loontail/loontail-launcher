@@ -1,36 +1,29 @@
-import type { MinecraftKit } from '@loontail/minecraft-kit';
 import { getSettings } from '@main/services/settings/settings';
 import type { ClientSlug } from '@shared/contracts/ids';
 import { type InstallStatus, InstallStatuses } from '@shared/contracts/minecraft';
 import { resolveClientSettings } from '@shared/domain/settings';
-import { buildContext } from './context';
-import type { Context } from './context';
-import { hasCurrentTargetInstallManifest } from './installManifest';
+import { loadTargetInstallManifest } from './installManifest';
 import { isAnythingInstalled } from './runtimeState';
 
-// Cheap "do we already have this install?" check used to seed status when the
-// launcher opens. Reads ONLY local state — the durable install manifest plus
-// on-disk files — and never runs hash/manifest verification. Verification is
-// reserved for the explicit repair flow and the lenient launch preflight, so
-// opening the launcher stays off the network and a flaky/offline verification
-// can no longer demote a working install to "Download".
-export const resolveClientInstallPresence = async (
-  kit: MinecraftKit,
-  slug: ClientSlug,
-): Promise<InstallStatus> => {
-  let ctx: Context;
-  try {
-    ctx = await buildContext(kit, slug);
-  } catch {
-    const folder = resolveClientSettings(getSettings(), slug).storage.clientFolder || null;
-    const hasLegacyInstall = folder === null ? false : await isAnythingInstalled(folder);
-    return hasLegacyInstall ? InstallStatuses.UNVERIFIED : InstallStatuses.NOT_INSTALLED;
-  }
-  const [hasCurrentManifest, installed] = await Promise.all([
-    hasCurrentTargetInstallManifest(ctx.clientFolder, ctx.target),
-    isAnythingInstalled(ctx.clientFolder),
+// Cheap, fully offline "do we already have this install?" check used to seed
+// status when the launcher opens. Reads ONLY local state — the durable install
+// manifest file plus on-disk version files — and never resolves the target,
+// hits the network, or runs hash/manifest verification.
+//
+// The target match is deliberately deferred to Play: a current durable manifest
+// means we wrote this install, so we report INSTALLED without re-resolving the
+// target. A Strapi version bump is therefore not detected at open (the stale
+// manifest still reads INSTALLED); it surfaces at Play, where buildContext
+// resolves the new target and the lenient launch preflight gates launchability.
+// Files present without our manifest is a legacy/foreign install we cannot
+// attribute to a target → UNVERIFIED.
+export const resolveClientInstallPresence = async (slug: ClientSlug): Promise<InstallStatus> => {
+  const folder = resolveClientSettings(getSettings(), slug).storage.clientFolder || null;
+  if (folder === null) return InstallStatuses.NOT_INSTALLED;
+  const [manifest, installed] = await Promise.all([
+    loadTargetInstallManifest(folder),
+    isAnythingInstalled(folder),
   ]);
-  return hasCurrentManifest && installed
-    ? InstallStatuses.INSTALLED
-    : InstallStatuses.NOT_INSTALLED;
+  if (!installed) return InstallStatuses.NOT_INSTALLED;
+  return manifest !== null ? InstallStatuses.INSTALLED : InstallStatuses.UNVERIFIED;
 };

@@ -1,14 +1,5 @@
-import {
-  MinecraftKitError,
-  type MinecraftKitErrorCode,
-  RepairFromErrorSupportedCodes,
-} from '@loontail/minecraft-kit';
-import {
-  ManagerError,
-  classifyError,
-  errorMessage,
-  tryAsSmartResumeError,
-} from '@main/services/minecraft/errors';
+import { MinecraftKitError, type MinecraftKitErrorCode } from '@loontail/minecraft-kit';
+import { ManagerError, classifyError, errorMessage } from '@main/services/minecraft/errors';
 import { type MinecraftErrorCode, MinecraftErrorCodes } from '@shared/contracts/minecraft';
 import { describe, expect, it } from 'vitest';
 
@@ -87,32 +78,5 @@ describe('errorMessage', () => {
     expect(errorMessage('plain')).toBe('plain');
     expect(errorMessage(42)).toBe('42');
     expect(errorMessage(null)).toBe('null');
-  });
-});
-
-describe('tryAsSmartResumeError', () => {
-  it('returns the error itself for every smart-resume kit code', () => {
-    for (const code of Object.values(RepairFromErrorSupportedCodes)) {
-      const error = new MinecraftKitError(code, 'boom');
-      expect(tryAsSmartResumeError(error, inactiveSignal)).toBe(error);
-    }
-  });
-
-  it('returns null for a kit error outside the smart-resume set', () => {
-    const error = new MinecraftKitError('LAUNCH_ABORTED', 'aborted');
-    expect(tryAsSmartResumeError(error, inactiveSignal)).toBeNull();
-  });
-
-  it('returns null for non-kit errors', () => {
-    expect(tryAsSmartResumeError(new Error('boom'), inactiveSignal)).toBeNull();
-    expect(tryAsSmartResumeError(undefined, inactiveSignal)).toBeNull();
-  });
-
-  it('short-circuits with null when the signal is aborted, even for a supported code', () => {
-    const error = new MinecraftKitError(
-      RepairFromErrorSupportedCodes.INTEGRITY_HASH_MISMATCH,
-      'mismatch',
-    );
-    expect(tryAsSmartResumeError(error, abortedSignal())).toBeNull();
   });
 });

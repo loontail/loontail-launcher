@@ -172,6 +172,24 @@ describe('MinecraftManager.startLaunch', () => {
     expect(orchestrationMocks.runLaunch).not.toHaveBeenCalled();
   });
 
+  it('settles status to INSTALLED when a non-aborted bundle sync fails', async () => {
+    resetMocks();
+    const broadcaster = makeBroadcaster();
+    const manager = makeManager(broadcaster);
+    const hookError = new Error('bundle manifest fetch failed');
+    manager.attachLaunchHook(vi.fn().mockRejectedValue(hookError));
+
+    await expect(manager.startLaunch(SLUG, account())).rejects.toBe(hookError);
+
+    // The base game is still installed: status must not stay stuck on LAUNCHING.
+    expect(orchestrationMocks.runLaunch).not.toHaveBeenCalled();
+    expect(broadcaster.status).toHaveBeenLastCalledWith({
+      slug: SLUG,
+      status: InstallStatuses.INSTALLED,
+      paused: false,
+    });
+  });
+
   it('aborts an in-flight launch hook and restores installed status', async () => {
     resetMocks();
     const broadcaster = makeBroadcaster();

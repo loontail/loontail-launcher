@@ -91,7 +91,7 @@ describe('MinecraftManager.getStatus', () => {
       status: InstallStatuses.INSTALLED,
       paused: false,
     });
-    expect(statusMocks.resolveClientInstallPresence).toHaveBeenCalledWith(expect.any(Object), SLUG);
+    expect(statusMocks.resolveClientInstallPresence).toHaveBeenCalledWith(SLUG);
   });
 
   it('seeds not-installed without any readiness verification', async () => {
@@ -114,12 +114,12 @@ describe('MinecraftManager.getStatus', () => {
     });
   });
 
-  it('keeps smart-resume install operations visible as repair status', async () => {
+  it('reports an in-flight install op as installing with its paused flag', async () => {
     resetStatusMocks();
     const manager = makeManager();
     const op: InstallOp = {
       kind: OpKinds.INSTALL,
-      status: InstallStatuses.REPAIRING,
+      status: InstallStatuses.INSTALLING,
       pauseController: new PauseController(),
       abort: new AbortController(),
       paused: true,
@@ -130,8 +130,10 @@ describe('MinecraftManager.getStatus', () => {
     internals.ops.set(SLUG, op);
 
     await expect(manager.getStatus(SLUG)).resolves.toEqual({
-      status: InstallStatuses.REPAIRING,
-      paused: false,
+      status: InstallStatuses.INSTALLING,
+      paused: true,
     });
+    // An in-flight op short-circuits before the cheap presence seed.
+    expect(statusMocks.resolveClientInstallPresence).not.toHaveBeenCalled();
   });
 });

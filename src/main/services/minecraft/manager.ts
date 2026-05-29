@@ -105,11 +105,11 @@ export class MinecraftManager {
         paused: false,
       };
     }
-    // Opening the launcher must not verify the install (no hashing, no network):
-    // report installability from local state only. The real check runs when the
-    // user clicks Play.
+    // Opening the launcher must not verify the install (no hashing, no network,
+    // no target resolve): report installability from local files only. The real
+    // check runs when the user clicks Play.
     return {
-      status: await resolveClientInstallPresence(this.kit, slug),
+      status: await resolveClientInstallPresence(slug),
       paused: false,
     };
   }
@@ -251,6 +251,11 @@ export class MinecraftManager {
           return;
         }
         logger.error(`[${slug}] launch: bundle sync failed`, error);
+        // A non-aborted bundle failure (offline, manifest fetch error) must not
+        // freeze the client on LAUNCHING — the base game is still installed and
+        // launchable. Settle status back to INSTALLED before rethrowing; the
+        // bundle error already reached the renderer via the bundle error channel.
+        this.env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
         throw error;
       } finally {
         this.ops.delete(slug);

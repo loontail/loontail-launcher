@@ -19,10 +19,8 @@ import {
   MinecraftKitError,
   MinecraftKitErrorCodes,
   type OperationOptions,
-  PauseController,
   type ProgressEvent,
   type RepairAllOptions,
-  type RepairPlan,
   type RepairReport,
   type Target,
   type VerificationKind,
@@ -34,8 +32,7 @@ import {
 import { bundleManifestPath } from '@main/services/bundle/paths';
 import type { Context } from '@main/services/minecraft/context';
 import type { ManagerEnv } from '@main/services/minecraft/env';
-import { runInstall } from '@main/services/minecraft/install';
-import { type InstallOp, type Op, OpKinds, type RepairOp } from '@main/services/minecraft/ops';
+import { type Op, OpKinds, type RepairOp } from '@main/services/minecraft/ops';
 import { runRepair } from '@main/services/minecraft/repair';
 import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes, ProgressStages } from '@shared/contracts/minecraft';
@@ -77,15 +74,6 @@ const installPlan = (): InstallPlan => ({
   totalActions: 0,
 });
 
-const repairPlan = (): RepairPlan => ({
-  targetId: 'target-id',
-  directory: CLIENT_FOLDER,
-  target: emptyTarget,
-  actions: [],
-  totalBytes: 0,
-  totalActions: 0,
-});
-
 const repairReport = (): RepairReport => ({
   targetId: 'target-id',
   bytesDownloaded: 0,
@@ -117,16 +105,6 @@ const makeContext = (): Context =>
     },
   }) as unknown as Context;
 
-const makeInstallOp = (): InstallOp => ({
-  kind: OpKinds.INSTALL,
-  status: InstallStatuses.INSTALLING,
-  pauseController: new PauseController(),
-  abort: new AbortController(),
-  paused: false,
-  cancelled: false,
-  fresh: false,
-});
-
 const makeEnv = (kit: MinecraftKit, ops: Map<ClientSlug, Op>): ManagerEnv => {
   const broadcaster = {
     status: vi.fn(),
@@ -146,53 +124,6 @@ const makeEnv = (kit: MinecraftKit, ops: Map<ClientSlug, Op>): ManagerEnv => {
     clearRuntimeOverride: vi.fn(),
   };
 };
-
-describe('runInstall smart resume', () => {
-  it('wires repair progress and releases the install slot when cancelled during resume', async () => {
-    const originalError = new MinecraftKitError(
-      MinecraftKitErrorCodes.INTEGRITY_HASH_MISMATCH,
-      'Downloaded file hash mismatch',
-    );
-    let repairOptions: OperationOptions | undefined;
-    const op = makeInstallOp();
-    const kit = {
-      install: {
-        plan: vi.fn(async () => installPlan()),
-        run: vi.fn().mockRejectedValueOnce(originalError),
-      },
-      repair: {
-        fromError: vi.fn(async () => repairPlan()),
-        minecraft: {
-          run: vi.fn(async (_plan: RepairPlan, options?: OperationOptions) => {
-            repairOptions = options;
-            op.cancelled = true;
-            op.abort.abort();
-            throw new MinecraftKitError(MinecraftKitErrorCodes.NETWORK_ABORTED, 'Cancelled');
-          }),
-        },
-      },
-    } as unknown as MinecraftKit;
-    const ops = new Map<ClientSlug, Op>([[SLUG, op]]);
-    const env = makeEnv(kit, ops);
-
-    await expect(runInstall(env, SLUG, makeContext(), op)).rejects.toBe(originalError);
-
-    expect(repairOptions?.signal).toBe(op.abort.signal);
-    expect(repairOptions?.onEvent).toEqual(expect.any(Function));
-    expect(ops.has(SLUG)).toBe(false);
-    expect(env.emitError).not.toHaveBeenCalled();
-    expect(env.broadcaster.status).toHaveBeenCalledWith({
-      slug: SLUG,
-      status: InstallStatuses.REPAIRING,
-      paused: false,
-    });
-    expect(env.broadcaster.status).toHaveBeenLastCalledWith({
-      slug: SLUG,
-      status: InstallStatuses.NOT_INSTALLED,
-      paused: false,
-    });
-  });
-});
 
 describe('runRepair', () => {
   it('maps runtime repair progress and refreshes the persisted runtime ref', async () => {
