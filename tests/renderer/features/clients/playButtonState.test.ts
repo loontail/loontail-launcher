@@ -55,4 +55,14 @@ describe('selectPlayButtonAction', () => {
       }),
     ).toBe(PlayButtonActions.ERROR);
   });
+
+  it('surfaces failed repair status as an error action', () => {
+    expect(
+      select({
+        status: InstallStatuses.ERROR,
+        hasBundle: false,
+        bundleInstalled: false,
+      }),
+    ).toBe(PlayButtonActions.ERROR);
+  });
 });

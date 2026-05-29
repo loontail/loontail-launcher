@@ -22,6 +22,7 @@ import { classifyError, errorMessage } from './errors';
 import { repairMissingForgeProcessorOutputs } from './forgeProcessorHealing';
 import type { RepairOp } from './ops';
 import { runtimePathFor } from './runtimeFs';
+import { isTargetReady } from './runtimeState';
 
 const PROGRESS_THROTTLE_MS = 100;
 const PROGRESS_STAGE_FOR_ASPECT: Record<VerificationKind, ProgressStage> = {
@@ -162,6 +163,18 @@ const loadBundleOwnedPaths = async (ctx: Context): Promise<ReadonlySet<string> |
   return new Set(Object.keys(manifest.files));
 };
 
+const emitReadinessStatus = async (
+  env: ManagerEnv,
+  slug: ClientSlug,
+  ctx: Context,
+  notReadyStatus: typeof InstallStatuses.ERROR | typeof InstallStatuses.NOT_INSTALLED,
+): Promise<void> => {
+  const status = (await isTargetReady(env.kit, ctx.target))
+    ? InstallStatuses.INSTALLED
+    : notReadyStatus;
+  env.emitStatus({ slug, status, paused: false });
+};
+
 export const runRepair = async (
   env: ManagerEnv,
   slug: ClientSlug,
@@ -217,9 +230,16 @@ export const runRepair = async (
     });
     env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
   } catch (error) {
-    env.logger.error(`[${slug}] repair: failed`, error);
-    env.emitError(slug, classifyError(error, op.abort.signal), errorMessage(error));
-    env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
+    if (op.abort.signal.aborted) {
+      env.logger.info(`[${slug}] repair: cancelled`);
+      await emitReadinessStatus(env, slug, ctx, InstallStatuses.NOT_INSTALLED);
+      return;
+    }
+    const code = classifyError(error, op.abort.signal);
+    const message = errorMessage(error);
+    env.logger.error(`[${slug}] repair: failed (${code}) - ${message}`, error);
+    env.emitError(slug, code, message);
+    await emitReadinessStatus(env, slug, ctx, InstallStatuses.ERROR);
   } finally {
     env.ops.delete(slug);
   }

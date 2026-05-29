@@ -34,7 +34,7 @@ import { runInstall } from '@main/services/minecraft/install';
 import { type InstallOp, type Op, OpKinds, type RepairOp } from '@main/services/minecraft/ops';
 import { runRepair } from '@main/services/minecraft/repair';
 import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
-import { InstallStatuses, ProgressStages } from '@shared/contracts/minecraft';
+import { InstallStatuses, MinecraftErrorCodes, ProgressStages } from '@shared/contracts/minecraft';
 import { LoaderChoices } from '@shared/contracts/settings';
 
 const SLUG = asClientSlug('test-client');
@@ -336,5 +336,69 @@ describe('runRepair', () => {
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
+  });
+
+  it('keeps a failed repair in error status when readiness is still broken', async () => {
+    const repairError = new MinecraftKitError(
+      MinecraftKitErrorCodes.INTEGRITY_HASH_MISMATCH,
+      'Library hash mismatch',
+    );
+    const op: RepairOp = { kind: OpKinds.REPAIR, abort: new AbortController() };
+    const kit = {
+      repair: {
+        all: vi.fn().mockRejectedValue(repairError),
+      },
+      verify: {
+        targetReady: {
+          run: vi.fn(async () => ({ isReady: false })),
+        },
+      },
+    } as unknown as MinecraftKit;
+    const ops = new Map<ClientSlug, Op>([[SLUG, op]]);
+    const env = makeEnv(kit, ops);
+
+    await runRepair(env, SLUG, makeContext(), op);
+
+    expect(env.emitError).toHaveBeenCalledWith(
+      SLUG,
+      MinecraftErrorCodes.INTEGRITY_ERROR,
+      repairError.message,
+    );
+    expect(env.broadcaster.status).toHaveBeenLastCalledWith({
+      slug: SLUG,
+      status: InstallStatuses.ERROR,
+      paused: false,
+    });
+    expect(ops.has(SLUG)).toBe(false);
+  });
+
+  it('does not emit an error event when repair cancellation leaves the target not ready', async () => {
+    const cancelError = new MinecraftKitError(MinecraftKitErrorCodes.NETWORK_ABORTED, 'Cancelled');
+    const op: RepairOp = { kind: OpKinds.REPAIR, abort: new AbortController() };
+    const kit = {
+      repair: {
+        all: vi.fn(async () => {
+          op.abort.abort();
+          throw cancelError;
+        }),
+      },
+      verify: {
+        targetReady: {
+          run: vi.fn(async () => ({ isReady: false })),
+        },
+      },
+    } as unknown as MinecraftKit;
+    const ops = new Map<ClientSlug, Op>([[SLUG, op]]);
+    const env = makeEnv(kit, ops);
+
+    await runRepair(env, SLUG, makeContext(), op);
+
+    expect(env.emitError).not.toHaveBeenCalled();
+    expect(env.broadcaster.status).toHaveBeenLastCalledWith({
+      slug: SLUG,
+      status: InstallStatuses.NOT_INSTALLED,
+      paused: false,
+    });
+    expect(ops.has(SLUG)).toBe(false);
   });
 });
