@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/loontail/minecraft-launcher.git"
+    "url": "git+https://github.com/loontail/loontail-launcher.git"
   },
   "scripts": {
     "dev": "electron-vite dev",
