@@ -12,6 +12,7 @@ import {
 import { scopedLogger } from '@main/infra/logger';
 import { BundleErrorCodes, type RemoteManifestEntry } from '@shared/contracts/bundle';
 import { BundleError, errorMessage } from './errors';
+import { resolveBundleRedirectUrl, validateBundleAssetDownloadUrl } from './urlPolicy';
 
 const logger = scopedLogger('bundle.download');
 
@@ -31,10 +32,9 @@ const requestOnce = (url: string, options: DownloadOptions): Promise<IncomingMes
   new Promise<IncomingMessage>((resolve, reject) => {
     let parsed: URL;
     try {
-      parsed = new URL(url);
+      parsed = new URL(validateBundleAssetDownloadUrl(url));
     } catch (err) {
-      reject(new BundleError(BundleErrorCodes.DOWNLOAD_FAILED, `Invalid URL: ${url}`));
-      void err;
+      reject(err);
       return;
     }
     const transport = parsed.protocol === HTTPS_PROTOCOL ? https : http;
@@ -85,15 +85,15 @@ const requestOnce = (url: string, options: DownloadOptions): Promise<IncomingMes
 // Walk a chain of 3xx redirects up to BUNDLE_DOWNLOAD_MAX_REDIRECTS hops, then
 // hand back the final 200 response stream. Throws on any non-2xx terminal.
 const followRedirects = async (url: string, options: DownloadOptions): Promise<IncomingMessage> => {
-  let current = url;
+  const initial = validateBundleAssetDownloadUrl(url);
+  let current = initial;
   for (let hop = 0; hop <= BUNDLE_DOWNLOAD_MAX_REDIRECTS; hop++) {
     const res = await requestOnce(current, options);
     const status = res.statusCode ?? 0;
     if (status >= 200 && status < 300) return res;
     if (status >= 300 && status < 400 && res.headers.location) {
-      const next = new URL(res.headers.location, current).toString();
       res.resume();
-      current = next;
+      current = resolveBundleRedirectUrl(res.headers.location, current, initial);
       continue;
     }
     res.resume();

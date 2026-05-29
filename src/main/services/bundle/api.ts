@@ -6,6 +6,7 @@ import { API_ROUTES } from '@shared/constants';
 import { type RemoteManifest, RemoteManifestSchema } from '@shared/contracts/bundle';
 import { BundleErrorCodes } from '@shared/contracts/bundle';
 import { BundleError, errorMessage } from './errors';
+import { resolveBundleManifestEntryUrl } from './urlPolicy';
 
 const logger = scopedLogger('bundle.api');
 
@@ -23,19 +24,13 @@ const sha256 = (input: string): string => createHash('sha256').update(input, 'ut
 // `/bundle-registry/builds/<slug>/files/<path>`) when the plugin's `publicUrl`
 // is unset and `server.url` is empty. Resolve those against the configured
 // API base so the downloader can treat every URL as absolute.
-const absolutizeUrl = (url: string, baseUrl: string): string => {
-  try {
-    return new URL(url).toString();
-  } catch {
-    return new URL(url, baseUrl).toString();
-  }
-};
-
 const absolutizeManifestUrls = (manifest: RemoteManifest, baseUrl: string): RemoteManifest => {
   const out: RemoteManifest = {};
   for (const [category, entries] of Object.entries(manifest)) {
     out[category] = entries.map((entry) =>
-      entry.url ? { ...entry, url: absolutizeUrl(entry.url, baseUrl) } : entry,
+      entry.url
+        ? { ...entry, url: resolveBundleManifestEntryUrl(entry.url, baseUrl, entry.path) }
+        : entry,
     );
   }
   return out;
