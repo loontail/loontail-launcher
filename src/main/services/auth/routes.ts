@@ -11,7 +11,7 @@ import {
 } from '@shared/contracts/auth';
 import { IPC_CHANNELS } from '@shared/ipc';
 import { fetchCurrentUser, login, logout } from './auth';
-import type { MojangAuth } from './mojangAuth';
+import { type MojangAuth, MojangBrowserOpenError } from './mojangAuth';
 import type { YggdrasilAuth } from './yggdrasilAuth';
 
 // Map a kit-side sign-in failure to the renderer's `LoginErrorCode`. The
@@ -20,6 +20,7 @@ import type { YggdrasilAuth } from './yggdrasilAuth';
 // surface as `TypeError: fetch failed` from undici — those deserve a distinct
 // code so the UI prompts the user to check connectivity.
 const mojangFailureCode = (error: unknown): LoginErrorCode => {
+  if (error instanceof MojangBrowserOpenError) return LOGIN_ERROR_CODE.BrowserOpenFailed;
   if (isErrorCode(error, 'AUTH_CANCELLED')) return LOGIN_ERROR_CODE.Unknown;
   if (error instanceof TypeError) return LOGIN_ERROR_CODE.NetworkError;
   return LOGIN_ERROR_CODE.Unknown;

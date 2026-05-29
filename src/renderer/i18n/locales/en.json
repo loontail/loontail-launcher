@@ -33,6 +33,7 @@
     "errorInvalid": "Invalid login or password.",
     "errorNetwork": "Could not reach the server. Check your connection.",
     "errorRateLimited": "Too many sign-in attempts. Please wait a minute and try again.",
+    "errorBrowserOpen": "Could not open your browser for Microsoft sign-in. Check your default browser and try again.",
     "errorUnknown": "Something went wrong. Try again later.",
     "or": "or",
     "signInWithMicrosoft": "Sign in with Microsoft",

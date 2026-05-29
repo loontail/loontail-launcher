@@ -1,4 +1,12 @@
-import { describe, expect, it, vi } from 'vitest';
+import type { Router } from '@main/ipc/router';
+import type { IpcMainInvokeEvent } from 'electron';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.hoisted(() => {
+  process.env.API_URL ??= 'http://test.invalid';
+  process.env.API_TOKEN ??= 'test-token';
+  process.env.MOJANG_CLIENT_ID ??= '00000000-0000-0000-0000-000000000000';
+});
 
 const storeMocks = vi.hoisted(() => {
   let session: unknown = null;
@@ -40,8 +48,32 @@ vi.mock('@main/services/auth/verify', () => ({
 }));
 
 import { logout } from '@main/services/auth/auth';
+import { type MojangAuth, MojangBrowserOpenError } from '@main/services/auth/mojangAuth';
+import { registerAuthRoutes } from '@main/services/auth/routes';
 import type { YggdrasilAuth } from '@main/services/auth/yggdrasilAuth';
-import type { YggdrasilSession } from '@shared/contracts/auth';
+import { LOGIN_ERROR_CODE, type YggdrasilSession } from '@shared/contracts/auth';
+import { IPC_CHANNELS, type IpcArgs, type IpcContract, type IpcResult } from '@shared/ipc';
+
+type StoredHandler = (rawArgs: unknown) => Promise<unknown> | unknown;
+
+const fakeEvent = (): IpcMainInvokeEvent => ({}) as unknown as IpcMainInvokeEvent;
+
+const createTestRouter = (): { router: Router; handlers: Map<string, StoredHandler> } => {
+  const handlers = new Map<string, StoredHandler>();
+  const router: Router = {
+    handle<TChannel extends keyof IpcContract>(
+      channel: TChannel,
+      handler: (
+        args: IpcArgs<TChannel>,
+        event: IpcMainInvokeEvent,
+      ) => Promise<IpcResult<TChannel>> | IpcResult<TChannel>,
+    ): void {
+      handlers.set(channel, (rawArgs) => handler(rawArgs as IpcArgs<TChannel>, fakeEvent()));
+    },
+    dispose: () => undefined,
+  };
+  return { router, handlers };
+};
 
 const yggdrasilSession = (): YggdrasilSession => ({
   provider: 'yggdrasil',
@@ -54,6 +86,18 @@ const yggdrasilAuth = (signOut: YggdrasilAuth['signOut']): YggdrasilAuth => ({
   signIn: vi.fn(),
   verifySession: vi.fn(),
   signOut,
+});
+
+const mojangAuth = (overrides: Partial<MojangAuth> = {}): MojangAuth => ({
+  signInWithMojang: vi.fn(),
+  cancelMojangLogin: vi.fn(),
+  verifyMojangSession: vi.fn(),
+  ...overrides,
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  storeMocks.setSession(null);
 });
 
 describe('logout', () => {
@@ -81,5 +125,25 @@ describe('logout', () => {
       'Yggdrasil sign-out cleanup failed after local logout',
       error,
     );
+  });
+});
+
+describe('registerAuthRoutes', () => {
+  it('maps Microsoft browser-open failures to a renderer-visible login error', async () => {
+    const { router, handlers } = createTestRouter();
+    const signInWithMojang = vi
+      .fn()
+      .mockRejectedValue(new MojangBrowserOpenError('Failed to open browser'));
+
+    registerAuthRoutes(router, yggdrasilAuth(vi.fn()), mojangAuth({ signInWithMojang }));
+
+    const handler = handlers.get(IPC_CHANNELS.authMojangSignIn);
+    if (!handler) throw new Error('auth.mojangSignIn handler was not registered');
+
+    await expect(handler(undefined)).resolves.toEqual({
+      ok: false,
+      error: LOGIN_ERROR_CODE.BrowserOpenFailed,
+    });
+    expect(storeMocks.setStoredAuth).not.toHaveBeenCalled();
   });
 });

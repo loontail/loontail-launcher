@@ -10,6 +10,26 @@ import type { MojangSession } from '@shared/contracts/auth';
 import { shell } from 'electron';
 
 const logger = scopedLogger('auth.mojang');
+// The kit's authorize URL is built for Microsoft personal accounts only.
+// Keep this host/path allowlist narrow before crossing Electron's shell boundary.
+const MICROSOFT_AUTHORIZE_HOST = 'login.microsoftonline.com';
+const MICROSOFT_AUTHORIZE_PATH = '/consumers/oauth2/v2.0/authorize';
+export const MOJANG_BROWSER_OPEN_ERROR_CODE = 'MOJANG_BROWSER_OPEN_FAILED';
+
+type BrowserOpener = (url: string) => Promise<void>;
+
+export class MojangBrowserOpenError extends Error {
+  readonly code = MOJANG_BROWSER_OPEN_ERROR_CODE;
+
+  constructor(message: string, options?: { readonly cause?: unknown }) {
+    super(message, options?.cause === undefined ? undefined : { cause: options.cause });
+    this.name = 'MojangBrowserOpenError';
+  }
+}
+
+export type MojangAuthOptions = {
+  readonly openExternal?: BrowserOpener;
+};
 
 const requireClientId = () => {
   if (!mainConfig.mojangClientId) {
@@ -65,17 +85,63 @@ export const withRefreshedProfile = (
   },
 });
 
-export const createMojangAuth = (kit: MinecraftKit): MojangAuth => {
+const parseUrl = (raw: string): URL | null => {
+  try {
+    return new URL(raw);
+  } catch {
+    return null;
+  }
+};
+
+const isMicrosoftAuthorizeUrl = (raw: string): boolean => {
+  const parsed = parseUrl(raw);
+  if (!parsed) return false;
+  if (parsed.protocol !== 'https:') return false;
+  return (
+    parsed.hostname.toLowerCase() === MICROSOFT_AUTHORIZE_HOST &&
+    parsed.pathname === MICROSOFT_AUTHORIZE_PATH
+  );
+};
+
+const openMicrosoftAuthorizeUrl = async (
+  rawUrl: string,
+  openExternal: BrowserOpener,
+  controller: AbortController,
+): Promise<void> => {
+  if (!isMicrosoftAuthorizeUrl(rawUrl)) {
+    const error = new MojangBrowserOpenError('Refusing to open unexpected Microsoft sign-in URL');
+    controller.abort(error);
+    throw error;
+  }
+
+  try {
+    await openExternal(rawUrl);
+  } catch (cause) {
+    const error = new MojangBrowserOpenError(
+      'Failed to open the system browser for Microsoft sign-in',
+      { cause },
+    );
+    controller.abort(error);
+    throw error;
+  }
+};
+
+export const createMojangAuth = (
+  kit: MinecraftKit,
+  options: MojangAuthOptions = {},
+): MojangAuth => {
   // One in-flight sign-in at a time. A second click while the browser flow is
   // outstanding aborts the previous attempt so the launcher doesn't leak
   // loopback servers.
   let activeController: AbortController | null = null;
+  const openExternal = options.openExternal ?? ((url: string) => shell.openExternal(url));
 
   /**
    * Run the OAuth Authorization Code + PKCE flow end-to-end via the kit. The kit
-   * binds a temporary loopback HTTP server, we hand it `shell.openExternal` as the
-   * browser opener, and the call blocks until the user finishes signing in or
-   * cancels. One concurrent flow at a time — a fresh call aborts the prior one.
+   * binds a temporary loopback HTTP server, we validate the generated Microsoft
+   * authorize URL before opening the browser, and the call blocks until the user
+   * finishes signing in or cancels. One concurrent flow at a time — a fresh call
+   * aborts the prior one.
    */
   const signInWithMojang = async (): Promise<MojangSession> => {
     const clientId = requireClientId();
@@ -87,9 +153,7 @@ export const createMojangAuth = (kit: MinecraftKit): MojangAuth => {
     try {
       const kitSession = await kit.auth.authorizationCode.run({
         clientId,
-        onOpenBrowser: (url) => {
-          void shell.openExternal(url);
-        },
+        onOpenBrowser: (url) => openMicrosoftAuthorizeUrl(url, openExternal, controller),
         signal: controller.signal,
       });
       const session = fromKitSession(kitSession);

@@ -10,6 +10,7 @@ const ERROR_COPY_KEYS: Record<LoginErrorCode, string> = {
   [LOGIN_ERROR_CODE.InvalidCredentials]: 'auth.errorInvalid',
   [LOGIN_ERROR_CODE.NetworkError]: 'auth.errorNetwork',
   [LOGIN_ERROR_CODE.RateLimited]: 'auth.errorRateLimited',
+  [LOGIN_ERROR_CODE.BrowserOpenFailed]: 'auth.errorBrowserOpen',
   [LOGIN_ERROR_CODE.Unknown]: 'auth.errorUnknown',
 };
 

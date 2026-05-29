@@ -96,6 +96,7 @@ export const LOGIN_ERROR_CODE = {
   NetworkError: 'NETWORK_ERROR',
   InvalidCredentials: 'INVALID_CREDENTIALS',
   RateLimited: 'RATE_LIMITED',
+  BrowserOpenFailed: 'BROWSER_OPEN_FAILED',
   Unknown: 'UNKNOWN',
 } as const;
 
