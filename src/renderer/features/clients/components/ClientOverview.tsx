@@ -2,9 +2,9 @@ import { useClientStatus } from '@renderer/features/minecraft';
 import type { Client } from '@shared/contracts/client';
 import { type InstallStatus, InstallStatuses } from '@shared/contracts/minecraft';
 import { Settings2 } from 'lucide-react';
-import { marked } from 'marked';
 import { type ReactNode, Suspense, lazy, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { renderClientDescriptionMarkdown } from '../clientDescriptionMarkdown';
 import { PlayButton } from './PlayButton';
 import { ServersInfo } from './ServersInfo';
 import { StrapiMedia } from './StrapiMedia';
@@ -64,7 +64,10 @@ export const ClientOverview = ({ client }: ClientOverviewProps) => {
     minecraftVersion,
   } = client;
 
-  const parsedDescription = useMemo(() => marked.parse(description ?? '') as string, [description]);
+  const parsedDescription = useMemo(
+    () => renderClientDescriptionMarkdown(description ?? ''),
+    [description],
+  );
 
   const firstScreenshot = screenshots[0] ?? null;
   const hasScreenshots = firstScreenshot !== null;
@@ -173,7 +176,7 @@ export const ClientOverview = ({ client }: ClientOverviewProps) => {
                 <SectionLabel>{t('clients.about')}</SectionLabel>
                 <div
                   className="prose prose-invert prose-sm max-w-none text-glass/60 [&_a]:text-glass/75 [&_h1]:text-glass/90 [&_h2]:text-glass/85 [&_h3]:text-glass/80 [&_img]:h-auto [&_img]:w-full [&_img]:rounded-lg [&_strong]:text-glass/80"
-                  // biome-ignore lint/security/noDangerouslySetInnerHtml: description is admin-authored in Strapi, parsed via `marked`
+                  // biome-ignore lint/security/noDangerouslySetInnerHtml: sanitized markdown helper removes raw HTML and unsafe links
                   dangerouslySetInnerHTML={{ __html: parsedDescription }}
                 />
               </section>

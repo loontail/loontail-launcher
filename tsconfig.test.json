@@ -5,6 +5,7 @@
     "types": ["node"],
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
+    "allowArbitraryExtensions": true,
     "paths": {
       "@shared/*": ["src/shared/*"],
       "@main/*": ["src/main/*"],
@@ -13,5 +14,5 @@
       "@splidejs/react-splide": ["node_modules/@splidejs/react-splide/dist/types/index.d.ts"]
     }
   },
-  "include": ["tests/**/*", "src/preload/index.d.ts", "vitest.config.ts"]
+  "include": ["tests/**/*", "src/renderer/env.d.ts", "src/preload/index.d.ts", "vitest.config.ts"]
 }

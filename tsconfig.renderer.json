@@ -5,6 +5,7 @@
     "outDir": "out/renderer",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "jsx": "react-jsx",
+    "allowArbitraryExtensions": true,
     "types": [],
     "paths": {
       "@shared/*": ["src/shared/*"],
