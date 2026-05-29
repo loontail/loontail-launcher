@@ -17,7 +17,7 @@ const idleBundle = (): BundleRuntimeState => ({
 });
 
 describe('selectInstallProgress', () => {
-  it('renders repair recovery with cancel-only controls while waiting for repair progress', () => {
+  it('keeps repair verification out of the download progress card', () => {
     const client: ClientRuntimeState = {
       status: InstallStatuses.REPAIRING,
       paused: false,
@@ -28,21 +28,10 @@ describe('selectInstallProgress', () => {
       hasLoader: true,
     });
 
-    expect(view).toMatchObject({
-      mode: 'repair',
-      activeStep: InstallStepKeys.MINECRAFT,
-      paused: false,
-      controls: 'cancel',
-    });
-    const active = view?.steps.find((step) => step.key === InstallStepKeys.MINECRAFT);
-    expect(active).toMatchObject({
-      state: StepStates.ACTIVE,
-      indeterminate: true,
-      percent: 0,
-    });
+    expect(view).toBeNull();
   });
 
-  it('uses current repair progress instead of stale install progress', () => {
+  it('shows the repair progress card once repair is actually downloading', () => {
     const client: ClientRuntimeState = {
       status: InstallStatuses.REPAIRING,
       paused: false,

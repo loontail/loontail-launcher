@@ -29,6 +29,7 @@ export const PlayButtonActions = {
   RUNNING: 'running',
   PLAY: 'play',
   UNVERIFIED: 'unverified',
+  CHECKING: 'checking',
   ERROR: 'error',
   INSTALL: 'install',
 } as const;
@@ -43,6 +44,7 @@ type PlayButtonSelectionInput = {
   bundleInstalled: boolean;
   bundleSignatureMatches: boolean;
   hasBundleError: boolean;
+  isChecking: boolean;
 };
 
 export const selectPlayButtonAction = ({
@@ -53,6 +55,7 @@ export const selectPlayButtonAction = ({
   bundleInstalled,
   bundleSignatureMatches,
   hasBundleError,
+  isChecking,
 }: PlayButtonSelectionInput): PlayButtonAction => {
   if (hasProgress) return PlayButtonActions.PROGRESS;
   if (
@@ -71,8 +74,20 @@ export const selectPlayButtonAction = ({
   ) {
     return PlayButtonActions.BUNDLE_UPDATE;
   }
+  if (
+    isChecking &&
+    (status === InstallStatuses.UNKNOWN ||
+      status === InstallStatuses.INSTALLED ||
+      status === InstallStatuses.UNVERIFIED ||
+      status === InstallStatuses.NOT_INSTALLED)
+  ) {
+    return PlayButtonActions.CHECKING;
+  }
 
   switch (status) {
+    case InstallStatuses.UNKNOWN:
+    case InstallStatuses.REPAIRING:
+      return PlayButtonActions.CHECKING;
     case InstallStatuses.UNINSTALLING:
       return PlayButtonActions.UNINSTALLING;
     case InstallStatuses.LAUNCHING:
@@ -147,6 +162,7 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
     bundleInstalled: bundle.installed,
     bundleSignatureMatches: bundle.signatureMatches,
     hasBundleError: Boolean(bundle.error),
+    isChecking: launch.isPending,
   });
 
   // Progress card wins over the per-status switch below whenever an install
@@ -212,6 +228,14 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
         >
           <X size={16} />
           {t('clients.cancel')}
+        </ActionButton>
+      );
+
+    case PlayButtonActions.CHECKING:
+      return (
+        <ActionButton disabled>
+          <Loader2 size={16} className="animate-spin" />
+          {t('clients.checking')}
         </ActionButton>
       );
 

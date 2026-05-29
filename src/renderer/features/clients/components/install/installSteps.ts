@@ -159,9 +159,10 @@ export const selectInstallProgress = (
 ): InstallProgressView | null => {
   const installRunning = client.status === InstallStatuses.INSTALLING;
   const repairRunning = client.status === InstallStatuses.REPAIRING;
+  const repairDownloadRunning = repairRunning && (client.totalBytes ?? 0) > 0;
   const bundleBusy = context.hasBundle && isBundleBusy(bundle.status);
 
-  if (!installRunning && !repairRunning && !bundleBusy) return null;
+  if (!installRunning && !repairDownloadRunning && !bundleBusy) return null;
 
   const steps = buildSteps(context.hasLoader, context.hasBundle);
 
@@ -170,7 +171,7 @@ export const selectInstallProgress = (
   let controls: ProgressControlsKind = null;
   let mode: InstallProgressMode = 'install';
 
-  if (installRunning || repairRunning) {
+  if (installRunning || repairDownloadRunning) {
     mode = repairRunning ? 'repair' : 'install';
     paused = client.paused;
     controls = installRunning ? 'install' : 'cancel';

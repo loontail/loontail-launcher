@@ -28,6 +28,7 @@ const select = (overrides: Partial<Parameters<typeof selectPlayButtonAction>[0]>
     bundleInstalled: true,
     bundleSignatureMatches: true,
     hasBundleError: false,
+    isChecking: false,
     ...overrides,
   });
 
@@ -68,5 +69,17 @@ describe('selectPlayButtonAction', () => {
 
   it('surfaces unverified installs as retry instead of plain play', () => {
     expect(select({ status: InstallStatuses.UNVERIFIED })).toBe(PlayButtonActions.UNVERIFIED);
+  });
+
+  it('shows a status-check spinner before the seeded install state is known', () => {
+    expect(select({ status: InstallStatuses.UNKNOWN })).toBe(PlayButtonActions.CHECKING);
+  });
+
+  it('shows a status-check spinner while repair is verifying before downloads', () => {
+    expect(select({ status: InstallStatuses.REPAIRING })).toBe(PlayButtonActions.CHECKING);
+  });
+
+  it('shows a status-check spinner while launch preflight is pending', () => {
+    expect(select({ isChecking: true })).toBe(PlayButtonActions.CHECKING);
   });
 });
