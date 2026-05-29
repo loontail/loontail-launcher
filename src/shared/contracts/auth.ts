@@ -14,28 +14,44 @@ export type AuthProvider = (typeof AUTH_PROVIDERS)[number];
 // Re-export kit-side literal unions so renderer/IPC code uses a single source of truth.
 export type { MojangAssetState, SkinVariant } from '@loontail/minecraft-kit';
 
+const NonEmptyStringSchema = z.string().min(1);
+const MOJANG_MILLISECOND_TIMESTAMP_MIN = Date.UTC(2000, 0, 1);
+const MOJANG_XUID_PATTERN = /^\d+$/;
+
 // Mirror of kit's `MojangProfileSkin` shape; kept here so the persisted-store
 // Zod schema can validate it without pulling kit's runtime into shared/.
 const MojangProfileSkinSchema: z.ZodType<MojangProfileSkin> = z.object({
-  id: z.string(),
+  id: NonEmptyStringSchema,
   state: z.enum(['ACTIVE', 'INACTIVE']),
-  url: z.string(),
+  url: NonEmptyStringSchema,
   variant: z.enum(['CLASSIC', 'SLIM']),
-  textureKey: z.string().optional(),
+  textureKey: NonEmptyStringSchema.optional(),
 });
 
 // The kit's `as*` brand validators are runtime imports that drag yauzl/stream
-// into the renderer bundle. Shared code can only carry types; the kit will
-// reject malformed values at the point of use.
-const PlayerUuidSchema = z.string().transform((value): PlayerUuid => value as PlayerUuid);
-const AzureClientIdSchema = z.string().transform((value): AzureClientId => value as AzureClientId);
-const MicrosoftRefreshTokenSchema = z
+// into the renderer bundle. Shared code carries the same primitive shape and
+// adds lightweight Zod checks before applying the compile-time brand.
+export const PlayerUuidSchema = z
   .string()
-  .transform((value): MicrosoftRefreshToken => value as MicrosoftRefreshToken);
+  .uuid()
+  .transform((value): PlayerUuid => value as PlayerUuid);
+export const AzureClientIdSchema = z
+  .string()
+  .uuid()
+  .transform((value): AzureClientId => value as AzureClientId);
+export const MicrosoftRefreshTokenSchema = NonEmptyStringSchema.transform(
+  (value): MicrosoftRefreshToken => value as MicrosoftRefreshToken,
+);
+export const MojangXuidSchema = z.string().regex(MOJANG_XUID_PATTERN);
+export const MojangExpiresAtSchema = z
+  .number()
+  .finite()
+  .int()
+  .gte(MOJANG_MILLISECOND_TIMESTAMP_MIN);
 
 export const MojangProfileSchema = z.object({
   uuid: PlayerUuidSchema,
-  username: z.string(),
+  username: NonEmptyStringSchema,
   skins: z.array(MojangProfileSkinSchema),
 });
 
@@ -46,11 +62,11 @@ export type MojangProfile = z.infer<typeof MojangProfileSchema>;
 // it to the kit's launch composer.
 export const YggdrasilProfileSchema = z.object({
   uuid: z.string().refine(isUuidUndashed, 'profile id must be 32-char undashed hex'),
-  name: z.string().min(1),
+  name: NonEmptyStringSchema,
 });
 export type YggdrasilProfile = z.infer<typeof YggdrasilProfileSchema>;
 
-// Stored session shapes — discriminated by `provider`.
+// Stored session shapes - discriminated by `provider`.
 //
 // `YggdrasilSession` carries only what the Yggdrasil protocol provides:
 // the access/client token pair and the selected profile. Anything that lives
@@ -59,8 +75,8 @@ export type YggdrasilProfile = z.infer<typeof YggdrasilProfileSchema>;
 // Yggdrasil session.
 export const YggdrasilSessionSchema = z.object({
   provider: z.literal('yggdrasil'),
-  accessToken: z.string().min(1),
-  clientToken: z.string().min(1),
+  accessToken: NonEmptyStringSchema,
+  clientToken: NonEmptyStringSchema,
   profile: YggdrasilProfileSchema,
 });
 
@@ -68,11 +84,11 @@ export type YggdrasilSession = z.infer<typeof YggdrasilSessionSchema>;
 
 export const MojangSessionSchema = z.object({
   provider: z.literal('mojang'),
-  accessToken: z.string(),
-  expiresAt: z.number(),
+  accessToken: NonEmptyStringSchema,
+  expiresAt: MojangExpiresAtSchema,
   refreshToken: MicrosoftRefreshTokenSchema,
   clientId: AzureClientIdSchema,
-  xuid: z.string(),
+  xuid: MojangXuidSchema,
   profile: MojangProfileSchema,
 });
 
@@ -87,8 +103,8 @@ export type AuthSession = z.infer<typeof AuthSessionSchema>;
 
 // Login (Yggdrasil authserver). Mojang has its own IPC flow.
 export const LoginPayloadSchema = z.object({
-  identifier: z.string().min(1),
-  password: z.string().min(1),
+  identifier: NonEmptyStringSchema,
+  password: NonEmptyStringSchema,
 });
 export type LoginPayload = z.infer<typeof LoginPayloadSchema>;
 

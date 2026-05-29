@@ -123,64 +123,59 @@ describe('YggdrasilSessionSchema', () => {
 });
 
 describe('MojangSessionSchema', () => {
-  // The shared schema brands strings without validating their format — kit's
-  // runtime `as*` guards can't be imported into shared (they drag Node-only
-  // modules into the renderer bundle), so brand checks live at the kit-call
-  // boundary in main instead.
   const clientId = '11111111-2222-3333-4444-555555555555';
   const playerUuid = '00000000-1111-2222-3333-444444444444';
+  const expiresAt = Date.UTC(2099, 0, 1);
+
+  const validSession = () => ({
+    provider: 'mojang' as const,
+    accessToken: 'token',
+    expiresAt,
+    refreshToken: 'refresh-token',
+    clientId,
+    xuid: '1234567890',
+    profile: {
+      uuid: playerUuid,
+      username: 'player',
+      skins: [
+        {
+          id: 'skin-id',
+          state: 'ACTIVE' as const,
+          url: 'https://textures.example/skin.png',
+          variant: 'CLASSIC' as const,
+        },
+      ],
+    },
+  });
 
   it('round-trips a valid session', () => {
-    const session = {
-      provider: 'mojang' as const,
-      accessToken: 'token',
-      expiresAt: 1_700_000_000,
-      refreshToken: 'refresh-token',
-      clientId,
-      xuid: 'xuid-value',
-      profile: {
-        uuid: playerUuid,
-        username: 'player',
-        skins: [
-          {
-            id: 'skin-id',
-            state: 'ACTIVE' as const,
-            url: 'https://textures.example/skin.png',
-            variant: 'CLASSIC' as const,
-          },
-        ],
-      },
-    };
-    const parsed = MojangSessionSchema.parse(session);
+    const parsed = MojangSessionSchema.parse(validSession());
     expect(parsed.profile.username).toBe('player');
     expect(parsed.profile.skins[0]?.state).toBe('ACTIVE');
   });
 
   it('rejects a non-string client id', () => {
     const result = MojangSessionSchema.safeParse({
-      provider: 'mojang',
-      accessToken: 'token',
-      expiresAt: 0,
-      refreshToken: 'refresh',
+      ...validSession(),
       clientId: 12345,
-      xuid: 'xuid',
-      profile: { uuid: playerUuid, username: 'p', skins: [] },
     });
     expect(result.success).toBe(false);
   });
 
   it('rejects an unknown skin variant', () => {
     const result = MojangSessionSchema.safeParse({
-      provider: 'mojang',
-      accessToken: 'token',
-      expiresAt: 0,
-      refreshToken: 'refresh',
-      clientId,
-      xuid: 'xuid',
+      ...validSession(),
       profile: {
         uuid: playerUuid,
         username: 'p',
-        skins: [{ id: 'x', state: 'ACTIVE', url: 'u', variant: 'UNKNOWN' }],
+        skins: [
+          {
+            id: 'x',
+            state: 'ACTIVE',
+            url: 'https://textures.example/skin.png',
+            variant: 'UNKNOWN',
+          },
+        ],
       },
     });
     expect(result.success).toBe(false);
@@ -188,14 +183,46 @@ describe('MojangSessionSchema', () => {
 
   it('rejects expiresAt that is not a number', () => {
     const result = MojangSessionSchema.safeParse({
-      provider: 'mojang',
-      accessToken: 'token',
+      ...validSession(),
       expiresAt: 'soon',
-      refreshToken: 'refresh',
-      clientId,
-      xuid: 'xuid',
-      profile: { uuid: playerUuid, username: 'p', skins: [] },
     });
     expect(result.success).toBe(false);
+  });
+
+  it('rejects empty token material', () => {
+    expect(MojangSessionSchema.safeParse({ ...validSession(), accessToken: '' }).success).toBe(
+      false,
+    );
+    expect(MojangSessionSchema.safeParse({ ...validSession(), refreshToken: '' }).success).toBe(
+      false,
+    );
+  });
+
+  it('rejects invalid profile identifiers and usernames', () => {
+    expect(
+      MojangSessionSchema.safeParse({
+        ...validSession(),
+        profile: { ...validSession().profile, uuid: '' },
+      }).success,
+    ).toBe(false);
+    expect(
+      MojangSessionSchema.safeParse({
+        ...validSession(),
+        profile: { ...validSession().profile, username: '' },
+      }).success,
+    ).toBe(false);
+  });
+
+  it('rejects non-millisecond expiresAt values', () => {
+    expect(
+      MojangSessionSchema.safeParse({ ...validSession(), expiresAt: 1_700_000_000 }).success,
+    ).toBe(false);
+    expect(
+      MojangSessionSchema.safeParse({ ...validSession(), expiresAt: expiresAt + 0.5 }).success,
+    ).toBe(false);
+    expect(
+      MojangSessionSchema.safeParse({ ...validSession(), expiresAt: Number.POSITIVE_INFINITY })
+        .success,
+    ).toBe(false);
   });
 });

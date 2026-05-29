@@ -11,7 +11,10 @@ import {
 import {
   type AuthSession,
   AuthSessionSchema,
+  AzureClientIdSchema,
+  MojangExpiresAtSchema,
   MojangProfileSchema,
+  MojangXuidSchema,
   YggdrasilProfileSchema,
 } from '@shared/contracts/auth';
 import { type LauncherSettings, LauncherSettingsSchema } from '@shared/contracts/settings';
@@ -45,9 +48,9 @@ const StoredYggdrasilAuthMetadataSchema = z.object({
 
 const StoredMojangAuthMetadataSchema = z.object({
   provider: z.literal('mojang'),
-  expiresAt: z.number(),
-  clientId: z.string(),
-  xuid: z.string(),
+  expiresAt: MojangExpiresAtSchema,
+  clientId: AzureClientIdSchema,
+  xuid: MojangXuidSchema,
   profile: MojangProfileSchema,
 });
 

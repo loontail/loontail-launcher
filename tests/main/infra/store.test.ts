@@ -79,6 +79,9 @@ import type { AuthSession } from '@shared/contracts/auth';
 
 const storeFile = path.join(tmpUserData, 'launcher.json');
 const authSecretFile = path.join(tmpUserData, 'auth-session.bin');
+const mojangClientId = '11111111-2222-3333-4444-555555555555';
+const mojangPlayerUuid = '00000000-1111-2222-3333-444444444444';
+const mojangXuid = '1234567890';
 
 const writeStore = (payload: Record<string, unknown>): void => {
   fs.writeFileSync(storeFile, JSON.stringify(payload), 'utf8');
@@ -171,9 +174,9 @@ describe('getStoredAuth', () => {
         accessToken: 'minecraft-access',
         expiresAt: Date.UTC(2099, 0, 1),
         refreshToken: 'microsoft-refresh',
-        clientId: 'client-id',
-        xuid: 'xuid',
-        profile: { uuid: 'uuid', username: 'someone', skins: [] },
+        clientId: mojangClientId,
+        xuid: mojangXuid,
+        profile: { uuid: mojangPlayerUuid, username: 'someone', skins: [] },
       },
       [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
     });
@@ -200,6 +203,32 @@ describe('getStoredAuth', () => {
 
     const { getStoredAuth } = await loadStoreModule();
     expect(getStoredAuth()).toBeNull();
+    expect(loggerMocks.warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns null when a persisted Mojang session has malformed metadata', async () => {
+    writeStore({
+      [STORE_KEY_AUTH]: {
+        provider: 'mojang',
+        expiresAt: 1_700_000_000,
+        clientId: mojangClientId,
+        xuid: mojangXuid,
+        profile: { uuid: mojangPlayerUuid, username: 'someone', skins: [] },
+      },
+      [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
+    });
+    writeAuthSecret({
+      version: 1,
+      provider: 'mojang',
+      accessToken: 'minecraft-access',
+      refreshToken: 'microsoft-refresh',
+    });
+
+    const { getStoredAuth } = await loadStoreModule();
+    expect(getStoredAuth()).toBeNull();
+    expect(JSON.parse(fs.readFileSync(storeFile, 'utf8'))).toMatchObject({
+      [STORE_KEY_AUTH]: null,
+    });
     expect(loggerMocks.warn).toHaveBeenCalledTimes(1);
   });
 
