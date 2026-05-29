@@ -32,7 +32,7 @@ import { requireAccount, runLaunch } from './launch';
 import { OP_TO_STATUS, type Op, OpKinds, type RepairOp } from './ops';
 import { resolveClientInstallPresence } from './readinessPolicy';
 import { runRepair } from './repair';
-import { isAnythingInstalled } from './runtimeState';
+import { clientFolderHasContent } from './runtimeState';
 import { runUninstall } from './uninstall';
 
 const logger = scopedLogger('minecraft');
@@ -191,7 +191,10 @@ export class MinecraftManager {
     const lock = this.acquireWriteLock(slug);
     try {
       const ctx = await buildContext(this.kit, slug);
-      if (!(await isAnythingInstalled(ctx.clientFolder))) {
+      // Allow repair whenever the client folder has any content, even when no
+      // version JSON is present — repair (kit.repair.all) rebuilds the missing
+      // version JSON. Only an empty/absent folder is "nothing to repair".
+      if (!(await clientFolderHasContent(ctx.clientFolder))) {
         throw new ManagerError(MinecraftErrorCodes.NOT_INSTALLED, 'Client is not installed');
       }
       const op: Op = { kind: OpKinds.REPAIR, abort: new AbortController() };

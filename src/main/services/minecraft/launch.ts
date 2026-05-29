@@ -5,8 +5,11 @@ import {
   EventTypes,
   type LaunchAuth,
   type LaunchComposition,
+  type MinecraftKitErrorCode,
+  MinecraftKitErrorCodes,
   asAzureClientId,
   asPlayerUuid,
+  isMinecraftKitError,
   resolveLaunchVersion,
   targetPaths,
   toOnlineAuth,
@@ -47,6 +50,30 @@ class LaunchPreflightError extends ManagerError {}
 
 const isLaunchPreflightError = (error: unknown): error is LaunchPreflightError =>
   error instanceof LaunchPreflightError;
+
+// Kit error codes that point at the Java runtime rather than the game files.
+const RUNTIME_REPAIR_KIT_CODES: ReadonlySet<MinecraftKitErrorCode> = new Set([
+  MinecraftKitErrorCodes.RUNTIME_NOT_FOUND,
+  MinecraftKitErrorCodes.RUNTIME_UNSUPPORTED_PLATFORM,
+  MinecraftKitErrorCodes.LAUNCH_JAVA_NOT_FOUND,
+]);
+
+// `kit.launch.compose` assembles the launch purely from on-disk files (the
+// installed version JSON, libraries, runtime) — it does not hit the network. A
+// MinecraftKitError thrown here therefore means the install is incomplete (e.g.
+// MANIFEST_NOT_FOUND = "no installed version JSON on disk"), not a transient
+// network failure. Reclassify it as a repairable launch-preflight failure so the
+// catch path keeps the client INSTALLED and the renderer offers a Repair toast,
+// instead of surfacing a raw, non-repairable error. Non-kit errors pass through
+// to the generic launch-failure branch.
+const toComposeFailure = (error: unknown): unknown => {
+  if (isLaunchPreflightError(error)) return error;
+  if (!isMinecraftKitError(error)) return error;
+  const code = RUNTIME_REPAIR_KIT_CODES.has(error.code)
+    ? MinecraftErrorCodes.RUNTIME_ERROR
+    : MinecraftErrorCodes.NOT_INSTALLED;
+  return new LaunchPreflightError(code, errorMessage(error));
+};
 
 const sanitizeHttpAgentToken = (value: string): string => {
   const token = value.trim().replace(/[^0-9A-Za-z.+_-]/g, '-');
@@ -220,16 +247,25 @@ export const runLaunch = async (
     if (resolved.extraJvmArgs.length > 0) {
       launchLogger.info(`[${slug}] launch: injecting authlib-injector (yggdrasil session)`);
     }
-    const composition = await env.kit.launch.compose(ctx.target, {
-      auth: resolved.auth,
-      ...(resolved.extraJvmArgs.length > 0 ? { extraJvmArgs: resolved.extraJvmArgs } : {}),
-      ...(ctx.resolved.memory.allocatedRamMb > 0
-        ? { memory: { maxMb: ctx.resolved.memory.allocatedRamMb } }
-        : {}),
-      fullscreen: ctx.resolved.launch.fullscreen,
-      launcherName: 'loontail',
-      launcherVersion: app.getVersion(),
-    });
+    let composition: LaunchComposition;
+    try {
+      composition = await env.kit.launch.compose(ctx.target, {
+        auth: resolved.auth,
+        ...(resolved.extraJvmArgs.length > 0 ? { extraJvmArgs: resolved.extraJvmArgs } : {}),
+        ...(ctx.resolved.memory.allocatedRamMb > 0
+          ? { memory: { maxMb: ctx.resolved.memory.allocatedRamMb } }
+          : {}),
+        fullscreen: ctx.resolved.launch.fullscreen,
+        launcherName: 'loontail',
+        launcherVersion: app.getVersion(),
+      });
+    } catch (error) {
+      if (startupSignal.aborted) {
+        restoreInstalled();
+        return;
+      }
+      throw toComposeFailure(error);
+    }
     if (startupSignal.aborted) {
       restoreInstalled();
       return;

@@ -9,6 +9,8 @@ import {
   type LaunchSession,
   Loaders,
   type MinecraftKit,
+  MinecraftKitError,
+  MinecraftKitErrorCodes,
   OperatingSystems,
   type Target,
   asMinecraftVersionId,
@@ -382,6 +384,61 @@ describe('runLaunch', () => {
       paused: false,
     });
     expect(launchMocks.openConsoleWindow).toHaveBeenCalled();
+  });
+
+  it('surfaces a compose missing-version-JSON kit error as a repairable not-installed error', async () => {
+    const fixture = await createLaunchFixture();
+    const compose = vi.fn(async () => {
+      throw new MinecraftKitError(
+        MinecraftKitErrorCodes.MANIFEST_NOT_FOUND,
+        'Could not find an installed version JSON for target target-id',
+        { context: { targetId: 'target-id', loaderType: 'forge' } },
+      );
+    });
+    const run = vi.fn();
+    const kit = { launch: { compose, run } } as unknown as MinecraftKit;
+    const ops = new Map<ClientSlug, Op>();
+    const managerEnv = env(kit, ops);
+
+    await expect(runLaunch(managerEnv, SLUG, fixture.ctx, account())).resolves.toBeUndefined();
+
+    expect(run).not.toHaveBeenCalled();
+    expect(ops.has(SLUG)).toBe(false);
+    // A disk-only compose failure must offer a repair, not read as a network error.
+    expect(managerEnv.emitError).toHaveBeenCalledWith(
+      SLUG,
+      MinecraftErrorCodes.NOT_INSTALLED,
+      expect.stringContaining('installed version JSON'),
+    );
+    expect(managerEnv.broadcaster.status).toHaveBeenLastCalledWith({
+      slug: SLUG,
+      status: InstallStatuses.INSTALLED,
+      paused: false,
+    });
+    expect(launchMocks.consoleHub.recordSystem).toHaveBeenCalledWith(
+      expect.stringContaining('Launch check failed'),
+      { slug: SLUG },
+    );
+  });
+
+  it('maps a compose runtime kit error to a repairable runtime error', async () => {
+    const fixture = await createLaunchFixture();
+    const compose = vi.fn(async () => {
+      throw new MinecraftKitError(MinecraftKitErrorCodes.RUNTIME_NOT_FOUND, 'runtime missing');
+    });
+    const run = vi.fn();
+    const kit = { launch: { compose, run } } as unknown as MinecraftKit;
+    const ops = new Map<ClientSlug, Op>();
+    const managerEnv = env(kit, ops);
+
+    await expect(runLaunch(managerEnv, SLUG, fixture.ctx, account())).resolves.toBeUndefined();
+
+    expect(run).not.toHaveBeenCalled();
+    expect(managerEnv.emitError).toHaveBeenCalledWith(
+      SLUG,
+      MinecraftErrorCodes.RUNTIME_ERROR,
+      expect.stringContaining('runtime missing'),
+    );
   });
 
   it('adds a launcher HTTP agent before authlib-injector for Yggdrasil sessions', async () => {
