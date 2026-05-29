@@ -1,26 +1,49 @@
+import path from 'node:path';
 import {
+  EventTypes,
   type InstallPlan,
+  Loaders,
   type MinecraftKit,
   MinecraftKitError,
   MinecraftKitErrorCodes,
   type OperationOptions,
   PauseController,
+  type ProgressEvent,
   type RepairPlan,
+  type RepairReport,
   type Target,
+  type VerificationKind,
+  VerificationKinds,
 } from '@loontail/minecraft-kit';
 import type { Context } from '@main/services/minecraft/context';
 import type { ManagerEnv } from '@main/services/minecraft/env';
 import { runInstall } from '@main/services/minecraft/install';
-import { type InstallOp, type Op, OpKinds } from '@main/services/minecraft/ops';
+import { type InstallOp, type Op, OpKinds, type RepairOp } from '@main/services/minecraft/ops';
+import { runRepair } from '@main/services/minecraft/repair';
 import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
-import { InstallStatuses } from '@shared/contracts/minecraft';
+import { InstallStatuses, ProgressStages } from '@shared/contracts/minecraft';
 import { LoaderChoices } from '@shared/contracts/settings';
 import { describe, expect, it, vi } from 'vitest';
 
 const SLUG = asClientSlug('test-client');
 const CLIENT_FOLDER = 'Z:/missing-client-folder';
+const USER_DATA = 'Z:/userData';
+const RUNTIME_COMPONENT = 'java-runtime-gamma';
 
-const emptyTarget = {} as Target;
+const electronMocks = vi.hoisted(() => ({
+  getPath: vi.fn(() => 'Z:/userData'),
+}));
+
+vi.mock('electron', () => ({
+  app: {
+    getPath: electronMocks.getPath,
+  },
+}));
+
+const emptyTarget = {
+  loader: { type: Loaders.VANILLA },
+  runtime: { component: RUNTIME_COMPONENT },
+} as unknown as Target;
 
 const installPlan = (): InstallPlan => ({
   targetId: 'target-id',
@@ -38,6 +61,13 @@ const repairPlan = (): RepairPlan => ({
   actions: [],
   totalBytes: 0,
   totalActions: 0,
+});
+
+const repairReport = (): RepairReport => ({
+  targetId: 'target-id',
+  bytesDownloaded: 0,
+  actionsCompleted: 1,
+  durationMs: 1,
 });
 
 const makeLogger = () => ({
@@ -138,5 +168,56 @@ describe('runInstall smart resume', () => {
       status: InstallStatuses.NOT_INSTALLED,
       paused: false,
     });
+  });
+});
+
+describe('runRepair', () => {
+  it('maps runtime repair progress and refreshes the persisted runtime ref', async () => {
+    const runtimeFile = `${CLIENT_FOLDER}/runtime/${RUNTIME_COMPONENT}/bin/javaw.exe`;
+    const op: RepairOp = { kind: OpKinds.REPAIR, abort: new AbortController() };
+    const kit = {
+      repair: {
+        all: vi.fn(async (_target: Target, options?: OperationOptions) => {
+          const event = {
+            type: EventTypes.VERIFY_FILE_CHECKED,
+            aspect: VerificationKinds.RUNTIME,
+            file: {
+              path: runtimeFile,
+              category: 'runtime-file',
+              status: 'missing',
+            },
+          } satisfies ProgressEvent & { readonly aspect: VerificationKind };
+          options?.onEvent?.(event);
+          return {
+            verifications: [],
+            repairs: new Map([[VerificationKinds.RUNTIME, repairReport()]]),
+            bytesDownloaded: 0,
+            durationMs: 1,
+          };
+        }),
+      },
+    } as unknown as MinecraftKit;
+    const ops = new Map<ClientSlug, Op>([[SLUG, op]]);
+    const env = makeEnv(kit, ops);
+
+    await runRepair(env, SLUG, makeContext(), op);
+
+    expect(env.broadcaster.progress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        slug: SLUG,
+        stage: ProgressStages.RUNTIME,
+        currentFile: runtimeFile,
+      }),
+    );
+    expect(env.persistRuntime).toHaveBeenCalledWith(SLUG, {
+      component: RUNTIME_COMPONENT,
+      path: path.join(USER_DATA, 'runtimes', RUNTIME_COMPONENT),
+    });
+    expect(env.broadcaster.status).toHaveBeenLastCalledWith({
+      slug: SLUG,
+      status: InstallStatuses.INSTALLED,
+      paused: false,
+    });
+    expect(ops.has(SLUG)).toBe(false);
   });
 });
