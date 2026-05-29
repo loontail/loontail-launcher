@@ -13,8 +13,8 @@ import type { ManagerEnv } from './env';
 import { classifyError, errorMessage } from './errors';
 import { repairMissingForgeProcessorOutputs } from './forgeProcessorHealing';
 import { saveCurrentTargetInstallManifest } from './installManifest';
+import { ReadinessPolicyKinds, resolveTargetReadinessPolicy } from './readinessPolicy';
 import { runtimePathFor } from './runtimeFs';
-import { isTargetReady } from './runtimeState';
 
 type RepairOptions = {
   readonly signal: AbortSignal;
@@ -48,9 +48,9 @@ const emitReadinessStatus = async (
   ctx: Context,
   notReadyStatus: typeof InstallStatuses.ERROR | typeof InstallStatuses.NOT_INSTALLED,
 ): Promise<void> => {
-  const status = (await isTargetReady(env.kit, ctx.target))
-    ? InstallStatuses.INSTALLED
-    : notReadyStatus;
+  const readiness = await resolveTargetReadinessPolicy(env.kit, ctx);
+  const status =
+    readiness.kind === ReadinessPolicyKinds.INSTALLED ? InstallStatuses.INSTALLED : notReadyStatus;
   env.emitStatus({ slug, status, paused: false });
 };
 

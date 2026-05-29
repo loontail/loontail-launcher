@@ -556,7 +556,7 @@ describe('runRepair', () => {
     expect(repairSignal).toBe(op.abort.signal);
     expect(env.emitError).not.toHaveBeenCalled();
     expect(env.emitErrorEvent).not.toHaveBeenCalled();
-    expect(targetReady).toHaveBeenCalledTimes(1);
+    expect(targetReady).not.toHaveBeenCalled();
     expect(env.broadcaster.status).toHaveBeenLastCalledWith({
       slug: SLUG,
       status: InstallStatuses.NOT_INSTALLED,

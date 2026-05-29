@@ -23,6 +23,13 @@ const orchestrationMocks = vi.hoisted(() => {
     hasCurrentTargetInstallManifest: vi.fn(),
     isAnythingInstalled: vi.fn(),
     isTargetReady: vi.fn(),
+    readinessKinds: {
+      INSTALLED: 'installed',
+      NEEDS_INSTALL: 'needs-install',
+      NEEDS_REPAIR: 'needs-repair',
+      UNVERIFIED: 'unverified',
+    },
+    resolveTargetReadinessPolicy: vi.fn(),
     runInstall: vi.fn(),
     runLaunch: vi.fn(),
     runRepair: vi.fn(),
@@ -45,6 +52,12 @@ vi.mock('@main/services/minecraft/runtimeState', () => ({
 
 vi.mock('@main/services/minecraft/installManifest', () => ({
   hasCurrentTargetInstallManifest: orchestrationMocks.hasCurrentTargetInstallManifest,
+}));
+
+vi.mock('@main/services/minecraft/readinessPolicy', () => ({
+  ReadinessPolicyKinds: orchestrationMocks.readinessKinds,
+  resolveClientReadinessPolicy: vi.fn(),
+  resolveTargetReadinessPolicy: orchestrationMocks.resolveTargetReadinessPolicy,
 }));
 
 vi.mock('@main/services/settings/settings', () => ({
@@ -126,6 +139,7 @@ const resetMocks = (): void => {
   orchestrationMocks.hasCurrentTargetInstallManifest.mockReset();
   orchestrationMocks.isAnythingInstalled.mockReset();
   orchestrationMocks.isTargetReady.mockReset();
+  orchestrationMocks.resolveTargetReadinessPolicy.mockReset();
   orchestrationMocks.runInstall.mockReset();
   orchestrationMocks.runLaunch.mockReset();
   orchestrationMocks.runRepair.mockReset();
@@ -136,6 +150,11 @@ const resetMocks = (): void => {
   orchestrationMocks.hasCurrentTargetInstallManifest.mockResolvedValue(true);
   orchestrationMocks.isAnythingInstalled.mockResolvedValue(false);
   orchestrationMocks.isTargetReady.mockResolvedValue(true);
+  orchestrationMocks.resolveTargetReadinessPolicy.mockResolvedValue({
+    kind: orchestrationMocks.readinessKinds.INSTALLED,
+    status: InstallStatuses.INSTALLED,
+    freshInstall: false,
+  });
   orchestrationMocks.runInstall.mockResolvedValue(undefined);
   orchestrationMocks.runLaunch.mockResolvedValue(undefined);
   orchestrationMocks.runRepair.mockResolvedValue(true);
@@ -164,11 +183,14 @@ describe('MinecraftManager.startLaunch', () => {
     const broadcaster = makeBroadcaster();
     const ctx = context();
     orchestrationMocks.buildContext.mockResolvedValue(ctx);
-    orchestrationMocks.isTargetReady.mockResolvedValue(false);
+    orchestrationMocks.resolveTargetReadinessPolicy.mockResolvedValue({
+      kind: orchestrationMocks.readinessKinds.NEEDS_REPAIR,
+      status: InstallStatuses.NOT_INSTALLED,
+      freshInstall: true,
+    });
 
     await makeManager(broadcaster).startLaunch(SLUG, account());
 
-    expect(orchestrationMocks.isAnythingInstalled).toHaveBeenCalledWith(CLIENT_FOLDER);
     expect(orchestrationMocks.runInstall).toHaveBeenCalledWith(
       expect.any(Object),
       SLUG,
@@ -191,12 +213,14 @@ describe('MinecraftManager.startLaunch', () => {
     resetMocks();
     const ctx = context();
     orchestrationMocks.buildContext.mockResolvedValue(ctx);
-    orchestrationMocks.hasCurrentTargetInstallManifest.mockResolvedValue(false);
-    orchestrationMocks.isAnythingInstalled.mockResolvedValue(true);
+    orchestrationMocks.resolveTargetReadinessPolicy.mockResolvedValue({
+      kind: orchestrationMocks.readinessKinds.NEEDS_INSTALL,
+      status: InstallStatuses.NOT_INSTALLED,
+      freshInstall: false,
+    });
 
     await makeManager().startLaunch(SLUG, account());
 
-    expect(orchestrationMocks.isTargetReady).not.toHaveBeenCalled();
     expect(orchestrationMocks.runInstall).toHaveBeenCalledWith(
       expect.any(Object),
       SLUG,

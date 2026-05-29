@@ -10,6 +10,7 @@ const statusMocks = vi.hoisted(() => {
     hasCurrentTargetInstallManifest: vi.fn(),
     isAnythingInstalled: vi.fn(),
     isTargetReady: vi.fn(),
+    resolveClientReadinessPolicy: vi.fn(),
     setClientOverride: vi.fn(),
   };
 });
@@ -29,6 +30,17 @@ vi.mock('@main/services/minecraft/runtimeState', () => ({
 
 vi.mock('@main/services/minecraft/installManifest', () => ({
   hasCurrentTargetInstallManifest: statusMocks.hasCurrentTargetInstallManifest,
+}));
+
+vi.mock('@main/services/minecraft/readinessPolicy', () => ({
+  ReadinessPolicyKinds: {
+    INSTALLED: 'installed',
+    NEEDS_INSTALL: 'needs-install',
+    NEEDS_REPAIR: 'needs-repair',
+    UNVERIFIED: 'unverified',
+  },
+  resolveClientReadinessPolicy: statusMocks.resolveClientReadinessPolicy,
+  resolveTargetReadinessPolicy: vi.fn(),
 }));
 
 vi.mock('@main/services/settings/settings', () => ({
@@ -72,12 +84,18 @@ const resetStatusMocks = (): void => {
   statusMocks.hasCurrentTargetInstallManifest.mockReset();
   statusMocks.isAnythingInstalled.mockReset();
   statusMocks.isTargetReady.mockReset();
+  statusMocks.resolveClientReadinessPolicy.mockReset();
   statusMocks.setClientOverride.mockReset();
 
   statusMocks.getSettings.mockReturnValue(launcherSettings());
   statusMocks.hasCurrentTargetInstallManifest.mockResolvedValue(true);
   statusMocks.isAnythingInstalled.mockResolvedValue(false);
   statusMocks.isTargetReady.mockResolvedValue(true);
+  statusMocks.resolveClientReadinessPolicy.mockResolvedValue({
+    kind: 'installed',
+    status: InstallStatuses.INSTALLED,
+    freshInstall: false,
+  });
 };
 
 describe('MinecraftManager.getStatus', () => {
@@ -87,14 +105,17 @@ describe('MinecraftManager.getStatus', () => {
       target: {} as Target,
       clientFolder: CLIENT_FOLDER,
     });
-    statusMocks.isTargetReady.mockResolvedValue(false);
-    statusMocks.isAnythingInstalled.mockResolvedValue(true);
+    statusMocks.resolveClientReadinessPolicy.mockResolvedValue({
+      kind: 'needs-repair',
+      status: InstallStatuses.NOT_INSTALLED,
+      freshInstall: false,
+    });
 
     await expect(makeManager().getStatus(SLUG)).resolves.toEqual({
       status: InstallStatuses.NOT_INSTALLED,
       paused: false,
     });
-    expect(statusMocks.isAnythingInstalled).not.toHaveBeenCalled();
+    expect(statusMocks.resolveClientReadinessPolicy).toHaveBeenCalledWith(expect.any(Object), SLUG);
   });
 
   it('reports not-installed without readiness verification when the target manifest is stale', async () => {
@@ -103,32 +124,41 @@ describe('MinecraftManager.getStatus', () => {
       target: {} as Target,
       clientFolder: CLIENT_FOLDER,
     });
-    statusMocks.hasCurrentTargetInstallManifest.mockResolvedValue(false);
+    statusMocks.resolveClientReadinessPolicy.mockResolvedValue({
+      kind: 'needs-install',
+      status: InstallStatuses.NOT_INSTALLED,
+      freshInstall: true,
+    });
 
     await expect(makeManager().getStatus(SLUG)).resolves.toEqual({
       status: InstallStatuses.NOT_INSTALLED,
       paused: false,
     });
-    expect(statusMocks.isTargetReady).not.toHaveBeenCalled();
-    expect(statusMocks.isAnythingInstalled).not.toHaveBeenCalled();
   });
 
   it('reports unverified when target context cannot be built but old files exist', async () => {
     resetStatusMocks();
-    statusMocks.buildContext.mockRejectedValue(new Error('Client not available'));
-    statusMocks.isAnythingInstalled.mockResolvedValue(true);
+    statusMocks.resolveClientReadinessPolicy.mockResolvedValue({
+      kind: 'unverified',
+      status: InstallStatuses.UNVERIFIED,
+      hasLegacyInstall: true,
+      freshInstall: false,
+    });
 
     await expect(makeManager().getStatus(SLUG)).resolves.toEqual({
       status: InstallStatuses.UNVERIFIED,
       paused: false,
     });
-    expect(statusMocks.isAnythingInstalled).toHaveBeenCalledWith(CLIENT_FOLDER);
   });
 
   it('reports not-installed when target context cannot be built and no files exist', async () => {
     resetStatusMocks();
-    statusMocks.buildContext.mockRejectedValue(new Error('Client not available'));
-    statusMocks.isAnythingInstalled.mockResolvedValue(false);
+    statusMocks.resolveClientReadinessPolicy.mockResolvedValue({
+      kind: 'unverified',
+      status: InstallStatuses.NOT_INSTALLED,
+      hasLegacyInstall: false,
+      freshInstall: true,
+    });
 
     await expect(makeManager().getStatus(SLUG)).resolves.toEqual({
       status: InstallStatuses.NOT_INSTALLED,

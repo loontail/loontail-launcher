@@ -28,11 +28,15 @@ import { buildContext } from './context';
 import type { ManagerEnv } from './env';
 import { ManagerError } from './errors';
 import { beginInstall, runInstall } from './install';
-import { hasCurrentTargetInstallManifest } from './installManifest';
 import { requireAccount, runLaunch } from './launch';
 import { OP_TO_STATUS, type Op, OpKinds, type RepairOp } from './ops';
+import {
+  ReadinessPolicyKinds,
+  resolveClientReadinessPolicy,
+  resolveTargetReadinessPolicy,
+} from './readinessPolicy';
 import { runRepair } from './repair';
-import { isAnythingInstalled, isTargetReady } from './runtimeState';
+import { isAnythingInstalled } from './runtimeState';
 import { runUninstall } from './uninstall';
 
 const logger = scopedLogger('minecraft');
@@ -105,27 +109,9 @@ export class MinecraftManager {
         paused: false,
       };
     }
-    try {
-      const ctx = await buildContext(this.kit, slug);
-      if (!(await hasCurrentTargetInstallManifest(ctx.clientFolder, ctx.target))) {
-        return {
-          status: InstallStatuses.NOT_INSTALLED,
-          paused: false,
-        };
-      }
-      return {
-        status: (await isTargetReady(this.kit, ctx.target))
-          ? InstallStatuses.INSTALLED
-          : InstallStatuses.NOT_INSTALLED,
-        paused: false,
-      };
-    } catch {
-      // Status seeding must tolerate settings or clients that cannot build a target yet.
-    }
-    const folder = this.clientFolderOrNull(slug);
-    const installed = folder ? await isAnythingInstalled(folder) : false;
+    const readiness = await resolveClientReadinessPolicy(this.kit, slug);
     return {
-      status: installed ? InstallStatuses.UNVERIFIED : InstallStatuses.NOT_INSTALLED,
+      status: readiness.status,
       paused: false,
     };
   }
@@ -244,13 +230,13 @@ export class MinecraftManager {
     this.requireIdle(slug);
     const ctx = await buildContext(this.kit, slug);
     const checkedAccount = requireAccount(account);
-    const hasInstallManifest = await hasCurrentTargetInstallManifest(ctx.clientFolder, ctx.target);
+    const readiness = await resolveTargetReadinessPolicy(this.kit, ctx);
 
-    if (!hasInstallManifest || !(await isTargetReady(this.kit, ctx.target))) {
+    if (readiness.kind !== ReadinessPolicyKinds.INSTALLED) {
       logger.info(`[${slug}] play: target install not current or not ready - installing first`);
       const lock = this.acquireWriteLock(slug);
       const op = beginInstall(this.env, slug, ctx, {
-        fresh: !(await isAnythingInstalled(ctx.clientFolder)),
+        fresh: readiness.freshInstall,
       });
       lock.setCancel(() => this.cancel(slug));
       try {
@@ -310,10 +296,6 @@ export class MinecraftManager {
         this.cancel(slug);
       }
     }
-  }
-
-  private clientFolderOrNull(slug: ClientSlug): string | null {
-    return resolveClientSettings(getSettings(), slug).storage.clientFolder || null;
   }
 
   private requireIdle(slug: ClientSlug): void {
