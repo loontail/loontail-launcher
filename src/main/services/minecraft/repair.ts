@@ -7,23 +7,22 @@ import {
   VerifyFileCategories,
   type VerifyFileCategory,
 } from '@loontail/minecraft-kit';
-import { loadLocalManifest } from '@main/services/bundle/manifestRepo';
 import type { ClientSlug } from '@shared/contracts/ids';
 import {
-  InstallStatuses,
   type MinecraftProgressEvent,
   type ProgressStage,
   ProgressStages,
 } from '@shared/contracts/minecraft';
-import { repairAllExceptBundle } from './bundleHealing';
 import type { Context } from './context';
 import type { ManagerEnv } from './env';
-import { classifyError, errorMessage } from './errors';
-import { repairMissingForgeProcessorOutputs } from './forgeProcessorHealing';
-import { saveCurrentTargetInstallManifest } from './installManifest';
 import type { RepairOp } from './ops';
-import { runtimePathFor } from './runtimeFs';
-import { isTargetReady } from './runtimeState';
+import {
+  finalizeRepairCancellation,
+  finalizeRepairFailure,
+  finalizeRepairSuccess,
+  healForgeProcessors,
+  verifyAndRepairBase,
+} from './repairWorkflow';
 
 const PROGRESS_THROTTLE_MS = 100;
 const PROGRESS_STAGE_FOR_ASPECT: Record<VerificationKind, ProgressStage> = {
@@ -173,38 +172,6 @@ const createRepairProgressListener = (
   };
 };
 
-const loadBundleOwnedPaths = async (ctx: Context): Promise<ReadonlySet<string> | null> => {
-  const bundleSlug = ctx.client.bundleSlug ?? null;
-  if (bundleSlug === null) return null;
-  const manifest = await loadLocalManifest(ctx.clientFolder);
-  if (manifest?.bundleSlug !== bundleSlug) return null;
-  return new Set(Object.keys(manifest.files));
-};
-
-const emitReadinessStatus = async (
-  env: ManagerEnv,
-  slug: ClientSlug,
-  ctx: Context,
-  notReadyStatus: typeof InstallStatuses.ERROR | typeof InstallStatuses.NOT_INSTALLED,
-): Promise<void> => {
-  const status = (await isTargetReady(env.kit, ctx.target))
-    ? InstallStatuses.INSTALLED
-    : notReadyStatus;
-  env.emitStatus({ slug, status, paused: false });
-};
-
-const persistTargetInstallManifest = async (
-  env: ManagerEnv,
-  slug: ClientSlug,
-  ctx: Context,
-): Promise<void> => {
-  try {
-    await saveCurrentTargetInstallManifest(ctx.clientFolder, ctx.target);
-  } catch (error) {
-    env.logger.warn(`[${slug}] repair: failed to persist target install manifest`, error);
-  }
-};
-
 export const runRepair = async (
   env: ManagerEnv,
   slug: ClientSlug,
@@ -218,60 +185,16 @@ export const runRepair = async (
       signal: op.abort.signal,
       onEvent: progress.onEvent,
     };
-    const bundleOwnedPaths = await loadBundleOwnedPaths(ctx);
-    const report =
-      bundleOwnedPaths === null
-        ? await env.kit.repair.all(ctx.target, repairOptions)
-        : (
-            await repairAllExceptBundle(
-              env.kit,
-              {
-                slug,
-                clientFolder: ctx.clientFolder,
-                target: ctx.target,
-              },
-              bundleOwnedPaths,
-              repairOptions,
-            )
-          ).report;
-    const broken = [...report.repairs.keys()];
-    env.logger.info(
-      broken.length === 0
-        ? `[${slug}] repair: clean`
-        : `[${slug}] repair: fixed ${broken.join(', ')}`,
-    );
-
-    // Forge processor outputs (srg/extra/forge-client jars) are NOT declared
-    // libraries, so kit.verify.forge can't see them and kit.repair.all skips
-    // them. Re-run only the processors whose outputs are missing on disk.
-    const processorOutcome = await repairMissingForgeProcessorOutputs(
-      env.kit,
-      slug,
-      ctx.target,
-      op.abort.signal,
-    );
-    if (processorOutcome.ranProcessors) {
-      env.logger.info(`[${slug}] repair: re-ran ${processorOutcome.reranCount} forge processor(s)`);
-    }
-
-    env.persistRuntime(slug, {
-      component: ctx.target.runtime.component,
-      path: runtimePathFor(ctx.target.runtime.component),
-    });
-    await persistTargetInstallManifest(env, slug, ctx);
-    env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
+    await verifyAndRepairBase(env, slug, ctx, repairOptions);
+    await healForgeProcessors(env, slug, ctx, op.abort.signal);
+    await finalizeRepairSuccess(env, slug, ctx);
     return true;
   } catch (error) {
     if (op.abort.signal.aborted) {
-      env.logger.info(`[${slug}] repair: cancelled`);
-      await emitReadinessStatus(env, slug, ctx, InstallStatuses.NOT_INSTALLED);
+      await finalizeRepairCancellation(env, slug, ctx);
       return false;
     }
-    const code = classifyError(error, op.abort.signal);
-    const message = errorMessage(error);
-    env.logger.error(`[${slug}] repair: failed (${code}) - ${message}`, error);
-    env.emitError(slug, code, message);
-    await emitReadinessStatus(env, slug, ctx, InstallStatuses.ERROR);
+    await finalizeRepairFailure({ env, slug, ctx, error, signal: op.abort.signal });
     return false;
   } finally {
     progress.dispose();

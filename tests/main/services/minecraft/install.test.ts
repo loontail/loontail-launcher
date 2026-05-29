@@ -426,16 +426,19 @@ describe('runRepair', () => {
   it('does not emit an error event when repair cancellation leaves the target not ready', async () => {
     const cancelError = new MinecraftKitError(MinecraftKitErrorCodes.NETWORK_ABORTED, 'Cancelled');
     const op: RepairOp = { kind: OpKinds.REPAIR, abort: new AbortController() };
+    let repairSignal: AbortSignal | undefined;
+    const targetReady = vi.fn(async () => ({ isReady: false }));
     const kit = {
       repair: {
-        all: vi.fn(async () => {
+        all: vi.fn(async (_target: Target, options?: OperationOptions) => {
+          repairSignal = options?.signal;
           op.abort.abort();
           throw cancelError;
         }),
       },
       verify: {
         targetReady: {
-          run: vi.fn(async () => ({ isReady: false })),
+          run: targetReady,
         },
       },
     } as unknown as MinecraftKit;
@@ -444,7 +447,14 @@ describe('runRepair', () => {
 
     await runRepair(env, SLUG, makeContext(), op);
 
+    expect(kit.repair.all).toHaveBeenCalledWith(
+      emptyTarget,
+      expect.objectContaining({ signal: op.abort.signal, onEvent: expect.any(Function) }),
+    );
+    expect(repairSignal).toBe(op.abort.signal);
     expect(env.emitError).not.toHaveBeenCalled();
+    expect(env.emitErrorEvent).not.toHaveBeenCalled();
+    expect(targetReady).toHaveBeenCalledTimes(1);
     expect(env.broadcaster.status).toHaveBeenLastCalledWith({
       slug: SLUG,
       status: InstallStatuses.NOT_INSTALLED,
