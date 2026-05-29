@@ -15,6 +15,7 @@ import { scopedLogger } from '@main/infra/logger';
 import type { ClientSlug } from '@shared/contracts/ids';
 
 const logger = scopedLogger('forge.processors');
+const forgeProcessorActionsCache = new Map<string, readonly RunForgeProcessorAction[]>();
 
 export type ProcessorHealOutcome = {
   // True when target was Forge and at least one missing/wrong output was repaired.
@@ -26,6 +27,38 @@ export type ProcessorHealOutcome = {
 export type ProcessorHealOptions = {
   readonly signal?: AbortSignal;
   readonly runPlan?: (plan: InstallPlan) => Promise<void>;
+};
+
+const forgeProcessorCacheKey = (target: Target): string | null => {
+  if (target.loader.type !== Loaders.FORGE) return null;
+  return JSON.stringify([
+    target.directory,
+    target.minecraft.version,
+    target.loader.fullVersion,
+    target.loader.installerUrl,
+  ]);
+};
+
+const isForgePlanTarget = (target: InstallPlan['target']): target is Target =>
+  target.loader?.type === Loaders.FORGE;
+
+const processorActionsFrom = (
+  actions: readonly InstallAction[],
+): readonly RunForgeProcessorAction[] =>
+  actions.filter(
+    (action): action is RunForgeProcessorAction =>
+      action.kind === InstallActionKinds.RUN_FORGE_PROCESSOR,
+  );
+
+export const rememberForgeProcessorActions = (plan: InstallPlan): void => {
+  if (!isForgePlanTarget(plan.target)) return;
+  const key = forgeProcessorCacheKey(plan.target);
+  if (key === null) return;
+  forgeProcessorActionsCache.set(key, processorActionsFrom(plan.actions));
+};
+
+export const clearForgeProcessorActionCache = (): void => {
+  forgeProcessorActionsCache.clear();
 };
 
 const sha1OfFile = async (filePath: string): Promise<string | null> => {
@@ -64,6 +97,16 @@ const processorOutputsOk = async (action: RunForgeProcessorAction): Promise<bool
   return true;
 };
 
+const brokenProcessorIndices = async (
+  processors: readonly RunForgeProcessorAction[],
+): Promise<ReadonlySet<number>> => {
+  const brokenIndices = new Set<number>();
+  for (const action of processors) {
+    if (!(await processorOutputsOk(action))) brokenIndices.add(action.index);
+  }
+  return brokenIndices;
+};
+
 // kit.verify.forge only inspects libraries declared in the Forge version JSON,
 // so processor outputs (e.g. <mc>-srg.jar, <mc>-extra.jar, forge-<v>-client.jar)
 // slip through — they're generated, not downloaded. This walks the install plan
@@ -80,20 +123,27 @@ export const repairMissingForgeProcessorOutputs = async (
     return { ranProcessors: false, reranCount: 0 };
   }
 
+  const cacheKey = forgeProcessorCacheKey(target);
+  const cachedProcessors = cacheKey === null ? undefined : forgeProcessorActionsCache.get(cacheKey);
+  if (cachedProcessors !== undefined) {
+    const cachedBrokenIndices = await brokenProcessorIndices(cachedProcessors);
+    if (cachedBrokenIndices.size === 0) {
+      logger.info(
+        `[${slug}] processor outputs clean from cache (checked ${cachedProcessors.length})`,
+      );
+      return { ranProcessors: false, reranCount: 0 };
+    }
+  }
+
   const plan = await kit.install.plan(
     target,
     options.signal ? { signal: options.signal } : undefined,
   );
-  const processors = plan.actions.filter(
-    (action): action is RunForgeProcessorAction =>
-      action.kind === InstallActionKinds.RUN_FORGE_PROCESSOR,
-  );
+  rememberForgeProcessorActions(plan);
+  const processors = processorActionsFrom(plan.actions);
   if (processors.length === 0) return { ranProcessors: false, reranCount: 0 };
 
-  const brokenIndices = new Set<number>();
-  for (const action of processors) {
-    if (!(await processorOutputsOk(action))) brokenIndices.add(action.index);
-  }
+  const brokenIndices = await brokenProcessorIndices(processors);
 
   if (brokenIndices.size === 0) {
     logger.info(`[${slug}] processor outputs clean (checked ${processors.length})`);

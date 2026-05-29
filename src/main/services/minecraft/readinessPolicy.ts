@@ -8,6 +8,7 @@ import type { Context } from './context';
 import { hasCurrentTargetInstallManifest } from './installManifest';
 import {
   type TargetInstallState,
+  type TargetInstallStateOptions,
   getTargetInstallState,
   isAnythingInstalled,
   isMinecraftTargetReady,
@@ -69,6 +70,7 @@ const legacyInstallFreshness = async (clientFolder: string): Promise<boolean> =>
 export const resolveTargetReadinessPolicy = async (
   kit: MinecraftKit,
   ctx: Context,
+  options: TargetInstallStateOptions = {},
 ): Promise<TargetReadinessPolicyResult> => {
   const hasCurrentManifest = await hasCurrentTargetInstallManifest(ctx.clientFolder, ctx.target);
   if (!hasCurrentManifest) {
@@ -82,7 +84,7 @@ export const resolveTargetReadinessPolicy = async (
     };
   }
 
-  const targetState = await getTargetInstallState(kit, ctx.target);
+  const targetState = await getTargetInstallState(kit, ctx.target, options);
   if (isMinecraftTargetReady(targetState)) {
     return {
       kind: ReadinessPolicyKinds.INSTALLED,

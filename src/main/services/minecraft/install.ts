@@ -5,11 +5,12 @@ import { InstallStatuses } from '@shared/contracts/minecraft';
 import type { Context } from './context';
 import type { ManagerEnv } from './env';
 import { classifyError, errorMessage, tryAsSmartResumeError } from './errors';
+import { rememberForgeProcessorActions } from './forgeProcessorHealing';
 import { saveCurrentTargetInstallManifest } from './installManifest';
 import { type InstallOp, OpKinds } from './ops';
 import { createPlannedProgressAdapter, runWithProgressAdapter } from './progressAdapter';
 import { runtimePathFor } from './runtimeFs';
-import { isAnythingInstalled } from './runtimeState';
+import { invalidateRuntimeVerification, isAnythingInstalled } from './runtimeState';
 import { isUnderClientsRoot } from './uninstall';
 
 export const beginInstall = (
@@ -98,6 +99,7 @@ const tryInstall = async (
   op: InstallOp,
 ): Promise<void> => {
   const plan = await env.kit.install.plan(ctx.target, { signal: op.abort.signal });
+  rememberForgeProcessorActions(plan);
   env.logger.info(
     `[${slug}] install: plan ready — ${plan.totalActions} actions, ${plan.totalBytes} bytes`,
   );
@@ -201,6 +203,7 @@ export const runInstall = async (
     await handleInstallFailure(env, slug, ctx, op, error);
     throw error;
   } finally {
+    invalidateRuntimeVerification(ctx.target);
     env.ops.delete(slug);
   }
 };

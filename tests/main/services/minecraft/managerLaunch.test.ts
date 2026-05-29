@@ -46,6 +46,10 @@ vi.mock('@main/services/minecraft/context', () => ({
 }));
 
 vi.mock('@main/services/minecraft/runtimeState', () => ({
+  RuntimeVerificationCacheModes: {
+    USE: 'use',
+    BYPASS: 'bypass',
+  },
   isAnythingInstalled: orchestrationMocks.isAnythingInstalled,
   isTargetReady: orchestrationMocks.isTargetReady,
 }));
@@ -170,6 +174,11 @@ describe('MinecraftManager.startLaunch', () => {
     await makeManager().startLaunch(SLUG, currentAccount);
 
     expect(orchestrationMocks.runInstall).not.toHaveBeenCalled();
+    expect(orchestrationMocks.resolveTargetReadinessPolicy).toHaveBeenCalledWith(
+      expect.any(Object),
+      ctx,
+      { runtimeVerificationCache: 'bypass' },
+    );
     expect(orchestrationMocks.runLaunch).toHaveBeenCalledWith(
       expect.any(Object),
       SLUG,

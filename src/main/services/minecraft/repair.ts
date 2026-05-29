@@ -15,6 +15,7 @@ import {
   healForgeProcessors,
   verifyAndRepairBase,
 } from './repairWorkflow';
+import { invalidateRuntimeVerification } from './runtimeState';
 
 export const runRepair = async (
   env: ManagerEnv,
@@ -24,6 +25,7 @@ export const runRepair = async (
 ): Promise<boolean> => {
   const progress = createRepairProgressAdapter(env, slug);
   try {
+    invalidateRuntimeVerification(ctx.target);
     env.logger.info(`[${slug}] repair: verifying & fixing…`);
     const repairOptions = {
       signal: op.abort.signal,
@@ -51,6 +53,7 @@ export const runRepair = async (
     await finalizeRepairFailure({ env, slug, ctx, error, signal: op.abort.signal });
     return false;
   } finally {
+    invalidateRuntimeVerification(ctx.target);
     progress.dispose();
     env.ops.delete(slug);
   }

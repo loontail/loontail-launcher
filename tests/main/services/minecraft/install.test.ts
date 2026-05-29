@@ -56,8 +56,15 @@ vi.mock('electron', () => ({
 }));
 
 const emptyTarget = {
+  id: 'target-id',
+  directory: CLIENT_FOLDER,
+  minecraft: { version: '1.20.1' },
   loader: { type: Loaders.VANILLA },
-  runtime: { component: RUNTIME_COMPONENT },
+  runtime: {
+    component: RUNTIME_COMPONENT,
+    manifestSha1: 'runtime-manifest-sha1',
+    platformKey: 'windows-x64',
+  },
 } as unknown as Target;
 
 const installPlan = (): InstallPlan => ({

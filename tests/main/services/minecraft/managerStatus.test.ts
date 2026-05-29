@@ -24,6 +24,10 @@ vi.mock('@main/services/minecraft/context', () => ({
 }));
 
 vi.mock('@main/services/minecraft/runtimeState', () => ({
+  RuntimeVerificationCacheModes: {
+    USE: 'use',
+    BYPASS: 'bypass',
+  },
   isAnythingInstalled: statusMocks.isAnythingInstalled,
   isTargetReady: statusMocks.isTargetReady,
 }));

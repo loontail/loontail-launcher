@@ -8,6 +8,7 @@ import {
   VerificationKinds,
   type VerificationResult,
   type VerifyOperationOptions,
+  targetPaths,
 } from '@loontail/minecraft-kit';
 
 const VERSIONS_DIR = 'versions';
@@ -21,6 +22,18 @@ type TargetReadyVerifier = {
 type TargetReadinessReport = {
   readonly isReady: boolean;
   readonly verifications?: readonly VerificationResult[];
+};
+
+export const RuntimeVerificationCacheModes = {
+  USE: 'use',
+  BYPASS: 'bypass',
+} as const;
+
+export type RuntimeVerificationCacheMode =
+  (typeof RuntimeVerificationCacheModes)[keyof typeof RuntimeVerificationCacheModes];
+
+export type TargetInstallStateOptions = {
+  readonly runtimeVerificationCache?: RuntimeVerificationCacheMode;
 };
 
 export const InstallReadinessStates = {
@@ -38,6 +51,24 @@ export type TargetInstallState = {
   readonly runtime: InstallReadinessState;
   readonly loader: InstallReadinessState;
   readonly bundle: InstallReadinessState;
+};
+
+const runtimeVerificationCache = new Map<string, Promise<VerificationResult>>();
+
+const runtimeVerificationCacheKey = (target: Target): string =>
+  JSON.stringify([
+    target.runtime.component,
+    target.runtime.manifestSha1,
+    target.runtime.platformKey,
+    targetPaths.runtimeRoot(target.directory, target.runtime.component, target.runtime.installRoot),
+  ]);
+
+export const invalidateRuntimeVerification = (target: Target): void => {
+  runtimeVerificationCache.delete(runtimeVerificationCacheKey(target));
+};
+
+export const clearRuntimeVerificationCache = (): void => {
+  runtimeVerificationCache.clear();
 };
 
 // Legacy fallback scan: the durable install manifest is the fast current-target
@@ -67,13 +98,17 @@ export const isAnythingInstalled = async (clientFolder: string): Promise<boolean
 export const getTargetInstallState = async (
   kit: MinecraftKit,
   target: Target,
+  options: TargetInstallStateOptions = {},
 ): Promise<TargetInstallState> => {
   try {
     const verifier = kit.verify as MinecraftKit['verify'] & TargetReadyVerifier;
-    if (verifier.targetReady !== undefined) {
+    if (
+      options.runtimeVerificationCache === RuntimeVerificationCacheModes.BYPASS &&
+      verifier.targetReady !== undefined
+    ) {
       return targetInstallStateFromReadiness(target, await verifier.targetReady.run(target));
     }
-    const results = await verifyTargetAspects(kit, target);
+    const results = await verifyTargetAspects(kit, target, options);
     return targetInstallStateFromResults(target, results);
   } catch {
     return {
@@ -88,8 +123,11 @@ export const getTargetInstallState = async (
 };
 
 // "Ready" = the kit can verify every launch-critical aspect for this target.
-export const isTargetReady = async (kit: MinecraftKit, target: Target): Promise<boolean> =>
-  isMinecraftTargetReady(await getTargetInstallState(kit, target));
+export const isTargetReady = async (
+  kit: MinecraftKit,
+  target: Target,
+  options: TargetInstallStateOptions = {},
+): Promise<boolean> => isMinecraftTargetReady(await getTargetInstallState(kit, target, options));
 
 export const isMinecraftTargetReady = (state: TargetInstallState): boolean =>
   state.minecraft === InstallReadinessStates.READY &&
@@ -100,14 +138,39 @@ export const isMinecraftTargetReady = (state: TargetInstallState): boolean =>
 const verifyTargetAspects = async (
   kit: MinecraftKit,
   target: Target,
+  options: TargetInstallStateOptions,
 ): Promise<readonly VerificationResult[]> => {
-  const results = [await kit.verify.minecraft.run(target), await kit.verify.runtime.run(target)];
+  const results = [
+    await kit.verify.minecraft.run(target),
+    await verifyRuntimeWithCache(kit, target, options),
+  ];
   if (target.loader.type === Loaders.FABRIC) {
     results.push(await kit.verify.fabric.run(target));
   } else if (target.loader.type === Loaders.FORGE) {
     results.push(await kit.verify.forge.run(target));
   }
   return results;
+};
+
+const verifyRuntimeWithCache = (
+  kit: MinecraftKit,
+  target: Target,
+  options: TargetInstallStateOptions,
+): Promise<VerificationResult> => {
+  if (options.runtimeVerificationCache === RuntimeVerificationCacheModes.BYPASS) {
+    return kit.verify.runtime.run(target);
+  }
+
+  const key = runtimeVerificationCacheKey(target);
+  const cached = runtimeVerificationCache.get(key);
+  if (cached) return cached;
+
+  const verification = kit.verify.runtime.run(target).catch((error: unknown) => {
+    runtimeVerificationCache.delete(key);
+    throw error;
+  });
+  runtimeVerificationCache.set(key, verification);
+  return verification;
 };
 
 const targetInstallStateFromReadiness = (

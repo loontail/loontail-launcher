@@ -36,7 +36,7 @@ import {
   resolveTargetReadinessPolicy,
 } from './readinessPolicy';
 import { runRepair } from './repair';
-import { isAnythingInstalled } from './runtimeState';
+import { RuntimeVerificationCacheModes, isAnythingInstalled } from './runtimeState';
 import { runUninstall } from './uninstall';
 
 const logger = scopedLogger('minecraft');
@@ -230,7 +230,9 @@ export class MinecraftManager {
     this.requireIdle(slug);
     const ctx = await buildContext(this.kit, slug);
     const checkedAccount = requireAccount(account);
-    const readiness = await resolveTargetReadinessPolicy(this.kit, ctx);
+    const readiness = await resolveTargetReadinessPolicy(this.kit, ctx, {
+      runtimeVerificationCache: RuntimeVerificationCacheModes.BYPASS,
+    });
 
     if (readiness.kind !== ReadinessPolicyKinds.INSTALLED) {
       logger.info(`[${slug}] play: target install not current or not ready - installing first`);
