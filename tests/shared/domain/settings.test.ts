@@ -3,6 +3,7 @@ import { LoaderChoices } from '@shared/contracts/settings';
 import type { LauncherSettings } from '@shared/contracts/settings';
 import {
   clearClientOverrides,
+  clearStaleClientRuntimeRef,
   defaultLauncherSettings,
   hasClientOverrides,
   joinClientFolder,
@@ -250,6 +251,34 @@ describe('setClientOverride / clearClientOverrides', () => {
   it('is a no-op when the slug has no override', () => {
     const settings = baseSettings();
     expect(clearClientOverrides(settings, slug)).toBe(settings);
+  });
+
+  it('clears a stale runtime ref when the target component changes', () => {
+    const settings: LauncherSettings = {
+      ...baseSettings(),
+      clients: {
+        [slug]: {
+          runtime: { component: 'java-runtime-gamma', path: '/jdk/gamma' },
+          memory: { allocatedRamMb: 4096 },
+        },
+      },
+    };
+    const next = clearStaleClientRuntimeRef(settings, slug, 'java-runtime-delta');
+
+    expect(next.clients[slug]).toEqual({ memory: { allocatedRamMb: 4096 } });
+  });
+
+  it('keeps a runtime ref when the target component still matches', () => {
+    const settings: LauncherSettings = {
+      ...baseSettings(),
+      clients: {
+        [slug]: {
+          runtime: { component: 'java-runtime-gamma', path: '/jdk/gamma' },
+        },
+      },
+    };
+
+    expect(clearStaleClientRuntimeRef(settings, slug, 'java-runtime-gamma')).toBe(settings);
   });
 });
 

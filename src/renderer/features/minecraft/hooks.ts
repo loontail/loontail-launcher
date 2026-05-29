@@ -1,12 +1,14 @@
+import { QUERY_KEYS } from '@shared/constants';
 import type { ClientSlug } from '@shared/contracts/ids';
 import type { LoaderChoice } from '@shared/contracts/settings';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import * as api from './api';
 import { type ClientRuntimeState, selectClient, useMinecraftStore } from './store';
 
 export const useClientStatus = (slug: ClientSlug | null | undefined): ClientRuntimeState => {
   const state = useMinecraftStore(selectClient(slug));
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!slug) return;
@@ -18,12 +20,13 @@ export const useClientStatus = (slug: ClientSlug | null | undefined): ClientRunt
       .then((data) => {
         if (useMinecraftStore.getState().entries[slug]) return;
         useMinecraftStore.getState().patch(slug, data);
+        void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.settings.root });
       })
       .catch((error: unknown) => {
         // biome-ignore lint/suspicious/noConsole: best-effort seed — main logger unreachable from renderer
         console.warn('[minecraft] failed to seed status', error);
       });
-  }, [slug]);
+  }, [queryClient, slug]);
 
   return state;
 };

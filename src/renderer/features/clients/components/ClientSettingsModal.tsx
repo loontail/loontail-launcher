@@ -15,6 +15,7 @@ import {
 import { Button } from '@renderer/shared/ui/Button';
 import { Modal } from '@renderer/shared/ui/Modal';
 import type { Client } from '@shared/contracts/client';
+import { InstallStatuses } from '@shared/contracts/minecraft';
 import { X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -93,6 +94,13 @@ export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsM
   };
   const loaderOverridden = settings.clients[slug]?.loader !== undefined;
   const hasAnyOverride = Object.values(resolved.diff).some(Boolean) || loaderOverridden;
+  const expectedRuntimeComponent = client.runtimeVersion?.trim() || null;
+  const currentRuntime =
+    runtimeState.status === InstallStatuses.INSTALLED &&
+    resolved.runtime &&
+    (expectedRuntimeComponent === null || resolved.runtime.component === expectedRuntimeComponent)
+      ? resolved.runtime
+      : null;
 
   return (
     <Modal
@@ -163,7 +171,7 @@ export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsM
           onSwitchLoader={(loader) => setClientOverride({ slug, patch: { loader } })}
         />
 
-        {resolved.runtime && <ClientRuntimeSection runtime={resolved.runtime} />}
+        {currentRuntime && <ClientRuntimeSection runtime={currentRuntime} />}
 
         <ClientActionsSection
           status={runtimeState.status}

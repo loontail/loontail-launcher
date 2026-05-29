@@ -9,7 +9,7 @@ import type { ClientSlug } from '@shared/contracts/ids';
 import { MinecraftErrorCodes } from '@shared/contracts/minecraft';
 import type { LoaderChoice } from '@shared/contracts/settings';
 import { isLoaderAvailable } from '@shared/domain/loader';
-import { resolveClientSettings } from '@shared/domain/settings';
+import { clearStaleClientRuntimeRef, resolveClientSettings } from '@shared/domain/settings';
 import { ManagerError } from './errors';
 import { getRuntimeRoot } from './runtimeFs';
 import { clientToTargetInput, resolveLoader } from './target';
@@ -35,7 +35,7 @@ export const buildContext = async (
   }
 
   const settings = getSettings();
-  const resolved = resolveClientSettings(settings, slug);
+  let resolved = resolveClientSettings(settings, slug);
   if (!resolved.storage.clientFolder) {
     throw new ManagerError(
       MinecraftErrorCodes.NO_CLIENT_FOLDER,
@@ -69,6 +69,15 @@ export const buildContext = async (
       loader: resolution.loader,
     }),
   );
+  const runtimeCheckedSettings = clearStaleClientRuntimeRef(
+    settings,
+    slug,
+    target.runtime.component,
+  );
+  if (runtimeCheckedSettings !== settings) {
+    const persistedSettings = persistClientOverride(slug, { runtime: undefined });
+    resolved = resolveClientSettings(persistedSettings, slug);
+  }
   return {
     client,
     clientFolder: resolved.storage.clientFolder,

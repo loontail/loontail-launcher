@@ -27,6 +27,7 @@ export const MinecraftEventsListener = (): null => {
         rest.status === InstallStatuses.INSTALLED ||
         rest.status === InstallStatuses.NOT_INSTALLED
       ) {
+        void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.settings.root });
         void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.system.folderSizeRoot });
         void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.system.diskSpaceRoot });
       }

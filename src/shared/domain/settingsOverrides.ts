@@ -98,6 +98,16 @@ export const clearClientOverrides = (
   return { ...settings, clients };
 };
 
+export const clearStaleClientRuntimeRef = (
+  settings: LauncherSettings,
+  slug: ClientSlug,
+  runtimeComponent: string,
+): LauncherSettings => {
+  const runtime = settings.clients[slug]?.runtime;
+  if (!runtime || runtime.component === runtimeComponent) return settings;
+  return setClientOverride(settings, slug, { runtime: undefined });
+};
+
 export const pruneClientOverrides = (
   settings: LauncherSettings,
   keepSlugs: ReadonlySet<string>,
