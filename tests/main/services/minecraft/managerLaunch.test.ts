@@ -19,6 +19,7 @@ const orchestrationMocks = vi.hoisted(() => {
   return {
     buildContext: vi.fn(),
     getSettings: vi.fn(),
+    hasCurrentTargetInstallManifest: vi.fn(),
     isAnythingInstalled: vi.fn(),
     isTargetReady: vi.fn(),
     runInstall: vi.fn(),
@@ -38,6 +39,10 @@ vi.mock('@main/services/minecraft/context', () => ({
 vi.mock('@main/services/minecraft/runtimeState', () => ({
   isAnythingInstalled: orchestrationMocks.isAnythingInstalled,
   isTargetReady: orchestrationMocks.isTargetReady,
+}));
+
+vi.mock('@main/services/minecraft/installManifest', () => ({
+  hasCurrentTargetInstallManifest: orchestrationMocks.hasCurrentTargetInstallManifest,
 }));
 
 vi.mock('@main/services/settings/settings', () => ({
@@ -112,6 +117,7 @@ const makeManager = (
 const resetMocks = (): void => {
   orchestrationMocks.buildContext.mockReset();
   orchestrationMocks.getSettings.mockReset();
+  orchestrationMocks.hasCurrentTargetInstallManifest.mockReset();
   orchestrationMocks.isAnythingInstalled.mockReset();
   orchestrationMocks.isTargetReady.mockReset();
   orchestrationMocks.runInstall.mockReset();
@@ -120,6 +126,7 @@ const resetMocks = (): void => {
 
   orchestrationMocks.buildContext.mockResolvedValue(context());
   orchestrationMocks.getSettings.mockReturnValue(launcherSettings());
+  orchestrationMocks.hasCurrentTargetInstallManifest.mockResolvedValue(true);
   orchestrationMocks.isAnythingInstalled.mockResolvedValue(false);
   orchestrationMocks.isTargetReady.mockResolvedValue(true);
   orchestrationMocks.runInstall.mockResolvedValue(undefined);
@@ -170,6 +177,25 @@ describe('MinecraftManager.startLaunch', () => {
       paused: false,
       loader: LoaderChoices.VANILLA,
     });
+  });
+
+  it('installs a ready target when its durable manifest is stale', async () => {
+    resetMocks();
+    const ctx = context();
+    orchestrationMocks.buildContext.mockResolvedValue(ctx);
+    orchestrationMocks.hasCurrentTargetInstallManifest.mockResolvedValue(false);
+    orchestrationMocks.isAnythingInstalled.mockResolvedValue(true);
+
+    await makeManager().startLaunch(SLUG, account());
+
+    expect(orchestrationMocks.isTargetReady).not.toHaveBeenCalled();
+    expect(orchestrationMocks.runInstall).toHaveBeenCalledWith(
+      expect.any(Object),
+      SLUG,
+      ctx,
+      expect.objectContaining({ fresh: false }),
+    );
+    expect(orchestrationMocks.runLaunch).toHaveBeenCalledTimes(1);
   });
 
   it('does not start the game when the launch hook fails', async () => {

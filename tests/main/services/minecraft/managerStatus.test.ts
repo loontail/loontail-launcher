@@ -7,6 +7,7 @@ const statusMocks = vi.hoisted(() => {
   return {
     buildContext: vi.fn(),
     getSettings: vi.fn(),
+    hasCurrentTargetInstallManifest: vi.fn(),
     isAnythingInstalled: vi.fn(),
     isTargetReady: vi.fn(),
     setClientOverride: vi.fn(),
@@ -24,6 +25,10 @@ vi.mock('@main/services/minecraft/context', () => ({
 vi.mock('@main/services/minecraft/runtimeState', () => ({
   isAnythingInstalled: statusMocks.isAnythingInstalled,
   isTargetReady: statusMocks.isTargetReady,
+}));
+
+vi.mock('@main/services/minecraft/installManifest', () => ({
+  hasCurrentTargetInstallManifest: statusMocks.hasCurrentTargetInstallManifest,
 }));
 
 vi.mock('@main/services/settings/settings', () => ({
@@ -64,11 +69,13 @@ const makeManager = (): MinecraftManager =>
 const resetStatusMocks = (): void => {
   statusMocks.buildContext.mockReset();
   statusMocks.getSettings.mockReset();
+  statusMocks.hasCurrentTargetInstallManifest.mockReset();
   statusMocks.isAnythingInstalled.mockReset();
   statusMocks.isTargetReady.mockReset();
   statusMocks.setClientOverride.mockReset();
 
   statusMocks.getSettings.mockReturnValue(launcherSettings());
+  statusMocks.hasCurrentTargetInstallManifest.mockResolvedValue(true);
   statusMocks.isAnythingInstalled.mockResolvedValue(false);
   statusMocks.isTargetReady.mockResolvedValue(true);
 };
@@ -87,6 +94,22 @@ describe('MinecraftManager.getStatus', () => {
       status: InstallStatuses.NOT_INSTALLED,
       paused: false,
     });
+    expect(statusMocks.isAnythingInstalled).not.toHaveBeenCalled();
+  });
+
+  it('reports not-installed without readiness verification when the target manifest is stale', async () => {
+    resetStatusMocks();
+    statusMocks.buildContext.mockResolvedValue({
+      target: {} as Target,
+      clientFolder: CLIENT_FOLDER,
+    });
+    statusMocks.hasCurrentTargetInstallManifest.mockResolvedValue(false);
+
+    await expect(makeManager().getStatus(SLUG)).resolves.toEqual({
+      status: InstallStatuses.NOT_INSTALLED,
+      paused: false,
+    });
+    expect(statusMocks.isTargetReady).not.toHaveBeenCalled();
     expect(statusMocks.isAnythingInstalled).not.toHaveBeenCalled();
   });
 

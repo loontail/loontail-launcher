@@ -11,6 +11,7 @@ import { InstallStatuses } from '@shared/contracts/minecraft';
 import type { Context } from './context';
 import type { ManagerEnv } from './env';
 import { classifyError, errorMessage, tryAsSmartResumeError } from './errors';
+import { saveCurrentTargetInstallManifest } from './installManifest';
 import { type InstallOp, OpKinds } from './ops';
 import { runtimePathFor } from './runtimeFs';
 import { isAnythingInstalled } from './runtimeState';
@@ -70,6 +71,18 @@ const emitPostInstallStatus = async (
     status: installed ? InstallStatuses.INSTALLED : InstallStatuses.NOT_INSTALLED,
     paused: false,
   });
+};
+
+const persistTargetInstallManifest = async (
+  env: ManagerEnv,
+  slug: ClientSlug,
+  ctx: Context,
+): Promise<void> => {
+  try {
+    await saveCurrentTargetInstallManifest(ctx.clientFolder, ctx.target);
+  } catch (error) {
+    env.logger.warn(`[${slug}] install: failed to persist target install manifest`, error);
+  }
 };
 
 const handleInstallFailure = async (
@@ -210,6 +223,7 @@ export const runInstall = async (
       component: ctx.target.runtime.component,
       path: runtimePathFor(ctx.target.runtime.component),
     });
+    await persistTargetInstallManifest(env, slug, ctx);
     env.logger.info(
       recovered
         ? `[${slug}] install: done (recovered via smart resume)`

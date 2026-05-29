@@ -40,8 +40,8 @@ export type TargetInstallState = {
   readonly bundle: InstallReadinessState;
 };
 
-// "Installed" = the client folder has at least one `versions/<id>/<id>.json`.
-// No sidecar state file; the kit's own output is the source of truth.
+// Legacy fallback scan: the durable install manifest is the fast current-target
+// proof, but this keeps cancel/uninstall recovery tolerant of old installs.
 export const isAnythingInstalled = async (clientFolder: string): Promise<boolean> => {
   if (!clientFolder) return false;
   const versionsRoot = path.join(clientFolder, VERSIONS_DIR);

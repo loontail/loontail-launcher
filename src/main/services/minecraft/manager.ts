@@ -28,6 +28,7 @@ import { buildContext } from './context';
 import type { ManagerEnv } from './env';
 import { ManagerError } from './errors';
 import { beginInstall, runInstall } from './install';
+import { hasCurrentTargetInstallManifest } from './installManifest';
 import { requireAccount, runLaunch } from './launch';
 import { OP_TO_STATUS, type Op, OpKinds } from './ops';
 import { runRepair } from './repair';
@@ -106,6 +107,12 @@ export class MinecraftManager {
     }
     try {
       const ctx = await buildContext(this.kit, slug);
+      if (!(await hasCurrentTargetInstallManifest(ctx.clientFolder, ctx.target))) {
+        return {
+          status: InstallStatuses.NOT_INSTALLED,
+          paused: false,
+        };
+      }
       return {
         status: (await isTargetReady(this.kit, ctx.target))
           ? InstallStatuses.INSTALLED
@@ -239,9 +246,10 @@ export class MinecraftManager {
     this.requireIdle(slug);
     const ctx = await buildContext(this.kit, slug);
     const checkedAccount = requireAccount(account);
+    const hasInstallManifest = await hasCurrentTargetInstallManifest(ctx.clientFolder, ctx.target);
 
-    if (!(await isTargetReady(this.kit, ctx.target))) {
-      logger.info(`[${slug}] play: target version missing on disk — installing first`);
+    if (!hasInstallManifest || !(await isTargetReady(this.kit, ctx.target))) {
+      logger.info(`[${slug}] play: target install not current or not ready - installing first`);
       const lock = this.acquireWriteLock(slug);
       const op = beginInstall(this.env, slug, ctx, {
         fresh: !(await isAnythingInstalled(ctx.clientFolder)),

@@ -20,6 +20,7 @@ import type { Context } from './context';
 import type { ManagerEnv } from './env';
 import { classifyError, errorMessage } from './errors';
 import { repairMissingForgeProcessorOutputs } from './forgeProcessorHealing';
+import { saveCurrentTargetInstallManifest } from './installManifest';
 import type { RepairOp } from './ops';
 import { runtimePathFor } from './runtimeFs';
 import { isTargetReady } from './runtimeState';
@@ -192,6 +193,18 @@ const emitReadinessStatus = async (
   env.emitStatus({ slug, status, paused: false });
 };
 
+const persistTargetInstallManifest = async (
+  env: ManagerEnv,
+  slug: ClientSlug,
+  ctx: Context,
+): Promise<void> => {
+  try {
+    await saveCurrentTargetInstallManifest(ctx.clientFolder, ctx.target);
+  } catch (error) {
+    env.logger.warn(`[${slug}] repair: failed to persist target install manifest`, error);
+  }
+};
+
 export const runRepair = async (
   env: ManagerEnv,
   slug: ClientSlug,
@@ -245,6 +258,7 @@ export const runRepair = async (
       component: ctx.target.runtime.component,
       path: runtimePathFor(ctx.target.runtime.component),
     });
+    await persistTargetInstallManifest(env, slug, ctx);
     env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
   } catch (error) {
     if (op.abort.signal.aborted) {

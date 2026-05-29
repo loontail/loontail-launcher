@@ -4,6 +4,7 @@ import type { ClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraft';
 import type { ManagerEnv } from './env';
 import { ManagerError, errorMessage } from './errors';
+import { clearTargetInstallManifest } from './installManifest';
 import { OpKinds } from './ops';
 import { isAnythingInstalled } from './runtimeState';
 
@@ -31,6 +32,7 @@ export const runUninstall = async (
   env.emitStatus({ slug, status: InstallStatuses.UNINSTALLING, paused: false });
   try {
     await fs.rm(folder, { recursive: true, force: true });
+    await clearTargetInstallManifest(folder);
     env.clearRuntimeOverride(slug);
     env.emitStatus({ slug, status: InstallStatuses.NOT_INSTALLED, paused: false });
   } catch (error) {
@@ -41,6 +43,7 @@ export const runUninstall = async (
     await Promise.allSettled([
       fs.rm(path.join(folder, 'versions'), { recursive: true, force: true }),
       fs.rm(path.join(folder, 'runtime'), { recursive: true, force: true }),
+      clearTargetInstallManifest(folder),
     ]);
     if (!(await isAnythingInstalled(folder))) {
       env.logger.warn(`[${slug}] uninstall: residual files remain but markers are gone`);
