@@ -19,6 +19,7 @@ const policyMocks = vi.hoisted(() => {
     getTargetInstallState: vi.fn(),
     hasCurrentTargetInstallManifest: vi.fn(),
     isAnythingInstalled: vi.fn(),
+    saveCurrentTargetInstallManifest: vi.fn(),
   };
 });
 
@@ -33,8 +34,13 @@ vi.mock('@main/services/minecraft/context', () => ({
   buildContext: policyMocks.buildContext,
 }));
 
+vi.mock('@main/infra/logger', () => ({
+  scopedLogger: () => ({ warn: vi.fn() }),
+}));
+
 vi.mock('@main/services/minecraft/installManifest', () => ({
   hasCurrentTargetInstallManifest: policyMocks.hasCurrentTargetInstallManifest,
+  saveCurrentTargetInstallManifest: policyMocks.saveCurrentTargetInstallManifest,
 }));
 
 vi.mock('@main/services/minecraft/runtimeState', () => ({
@@ -97,12 +103,14 @@ const resetPolicyMocks = (): void => {
   policyMocks.getTargetInstallState.mockReset();
   policyMocks.hasCurrentTargetInstallManifest.mockReset();
   policyMocks.isAnythingInstalled.mockReset();
+  policyMocks.saveCurrentTargetInstallManifest.mockReset();
 
   policyMocks.buildContext.mockResolvedValue(context());
   policyMocks.getSettings.mockReturnValue(launcherSettings());
   policyMocks.getTargetInstallState.mockResolvedValue(targetState());
   policyMocks.hasCurrentTargetInstallManifest.mockResolvedValue(true);
   policyMocks.isAnythingInstalled.mockResolvedValue(true);
+  policyMocks.saveCurrentTargetInstallManifest.mockResolvedValue(undefined);
 };
 
 describe('readiness policy', () => {
@@ -149,8 +157,42 @@ describe('readiness policy', () => {
     );
   });
 
-  it('resolves stale target manifests as install work with legacy freshness', async () => {
+  it('resolves ready targets with stale manifests as installed and refreshes the manifest', async () => {
     policyMocks.hasCurrentTargetInstallManifest.mockResolvedValue(false);
+
+    await expect(resolveTargetReadinessPolicy({} as MinecraftKit, context())).resolves.toEqual(
+      expect.objectContaining({
+        kind: ReadinessPolicyKinds.INSTALLED,
+        status: InstallStatuses.INSTALLED,
+        hasCurrentManifest: false,
+        freshInstall: false,
+      }),
+    );
+    expect(policyMocks.saveCurrentTargetInstallManifest).toHaveBeenCalledWith(
+      CLIENT_FOLDER,
+      expect.objectContaining({ id: 'target-id' }),
+    );
+  });
+
+  it('keeps ready targets installed when refreshing a stale manifest fails', async () => {
+    policyMocks.hasCurrentTargetInstallManifest.mockResolvedValue(false);
+    policyMocks.saveCurrentTargetInstallManifest.mockRejectedValue(new Error('disk full'));
+
+    await expect(resolveTargetReadinessPolicy({} as MinecraftKit, context())).resolves.toEqual(
+      expect.objectContaining({
+        kind: ReadinessPolicyKinds.INSTALLED,
+        status: InstallStatuses.INSTALLED,
+        hasCurrentManifest: false,
+        freshInstall: false,
+      }),
+    );
+  });
+
+  it('resolves stale target manifests with missing target files as install work', async () => {
+    policyMocks.hasCurrentTargetInstallManifest.mockResolvedValue(false);
+    policyMocks.getTargetInstallState.mockResolvedValue(
+      targetState({ minecraft: installReadinessStates.NOT_READY }),
+    );
     policyMocks.isAnythingInstalled.mockResolvedValue(false);
 
     await expect(resolveTargetReadinessPolicy({} as MinecraftKit, context())).resolves.toEqual(
@@ -160,6 +202,7 @@ describe('readiness policy', () => {
         freshInstall: true,
       }),
     );
+    expect(policyMocks.saveCurrentTargetInstallManifest).not.toHaveBeenCalled();
   });
 
   it('resolves context failures as unverified when old files exist', async () => {

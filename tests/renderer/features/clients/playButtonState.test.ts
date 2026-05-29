@@ -71,15 +71,21 @@ describe('selectPlayButtonAction', () => {
     expect(select({ status: InstallStatuses.UNVERIFIED })).toBe(PlayButtonActions.UNVERIFIED);
   });
 
-  it('shows a status-check spinner before the seeded install state is known', () => {
-    expect(select({ status: InstallStatuses.UNKNOWN })).toBe(PlayButtonActions.CHECKING);
+  it('does not expose initial unknown status as checking or download', () => {
+    expect(select({ status: InstallStatuses.UNKNOWN })).toBe(PlayButtonActions.STATUS_PENDING);
   });
 
-  it('shows a status-check spinner while repair is verifying before downloads', () => {
-    expect(select({ status: InstallStatuses.REPAIRING })).toBe(PlayButtonActions.CHECKING);
+  it('shows a dedicated repair state while repair is verifying before downloads', () => {
+    expect(select({ status: InstallStatuses.REPAIRING })).toBe(PlayButtonActions.REPAIRING);
   });
 
   it('shows a status-check spinner while launch preflight is pending', () => {
     expect(select({ isChecking: true })).toBe(PlayButtonActions.CHECKING);
+  });
+
+  it('does not show launch checking for non-play statuses', () => {
+    expect(select({ status: InstallStatuses.NOT_INSTALLED, isChecking: true })).toBe(
+      PlayButtonActions.INSTALL,
+    );
   });
 });

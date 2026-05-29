@@ -1,11 +1,15 @@
 import type { MinecraftKit } from '@loontail/minecraft-kit';
+import { scopedLogger } from '@main/infra/logger';
 import { getSettings } from '@main/services/settings/settings';
 import type { ClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
 import { resolveClientSettings } from '@shared/domain/settings';
 import { buildContext } from './context';
 import type { Context } from './context';
-import { hasCurrentTargetInstallManifest } from './installManifest';
+import {
+  hasCurrentTargetInstallManifest,
+  saveCurrentTargetInstallManifest,
+} from './installManifest';
 import {
   type TargetInstallState,
   type TargetInstallStateOptions,
@@ -27,7 +31,7 @@ type InstalledReadiness = {
   readonly kind: typeof ReadinessPolicyKinds.INSTALLED;
   readonly status: typeof InstallStatuses.INSTALLED;
   readonly ctx: Context;
-  readonly hasCurrentManifest: true;
+  readonly hasCurrentManifest: boolean;
   readonly targetState: TargetInstallState;
   readonly freshInstall: false;
 };
@@ -64,8 +68,18 @@ export type TargetReadinessPolicyResult =
 
 export type ClientReadinessPolicyResult = TargetReadinessPolicyResult | UnverifiedReadiness;
 
+const logger = scopedLogger('minecraft.readinessPolicy');
+
 const legacyInstallFreshness = async (clientFolder: string): Promise<boolean> =>
   !(await isAnythingInstalled(clientFolder));
+
+const refreshTargetInstallManifest = async (ctx: Context): Promise<void> => {
+  try {
+    await saveCurrentTargetInstallManifest(ctx.clientFolder, ctx.target);
+  } catch (error) {
+    logger.warn(`[${ctx.client.slug}] readiness: failed to refresh target install manifest`, error);
+  }
+};
 
 export const resolveTargetReadinessPolicy = async (
   kit: MinecraftKit,
@@ -73,6 +87,19 @@ export const resolveTargetReadinessPolicy = async (
   options: TargetInstallStateOptions = {},
 ): Promise<TargetReadinessPolicyResult> => {
   const hasCurrentManifest = await hasCurrentTargetInstallManifest(ctx.clientFolder, ctx.target);
+  const targetState = await getTargetInstallState(kit, ctx.target, options);
+  if (isMinecraftTargetReady(targetState)) {
+    if (!hasCurrentManifest) await refreshTargetInstallManifest(ctx);
+    return {
+      kind: ReadinessPolicyKinds.INSTALLED,
+      status: InstallStatuses.INSTALLED,
+      ctx,
+      hasCurrentManifest,
+      targetState,
+      freshInstall: false,
+    };
+  }
+
   if (!hasCurrentManifest) {
     return {
       kind: ReadinessPolicyKinds.NEEDS_INSTALL,
@@ -81,18 +108,6 @@ export const resolveTargetReadinessPolicy = async (
       hasCurrentManifest: false,
       targetState: null,
       freshInstall: await legacyInstallFreshness(ctx.clientFolder),
-    };
-  }
-
-  const targetState = await getTargetInstallState(kit, ctx.target, options);
-  if (isMinecraftTargetReady(targetState)) {
-    return {
-      kind: ReadinessPolicyKinds.INSTALLED,
-      status: InstallStatuses.INSTALLED,
-      ctx,
-      hasCurrentManifest: true,
-      targetState,
-      freshInstall: false,
     };
   }
 

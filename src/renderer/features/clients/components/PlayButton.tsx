@@ -30,6 +30,8 @@ export const PlayButtonActions = {
   PLAY: 'play',
   UNVERIFIED: 'unverified',
   CHECKING: 'checking',
+  REPAIRING: 'repairing',
+  STATUS_PENDING: 'status-pending',
   ERROR: 'error',
   INSTALL: 'install',
 } as const;
@@ -76,18 +78,16 @@ export const selectPlayButtonAction = ({
   }
   if (
     isChecking &&
-    (status === InstallStatuses.UNKNOWN ||
-      status === InstallStatuses.INSTALLED ||
-      status === InstallStatuses.UNVERIFIED ||
-      status === InstallStatuses.NOT_INSTALLED)
+    (status === InstallStatuses.INSTALLED || status === InstallStatuses.UNVERIFIED)
   ) {
     return PlayButtonActions.CHECKING;
   }
 
   switch (status) {
     case InstallStatuses.UNKNOWN:
+      return PlayButtonActions.STATUS_PENDING;
     case InstallStatuses.REPAIRING:
-      return PlayButtonActions.CHECKING;
+      return PlayButtonActions.REPAIRING;
     case InstallStatuses.UNINSTALLING:
       return PlayButtonActions.UNINSTALLING;
     case InstallStatuses.LAUNCHING:
@@ -210,6 +210,9 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
   }
 
   switch (action) {
+    case PlayButtonActions.STATUS_PENDING:
+      return null;
+
     case PlayButtonActions.UNINSTALLING:
       return (
         <ActionButton disabled>
@@ -236,6 +239,14 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
         <ActionButton disabled>
           <Loader2 size={16} className="animate-spin" />
           {t('clients.checking')}
+        </ActionButton>
+      );
+
+    case PlayButtonActions.REPAIRING:
+      return (
+        <ActionButton disabled>
+          <Loader2 size={16} className="animate-spin" />
+          {t('clients.repairing')}
         </ActionButton>
       );
 
