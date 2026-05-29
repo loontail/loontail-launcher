@@ -35,6 +35,17 @@ const launchLogger = scopedLogger('minecraft.launch');
 // at JVM init, so the game never contacts Microsoft — but the kit still
 // validates the field shape, hence a real-looking zero GUID.
 const YGGDRASIL_PLACEHOLDER_CLIENT_ID = asAzureClientId('00000000-0000-0000-0000-000000000000');
+// authlib-injector fetches metadata with Java's default URLConnection UA.
+// Cloudflare blocks bare `Java/...`, so give that JVM traffic a launcher UA.
+const YGGDRASIL_HTTP_AGENT_NAME = 'LoontailLauncher';
+
+const sanitizeHttpAgentToken = (value: string): string => {
+  const token = value.trim().replace(/[^0-9A-Za-z.+_-]/g, '-');
+  return token.length > 0 ? token : 'dev';
+};
+
+const buildYggdrasilHttpAgentJvmArg = (): string =>
+  `-Dhttp.agent=${YGGDRASIL_HTTP_AGENT_NAME}/${sanitizeHttpAgentToken(app.getVersion())}`;
 
 const resolveAuthlibInjectorJar = (): string => {
   if (app.isPackaged) {
@@ -115,7 +126,10 @@ const resolveLaunchAuth = (account: Account): ResolvedLaunchAuth => {
         clientId: YGGDRASIL_PLACEHOLDER_CLIENT_ID,
         xuid: '',
       },
-      extraJvmArgs: [buildAuthlibInjectorJvmArg({ jarPath, apiRoot: mainConfig.yggdrasilApiRoot })],
+      extraJvmArgs: [
+        buildYggdrasilHttpAgentJvmArg(),
+        buildAuthlibInjectorJvmArg({ jarPath, apiRoot: mainConfig.yggdrasilApiRoot }),
+      ],
     };
   }
   return {

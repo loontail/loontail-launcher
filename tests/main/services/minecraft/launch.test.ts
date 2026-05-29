@@ -11,6 +11,7 @@ import type { ManagerEnv } from '@main/services/minecraft/env';
 import { runLaunch } from '@main/services/minecraft/launch';
 import { type Op, OpKinds } from '@main/services/minecraft/ops';
 import type { Account } from '@shared/contracts/account';
+import type { AuthSession, YggdrasilSession } from '@shared/contracts/auth';
 import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
 import { LoaderChoices } from '@shared/contracts/settings';
@@ -21,7 +22,7 @@ const launchMocks = vi.hoisted(() => {
   process.env.API_TOKEN ??= 'test-token';
   return {
     appGetVersion: vi.fn(() => '0.0.0-test'),
-    getStoredAuth: vi.fn(() => null),
+    getStoredAuth: vi.fn<() => AuthSession | null>(() => null),
     openConsoleWindow: vi.fn(),
     consoleHub: {
       emitState: vi.fn(),
@@ -78,6 +79,13 @@ const account = (): Account => ({
   email: null,
   skin: null,
   cape: null,
+});
+
+const yggdrasilSession = (): YggdrasilSession => ({
+  provider: 'yggdrasil',
+  accessToken: 'access-token',
+  clientToken: 'client-token',
+  profile: { uuid: '0123456789abcdef0123456789abcdef', name: 'tester' },
 });
 
 const context = (): Context =>
@@ -146,6 +154,7 @@ const env = (kit: MinecraftKit, ops: Map<ClientSlug, Op>): ManagerEnv => {
 describe('runLaunch', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    launchMocks.getStoredAuth.mockReturnValue(null);
   });
 
   it('cancels startup during compose before creating a process session', async () => {
@@ -214,5 +223,29 @@ describe('runLaunch', () => {
       session: activeSession,
       consoleEnabled: false,
     });
+  });
+
+  it('adds a launcher HTTP agent before authlib-injector for Yggdrasil sessions', async () => {
+    launchMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
+    const compose = vi.fn(async (_target: Target, _options: unknown) => composition());
+    const run = vi.fn(() => session());
+    const kit = { launch: { compose, run } } as unknown as MinecraftKit;
+    const ops = new Map<ClientSlug, Op>();
+
+    await runLaunch(env(kit, ops), SLUG, context(), account());
+
+    const options = compose.mock.calls[0]?.[1] as
+      | { readonly extraJvmArgs?: readonly string[]; readonly auth?: unknown }
+      | undefined;
+    expect(options?.extraJvmArgs?.[0]).toBe('-Dhttp.agent=LoontailLauncher/0.0.0-test');
+    expect(options?.extraJvmArgs?.[1]).toContain('authlib-injector-1.2.5.jar');
+    expect(options?.extraJvmArgs?.[1]).toContain('=https://auth.test.invalid');
+    expect(options?.auth).toEqual(
+      expect.objectContaining({
+        mode: AuthModes.ONLINE,
+        username: 'tester',
+        accessToken: 'access-token',
+      }),
+    );
   });
 });
