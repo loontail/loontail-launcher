@@ -7,9 +7,21 @@ export const ToastVariants = {
 
 export type ToastVariant = (typeof ToastVariants)[keyof typeof ToastVariants];
 
+// Optional inline call-to-action (e.g. "Repair"). When present, the toast does
+// not auto-dismiss — the user must act on or dismiss it.
+export type ToastAction = {
+  label: string;
+  onClick: () => void;
+};
+
 export type ToastPayload = {
   message: string;
   variant: ToastVariant;
+  action?: ToastAction;
+};
+
+export type ToastOptions = {
+  action?: ToastAction;
 };
 
 type Listener = (payload: ToastPayload) => void;
@@ -38,9 +50,23 @@ const emit = (payload: ToastPayload): void => {
   for (const listener of listeners) listener(payload);
 };
 
+const withVariant = (
+  message: string,
+  variant: ToastVariant,
+  options?: ToastOptions,
+): ToastPayload => ({
+  message,
+  variant,
+  ...(options?.action ? { action: options.action } : {}),
+});
+
 export const toast = {
-  success: (message: string) => emit({ message, variant: ToastVariants.SUCCESS }),
-  error: (message: string) => emit({ message, variant: ToastVariants.ERROR }),
-  info: (message: string) => emit({ message, variant: ToastVariants.INFO }),
-  warn: (message: string) => emit({ message, variant: ToastVariants.WARN }),
+  success: (message: string, options?: ToastOptions) =>
+    emit(withVariant(message, ToastVariants.SUCCESS, options)),
+  error: (message: string, options?: ToastOptions) =>
+    emit(withVariant(message, ToastVariants.ERROR, options)),
+  info: (message: string, options?: ToastOptions) =>
+    emit(withVariant(message, ToastVariants.INFO, options)),
+  warn: (message: string, options?: ToastOptions) =>
+    emit(withVariant(message, ToastVariants.WARN, options)),
 };

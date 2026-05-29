@@ -60,7 +60,7 @@ vi.mock('@main/services/minecraft/installManifest', () => ({
 
 vi.mock('@main/services/minecraft/readinessPolicy', () => ({
   ReadinessPolicyKinds: orchestrationMocks.readinessKinds,
-  resolveClientReadinessPolicy: vi.fn(),
+  resolveClientInstallPresence: vi.fn(),
   resolveTargetReadinessPolicy: orchestrationMocks.resolveTargetReadinessPolicy,
 }));
 
@@ -165,7 +165,7 @@ const resetMocks = (): void => {
 };
 
 describe('MinecraftManager.startLaunch', () => {
-  it('launches a ready target without running install first', async () => {
+  it('launches without running install or pre-launch hash verification', async () => {
     resetMocks();
     const ctx = context();
     orchestrationMocks.buildContext.mockResolvedValue(ctx);
@@ -173,70 +173,16 @@ describe('MinecraftManager.startLaunch', () => {
 
     await makeManager().startLaunch(SLUG, currentAccount);
 
+    // The lenient preflight inside runLaunch is the only launch-time gate now —
+    // startLaunch neither verifies hashes nor reinstalls implicitly.
     expect(orchestrationMocks.runInstall).not.toHaveBeenCalled();
-    expect(orchestrationMocks.resolveTargetReadinessPolicy).toHaveBeenCalledWith(
-      expect.any(Object),
-      ctx,
-      { runtimeVerificationCache: 'bypass' },
-    );
+    expect(orchestrationMocks.resolveTargetReadinessPolicy).not.toHaveBeenCalled();
     expect(orchestrationMocks.runLaunch).toHaveBeenCalledWith(
       expect.any(Object),
       SLUG,
       ctx,
       currentAccount,
     );
-  });
-
-  it('installs a missing target before launching it', async () => {
-    resetMocks();
-    const broadcaster = makeBroadcaster();
-    const ctx = context();
-    orchestrationMocks.buildContext.mockResolvedValue(ctx);
-    orchestrationMocks.resolveTargetReadinessPolicy.mockResolvedValue({
-      kind: orchestrationMocks.readinessKinds.NEEDS_REPAIR,
-      status: InstallStatuses.NOT_INSTALLED,
-      freshInstall: true,
-    });
-
-    await makeManager(broadcaster).startLaunch(SLUG, account());
-
-    expect(orchestrationMocks.runInstall).toHaveBeenCalledWith(
-      expect.any(Object),
-      SLUG,
-      ctx,
-      expect.objectContaining({ fresh: true }),
-    );
-    expect(orchestrationMocks.runLaunch).toHaveBeenCalledTimes(1);
-    expect(orchestrationMocks.runInstall.mock.invocationCallOrder[0]).toBeLessThan(
-      orchestrationMocks.runLaunch.mock.invocationCallOrder[0] ?? 0,
-    );
-    expect(broadcaster.status).toHaveBeenCalledWith({
-      slug: SLUG,
-      status: InstallStatuses.INSTALLING,
-      paused: false,
-      loader: LoaderChoices.VANILLA,
-    });
-  });
-
-  it('installs a ready target when its durable manifest is stale', async () => {
-    resetMocks();
-    const ctx = context();
-    orchestrationMocks.buildContext.mockResolvedValue(ctx);
-    orchestrationMocks.resolveTargetReadinessPolicy.mockResolvedValue({
-      kind: orchestrationMocks.readinessKinds.NEEDS_INSTALL,
-      status: InstallStatuses.NOT_INSTALLED,
-      freshInstall: false,
-    });
-
-    await makeManager().startLaunch(SLUG, account());
-
-    expect(orchestrationMocks.runInstall).toHaveBeenCalledWith(
-      expect.any(Object),
-      SLUG,
-      ctx,
-      expect.objectContaining({ fresh: false }),
-    );
-    expect(orchestrationMocks.runLaunch).toHaveBeenCalledTimes(1);
   });
 
   it('does not start the game when the launch hook fails', async () => {

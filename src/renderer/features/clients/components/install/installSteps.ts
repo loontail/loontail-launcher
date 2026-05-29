@@ -46,7 +46,7 @@ export type InstallStep = {
   subStage?: string;
 };
 
-export type ProgressControlsKind = 'install' | 'bundle' | 'cancel' | null;
+export type ProgressControlsKind = 'install' | 'bundle' | null;
 
 export type InstallProgressMode = 'install' | 'repair' | 'bundle';
 
@@ -84,6 +84,13 @@ const BUNDLE_INDETERMINATE: ReadonlySet<BundleSyncStatus> = new Set([
 
 const isBundleBusy = (status: BundleSyncStatus): boolean =>
   BUSY_BUNDLE_STATUSES.has(status) || status === BundleSyncStatuses.PAUSED;
+
+// The progress card is reserved for an *actual transfer*. A bundle sync only
+// downloads bytes in DOWNLOADING (and a PAUSED download that can resume); the
+// fetch/plan/delete/heal phases just inspect or clean up, so they surface as a
+// spinner instead. Mirrors how install/repair gate the card on `totalBytes`.
+const isBundleDownloading = (status: BundleSyncStatus): boolean =>
+  status === BundleSyncStatuses.DOWNLOADING || status === BundleSyncStatuses.PAUSED;
 
 const clamp = (n: number): number => {
   if (n < 0) return 0;
@@ -159,10 +166,17 @@ export const selectInstallProgress = (
 ): InstallProgressView | null => {
   const installRunning = client.status === InstallStatuses.INSTALLING;
   const repairRunning = client.status === InstallStatuses.REPAIRING;
-  const repairDownloadRunning = repairRunning && (client.totalBytes ?? 0) > 0;
+  // The card shows only once there is something to download. While an op is
+  // still checking the build (install planning, repair verification, bundle
+  // manifest fetch/planning) there is no transfer to render — the caller shows
+  // a spinner and this returns null so no card mounts.
+  const hasDownloadBytes = (client.totalBytes ?? 0) > 0;
+  const installDownloadRunning = installRunning && hasDownloadBytes;
+  const repairDownloadRunning = repairRunning && hasDownloadBytes;
   const bundleBusy = context.hasBundle && isBundleBusy(bundle.status);
+  const bundleDownloadRunning = bundleBusy && isBundleDownloading(bundle.status);
 
-  if (!installRunning && !repairDownloadRunning && !bundleBusy) return null;
+  if (!installDownloadRunning && !repairDownloadRunning && !bundleDownloadRunning) return null;
 
   const steps = buildSteps(context.hasLoader, context.hasBundle);
 
@@ -171,10 +185,12 @@ export const selectInstallProgress = (
   let controls: ProgressControlsKind = null;
   let mode: InstallProgressMode = 'install';
 
-  if (installRunning || repairDownloadRunning) {
+  if (installDownloadRunning || repairDownloadRunning) {
     mode = repairRunning ? 'repair' : 'install';
     paused = client.paused;
-    controls = installRunning ? 'install' : 'cancel';
+    // Repair is not user-cancellable: it only refetches what verification found
+    // broken, so it always runs to completion. Install keeps pause/cancel.
+    controls = installRunning ? 'install' : null;
 
     const stage = client.stage;
     let currentKey: InstallStepKey;
@@ -202,7 +218,7 @@ export const selectInstallProgress = (
       const bundleStep = steps.find((s) => s.key === InstallStepKeys.BUNDLE);
       if (bundleStep) bundleStep.state = StepStates.SKIPPED;
     }
-  } else if (bundleBusy) {
+  } else if (bundleDownloadRunning) {
     mode = 'bundle';
     paused = bundle.status === BundleSyncStatuses.PAUSED;
     controls = 'bundle';

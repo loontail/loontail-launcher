@@ -1,9 +1,4 @@
-import {
-  useCancelInstall,
-  useClientStatus,
-  useRepairClient,
-  useUninstallClient,
-} from '@renderer/features/minecraft';
+import { useClientStatus, useRepairClient, useUninstallClient } from '@renderer/features/minecraft';
 import {
   FolderInfoBlock,
   RamControl,
@@ -52,7 +47,6 @@ export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsM
   const { mutate: chooseClientFolder } = useChooseClientFolder();
   const runtimeState = useClientStatus(slug);
   const repairMutation = useRepairClient();
-  const cancelMutation = useCancelInstall();
   const uninstallMutation = useUninstallClient();
   const [confirmUninstallOpen, setConfirmUninstallOpen] = useState(false);
 
@@ -182,10 +176,8 @@ export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsM
         <ClientActionsSection
           status={runtimeState.status}
           repairPending={repairMutation.isPending}
-          cancelPending={cancelMutation.isPending}
           uninstallPending={uninstallMutation.isPending}
           onRepair={() => void repairMutation.mutateAsync(slug)}
-          onCancel={() => void cancelMutation.mutateAsync(slug)}
           onRequestUninstall={() => setConfirmUninstallOpen(true)}
         />
 

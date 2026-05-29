@@ -2,7 +2,7 @@ import type { MinecraftKit } from '@loontail/minecraft-kit';
 import { scopedLogger } from '@main/infra/logger';
 import { getSettings } from '@main/services/settings/settings';
 import type { ClientSlug } from '@shared/contracts/ids';
-import { InstallStatuses } from '@shared/contracts/minecraft';
+import { type InstallStatus, InstallStatuses } from '@shared/contracts/minecraft';
 import { resolveClientSettings } from '@shared/domain/settings';
 import { buildContext } from './context';
 import type { Context } from './context';
@@ -54,19 +54,10 @@ type NeedsRepairReadiness = {
   readonly freshInstall: boolean;
 };
 
-type UnverifiedReadiness = {
-  readonly kind: typeof ReadinessPolicyKinds.UNVERIFIED;
-  readonly status: typeof InstallStatuses.UNVERIFIED | typeof InstallStatuses.NOT_INSTALLED;
-  readonly hasLegacyInstall: boolean;
-  readonly freshInstall: boolean;
-};
-
 export type TargetReadinessPolicyResult =
   | InstalledReadiness
   | NeedsInstallReadiness
   | NeedsRepairReadiness;
-
-export type ClientReadinessPolicyResult = TargetReadinessPolicyResult | UnverifiedReadiness;
 
 const logger = scopedLogger('minecraft.readinessPolicy');
 
@@ -121,20 +112,29 @@ export const resolveTargetReadinessPolicy = async (
   };
 };
 
-export const resolveClientReadinessPolicy = async (
+// Cheap "do we already have this install?" check used to seed status when the
+// launcher opens. Reads ONLY local state — the durable install manifest plus
+// on-disk files — and never runs hash/manifest verification. Verification is
+// reserved for the explicit repair flow and the lenient launch preflight, so
+// opening the launcher stays off the network and a flaky/offline verification
+// can no longer demote a working install to "Download".
+export const resolveClientInstallPresence = async (
   kit: MinecraftKit,
   slug: ClientSlug,
-): Promise<ClientReadinessPolicyResult> => {
+): Promise<InstallStatus> => {
+  let ctx: Context;
   try {
-    return await resolveTargetReadinessPolicy(kit, await buildContext(kit, slug));
+    ctx = await buildContext(kit, slug);
   } catch {
     const folder = resolveClientSettings(getSettings(), slug).storage.clientFolder || null;
     const hasLegacyInstall = folder === null ? false : await isAnythingInstalled(folder);
-    return {
-      kind: ReadinessPolicyKinds.UNVERIFIED,
-      status: hasLegacyInstall ? InstallStatuses.UNVERIFIED : InstallStatuses.NOT_INSTALLED,
-      hasLegacyInstall,
-      freshInstall: !hasLegacyInstall,
-    };
+    return hasLegacyInstall ? InstallStatuses.UNVERIFIED : InstallStatuses.NOT_INSTALLED;
   }
+  const [hasCurrentManifest, installed] = await Promise.all([
+    hasCurrentTargetInstallManifest(ctx.clientFolder, ctx.target),
+    isAnythingInstalled(ctx.clientFolder),
+  ]);
+  return hasCurrentManifest && installed
+    ? InstallStatuses.INSTALLED
+    : InstallStatuses.NOT_INSTALLED;
 };

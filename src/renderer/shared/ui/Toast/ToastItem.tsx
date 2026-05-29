@@ -74,9 +74,10 @@ export const ToastItem = ({ entry, style, paused, onClose, onHeight }: ToastItem
   }, [entry.id, onHeight]);
 
   // Auto-close with hover-pause: `remainingRef` carries the leftover budget so
-  // re-entry doesn't restart the bar from full.
+  // re-entry doesn't restart the bar from full. Actionable toasts never
+  // auto-close — they wait for the user to act on or dismiss them.
   useEffect(() => {
-    if (entry.closing) return;
+    if (entry.closing || entry.action) return;
     if (paused) {
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);
@@ -104,7 +105,7 @@ export const ToastItem = ({ entry, style, paused, onClose, onHeight }: ToastItem
         );
       }
     };
-  }, [paused, entry.closing, onClose]);
+  }, [paused, entry.closing, entry.action, onClose]);
 
   const handleCopy = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -113,6 +114,12 @@ export const ToastItem = ({ entry, style, paused, onClose, onHeight }: ToastItem
 
   const handleDismiss = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
+    onClose();
+  };
+
+  const handleAction = (event: MouseEvent<HTMLButtonElement>) => {
+    event.stopPropagation();
+    entry.action?.onClick();
     onClose();
   };
 
@@ -170,15 +177,29 @@ export const ToastItem = ({ entry, style, paused, onClose, onHeight }: ToastItem
           </div>
         </div>
 
-        <div className="absolute right-0 bottom-0 left-0 h-[2px] bg-glass/5">
-          <div
-            className={cn('h-full origin-left', styles.progress)}
-            style={{
-              animation: `toast-shrink ${AUTO_CLOSE_MS}ms linear forwards`,
-              animationPlayState: paused || entry.closing ? 'paused' : 'running',
-            }}
-          />
-        </div>
+        {entry.action && (
+          <div className="flex justify-end gap-2 px-3.5 pb-3">
+            <button
+              type="button"
+              onClick={handleAction}
+              className="cursor-pointer rounded-lg border border-edge-md bg-ghost px-3.5 py-1.5 text-caption font-semibold text-glass/85 transition-colors hover:border-edge-xl hover:bg-ghost-hover hover:text-glass active:scale-[0.97]"
+            >
+              {entry.action.label}
+            </button>
+          </div>
+        )}
+
+        {!entry.action && (
+          <div className="absolute right-0 bottom-0 left-0 h-[2px] bg-glass/5">
+            <div
+              className={cn('h-full origin-left', styles.progress)}
+              style={{
+                animation: `toast-shrink ${AUTO_CLOSE_MS}ms linear forwards`,
+                animationPlayState: paused || entry.closing ? 'paused' : 'running',
+              }}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

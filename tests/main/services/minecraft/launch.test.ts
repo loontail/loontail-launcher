@@ -319,7 +319,7 @@ describe('runLaunch', () => {
     });
   });
 
-  it('does not spawn when Java disappears between readiness and launch', async () => {
+  it('surfaces a missing Java executable as a repairable launch error, staying installed', async () => {
     const fixture = await createLaunchFixture();
     await fs.rm(fixture.javaPath, { force: true });
     const compose = vi.fn(async () => fixture.composition);
@@ -337,16 +337,21 @@ describe('runLaunch', () => {
       MinecraftErrorCodes.RUNTIME_ERROR,
       expect.stringContaining('Java executable'),
     );
+    // Stays INSTALLED so the affordance remains "Play"; the failure is surfaced
+    // in the console and via a repair toast on the renderer.
     expect(managerEnv.broadcaster.status).toHaveBeenLastCalledWith({
       slug: SLUG,
-      status: InstallStatuses.NOT_INSTALLED,
+      status: InstallStatuses.INSTALLED,
       paused: false,
     });
-    expect(launchMocks.consoleHub.emitState).not.toHaveBeenCalled();
-    expect(launchMocks.openConsoleWindow).not.toHaveBeenCalled();
+    expect(launchMocks.consoleHub.recordSystem).toHaveBeenCalledWith(
+      expect.stringContaining('Launch check failed'),
+      { slug: SLUG },
+    );
+    expect(launchMocks.openConsoleWindow).toHaveBeenCalled();
   });
 
-  it('routes a missing launch classpath file back to install state', async () => {
+  it('surfaces a missing classpath file as a repairable launch error, staying installed', async () => {
     const fixture = await createLaunchFixture();
     const missingClasspathFile = path.join(
       fixture.composition.directory,
@@ -373,9 +378,10 @@ describe('runLaunch', () => {
     );
     expect(managerEnv.broadcaster.status).toHaveBeenLastCalledWith({
       slug: SLUG,
-      status: InstallStatuses.NOT_INSTALLED,
+      status: InstallStatuses.INSTALLED,
       paused: false,
     });
+    expect(launchMocks.openConsoleWindow).toHaveBeenCalled();
   });
 
   it('adds a launcher HTTP agent before authlib-injector for Yggdrasil sessions', async () => {

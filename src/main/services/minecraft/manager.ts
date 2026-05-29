@@ -30,13 +30,9 @@ import { ManagerError } from './errors';
 import { beginInstall, runInstall } from './install';
 import { requireAccount, runLaunch } from './launch';
 import { OP_TO_STATUS, type Op, OpKinds, type RepairOp } from './ops';
-import {
-  ReadinessPolicyKinds,
-  resolveClientReadinessPolicy,
-  resolveTargetReadinessPolicy,
-} from './readinessPolicy';
+import { resolveClientInstallPresence } from './readinessPolicy';
 import { runRepair } from './repair';
-import { RuntimeVerificationCacheModes, isAnythingInstalled } from './runtimeState';
+import { isAnythingInstalled } from './runtimeState';
 import { runUninstall } from './uninstall';
 
 const logger = scopedLogger('minecraft');
@@ -109,9 +105,11 @@ export class MinecraftManager {
         paused: false,
       };
     }
-    const readiness = await resolveClientReadinessPolicy(this.kit, slug);
+    // Opening the launcher must not verify the install (no hashing, no network):
+    // report installability from local state only. The real check runs when the
+    // user clicks Play.
     return {
-      status: readiness.status,
+      status: await resolveClientInstallPresence(this.kit, slug),
       paused: false,
     };
   }
@@ -230,26 +228,11 @@ export class MinecraftManager {
     this.requireIdle(slug);
     const ctx = await buildContext(this.kit, slug);
     const checkedAccount = requireAccount(account);
-    const readiness = await resolveTargetReadinessPolicy(this.kit, ctx, {
-      runtimeVerificationCache: RuntimeVerificationCacheModes.BYPASS,
-    });
 
-    if (readiness.kind !== ReadinessPolicyKinds.INSTALLED) {
-      logger.info(`[${slug}] play: target install not current or not ready - installing first`);
-      const lock = this.acquireWriteLock(slug);
-      const op = beginInstall(this.env, slug, ctx, {
-        fresh: readiness.freshInstall,
-      });
-      lock.setCancel(() => this.cancel(slug));
-      try {
-        await runInstall(this.env, slug, ctx, op);
-      } catch (error) {
-        if (op.cancelled) return;
-        throw error;
-      } finally {
-        lock.release();
-      }
-    }
+    // No pre-launch hash verification and no implicit reinstall here. The
+    // lenient launch preflight inside runLaunch decides launchability from the
+    // files actually on disk; if it fails, that path surfaces the error in the
+    // console and a repair offer rather than silently re-downloading.
 
     // Chain the bundle sync before launch. The hook resolves immediately for
     // clients without a bundleSlug, so this is free in the no-bundle path.

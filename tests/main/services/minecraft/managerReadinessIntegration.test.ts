@@ -206,20 +206,18 @@ describe('MinecraftManager readiness integration', () => {
     });
   });
 
-  it('installs a vanilla target with missing launch files before spawning', async () => {
+  it('launches without an implicit reinstall — the lenient preflight guards launchability', async () => {
     const resolvedTarget = target();
     resetMocks(resolvedTarget);
 
     await new MinecraftManager(broadcaster(), kit()).startLaunch(SLUG, account());
 
-    expect(readinessMocks.runInstall).toHaveBeenCalledWith(
+    expect(readinessMocks.runInstall).not.toHaveBeenCalled();
+    expect(readinessMocks.runLaunch).toHaveBeenCalledWith(
       expect.any(Object),
       SLUG,
       context(resolvedTarget),
-      expect.objectContaining({ fresh: true }),
-    );
-    expect(readinessMocks.runInstall.mock.invocationCallOrder[0]).toBeLessThan(
-      readinessMocks.runLaunch.mock.invocationCallOrder[0] ?? 0,
+      account(),
     );
   });
 });

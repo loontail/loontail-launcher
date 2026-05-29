@@ -7,7 +7,11 @@ import {
   useStopClient,
 } from '@renderer/features/minecraft';
 import { useLauncherSettings, useResolveFor } from '@renderer/features/settings';
-import { type BundleSyncStatus, BundleSyncStatuses } from '@shared/contracts/bundle';
+import {
+  BUSY_BUNDLE_STATUSES,
+  type BundleSyncStatus,
+  BundleSyncStatuses,
+} from '@shared/contracts/bundle';
 import type { Client } from '@shared/contracts/client';
 import { type InstallStatus, InstallStatuses } from '@shared/contracts/minecraft';
 import type { LoaderChoice } from '@shared/contracts/settings';
@@ -60,6 +64,12 @@ export const selectPlayButtonAction = ({
   isChecking,
 }: PlayButtonSelectionInput): PlayButtonAction => {
   if (hasProgress) return PlayButtonActions.PROGRESS;
+  // A bundle sync that is busy but not yet downloading (manifest fetch,
+  // planning, deleting, healing) has no card to show — surface a spinner so we
+  // never flash a stale Play/Update/Download affordance mid-sync.
+  if (hasBundle && BUSY_BUNDLE_STATUSES.has(bundleStatus)) {
+    return PlayButtonActions.CHECKING;
+  }
   if (
     hasBundle &&
     bundleStatus === BundleSyncStatuses.ERROR &&
@@ -75,6 +85,11 @@ export const selectPlayButtonAction = ({
     status === InstallStatuses.INSTALLED
   ) {
     return PlayButtonActions.BUNDLE_UPDATE;
+  }
+  // INSTALLING before the first progress event = the planning/checking phase
+  // (the card only mounts once bytes are flowing). Show the same spinner.
+  if (status === InstallStatuses.INSTALLING) {
+    return PlayButtonActions.CHECKING;
   }
   if (
     isChecking &&
@@ -210,8 +225,15 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
   }
 
   switch (action) {
+    // Initial status seed (and any later build-status check) renders a spinner
+    // rather than vanishing — the affordance stays put while we resolve state.
     case PlayButtonActions.STATUS_PENDING:
-      return null;
+      return (
+        <ActionButton disabled>
+          <Loader2 size={16} className="animate-spin" />
+          {t('clients.checking')}
+        </ActionButton>
+      );
 
     case PlayButtonActions.UNINSTALLING:
       return (

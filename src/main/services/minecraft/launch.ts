@@ -318,8 +318,13 @@ export const runLaunch = async (
     if (isLaunchPreflightError(error)) {
       const message = errorMessage(error);
       launchLogger.warn(`[${slug}] launch preflight failed - ${message}`, error);
+      // Surface the failed check in the console and keep the client INSTALLED so
+      // the affordance stays "Play". The renderer turns the error event into a
+      // toast offering a repair — we do not silently reinstall here.
+      consoleHub.recordSystem(`Launch check failed: ${message}`, { slug });
+      if (!consoleHub.hasWindow()) openConsoleWindow();
       env.emitError(slug, error.code, message);
-      env.emitStatus({ slug, status: InstallStatuses.NOT_INSTALLED, paused: false });
+      env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
       return;
     }
     env.logger.error(`[${slug}] launch failed`, error);

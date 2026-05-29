@@ -2,7 +2,7 @@ import { Loaders, type MinecraftKit, type Target } from '@loontail/minecraft-kit
 import type { Context } from '@main/services/minecraft/context';
 import {
   ReadinessPolicyKinds,
-  resolveClientReadinessPolicy,
+  resolveClientInstallPresence,
   resolveTargetReadinessPolicy,
 } from '@main/services/minecraft/readinessPolicy';
 import { asClientSlug } from '@shared/contracts/ids';
@@ -205,17 +205,32 @@ describe('readiness policy', () => {
     expect(policyMocks.saveCurrentTargetInstallManifest).not.toHaveBeenCalled();
   });
 
-  it('resolves context failures as unverified when old files exist', async () => {
+  it('seeds installed from local state without running verification', async () => {
+    policyMocks.hasCurrentTargetInstallManifest.mockResolvedValue(true);
+    policyMocks.isAnythingInstalled.mockResolvedValue(true);
+
+    await expect(resolveClientInstallPresence({} as MinecraftKit, SLUG)).resolves.toBe(
+      InstallStatuses.INSTALLED,
+    );
+    // The cheap presence check must never hash/verify the install.
+    expect(policyMocks.getTargetInstallState).not.toHaveBeenCalled();
+  });
+
+  it('seeds not-installed when no current install manifest is present', async () => {
+    policyMocks.hasCurrentTargetInstallManifest.mockResolvedValue(false);
+    policyMocks.isAnythingInstalled.mockResolvedValue(true);
+
+    await expect(resolveClientInstallPresence({} as MinecraftKit, SLUG)).resolves.toBe(
+      InstallStatuses.NOT_INSTALLED,
+    );
+  });
+
+  it('seeds unverified when context cannot be built but old files exist', async () => {
     policyMocks.buildContext.mockRejectedValue(new Error('Client is not resolvable'));
     policyMocks.isAnythingInstalled.mockResolvedValue(true);
 
-    await expect(resolveClientReadinessPolicy({} as MinecraftKit, SLUG)).resolves.toEqual(
-      expect.objectContaining({
-        kind: ReadinessPolicyKinds.UNVERIFIED,
-        status: InstallStatuses.UNVERIFIED,
-        hasLegacyInstall: true,
-        freshInstall: false,
-      }),
+    await expect(resolveClientInstallPresence({} as MinecraftKit, SLUG)).resolves.toBe(
+      InstallStatuses.UNVERIFIED,
     );
   });
 });

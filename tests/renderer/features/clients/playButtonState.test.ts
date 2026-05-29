@@ -88,4 +88,27 @@ describe('selectPlayButtonAction', () => {
       PlayButtonActions.INSTALL,
     );
   });
+
+  it('shows a spinner while install is still planning (no bytes yet)', () => {
+    expect(select({ status: InstallStatuses.INSTALLING, hasProgress: false })).toBe(
+      PlayButtonActions.CHECKING,
+    );
+  });
+
+  it('shows a spinner while a bundle sync is busy before downloading', () => {
+    for (const bundleStatus of [
+      BundleSyncStatuses.FETCHING_MANIFEST,
+      BundleSyncStatuses.PLANNING,
+      BundleSyncStatuses.DELETING,
+      BundleSyncStatuses.HEALING,
+    ]) {
+      expect(select({ bundleStatus })).toBe(PlayButtonActions.CHECKING);
+    }
+  });
+
+  it('still renders the download card when a bundle is actively downloading', () => {
+    expect(select({ bundleStatus: BundleSyncStatuses.DOWNLOADING, hasProgress: true })).toBe(
+      PlayButtonActions.PROGRESS,
+    );
+  });
 });

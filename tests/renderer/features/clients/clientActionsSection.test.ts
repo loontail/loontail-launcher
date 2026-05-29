@@ -6,7 +6,6 @@ const select = (overrides: Partial<Parameters<typeof selectClientActionsState>[0
   selectClientActionsState({
     status: InstallStatuses.INSTALLED,
     repairPending: false,
-    cancelPending: false,
     uninstallPending: false,
     ...overrides,
   });
@@ -20,24 +19,19 @@ describe('selectClientActionsState', () => {
     });
   });
 
-  it('turns the repair action into cancel while repair is active', () => {
+  it('disables both actions while repair is active (no cancel affordance)', () => {
     expect(select({ status: InstallStatuses.REPAIRING })).toEqual({
       repairActive: true,
-      repairDisabled: false,
+      repairDisabled: true,
       uninstallDisabled: true,
     });
   });
 
-  it('does not re-enable the active repair action while cancel is pending', () => {
-    expect(
-      select({
-        status: InstallStatuses.REPAIRING,
-        cancelPending: true,
-      }),
-    ).toEqual({
-      repairActive: true,
+  it('disables repair while a repair request is pending', () => {
+    expect(select({ repairPending: true })).toEqual({
+      repairActive: false,
       repairDisabled: true,
-      uninstallDisabled: true,
+      uninstallDisabled: false,
     });
   });
 });

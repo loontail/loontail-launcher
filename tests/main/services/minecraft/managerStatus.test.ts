@@ -1,4 +1,4 @@
-import { type MinecraftKit, PauseController, type Target } from '@loontail/minecraft-kit';
+import { type MinecraftKit, PauseController } from '@loontail/minecraft-kit';
 import { describe, expect, it, vi } from 'vitest';
 
 const statusMocks = vi.hoisted(() => {
@@ -10,7 +10,7 @@ const statusMocks = vi.hoisted(() => {
     hasCurrentTargetInstallManifest: vi.fn(),
     isAnythingInstalled: vi.fn(),
     isTargetReady: vi.fn(),
-    resolveClientReadinessPolicy: vi.fn(),
+    resolveClientInstallPresence: vi.fn(),
     setClientOverride: vi.fn(),
   };
 });
@@ -37,13 +37,7 @@ vi.mock('@main/services/minecraft/installManifest', () => ({
 }));
 
 vi.mock('@main/services/minecraft/readinessPolicy', () => ({
-  ReadinessPolicyKinds: {
-    INSTALLED: 'installed',
-    NEEDS_INSTALL: 'needs-install',
-    NEEDS_REPAIR: 'needs-repair',
-    UNVERIFIED: 'unverified',
-  },
-  resolveClientReadinessPolicy: statusMocks.resolveClientReadinessPolicy,
+  resolveClientInstallPresence: statusMocks.resolveClientInstallPresence,
   resolveTargetReadinessPolicy: vi.fn(),
 }));
 
@@ -60,7 +54,6 @@ import { InstallStatuses } from '@shared/contracts/minecraft';
 import type { LauncherSettings } from '@shared/contracts/settings';
 
 const SLUG = asClientSlug('test-client');
-const CLIENT_FOLDER = '/tmp/clients/test-client';
 
 const launcherSettings = (): LauncherSettings => ({
   memory: { allocatedRamMb: 0 },
@@ -88,51 +81,31 @@ const resetStatusMocks = (): void => {
   statusMocks.hasCurrentTargetInstallManifest.mockReset();
   statusMocks.isAnythingInstalled.mockReset();
   statusMocks.isTargetReady.mockReset();
-  statusMocks.resolveClientReadinessPolicy.mockReset();
+  statusMocks.resolveClientInstallPresence.mockReset();
   statusMocks.setClientOverride.mockReset();
 
   statusMocks.getSettings.mockReturnValue(launcherSettings());
   statusMocks.hasCurrentTargetInstallManifest.mockResolvedValue(true);
   statusMocks.isAnythingInstalled.mockResolvedValue(false);
   statusMocks.isTargetReady.mockResolvedValue(true);
-  statusMocks.resolveClientReadinessPolicy.mockResolvedValue({
-    kind: 'installed',
-    status: InstallStatuses.INSTALLED,
-    freshInstall: false,
-  });
+  statusMocks.resolveClientInstallPresence.mockResolvedValue(InstallStatuses.INSTALLED);
 };
 
 describe('MinecraftManager.getStatus', () => {
-  it('reports not-installed when the current target is not ready even if old files exist', async () => {
+  it('seeds installed status straight from the cheap presence check', async () => {
     resetStatusMocks();
-    statusMocks.buildContext.mockResolvedValue({
-      target: {} as Target,
-      clientFolder: CLIENT_FOLDER,
-    });
-    statusMocks.resolveClientReadinessPolicy.mockResolvedValue({
-      kind: 'needs-repair',
-      status: InstallStatuses.NOT_INSTALLED,
-      freshInstall: false,
-    });
+    statusMocks.resolveClientInstallPresence.mockResolvedValue(InstallStatuses.INSTALLED);
 
     await expect(makeManager().getStatus(SLUG)).resolves.toEqual({
-      status: InstallStatuses.NOT_INSTALLED,
+      status: InstallStatuses.INSTALLED,
       paused: false,
     });
-    expect(statusMocks.resolveClientReadinessPolicy).toHaveBeenCalledWith(expect.any(Object), SLUG);
+    expect(statusMocks.resolveClientInstallPresence).toHaveBeenCalledWith(expect.any(Object), SLUG);
   });
 
-  it('reports not-installed without readiness verification when the target manifest is stale', async () => {
+  it('seeds not-installed without any readiness verification', async () => {
     resetStatusMocks();
-    statusMocks.buildContext.mockResolvedValue({
-      target: {} as Target,
-      clientFolder: CLIENT_FOLDER,
-    });
-    statusMocks.resolveClientReadinessPolicy.mockResolvedValue({
-      kind: 'needs-install',
-      status: InstallStatuses.NOT_INSTALLED,
-      freshInstall: true,
-    });
+    statusMocks.resolveClientInstallPresence.mockResolvedValue(InstallStatuses.NOT_INSTALLED);
 
     await expect(makeManager().getStatus(SLUG)).resolves.toEqual({
       status: InstallStatuses.NOT_INSTALLED,
@@ -140,32 +113,12 @@ describe('MinecraftManager.getStatus', () => {
     });
   });
 
-  it('reports unverified when target context cannot be built but old files exist', async () => {
+  it('seeds unverified when the client context cannot be resolved but old files exist', async () => {
     resetStatusMocks();
-    statusMocks.resolveClientReadinessPolicy.mockResolvedValue({
-      kind: 'unverified',
-      status: InstallStatuses.UNVERIFIED,
-      hasLegacyInstall: true,
-      freshInstall: false,
-    });
+    statusMocks.resolveClientInstallPresence.mockResolvedValue(InstallStatuses.UNVERIFIED);
 
     await expect(makeManager().getStatus(SLUG)).resolves.toEqual({
       status: InstallStatuses.UNVERIFIED,
-      paused: false,
-    });
-  });
-
-  it('reports not-installed when target context cannot be built and no files exist', async () => {
-    resetStatusMocks();
-    statusMocks.resolveClientReadinessPolicy.mockResolvedValue({
-      kind: 'unverified',
-      status: InstallStatuses.NOT_INSTALLED,
-      hasLegacyInstall: false,
-      freshInstall: true,
-    });
-
-    await expect(makeManager().getStatus(SLUG)).resolves.toEqual({
-      status: InstallStatuses.NOT_INSTALLED,
       paused: false,
     });
   });
