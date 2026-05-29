@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { mainConfig } from '@main/config';
 import { scopedLogger } from '@main/infra/logger';
 import { BrowserWindow, shell } from 'electron';
+import { RENDERER_ENTRY_FILES, createRendererLocation } from './rendererLocations';
 
 const DEFAULT_WIDTH = 1000;
 const DEFAULT_HEIGHT = 624;
@@ -44,25 +45,6 @@ const isAllowedExternalUrl = (raw: string, allowlist: ReadonlySet<string>): bool
   return false;
 };
 
-type NavigationGuard = (url: string) => boolean;
-
-// Renderer loads from exactly one origin: dev URL or file://. Anything else
-// is a navigation attempt away from the app and must be denied.
-const buildNavigationGuard = (): NavigationGuard => {
-  const devUrl = process.env.ELECTRON_RENDERER_URL;
-  if (devUrl) {
-    const devOrigin = safeParseUrl(devUrl)?.origin ?? null;
-    return (url) => {
-      const parsed = safeParseUrl(url);
-      return parsed !== null && devOrigin !== null && parsed.origin === devOrigin;
-    };
-  }
-  return (url) => {
-    const parsed = safeParseUrl(url);
-    return parsed !== null && parsed.protocol === 'file:';
-  };
-};
-
 const buildWindowOptions = (): Electron.BrowserWindowConstructorOptions => {
   const base: Electron.BrowserWindowConstructorOptions = {
     width: DEFAULT_WIDTH,
@@ -101,7 +83,7 @@ const buildWindowOptions = (): Electron.BrowserWindowConstructorOptions => {
 export const createMainWindow = (): BrowserWindow => {
   const window = new BrowserWindow(buildWindowOptions());
   const externalAllowlist = buildExternalHostAllowlist();
-  const isAllowedNavigation = buildNavigationGuard();
+  const rendererLocation = createRendererLocation({ entryFile: RENDERER_ENTRY_FILES.Main });
 
   window.on('ready-to-show', () => {
     window.show();
@@ -117,18 +99,22 @@ export const createMainWindow = (): BrowserWindow => {
   });
 
   window.webContents.on('will-navigate', (event, url) => {
-    if (!isAllowedNavigation(url)) {
+    if (!rendererLocation.isAllowedUrl(url)) {
       event.preventDefault();
       logger.info(`Denied in-window navigation: ${url}`);
     }
   });
 
-  const devServerUrl = process.env.ELECTRON_RENDERER_URL;
-  if (devServerUrl) {
-    void window.loadURL(devServerUrl);
+  window.webContents.on('will-attach-webview', (event) => {
+    event.preventDefault();
+    logger.info('Denied webview attachment');
+  });
+
+  if (rendererLocation.loadUrl) {
+    void window.loadURL(rendererLocation.loadUrl);
     window.webContents.openDevTools({ mode: 'detach' });
   } else {
-    void window.loadFile(join(__dirname, '../renderer/index.html'));
+    void window.loadFile(rendererLocation.filePath);
   }
 
   return window;

@@ -1,6 +1,8 @@
 import { join } from 'node:path';
 import { consoleHub } from '@main/infra/consoleHub';
+import { scopedLogger } from '@main/infra/logger';
 import { BrowserWindow } from 'electron';
+import { RENDERER_ENTRY_FILES, createRendererLocation } from './rendererLocations';
 
 const DEFAULT_WIDTH = 960;
 const DEFAULT_HEIGHT = 600;
@@ -10,6 +12,8 @@ const BACKGROUND_COLOR = '#212121';
 const TITLE_BAR_HEIGHT = 40;
 const TITLE_BAR_OVERLAY_COLOR = 'rgba(0, 0, 0, 0)';
 const TITLE_BAR_SYMBOL_COLOR = '#a3a3a3';
+
+const logger = scopedLogger('consoleWindow');
 
 const useNativeFrame = (): boolean => process.platform === 'linux';
 
@@ -57,14 +61,31 @@ export const openConsoleWindow = (): BrowserWindow => {
   }
 
   const window = new BrowserWindow(buildOptions());
+  const rendererLocation = createRendererLocation({ entryFile: RENDERER_ENTRY_FILES.Console });
 
   window.on('ready-to-show', () => window.show());
 
-  const devServerUrl = process.env.ELECTRON_RENDERER_URL;
-  if (devServerUrl) {
-    void window.loadURL(`${devServerUrl}/console.html`);
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    logger.info(`Denied console window open: ${url}`);
+    return { action: 'deny' };
+  });
+
+  window.webContents.on('will-navigate', (event, url) => {
+    if (!rendererLocation.isAllowedUrl(url)) {
+      event.preventDefault();
+      logger.info(`Denied console navigation: ${url}`);
+    }
+  });
+
+  window.webContents.on('will-attach-webview', (event) => {
+    event.preventDefault();
+    logger.info('Denied console webview attachment');
+  });
+
+  if (rendererLocation.loadUrl) {
+    void window.loadURL(rendererLocation.loadUrl);
   } else {
-    void window.loadFile(join(__dirname, '../renderer/console.html'));
+    void window.loadFile(rendererLocation.filePath);
   }
 
   consoleHub.attach(window);
