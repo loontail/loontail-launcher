@@ -30,7 +30,7 @@ import { ManagerError } from './errors';
 import { beginInstall, runInstall } from './install';
 import { hasCurrentTargetInstallManifest } from './installManifest';
 import { requireAccount, runLaunch } from './launch';
-import { OP_TO_STATUS, type Op, OpKinds } from './ops';
+import { OP_TO_STATUS, type Op, OpKinds, type RepairOp } from './ops';
 import { runRepair } from './repair';
 import { isAnythingInstalled, isTargetReady } from './runtimeState';
 import { runUninstall } from './uninstall';
@@ -215,10 +215,8 @@ export class MinecraftManager {
       lock.setCancel(() => this.cancel(slug));
       this.env.emitStatus({ slug, status: InstallStatuses.REPAIRING, paused: false });
 
-      // runRepair never throws; it handles errors internally via emitError +
-      // emitStatus and always clears the ops map in finally.
-      void runRepair(this.env, slug, ctx, op).finally(() => {
-        lock.release();
+      void this.finishRepair(slug, ctx, op, lock).catch((error) => {
+        logger.error(`[${slug}] repair: unexpected background failure`, error);
       });
     } catch (error) {
       lock.release();
@@ -341,5 +339,27 @@ export class MinecraftManager {
       MinecraftErrorCodes.OP_IN_FLIGHT,
       'Another operation is already running for this client',
     );
+  }
+
+  private async finishRepair(
+    slug: ClientSlug,
+    ctx: Awaited<ReturnType<typeof buildContext>>,
+    op: RepairOp,
+    lock: ClientOperationLease,
+  ): Promise<void> {
+    let repaired = false;
+    try {
+      repaired = await runRepair(this.env, slug, ctx, op);
+    } finally {
+      lock.release();
+    }
+
+    if (!repaired || this.launchHook === null) return;
+
+    try {
+      await this.launchHook(slug);
+    } catch (error) {
+      logger.warn(`[${slug}] repair: bundle sync after repair failed`, error);
+    }
   }
 }

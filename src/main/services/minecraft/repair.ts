@@ -210,7 +210,7 @@ export const runRepair = async (
   slug: ClientSlug,
   ctx: Context,
   op: RepairOp,
-): Promise<void> => {
+): Promise<boolean> => {
   const progress = createRepairProgressListener(env, slug);
   try {
     env.logger.info(`[${slug}] repair: verifying & fixing…`);
@@ -260,17 +260,19 @@ export const runRepair = async (
     });
     await persistTargetInstallManifest(env, slug, ctx);
     env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
+    return true;
   } catch (error) {
     if (op.abort.signal.aborted) {
       env.logger.info(`[${slug}] repair: cancelled`);
       await emitReadinessStatus(env, slug, ctx, InstallStatuses.NOT_INSTALLED);
-      return;
+      return false;
     }
     const code = classifyError(error, op.abort.signal);
     const message = errorMessage(error);
     env.logger.error(`[${slug}] repair: failed (${code}) - ${message}`, error);
     env.emitError(slug, code, message);
     await emitReadinessStatus(env, slug, ctx, InstallStatuses.ERROR);
+    return false;
   } finally {
     progress.dispose();
     env.ops.delete(slug);

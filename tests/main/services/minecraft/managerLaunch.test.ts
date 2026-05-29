@@ -7,6 +7,7 @@ import {
 } from '@main/services/clientOperationLocks';
 import type { Broadcaster } from '@main/services/minecraft/broadcast';
 import type { Context } from '@main/services/minecraft/context';
+import { OpKinds } from '@main/services/minecraft/ops';
 import type { Account } from '@shared/contracts/account';
 import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraft';
@@ -24,6 +25,7 @@ const orchestrationMocks = vi.hoisted(() => {
     isTargetReady: vi.fn(),
     runInstall: vi.fn(),
     runLaunch: vi.fn(),
+    runRepair: vi.fn(),
     setClientOverride: vi.fn(),
   };
 });
@@ -59,6 +61,10 @@ vi.mock('@main/services/minecraft/launch', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@main/services/minecraft/launch')>();
   return { ...actual, runLaunch: orchestrationMocks.runLaunch };
 });
+
+vi.mock('@main/services/minecraft/repair', () => ({
+  runRepair: orchestrationMocks.runRepair,
+}));
 
 import { MinecraftManager } from '@main/services/minecraft/manager';
 
@@ -122,6 +128,7 @@ const resetMocks = (): void => {
   orchestrationMocks.isTargetReady.mockReset();
   orchestrationMocks.runInstall.mockReset();
   orchestrationMocks.runLaunch.mockReset();
+  orchestrationMocks.runRepair.mockReset();
   orchestrationMocks.setClientOverride.mockReset();
 
   orchestrationMocks.buildContext.mockResolvedValue(context());
@@ -131,6 +138,7 @@ const resetMocks = (): void => {
   orchestrationMocks.isTargetReady.mockResolvedValue(true);
   orchestrationMocks.runInstall.mockResolvedValue(undefined);
   orchestrationMocks.runLaunch.mockResolvedValue(undefined);
+  orchestrationMocks.runRepair.mockResolvedValue(true);
 };
 
 describe('MinecraftManager.startLaunch', () => {
@@ -265,5 +273,46 @@ describe('MinecraftManager.startLaunch', () => {
     } finally {
       bundleLock.lease.release();
     }
+  });
+
+  it('refreshes bundle state after a successful manual repair', async () => {
+    resetMocks();
+    const operationLocks = createClientOperationLocks();
+    const broadcaster = makeBroadcaster();
+    const manager = makeManager(broadcaster, operationLocks);
+    const ctx = context();
+    orchestrationMocks.buildContext.mockResolvedValue(ctx);
+    orchestrationMocks.isAnythingInstalled.mockResolvedValue(true);
+
+    let bundleLockAcquired = false;
+    const hook = vi.fn(async () => {
+      const bundleLock = operationLocks.acquire({
+        slug: SLUG,
+        domain: ClientOperationDomains.BUNDLE,
+        resources: [ClientOperationResources.CLIENT_FOLDER],
+      });
+      if (bundleLock.kind !== 'acquired') return;
+      bundleLockAcquired = true;
+      bundleLock.lease.release();
+    });
+    manager.attachLaunchHook(hook);
+
+    await manager.startRepair(SLUG);
+
+    await vi.waitFor(() => {
+      expect(hook).toHaveBeenCalledWith(SLUG);
+    });
+    expect(bundleLockAcquired).toBe(true);
+    expect(orchestrationMocks.runRepair).toHaveBeenCalledWith(
+      expect.any(Object),
+      SLUG,
+      ctx,
+      expect.objectContaining({ kind: OpKinds.REPAIR }),
+    );
+    expect(broadcaster.status).toHaveBeenCalledWith({
+      slug: SLUG,
+      status: InstallStatuses.REPAIRING,
+      paused: false,
+    });
   });
 });
