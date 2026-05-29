@@ -23,6 +23,10 @@ import type { Healer } from '@main/services/bundle/healer';
 import { BundleManager } from '@main/services/bundle/manager';
 import type { SyncPlan } from '@main/services/bundle/plan';
 import type { SyncTask } from '@main/services/bundle/runner';
+import {
+  ClientOperationDomains,
+  createClientOperationLocks,
+} from '@main/services/clientOperationLocks';
 import { BundleErrorCodes, BundleSyncStatuses } from '@shared/contracts/bundle';
 import type { ClientSlug } from '@shared/contracts/ids';
 import type { LauncherSettings } from '@shared/contracts/settings';
@@ -245,6 +249,24 @@ describe('BundleManager pause cleanup', () => {
       slug: SLUG,
       status: BundleSyncStatuses.CANCELLED,
     });
+  });
+
+  it('rejects manual bundle sync while a minecraft writer lock is held', async () => {
+    managerMocks.getClient.mockResolvedValue({ bundleSlug: BUNDLE_SLUG });
+    const operationLocks = createClientOperationLocks();
+    const minecraftLock = operationLocks.acquire(SLUG, ClientOperationDomains.MINECRAFT);
+    if (minecraftLock.kind !== 'acquired') throw new Error('Expected minecraft lock');
+
+    try {
+      const manager = new BundleManager(makeBroadcaster(), makeHealer(), operationLocks);
+
+      await expect(manager.startSync({ slug: SLUG })).rejects.toMatchObject({
+        code: BundleErrorCodes.OP_IN_FLIGHT,
+      });
+      expect(managerMocks.fetchRemoteManifest).not.toHaveBeenCalled();
+    } finally {
+      minecraftLock.lease.release();
+    }
   });
 
   it('cancelAll aborts every active sync and frees all slots', async () => {

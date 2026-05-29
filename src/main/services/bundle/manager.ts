@@ -1,5 +1,11 @@
 import { BUNDLE_PAUSED_SYNC_MAX_IDLE_MS } from '@main/constants/bundle';
 import { scopedLogger } from '@main/infra/logger';
+import {
+  ClientOperationDomains,
+  type ClientOperationLease,
+  type ClientOperationLocks,
+  createClientOperationLocks,
+} from '@main/services/clientOperationLocks';
 import { getClient } from '@main/services/clients';
 import { getSettings } from '@main/services/settings/settings';
 import {
@@ -67,10 +73,12 @@ const createEmit = (
 
 export class BundleManager {
   private readonly activeSyncs = new Map<ClientSlug, ActiveSync>();
+  private readonly activeLocks = new Map<ClientSlug, ClientOperationLease>();
 
   constructor(
     private readonly broadcaster: BundleBroadcaster,
     private readonly healer: Healer,
+    private readonly operationLocks: ClientOperationLocks = createClientOperationLocks(),
   ) {}
 
   // Public API ---------------------------------------------------------------
@@ -150,7 +158,7 @@ export class BundleManager {
         active,
         new BundleError(BundleErrorCodes.ABORTED, 'Sync cancelled while paused'),
       );
-      this.activeSyncs.delete(slug);
+      this.dropActiveSync(slug);
     }
   }
 
@@ -215,10 +223,12 @@ export class BundleManager {
         'Set the launcher install folder in System settings first',
       );
     }
+    const lock = this.acquireWriteLock(slug);
     const task = createSyncTask(slug, clientFolder);
     const active = createActiveSync(task, bundleSlug, options.forLaunch);
     const launchWait = active.forLaunch ? this.createAwaiter(active) : null;
     this.activeSyncs.set(slug, active);
+    this.activeLocks.set(slug, lock);
 
     await this.executePreparedSync(active, task, {
       force: req.force === true,
@@ -301,7 +311,7 @@ export class BundleManager {
       this.rejectAwaiters(active, this.toBundleError(err, code));
     } finally {
       if (!task.paused || task.cancelled) {
-        this.activeSyncs.delete(task.slug);
+        this.dropActiveSync(task.slug);
       }
     }
   }
@@ -338,6 +348,23 @@ export class BundleManager {
   private resolveClientFolder(slug: ClientSlug): string {
     const resolved = resolveClientSettings(getSettings(), slug);
     return resolved.storage.clientFolder || '';
+  }
+
+  private acquireWriteLock(slug: ClientSlug): ClientOperationLease {
+    const result = this.operationLocks.acquire(slug, ClientOperationDomains.BUNDLE);
+    if (result.kind === 'acquired') return result.lease;
+    throw new BundleError(
+      BundleErrorCodes.OP_IN_FLIGHT,
+      'Another operation is already running for this client',
+    );
+  }
+
+  private dropActiveSync(slug: ClientSlug): void {
+    this.activeSyncs.delete(slug);
+    const lock = this.activeLocks.get(slug);
+    if (lock === undefined) return;
+    lock.release();
+    this.activeLocks.delete(slug);
   }
 
   private emitStatus(slug: ClientSlug, status: BundleSyncStatus): void {
@@ -391,7 +418,7 @@ export class BundleManager {
       active,
       new BundleError(BundleErrorCodes.ABORTED, 'Paused sync expired before resume'),
     );
-    this.activeSyncs.delete(slug);
+    this.dropActiveSync(slug);
   }
 
   private toBundleError(err: unknown, code: BundleErrorCode): BundleError {

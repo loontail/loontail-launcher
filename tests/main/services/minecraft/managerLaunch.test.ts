@@ -1,9 +1,14 @@
 import type { MinecraftKit, Target } from '@loontail/minecraft-kit';
+import {
+  ClientOperationDomains,
+  type ClientOperationLocks,
+  createClientOperationLocks,
+} from '@main/services/clientOperationLocks';
 import type { Broadcaster } from '@main/services/minecraft/broadcast';
 import type { Context } from '@main/services/minecraft/context';
 import type { Account } from '@shared/contracts/account';
 import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
-import { InstallStatuses } from '@shared/contracts/minecraft';
+import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraft';
 import { type LauncherSettings, LoaderChoices } from '@shared/contracts/settings';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -91,10 +96,17 @@ const makeBroadcaster = (): Broadcaster =>
     error: vi.fn(),
   }) as unknown as Broadcaster;
 
-const makeManager = (broadcaster = makeBroadcaster()): MinecraftManager =>
-  new MinecraftManager(broadcaster, {
-    targets: { resolve: vi.fn() },
-  } as unknown as MinecraftKit);
+const makeManager = (
+  broadcaster = makeBroadcaster(),
+  operationLocks?: ClientOperationLocks,
+): MinecraftManager =>
+  new MinecraftManager(
+    broadcaster,
+    {
+      targets: { resolve: vi.fn() },
+    } as unknown as MinecraftKit,
+    operationLocks,
+  );
 
 const resetMocks = (): void => {
   orchestrationMocks.buildContext.mockReset();
@@ -204,5 +216,23 @@ describe('MinecraftManager.startLaunch', () => {
       status: InstallStatuses.INSTALLED,
       paused: false,
     });
+  });
+
+  it('rejects repair while a bundle writer lock is held for the same client', async () => {
+    resetMocks();
+    const operationLocks = createClientOperationLocks();
+    const bundleLock = operationLocks.acquire(SLUG, ClientOperationDomains.BUNDLE);
+    if (bundleLock.kind !== 'acquired') throw new Error('Expected bundle lock');
+
+    try {
+      await expect(
+        makeManager(makeBroadcaster(), operationLocks).startRepair(SLUG),
+      ).rejects.toMatchObject({
+        code: MinecraftErrorCodes.OP_IN_FLIGHT,
+      });
+      expect(orchestrationMocks.buildContext).not.toHaveBeenCalled();
+    } finally {
+      bundleLock.lease.release();
+    }
   });
 });

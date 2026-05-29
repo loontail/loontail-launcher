@@ -1,6 +1,12 @@
 import type { MinecraftKit } from '@loontail/minecraft-kit';
 import { scopedLogger } from '@main/infra/logger';
 import {
+  ClientOperationDomains,
+  type ClientOperationLease,
+  type ClientOperationLocks,
+  createClientOperationLocks,
+} from '@main/services/clientOperationLocks';
+import {
   getSettings,
   setClientOverride as persistClientOverride,
 } from '@main/services/settings/settings';
@@ -39,7 +45,11 @@ export class MinecraftManager {
   private readonly kit: MinecraftKit;
   private launchHook: LaunchHook | null = null;
 
-  constructor(broadcaster: Broadcaster, kit: MinecraftKit) {
+  constructor(
+    broadcaster: Broadcaster,
+    kit: MinecraftKit,
+    private readonly operationLocks: ClientOperationLocks = createClientOperationLocks(),
+  ) {
     this.kit = kit;
     this.env = {
       kit,
@@ -104,13 +114,18 @@ export class MinecraftManager {
 
   async startInstall(slug: ClientSlug, loaderOverride?: LoaderChoice): Promise<void> {
     this.requireIdle(slug);
-    const ctx = await buildContext(this.kit, slug, loaderOverride);
+    const lock = this.acquireWriteLock(slug);
+    const ctx = await buildContext(this.kit, slug, loaderOverride).catch((error: unknown) => {
+      lock.release();
+      throw error;
+    });
     const op = beginInstall(this.env, slug, ctx, { fresh: true });
     // runInstall handles errors internally (emits via handleInstallFailure) and
     // rethrows for the launch path; in the fire-and-forget case we only need
     // the final INSTALLED status on success.
     void runInstall(this.env, slug, ctx, op)
       .then(async () => {
+        lock.release();
         // Mark Minecraft itself as installed BEFORE the bundle phase. The UI
         // listens for INSTALLED to switch the progress card from "downloading
         // minecraft" to "syncing bundle" (which only renders on top of an
@@ -128,6 +143,9 @@ export class MinecraftManager {
       })
       .catch(() => {
         // Already reported by handleInstallFailure; nothing to do here.
+      })
+      .finally(() => {
+        lock.release();
       });
   }
 
@@ -167,28 +185,41 @@ export class MinecraftManager {
 
   async startRepair(slug: ClientSlug): Promise<void> {
     this.requireIdle(slug);
-    const ctx = await buildContext(this.kit, slug);
-    if (!(await isAnythingInstalled(ctx.clientFolder))) {
-      throw new ManagerError(MinecraftErrorCodes.NOT_INSTALLED, 'Client is not installed');
-    }
-    const op: Op = { kind: OpKinds.REPAIR, abort: new AbortController() };
-    this.ops.set(slug, op);
-    this.env.emitStatus({ slug, status: InstallStatuses.REPAIRING, paused: false });
+    const lock = this.acquireWriteLock(slug);
+    try {
+      const ctx = await buildContext(this.kit, slug);
+      if (!(await isAnythingInstalled(ctx.clientFolder))) {
+        throw new ManagerError(MinecraftErrorCodes.NOT_INSTALLED, 'Client is not installed');
+      }
+      const op: Op = { kind: OpKinds.REPAIR, abort: new AbortController() };
+      this.ops.set(slug, op);
+      this.env.emitStatus({ slug, status: InstallStatuses.REPAIRING, paused: false });
 
-    // runRepair never throws; it handles errors internally via emitError +
-    // emitStatus and always clears the ops map in finally.
-    void runRepair(this.env, slug, ctx, op);
+      // runRepair never throws; it handles errors internally via emitError +
+      // emitStatus and always clears the ops map in finally.
+      void runRepair(this.env, slug, ctx, op).finally(() => {
+        lock.release();
+      });
+    } catch (error) {
+      lock.release();
+      throw error;
+    }
   }
 
   async uninstall(slug: ClientSlug): Promise<void> {
     this.requireIdle(slug);
+    const lock = this.acquireWriteLock(slug);
     const resolved = resolveClientSettings(getSettings(), slug);
-    await runUninstall(
-      this.env,
-      slug,
-      resolved.storage.clientFolder,
-      resolved.storage.clientsFolder,
-    );
+    try {
+      await runUninstall(
+        this.env,
+        slug,
+        resolved.storage.clientFolder,
+        resolved.storage.clientsFolder,
+      );
+    } finally {
+      lock.release();
+    }
   }
 
   async startLaunch(slug: ClientSlug, account: Account | null): Promise<void> {
@@ -198,6 +229,7 @@ export class MinecraftManager {
 
     if (!(await isTargetReady(this.kit, ctx.target))) {
       logger.info(`[${slug}] play: target version missing on disk — installing first`);
+      const lock = this.acquireWriteLock(slug);
       const op = beginInstall(this.env, slug, ctx, {
         fresh: !(await isAnythingInstalled(ctx.clientFolder)),
       });
@@ -206,6 +238,8 @@ export class MinecraftManager {
       } catch (error) {
         if (op.cancelled) return;
         throw error;
+      } finally {
+        lock.release();
       }
     }
 
@@ -269,5 +303,14 @@ export class MinecraftManager {
         'Another operation is already running for this client',
       );
     }
+  }
+
+  private acquireWriteLock(slug: ClientSlug): ClientOperationLease {
+    const result = this.operationLocks.acquire(slug, ClientOperationDomains.MINECRAFT);
+    if (result.kind === 'acquired') return result.lease;
+    throw new ManagerError(
+      MinecraftErrorCodes.OP_IN_FLIGHT,
+      'Another operation is already running for this client',
+    );
   }
 }

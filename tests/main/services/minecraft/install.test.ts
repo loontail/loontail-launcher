@@ -1,4 +1,13 @@
+import fs from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.hoisted(() => {
+  process.env.API_URL ??= 'http://test.invalid';
+  process.env.API_TOKEN ??= 'test-token';
+});
+
 import {
   EventTypes,
   type InstallPlan,
@@ -14,7 +23,11 @@ import {
   type Target,
   type VerificationKind,
   VerificationKinds,
+  type VerificationResult,
+  VerifyFileCategories,
+  VerifyFileStatuses,
 } from '@loontail/minecraft-kit';
+import { bundleManifestPath } from '@main/services/bundle/paths';
 import type { Context } from '@main/services/minecraft/context';
 import type { ManagerEnv } from '@main/services/minecraft/env';
 import { runInstall } from '@main/services/minecraft/install';
@@ -23,7 +36,6 @@ import { runRepair } from '@main/services/minecraft/repair';
 import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses, ProgressStages } from '@shared/contracts/minecraft';
 import { LoaderChoices } from '@shared/contracts/settings';
-import { describe, expect, it, vi } from 'vitest';
 
 const SLUG = asClientSlug('test-client');
 const CLIENT_FOLDER = 'Z:/missing-client-folder';
@@ -219,5 +231,110 @@ describe('runRepair', () => {
       paused: false,
     });
     expect(ops.has(SLUG)).toBe(false);
+  });
+
+  it('filters bundle-owned paths during manual repair', async () => {
+    const root = await fs.mkdtemp(path.join(tmpdir(), 'launcher-repair-bundle-'));
+    const bundleSlug = 'bundle-x';
+    const bundleRelativePath = 'versions/1.20.1/1.20.1.jar';
+    const vanillaRelativePath = 'libraries/com/example/lib.jar';
+    const bundlePath = path.join(root, bundleRelativePath);
+    const vanillaPath = path.join(root, vanillaRelativePath);
+    const manifestPath = bundleManifestPath(root);
+    await fs.mkdir(path.dirname(manifestPath), { recursive: true });
+    await fs.writeFile(
+      manifestPath,
+      JSON.stringify({
+        bundleSlug,
+        manifestHash: 'bundle-manifest-hash',
+        syncedAt: new Date(0).toISOString(),
+        files: {
+          [bundleRelativePath]: { sha256: 'bundle-sha256', size: 1 },
+        },
+      }),
+      'utf8',
+    );
+
+    try {
+      const target = {
+        ...emptyTarget,
+        id: 'target-id',
+        directory: root,
+        loader: { type: Loaders.VANILLA },
+      } as unknown as Target;
+      const context = {
+        ...makeContext(),
+        client: { slug: SLUG, bundleSlug },
+        clientFolder: root,
+        target,
+      } as unknown as Context;
+      const minecraftVerification: VerificationResult = {
+        targetId: 'target-id',
+        kind: VerificationKinds.MINECRAFT,
+        isValid: false,
+        checkedFiles: 2,
+        durationMs: 1,
+        issues: [
+          {
+            path: bundlePath,
+            category: VerifyFileCategories.CLIENT_JAR,
+            status: VerifyFileStatuses.CORRUPT,
+          },
+          {
+            path: vanillaPath,
+            category: VerifyFileCategories.LIBRARY,
+            status: VerifyFileStatuses.MISSING,
+          },
+        ],
+      };
+      const runtimeVerification: VerificationResult = {
+        targetId: 'target-id',
+        kind: VerificationKinds.RUNTIME,
+        isValid: true,
+        checkedFiles: 1,
+        durationMs: 1,
+        issues: [],
+      };
+      let plannedFrom: VerificationResult | readonly VerificationResult[] | undefined;
+      const op: RepairOp = { kind: OpKinds.REPAIR, abort: new AbortController() };
+      const kit = {
+        verify: {
+          minecraft: { run: vi.fn(async () => minecraftVerification) },
+          runtime: { run: vi.fn(async () => runtimeVerification) },
+        },
+        repair: {
+          all: vi.fn(),
+          minecraft: {
+            plan: vi.fn(async (_target: Target, options: { from: VerificationResult }) => {
+              plannedFrom = options.from;
+              return { ...repairPlan(), totalActions: 1 };
+            }),
+            run: vi.fn(async () => repairReport()),
+          },
+        },
+      } as unknown as MinecraftKit;
+      const ops = new Map<ClientSlug, Op>([[SLUG, op]]);
+      const env = makeEnv(kit, ops);
+
+      await runRepair(env, SLUG, context, op);
+
+      expect(kit.repair.all).not.toHaveBeenCalled();
+      expect(plannedFrom).toMatchObject({
+        issues: [expect.objectContaining({ path: vanillaPath })],
+      });
+      expect(
+        (plannedFrom as VerificationResult | undefined)?.issues.some(
+          (issue) => issue.path === bundlePath,
+        ),
+      ).toBe(false);
+      expect(kit.repair.minecraft.run).toHaveBeenCalledTimes(1);
+      expect(env.broadcaster.status).toHaveBeenLastCalledWith({
+        slug: SLUG,
+        status: InstallStatuses.INSTALLED,
+        paused: false,
+      });
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
   });
 });

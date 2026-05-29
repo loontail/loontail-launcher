@@ -1,5 +1,9 @@
 import type { MinecraftKit } from '@loontail/minecraft-kit';
 import type { Router } from '@main/ipc/router';
+import {
+  type ClientOperationLocks,
+  createClientOperationLocks,
+} from '@main/services/clientOperationLocks';
 import type { BrowserWindow } from 'electron';
 import { createBundleBroadcaster } from './broadcast';
 import { createHealer } from './healer';
@@ -17,10 +21,11 @@ export const createBundleService = (
   router: Router,
   mainWindow: BrowserWindow,
   kit: MinecraftKit,
+  operationLocks: ClientOperationLocks = createClientOperationLocks(),
 ): BundleService => {
   const broadcaster = createBundleBroadcaster(mainWindow);
   const healer = createHealer(kit);
-  const manager = new BundleManager(broadcaster, healer);
+  const manager = new BundleManager(broadcaster, healer, operationLocks);
   return {
     init: async () => {
       registerBundleRoutes(router, manager);

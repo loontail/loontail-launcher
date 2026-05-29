@@ -17,6 +17,7 @@ import { createTrustedSenderCheck } from '@main/ipc/trustedSender';
 import { createAppService } from '@main/services/app';
 import { createAuthService } from '@main/services/auth';
 import { createBundleService } from '@main/services/bundle';
+import { createClientOperationLocks } from '@main/services/clientOperationLocks';
 import { createClientsService } from '@main/services/clients';
 import { createConsoleService } from '@main/services/console';
 import { createKit } from '@main/services/kit';
@@ -91,6 +92,7 @@ const start = async (): Promise<void> => {
   const router = createRouter(createTrustedSenderCheck(mainWindow));
 
   const kit = createKit();
+  const clientOperationLocks = createClientOperationLocks();
   const appService = createAppService(router);
   const authService = createAuthService(router, kit);
   const systemService = createSystemService(router, mainWindow);
@@ -99,8 +101,8 @@ const start = async (): Promise<void> => {
   const clientsService = createClientsService(router);
   const serversService = createServersService(router);
   const mediaService = createMediaService(router);
-  const minecraftService = createMinecraftService(router, mainWindow, kit);
-  const bundleService = createBundleService(router, mainWindow, kit);
+  const minecraftService = createMinecraftService(router, mainWindow, kit, clientOperationLocks);
+  const bundleService = createBundleService(router, mainWindow, kit, clientOperationLocks);
   // Wire bundle sync into the launch flow — runs after install, before launch.
   // No-op for clients without a bundleSlug (handled inside syncForLaunch).
   minecraftService.manager.attachLaunchHook((slug, signal) =>

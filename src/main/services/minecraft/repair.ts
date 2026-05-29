@@ -7,6 +7,7 @@ import {
   VerifyFileCategories,
   type VerifyFileCategory,
 } from '@loontail/minecraft-kit';
+import { loadLocalManifest } from '@main/services/bundle/manifestRepo';
 import type { ClientSlug } from '@shared/contracts/ids';
 import {
   InstallStatuses,
@@ -14,6 +15,7 @@ import {
   type ProgressStage,
   ProgressStages,
 } from '@shared/contracts/minecraft';
+import { repairAllExceptBundle } from './bundleHealing';
 import type { Context } from './context';
 import type { ManagerEnv } from './env';
 import { classifyError, errorMessage } from './errors';
@@ -152,6 +154,14 @@ const createRepairProgressListener = (env: ManagerEnv, slug: ClientSlug): Progre
   };
 };
 
+const loadBundleOwnedPaths = async (ctx: Context): Promise<ReadonlySet<string> | null> => {
+  const bundleSlug = ctx.client.bundleSlug ?? null;
+  if (bundleSlug === null) return null;
+  const manifest = await loadLocalManifest(ctx.clientFolder);
+  if (manifest?.bundleSlug !== bundleSlug) return null;
+  return new Set(Object.keys(manifest.files));
+};
+
 export const runRepair = async (
   env: ManagerEnv,
   slug: ClientSlug,
@@ -161,10 +171,26 @@ export const runRepair = async (
   try {
     env.logger.info(`[${slug}] repair: verifying & fixing…`);
     const onEvent = createRepairProgressListener(env, slug);
-    const report = await env.kit.repair.all(ctx.target, {
+    const repairOptions = {
       signal: op.abort.signal,
       onEvent,
-    });
+    };
+    const bundleOwnedPaths = await loadBundleOwnedPaths(ctx);
+    const report =
+      bundleOwnedPaths === null
+        ? await env.kit.repair.all(ctx.target, repairOptions)
+        : (
+            await repairAllExceptBundle(
+              env.kit,
+              {
+                slug,
+                clientFolder: ctx.clientFolder,
+                target: ctx.target,
+              },
+              bundleOwnedPaths,
+              repairOptions,
+            )
+          ).report;
     const broken = [...report.repairs.keys()];
     env.logger.info(
       broken.length === 0

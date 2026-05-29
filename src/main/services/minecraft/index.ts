@@ -1,5 +1,9 @@
 import type { MinecraftKit } from '@loontail/minecraft-kit';
 import type { Router } from '@main/ipc/router';
+import {
+  type ClientOperationLocks,
+  createClientOperationLocks,
+} from '@main/services/clientOperationLocks';
 import type { BrowserWindow } from 'electron';
 import { createBroadcaster } from './broadcast';
 import { MinecraftManager } from './manager';
@@ -17,9 +21,10 @@ export const createMinecraftService = (
   router: Router,
   mainWindow: BrowserWindow,
   kit: MinecraftKit,
+  operationLocks: ClientOperationLocks = createClientOperationLocks(),
 ): MinecraftService => {
   const broadcaster = createBroadcaster(mainWindow);
-  const manager = new MinecraftManager(broadcaster, kit);
+  const manager = new MinecraftManager(broadcaster, kit, operationLocks);
   return {
     init: async () => {
       registerMinecraftRoutes(router, manager);
