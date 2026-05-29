@@ -16,19 +16,14 @@ const ERROR_COPY_KEYS: Record<LoginErrorCode, string> = {
 
 export const LoginForm = () => {
   const { t } = useTranslation();
-  const { submit, isPending } = useLogin();
+  const { submit, isPending, errorCode, clearError } = useLogin();
   const mojang = useMojangLogin();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
-  const [errorCode, setErrorCode] = useState<LoginErrorCode | null>(null);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setErrorCode(null);
-    const result = await submit({ identifier, password });
-    if (!result.ok) {
-      setErrorCode(result.error);
-    }
+    await submit({ identifier, password });
   };
 
   const isCredentialsDisabled = isPending || identifier.length === 0 || password.length === 0;
@@ -108,7 +103,7 @@ export const LoginForm = () => {
             variant="outline"
             disabled={isPending}
             onClick={() => {
-              setErrorCode(null);
+              clearError();
               void mojang.signIn();
             }}
             className="w-full gap-2"
