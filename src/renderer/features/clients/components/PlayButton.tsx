@@ -6,18 +6,85 @@ import {
   useStopClient,
 } from '@renderer/features/minecraft';
 import { useLauncherSettings, useResolveFor } from '@renderer/features/settings';
-import { BundleSyncStatuses } from '@shared/contracts/bundle';
+import { type BundleSyncStatus, BundleSyncStatuses } from '@shared/contracts/bundle';
 import type { Client } from '@shared/contracts/client';
-import { InstallStatuses } from '@shared/contracts/minecraft';
+import { type InstallStatus, InstallStatuses } from '@shared/contracts/minecraft';
 import type { LoaderChoice } from '@shared/contracts/settings';
 import { isLoaderAvailable } from '@shared/domain/loader';
-import { Download, Loader2, Play, RotateCcw, Square } from 'lucide-react';
+import { Download, Loader2, Play, RefreshCw, RotateCcw, Square } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LoaderChoiceModal } from './LoaderChoiceModal';
 import { ActionButton, InstallProgress, useInstallProgress } from './install';
 
 type PlayButtonProps = { client: Client };
+
+export const PlayButtonActions = {
+  PROGRESS: 'progress',
+  BUNDLE_ERROR: 'bundle-error',
+  BUNDLE_UPDATE: 'bundle-update',
+  UNINSTALLING: 'uninstalling',
+  LAUNCHING: 'launching',
+  RUNNING: 'running',
+  PLAY: 'play',
+  ERROR: 'error',
+  INSTALL: 'install',
+} as const;
+
+export type PlayButtonAction = (typeof PlayButtonActions)[keyof typeof PlayButtonActions];
+
+type PlayButtonSelectionInput = {
+  status: InstallStatus;
+  hasProgress: boolean;
+  hasBundle: boolean;
+  bundleStatus: BundleSyncStatus;
+  bundleInstalled: boolean;
+  bundleSignatureMatches: boolean;
+  hasBundleError: boolean;
+};
+
+export const selectPlayButtonAction = ({
+  status,
+  hasProgress,
+  hasBundle,
+  bundleStatus,
+  bundleInstalled,
+  bundleSignatureMatches,
+  hasBundleError,
+}: PlayButtonSelectionInput): PlayButtonAction => {
+  if (hasProgress) return PlayButtonActions.PROGRESS;
+  if (
+    hasBundle &&
+    bundleStatus === BundleSyncStatuses.ERROR &&
+    hasBundleError &&
+    status === InstallStatuses.INSTALLED
+  ) {
+    return PlayButtonActions.BUNDLE_ERROR;
+  }
+  if (
+    hasBundle &&
+    bundleInstalled &&
+    !bundleSignatureMatches &&
+    status === InstallStatuses.INSTALLED
+  ) {
+    return PlayButtonActions.BUNDLE_UPDATE;
+  }
+
+  switch (status) {
+    case InstallStatuses.UNINSTALLING:
+      return PlayButtonActions.UNINSTALLING;
+    case InstallStatuses.LAUNCHING:
+      return PlayButtonActions.LAUNCHING;
+    case InstallStatuses.RUNNING:
+      return PlayButtonActions.RUNNING;
+    case InstallStatuses.INSTALLED:
+      return PlayButtonActions.PLAY;
+    case InstallStatuses.ERROR:
+      return PlayButtonActions.ERROR;
+    default:
+      return PlayButtonActions.INSTALL;
+  }
+};
 
 export const PlayButton = ({ client }: PlayButtonProps) => {
   const { t } = useTranslation();
@@ -67,10 +134,20 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
     />
   );
 
+  const action = selectPlayButtonAction({
+    status: state.status,
+    hasProgress: Boolean(progress),
+    hasBundle,
+    bundleStatus: bundle.status,
+    bundleInstalled: bundle.installed,
+    bundleSignatureMatches: bundle.signatureMatches,
+    hasBundleError: Boolean(bundle.error),
+  });
+
   // Progress card wins over the per-status switch below whenever an install
   // or bundle sync is in flight. Selector returns null otherwise and the
   // card collapses immediately — no transient success state.
-  if (progress) {
+  if (action === PlayButtonActions.PROGRESS && progress) {
     return (
       <>
         <InstallProgress slug={slug} view={progress} />
@@ -81,12 +158,7 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
 
   // Bundle error surface: render under the Play affordance so the user can
   // retry without leaving the client page.
-  if (
-    hasBundle &&
-    bundle.status === BundleSyncStatuses.ERROR &&
-    bundle.error &&
-    state.status === InstallStatuses.INSTALLED
-  ) {
+  if (action === PlayButtonActions.BUNDLE_ERROR && bundle.error) {
     const errorText = localizeBundleError(bundle.error.code, bundle.error.message, t);
     return (
       <div className="flex max-w-[480px] flex-col gap-2">
@@ -104,8 +176,20 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
     );
   }
 
-  switch (state.status) {
-    case InstallStatuses.UNINSTALLING:
+  if (action === PlayButtonActions.BUNDLE_UPDATE) {
+    return (
+      <ActionButton
+        onClick={() => void startBundle.mutateAsync({ slug })}
+        disabled={startBundle.isPending}
+      >
+        <RefreshCw size={16} />
+        {t('clients.update')}
+      </ActionButton>
+    );
+  }
+
+  switch (action) {
+    case PlayButtonActions.UNINSTALLING:
       return (
         <ActionButton disabled>
           <Loader2 size={16} className="animate-spin" />
@@ -113,7 +197,7 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
         </ActionButton>
       );
 
-    case InstallStatuses.LAUNCHING:
+    case PlayButtonActions.LAUNCHING:
       return (
         <ActionButton disabled>
           <Loader2 size={16} className="animate-spin" />
@@ -121,7 +205,7 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
         </ActionButton>
       );
 
-    case InstallStatuses.RUNNING:
+    case PlayButtonActions.RUNNING:
       return (
         <ActionButton
           onClick={() => void stop.mutateAsync(slug)}
@@ -132,7 +216,7 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
         </ActionButton>
       );
 
-    case InstallStatuses.INSTALLED:
+    case PlayButtonActions.PLAY:
       return (
         <ActionButton onClick={() => void launch.mutateAsync(slug)} disabled={launch.isPending}>
           <Play size={16} />
@@ -140,7 +224,7 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
         </ActionButton>
       );
 
-    case InstallStatuses.ERROR: {
+    case PlayButtonActions.ERROR: {
       const errorText = state.error
         ? localizeMinecraftError(state.error.code, state.error.message, t)
         : null;

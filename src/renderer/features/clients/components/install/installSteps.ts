@@ -46,7 +46,7 @@ export type InstallStep = {
   subStage?: string;
 };
 
-export type ProgressControlsKind = 'install' | 'bundle' | null;
+export type ProgressControlsKind = 'install' | 'bundle' | 'cancel' | null;
 
 export type InstallProgressMode = 'install' | 'repair' | 'bundle';
 
@@ -173,10 +173,15 @@ export const selectInstallProgress = (
   if (installRunning || repairRunning) {
     mode = repairRunning ? 'repair' : 'install';
     paused = client.paused;
-    controls = installRunning ? 'install' : null;
+    controls = installRunning ? 'install' : 'cancel';
 
     const stage = client.stage;
-    const currentKey = stage ? stageToStep(stage, context.hasLoader) : InstallStepKeys.RUNTIME;
+    let currentKey: InstallStepKey;
+    if (stage) {
+      currentKey = stageToStep(stage, context.hasLoader);
+    } else {
+      currentKey = repairRunning ? InstallStepKeys.MINECRAFT : InstallStepKeys.RUNTIME;
+    }
     activeStep = currentKey;
     markPrecedingDone(steps, currentKey);
     const current = steps.find((s) => s.key === currentKey);
@@ -185,6 +190,7 @@ export const selectInstallProgress = (
       current.state = paused ? StepStates.PAUSED : StepStates.ACTIVE;
       applyProgress(current, {
         percent: client.stagePercent ?? 0,
+        indeterminate: repairRunning && stage === undefined,
         currentFile: client.currentFile,
         bytesDownloaded: done,
         bytesTotal: total,

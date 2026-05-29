@@ -72,10 +72,27 @@ export class MinecraftManager {
   async getStatus(slug: ClientSlug): Promise<{ status: InstallStatus; paused: boolean }> {
     const op = this.ops.get(slug);
     if (op) {
+      if (op.kind === OpKinds.INSTALL) {
+        return {
+          status: op.status,
+          paused: op.status === InstallStatuses.INSTALLING ? op.paused : false,
+        };
+      }
       return {
         status: OP_TO_STATUS[op.kind],
-        paused: op.kind === OpKinds.INSTALL ? op.paused : false,
+        paused: false,
       };
+    }
+    try {
+      const ctx = await buildContext(this.kit, slug);
+      return {
+        status: (await isTargetReady(ctx.target))
+          ? InstallStatuses.INSTALLED
+          : InstallStatuses.NOT_INSTALLED,
+        paused: false,
+      };
+    } catch {
+      // Status seeding must tolerate settings or clients that cannot build a target yet.
     }
     const folder = this.clientFolderOrNull(slug);
     const installed = folder ? await isAnythingInstalled(folder) : false;
@@ -117,6 +134,7 @@ export class MinecraftManager {
   pause(slug: ClientSlug): void {
     const op = this.ops.get(slug);
     if (op?.kind !== OpKinds.INSTALL) return;
+    if (op.status !== InstallStatuses.INSTALLING) return;
     op.paused = true;
     op.pauseController.pause();
     this.env.emitStatus({ slug, status: InstallStatuses.INSTALLING, paused: true });
@@ -125,6 +143,7 @@ export class MinecraftManager {
   resume(slug: ClientSlug): void {
     const op = this.ops.get(slug);
     if (op?.kind !== OpKinds.INSTALL) return;
+    if (op.status !== InstallStatuses.INSTALLING) return;
     op.paused = false;
     op.pauseController.resume();
     this.env.emitStatus({ slug, status: InstallStatuses.INSTALLING, paused: false });

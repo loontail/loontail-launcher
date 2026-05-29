@@ -70,6 +70,18 @@ const BundleControls = ({ slug, paused }: { slug: ClientSlug; paused: boolean })
   );
 };
 
+const CancelControl = ({ slug }: { slug: ClientSlug }) => {
+  const cancel = useCancelInstall();
+  const { t } = useTranslation();
+
+  return (
+    <ActionButton variant="danger" onClick={() => void cancel.mutateAsync(slug)}>
+      <X size={12} />
+      {t('clients.cancel')}
+    </ActionButton>
+  );
+};
+
 type ProgressControlsProps = {
   kind: ProgressControlsKind;
   paused: boolean;
@@ -79,5 +91,6 @@ type ProgressControlsProps = {
 export const ProgressControls = ({ kind, paused, slug }: ProgressControlsProps) => {
   if (kind === 'install') return <InstallControls slug={slug} paused={paused} />;
   if (kind === 'bundle') return <BundleControls slug={slug} paused={paused} />;
+  if (kind === 'cancel') return <CancelControl slug={slug} />;
   return null;
 };

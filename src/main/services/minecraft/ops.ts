@@ -13,6 +13,7 @@ export type OpKind = (typeof OpKinds)[keyof typeof OpKinds];
 
 export type InstallOp = {
   kind: typeof OpKinds.INSTALL;
+  status: typeof InstallStatuses.INSTALLING | typeof InstallStatuses.REPAIRING;
   pauseController: PauseController;
   abort: AbortController;
   paused: boolean;

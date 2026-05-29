@@ -32,6 +32,7 @@ type Store = {
 const STATUSES_WITHOUT_PROGRESS: ReadonlySet<InstallStatus> = new Set([
   InstallStatuses.INSTALLED,
   InstallStatuses.NOT_INSTALLED,
+  InstallStatuses.REPAIRING,
   InstallStatuses.RUNNING,
   InstallStatuses.ERROR,
   InstallStatuses.UNKNOWN,
@@ -52,6 +53,8 @@ export const useMinecraftStore = create<Store>((set) => ({
         merged.stage = undefined;
         merged.stagePercent = undefined;
         merged.overallPercent = undefined;
+        merged.bytesDownloaded = undefined;
+        merged.totalBytes = undefined;
         merged.currentFile = undefined;
       }
       if (change.status && STATUSES_CLEAR_ERROR.has(change.status)) {

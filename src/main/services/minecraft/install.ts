@@ -24,6 +24,7 @@ export const beginInstall = (
 ): InstallOp => {
   const op: InstallOp = {
     kind: OpKinds.INSTALL,
+    status: InstallStatuses.INSTALLING,
     pauseController: new PauseController(),
     abort: new AbortController(),
     paused: false,
@@ -144,6 +145,7 @@ const attemptSmartResume = async (
   originalError: MinecraftKitError,
 ): Promise<boolean> => {
   env.logger.info(`[${slug}] install: ${originalError.code} caught — attempting smart resume`);
+  op.status = InstallStatuses.REPAIRING;
   env.emitStatus({ slug, status: InstallStatuses.REPAIRING, paused: false });
   try {
     const resumePlan = await env.kit.repair.fromError({
@@ -154,8 +156,19 @@ const attemptSmartResume = async (
     env.logger.info(
       `[${slug}] install: resume plan ready — ${resumePlan.totalActions} actions, ${resumePlan.totalBytes} bytes`,
     );
-    await env.kit.repair.minecraft.run(resumePlan, { signal: op.abort.signal });
+    const resumeTracker = createInstallProgressTracker(resumePlan);
+    const unsubscribe = subscribeProgress(env, slug, resumeTracker);
+    try {
+      await env.kit.repair.minecraft.run(resumePlan, {
+        signal: op.abort.signal,
+        onEvent: resumeTracker.onEvent,
+      });
+    } finally {
+      resumeTracker.finish();
+      unsubscribe();
+    }
     env.logger.info(`[${slug}] install: resume repair done, continuing install`);
+    op.status = InstallStatuses.INSTALLING;
     env.emitStatus({
       slug,
       status: InstallStatuses.INSTALLING,
