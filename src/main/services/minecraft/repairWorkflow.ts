@@ -7,7 +7,7 @@ import {
 import { loadLocalManifest } from '@main/services/bundle/manifestRepo';
 import type { ClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
-import { repairAllExceptBundle } from './bundleHealing';
+import { createBundleRepairIssueFilter } from './bundleHealing';
 import type { Context } from './context';
 import type { ManagerEnv } from './env';
 import { classifyError, errorMessage } from './errors';
@@ -76,18 +76,10 @@ export const verifyAndRepairBase = async (
   const report =
     bundleOwnedPaths === null
       ? await env.kit.repair.all(ctx.target, options)
-      : (
-          await repairAllExceptBundle(
-            env.kit,
-            {
-              slug,
-              clientFolder: ctx.clientFolder,
-              target: ctx.target,
-            },
-            bundleOwnedPaths,
-            options,
-          )
-        ).report;
+      : await env.kit.repair.all(ctx.target, {
+          ...options,
+          shouldRepairIssue: createBundleRepairIssueFilter(ctx.clientFolder, bundleOwnedPaths),
+        });
   const broken = [...report.repairs.keys()];
   env.logger.info(
     broken.length === 0

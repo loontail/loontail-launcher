@@ -33,7 +33,7 @@
   },
   "dependencies": {
     "@fontsource/nunito": "^5.0.0",
-    "@loontail/minecraft-kit": "0.8.11",
+    "@loontail/minecraft-kit": "0.8.13",
     "@loontail/yggdrasil-client": "^0.0.6",
     "@loontail/yggdrasil-core": "^0.0.6",
     "@splidejs/react-splide": "^0.7.12",

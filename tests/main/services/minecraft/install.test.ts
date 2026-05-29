@@ -21,6 +21,7 @@ import {
   type OperationOptions,
   PauseController,
   type ProgressEvent,
+  type RepairAllOptions,
   type RepairPlan,
   type RepairReport,
   type Target,
@@ -443,47 +444,52 @@ describe('runRepair', () => {
           },
         ],
       };
-      const runtimeVerification: VerificationResult = {
-        targetId: 'target-id',
-        kind: VerificationKinds.RUNTIME,
-        isValid: true,
-        checkedFiles: 1,
-        durationMs: 1,
-        issues: [],
-      };
-      let plannedFrom: VerificationResult | readonly VerificationResult[] | undefined;
+      let shouldRepairIssue: RepairAllOptions['shouldRepairIssue'];
       const op: RepairOp = { kind: OpKinds.REPAIR, abort: new AbortController() };
       const kit = {
-        verify: {
-          minecraft: { run: vi.fn(async () => minecraftVerification) },
-          runtime: { run: vi.fn(async () => runtimeVerification) },
-        },
         repair: {
-          all: vi.fn(),
-          minecraft: {
-            plan: vi.fn(async (_target: Target, options: { from: VerificationResult }) => {
-              plannedFrom = options.from;
-              return { ...repairPlan(), totalActions: 1 };
-            }),
-            run: vi.fn(async () => repairReport()),
-          },
+          all: vi.fn(async (_target: Target, options?: RepairAllOptions) => {
+            shouldRepairIssue = options?.shouldRepairIssue;
+            return {
+              verifications: [minecraftVerification],
+              repairs: new Map(),
+              bytesDownloaded: 0,
+              durationMs: 1,
+            };
+          }),
         },
       } as unknown as MinecraftKit;
       const ops = new Map<ClientSlug, Op>([[SLUG, op]]);
       const env = makeEnv(kit, ops);
+      const [bundleIssue, vanillaIssue] = minecraftVerification.issues;
+      if (bundleIssue === undefined || vanillaIssue === undefined) {
+        throw new Error('Expected bundle and vanilla repair issues');
+      }
 
       await runRepair(env, SLUG, context, op);
 
-      expect(kit.repair.all).not.toHaveBeenCalled();
-      expect(plannedFrom).toMatchObject({
-        issues: [expect.objectContaining({ path: vanillaPath })],
-      });
+      expect(kit.repair.all).toHaveBeenCalledWith(
+        target,
+        expect.objectContaining({
+          signal: op.abort.signal,
+          onEvent: expect.any(Function),
+          shouldRepairIssue: expect.any(Function),
+        }),
+      );
       expect(
-        (plannedFrom as VerificationResult | undefined)?.issues.some(
-          (issue) => issue.path === bundlePath,
-        ),
+        shouldRepairIssue?.({
+          target,
+          verification: minecraftVerification,
+          issue: bundleIssue,
+        }),
       ).toBe(false);
-      expect(kit.repair.minecraft.run).toHaveBeenCalledTimes(1);
+      expect(
+        shouldRepairIssue?.({
+          target,
+          verification: minecraftVerification,
+          issue: vanillaIssue,
+        }),
+      ).toBe(true);
       expect(env.broadcaster.status).toHaveBeenLastCalledWith({
         slug: SLUG,
         status: InstallStatuses.INSTALLED,
