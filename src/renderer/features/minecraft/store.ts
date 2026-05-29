@@ -36,6 +36,7 @@ const STATUSES_WITHOUT_PROGRESS: ReadonlySet<InstallStatus> = new Set([
   InstallStatuses.RUNNING,
   InstallStatuses.ERROR,
   InstallStatuses.UNKNOWN,
+  InstallStatuses.UNVERIFIED,
 ]);
 
 const STATUSES_CLEAR_ERROR: ReadonlySet<InstallStatus> = new Set([

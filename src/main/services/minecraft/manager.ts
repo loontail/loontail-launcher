@@ -125,7 +125,7 @@ export class MinecraftManager {
     const folder = this.clientFolderOrNull(slug);
     const installed = folder ? await isAnythingInstalled(folder) : false;
     return {
-      status: installed ? InstallStatuses.INSTALLED : InstallStatuses.NOT_INSTALLED,
+      status: installed ? InstallStatuses.UNVERIFIED : InstallStatuses.NOT_INSTALLED,
       paused: false,
     };
   }

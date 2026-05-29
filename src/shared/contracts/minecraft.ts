@@ -8,6 +8,7 @@ export type { ProgressStage } from '@loontail/minecraft-kit';
 
 export const InstallStatuses = {
   UNKNOWN: 'unknown',
+  UNVERIFIED: 'unverified',
   NOT_INSTALLED: 'not-installed',
   INSTALLING: 'installing',
   INSTALLED: 'installed',
@@ -22,6 +23,7 @@ export type InstallStatus = (typeof InstallStatuses)[keyof typeof InstallStatuse
 
 export const InstallStatusSchema = z.enum([
   InstallStatuses.UNKNOWN,
+  InstallStatuses.UNVERIFIED,
   InstallStatuses.NOT_INSTALLED,
   InstallStatuses.INSTALLING,
   InstallStatuses.INSTALLED,

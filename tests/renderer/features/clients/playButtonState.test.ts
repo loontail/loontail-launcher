@@ -65,4 +65,8 @@ describe('selectPlayButtonAction', () => {
       }),
     ).toBe(PlayButtonActions.ERROR);
   });
+
+  it('surfaces unverified installs as retry instead of plain play', () => {
+    expect(select({ status: InstallStatuses.UNVERIFIED })).toBe(PlayButtonActions.UNVERIFIED);
+  });
 });

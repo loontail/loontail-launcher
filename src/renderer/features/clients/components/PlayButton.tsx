@@ -28,6 +28,7 @@ export const PlayButtonActions = {
   LAUNCHING: 'launching',
   RUNNING: 'running',
   PLAY: 'play',
+  UNVERIFIED: 'unverified',
   ERROR: 'error',
   INSTALL: 'install',
 } as const;
@@ -80,6 +81,8 @@ export const selectPlayButtonAction = ({
       return PlayButtonActions.RUNNING;
     case InstallStatuses.INSTALLED:
       return PlayButtonActions.PLAY;
+    case InstallStatuses.UNVERIFIED:
+      return PlayButtonActions.UNVERIFIED;
     case InstallStatuses.ERROR:
       return PlayButtonActions.ERROR;
     default:
@@ -228,6 +231,18 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
         <ActionButton onClick={() => void launch.mutateAsync(slug)} disabled={launch.isPending}>
           <Play size={16} />
           {t('clients.play')}
+        </ActionButton>
+      );
+
+    case PlayButtonActions.UNVERIFIED:
+      return (
+        <ActionButton
+          onClick={() => void launch.mutateAsync(slug)}
+          disabled={!folderReady || launch.isPending}
+          title={folderReady ? undefined : t('clients.setInstallFolder')}
+        >
+          <RefreshCw size={16} />
+          {t('clients.retry')}
         </ActionButton>
       );
 

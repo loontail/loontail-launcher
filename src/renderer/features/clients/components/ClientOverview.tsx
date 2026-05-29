@@ -25,6 +25,7 @@ const SETTABLE_STATUSES: ReadonlySet<InstallStatus> = new Set([
   InstallStatuses.RUNNING,
   InstallStatuses.REPAIRING,
   InstallStatuses.UNINSTALLING,
+  InstallStatuses.UNVERIFIED,
 ]);
 
 const SETTINGS_DISABLED_STATUSES: ReadonlySet<InstallStatus> = new Set([

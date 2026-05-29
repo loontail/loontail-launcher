@@ -113,16 +113,27 @@ describe('MinecraftManager.getStatus', () => {
     expect(statusMocks.isAnythingInstalled).not.toHaveBeenCalled();
   });
 
-  it('falls back to the folder scan when target context cannot be built', async () => {
+  it('reports unverified when target context cannot be built but old files exist', async () => {
     resetStatusMocks();
     statusMocks.buildContext.mockRejectedValue(new Error('Client not available'));
     statusMocks.isAnythingInstalled.mockResolvedValue(true);
 
     await expect(makeManager().getStatus(SLUG)).resolves.toEqual({
-      status: InstallStatuses.INSTALLED,
+      status: InstallStatuses.UNVERIFIED,
       paused: false,
     });
     expect(statusMocks.isAnythingInstalled).toHaveBeenCalledWith(CLIENT_FOLDER);
+  });
+
+  it('reports not-installed when target context cannot be built and no files exist', async () => {
+    resetStatusMocks();
+    statusMocks.buildContext.mockRejectedValue(new Error('Client not available'));
+    statusMocks.isAnythingInstalled.mockResolvedValue(false);
+
+    await expect(makeManager().getStatus(SLUG)).resolves.toEqual({
+      status: InstallStatuses.NOT_INSTALLED,
+      paused: false,
+    });
   });
 
   it('keeps smart-resume install operations visible as repair status', async () => {
