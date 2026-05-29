@@ -36,6 +36,11 @@ type AspectTaggedProgressEvent = Parameters<ProgressListener>[0] & {
   readonly aspect?: VerificationKind;
 };
 
+type ThrottledProgressListener = {
+  readonly onEvent: ProgressListener;
+  readonly dispose: () => void;
+};
+
 const progressStageForDownloadCategory = (category: string | undefined): ProgressStage | null => {
   switch (category) {
     case DownloadCategories.RUNTIME_FILE:
@@ -80,7 +85,10 @@ const progressStageForAspect = (event: Parameters<ProgressListener>[0]): Progres
 // totals used by `createInstallProgressTracker` are unavailable. Instead, fold
 // per-file events into a coarse snapshot driven by the current download/verify
 // activity, and throttle the broadcast to avoid flooding the renderer.
-const createRepairProgressListener = (env: ManagerEnv, slug: ClientSlug): ProgressListener => {
+const createRepairProgressListener = (
+  env: ManagerEnv,
+  slug: ClientSlug,
+): ThrottledProgressListener => {
   let stage: ProgressStage = ProgressStages.MINECRAFT;
   let bytesDownloaded = 0;
   let totalBytes = 0;
@@ -103,16 +111,20 @@ const createRepairProgressListener = (env: ManagerEnv, slug: ClientSlug): Progre
     env.broadcaster.progress(event);
   };
 
+  const clearPendingFlush = (): void => {
+    if (pendingFlush === null) return;
+    clearTimeout(pendingFlush);
+    pendingFlush = null;
+  };
+
   const scheduleFlush = (): void => {
     const elapsed = Date.now() - lastEmittedAt;
     if (elapsed >= PROGRESS_THROTTLE_MS) {
-      if (pendingFlush !== null) {
-        clearTimeout(pendingFlush);
-        pendingFlush = null;
-      }
+      clearPendingFlush();
       flush();
     } else if (pendingFlush === null) {
       pendingFlush = setTimeout(flush, PROGRESS_THROTTLE_MS - elapsed);
+      if (typeof pendingFlush.unref === 'function') pendingFlush.unref();
     }
   };
 
@@ -124,7 +136,7 @@ const createRepairProgressListener = (env: ManagerEnv, slug: ClientSlug): Progre
     currentFile = undefined;
   };
 
-  return (event) => {
+  const onEvent: ProgressListener = (event) => {
     switch (event.type) {
       case EventTypes.DOWNLOAD_PROGRESS:
         setStage(
@@ -152,6 +164,11 @@ const createRepairProgressListener = (env: ManagerEnv, slug: ClientSlug): Progre
       default:
         return;
     }
+  };
+
+  return {
+    onEvent,
+    dispose: clearPendingFlush,
   };
 };
 
@@ -181,12 +198,12 @@ export const runRepair = async (
   ctx: Context,
   op: RepairOp,
 ): Promise<void> => {
+  const progress = createRepairProgressListener(env, slug);
   try {
     env.logger.info(`[${slug}] repair: verifying & fixing…`);
-    const onEvent = createRepairProgressListener(env, slug);
     const repairOptions = {
       signal: op.abort.signal,
-      onEvent,
+      onEvent: progress.onEvent,
     };
     const bundleOwnedPaths = await loadBundleOwnedPaths(ctx);
     const report =
@@ -241,6 +258,7 @@ export const runRepair = async (
     env.emitError(slug, code, message);
     await emitReadinessStatus(env, slug, ctx, InstallStatuses.ERROR);
   } finally {
+    progress.dispose();
     env.ops.delete(slug);
   }
 };

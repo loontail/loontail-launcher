@@ -5,10 +5,15 @@ import type { EmitProgress } from './runner';
 
 const HEAL_PROGRESS_THROTTLE_MS = 100;
 
+export type HealProgressListener = {
+  readonly onEvent: ProgressListener;
+  readonly dispose: () => void;
+};
+
 export const createHealProgressListener = (
   slug: ClientSlug,
   emit: EmitProgress,
-): ProgressListener => {
+): HealProgressListener => {
   let verifiedFiles = 0;
   let bytesDownloaded = 0;
   let totalBytes = 0;
@@ -26,22 +31,26 @@ export const createHealProgressListener = (
     });
   };
 
+  const clearPendingFlush = (): void => {
+    if (pendingFlush === null) return;
+    clearTimeout(pendingFlush);
+    pendingFlush = null;
+  };
+
   const scheduleFlush = (): void => {
     const elapsed = Date.now() - lastEmittedAt;
     if (elapsed >= HEAL_PROGRESS_THROTTLE_MS) {
-      if (pendingFlush !== null) {
-        clearTimeout(pendingFlush);
-        pendingFlush = null;
-      }
+      clearPendingFlush();
       flush();
       return;
     }
     if (pendingFlush === null) {
       pendingFlush = setTimeout(flush, HEAL_PROGRESS_THROTTLE_MS - elapsed);
+      if (typeof pendingFlush.unref === 'function') pendingFlush.unref();
     }
   };
 
-  return (event) => {
+  const onEvent: ProgressListener = (event) => {
     switch (event.type) {
       case EventTypes.VERIFY_FILE_CHECKED:
         verifiedFiles += 1;
@@ -61,5 +70,10 @@ export const createHealProgressListener = (
       default:
         return;
     }
+  };
+
+  return {
+    onEvent,
+    dispose: clearPendingFlush,
   };
 };

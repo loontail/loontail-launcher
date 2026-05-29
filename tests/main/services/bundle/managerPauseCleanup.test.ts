@@ -1,4 +1,10 @@
 import type { ClientRequest } from 'node:http';
+import {
+  EventTypes,
+  type ProgressEvent,
+  VerifyFileCategories,
+  VerifyFileStatuses,
+} from '@loontail/minecraft-kit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const managerMocks = vi.hoisted(() => {
@@ -389,6 +395,46 @@ describe('BundleManager pause cleanup', () => {
       BundleSyncStatuses.FETCHING_MANIFEST,
       BundleSyncStatuses.PLANNING,
     ]);
+  });
+
+  it('clears pending heal progress before sync reaches a terminal status', async () => {
+    vi.setSystemTime(0);
+    managerMocks.getClient.mockResolvedValue({ bundleSlug: BUNDLE_SLUG });
+    managerMocks.buildPlan.mockResolvedValueOnce({
+      ...EMPTY_PLAN,
+      toDelete: ['mods/old.jar'],
+      bundleOwnedRelativePaths: new Set(['mods/old.jar']),
+    });
+    managerMocks.runSyncPhases.mockResolvedValueOnce({ deletedAny: true });
+    const healer: Healer = {
+      healAfterDeletes: vi.fn(async (_slug, _bundleOwnedPaths, options) => {
+        const event = {
+          type: EventTypes.VERIFY_FILE_CHECKED,
+          file: {
+            path: `${CLIENT_FOLDER}/libraries/example.jar`,
+            category: VerifyFileCategories.LIBRARY,
+            status: VerifyFileStatuses.MISSING,
+          },
+        } satisfies ProgressEvent;
+        options?.onEvent?.(event);
+      }),
+    };
+    const broadcaster = makeBroadcaster();
+    const manager = new BundleManager(broadcaster, healer);
+
+    await manager.startSync({ slug: SLUG });
+
+    expect(statusEvents(broadcaster)).toEqual([
+      BundleSyncStatuses.FETCHING_MANIFEST,
+      BundleSyncStatuses.PLANNING,
+      BundleSyncStatuses.HEALING,
+      BundleSyncStatuses.COMPLETED,
+    ]);
+    expect(broadcaster.progress).not.toHaveBeenCalled();
+
+    vi.advanceTimersByTime(101);
+
+    expect(broadcaster.progress).not.toHaveBeenCalled();
   });
 
   it('keeps syncForLaunch pending across pause and resolves after resume completes', async () => {

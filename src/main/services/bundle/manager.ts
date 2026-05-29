@@ -293,10 +293,15 @@ export class BundleManager {
       }
       if (deletedAny) {
         this.emitStatus(task.slug, BundleSyncStatuses.HEALING);
-        await this.healer.healAfterDeletes(task.slug, plan.bundleOwnedRelativePaths, {
-          signal: task.abort.signal,
-          onEvent: createHealProgressListener(task.slug, emit),
-        });
+        const progress = createHealProgressListener(task.slug, emit);
+        try {
+          await this.healer.healAfterDeletes(task.slug, plan.bundleOwnedRelativePaths, {
+            signal: task.abort.signal,
+            onEvent: progress.onEvent,
+          });
+        } finally {
+          progress.dispose();
+        }
       }
       if (task.paused) {
         return;

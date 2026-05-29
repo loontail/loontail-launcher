@@ -233,6 +233,53 @@ describe('runRepair', () => {
     expect(ops.has(SLUG)).toBe(false);
   });
 
+  it('clears pending repair progress before the terminal status settles', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    try {
+      const pendingFile = `${CLIENT_FOLDER}/versions/1.20.1/1.20.1.jar`;
+      const op: RepairOp = { kind: OpKinds.REPAIR, abort: new AbortController() };
+      const kit = {
+        repair: {
+          all: vi.fn(async (_target: Target, options?: OperationOptions) => {
+            const event = {
+              type: EventTypes.VERIFY_FILE_CHECKED,
+              file: {
+                path: pendingFile,
+                category: VerifyFileCategories.CLIENT_JAR,
+                status: VerifyFileStatuses.MISSING,
+              },
+            } satisfies ProgressEvent;
+            options?.onEvent?.(event);
+            return {
+              verifications: [],
+              repairs: new Map(),
+              bytesDownloaded: 0,
+              durationMs: 1,
+            };
+          }),
+        },
+      } as unknown as MinecraftKit;
+      const ops = new Map<ClientSlug, Op>([[SLUG, op]]);
+      const env = makeEnv(kit, ops);
+
+      await runRepair(env, SLUG, makeContext(), op);
+
+      expect(env.broadcaster.status).toHaveBeenLastCalledWith({
+        slug: SLUG,
+        status: InstallStatuses.INSTALLED,
+        paused: false,
+      });
+      expect(env.broadcaster.progress).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(101);
+
+      expect(env.broadcaster.progress).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('filters bundle-owned paths during manual repair', async () => {
     const root = await fs.mkdtemp(path.join(tmpdir(), 'launcher-repair-bundle-'));
     const bundleSlug = 'bundle-x';
@@ -333,6 +380,10 @@ describe('runRepair', () => {
         status: InstallStatuses.INSTALLED,
         paused: false,
       });
+      const localManifestAfterRepair = JSON.parse(await fs.readFile(manifestPath, 'utf8')) as {
+        readonly files: Record<string, unknown>;
+      };
+      expect(localManifestAfterRepair.files).toHaveProperty(bundleRelativePath);
     } finally {
       await fs.rm(root, { recursive: true, force: true });
     }
