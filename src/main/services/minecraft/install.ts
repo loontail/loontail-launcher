@@ -1,11 +1,5 @@
 import fs from 'node:fs/promises';
-import {
-  type InstallProgressTracker,
-  type MinecraftKitError,
-  PauseController,
-  type ProgressSnapshot,
-  createInstallProgressTracker,
-} from '@loontail/minecraft-kit';
+import { type MinecraftKitError, PauseController } from '@loontail/minecraft-kit';
 import type { ClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
 import type { Context } from './context';
@@ -13,6 +7,7 @@ import type { ManagerEnv } from './env';
 import { classifyError, errorMessage, tryAsSmartResumeError } from './errors';
 import { saveCurrentTargetInstallManifest } from './installManifest';
 import { type InstallOp, OpKinds } from './ops';
+import { createPlannedProgressAdapter, runWithProgressAdapter } from './progressAdapter';
 import { runtimePathFor } from './runtimeFs';
 import { isAnythingInstalled } from './runtimeState';
 import { isUnderClientsRoot } from './uninstall';
@@ -42,23 +37,6 @@ export const beginInstall = (
   env.logger.info(`[${slug}] install: started (loader=${ctx.loader}, fresh=${options.fresh})`);
   return op;
 };
-
-const subscribeProgress = (
-  env: ManagerEnv,
-  slug: ClientSlug,
-  tracker: InstallProgressTracker,
-): (() => void) =>
-  tracker.subscribe((snap: ProgressSnapshot) => {
-    env.broadcaster.progress({
-      slug,
-      stage: snap.stage,
-      stagePercent: snap.stagePercent,
-      overallPercent: snap.overallPercent,
-      bytesDownloaded: snap.bytesDownloaded,
-      totalBytes: snap.totalBytes,
-      ...(snap.currentFile !== undefined ? { currentFile: snap.currentFile } : {}),
-    });
-  });
 
 const emitPostInstallStatus = async (
   env: ManagerEnv,
@@ -123,18 +101,13 @@ const tryInstall = async (
   env.logger.info(
     `[${slug}] install: plan ready — ${plan.totalActions} actions, ${plan.totalBytes} bytes`,
   );
-  const tracker = createInstallProgressTracker(plan);
-  const unsubscribe = subscribeProgress(env, slug, tracker);
-  try {
-    await env.kit.install.run(plan, {
+  await runWithProgressAdapter(createPlannedProgressAdapter(env, slug, plan), (onEvent) =>
+    env.kit.install.run(plan, {
       signal: op.abort.signal,
       pauseController: op.pauseController,
-      onEvent: tracker.onEvent,
-    });
-  } finally {
-    tracker.finish();
-    unsubscribe();
-  }
+      onEvent,
+    }),
+  );
 };
 
 // One automatic recovery pass for transient install failures kit can derive a
@@ -169,17 +142,12 @@ const attemptSmartResume = async (
     env.logger.info(
       `[${slug}] install: resume plan ready — ${resumePlan.totalActions} actions, ${resumePlan.totalBytes} bytes`,
     );
-    const resumeTracker = createInstallProgressTracker(resumePlan);
-    const unsubscribe = subscribeProgress(env, slug, resumeTracker);
-    try {
-      await env.kit.repair.minecraft.run(resumePlan, {
+    await runWithProgressAdapter(createPlannedProgressAdapter(env, slug, resumePlan), (onEvent) =>
+      env.kit.repair.minecraft.run(resumePlan, {
         signal: op.abort.signal,
-        onEvent: resumeTracker.onEvent,
-      });
-    } finally {
-      resumeTracker.finish();
-      unsubscribe();
-    }
+        onEvent,
+      }),
+    );
     env.logger.info(`[${slug}] install: resume repair done, continuing install`);
     op.status = InstallStatuses.INSTALLING;
     env.emitStatus({

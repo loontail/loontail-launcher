@@ -23,6 +23,11 @@ export type ProcessorHealOutcome = {
   reranCount: number;
 };
 
+export type ProcessorHealOptions = {
+  readonly signal?: AbortSignal;
+  readonly runPlan?: (plan: InstallPlan) => Promise<void>;
+};
+
 const sha1OfFile = async (filePath: string): Promise<string | null> => {
   try {
     return await new Promise<string>((resolve, reject) => {
@@ -69,13 +74,16 @@ export const repairMissingForgeProcessorOutputs = async (
   kit: MinecraftKit,
   slug: ClientSlug,
   target: Target,
-  signal?: AbortSignal,
+  options: ProcessorHealOptions = {},
 ): Promise<ProcessorHealOutcome> => {
   if (target.loader.type !== Loaders.FORGE) {
     return { ranProcessors: false, reranCount: 0 };
   }
 
-  const plan = await kit.install.plan(target, signal ? { signal } : undefined);
+  const plan = await kit.install.plan(
+    target,
+    options.signal ? { signal: options.signal } : undefined,
+  );
   const processors = plan.actions.filter(
     (action): action is RunForgeProcessorAction =>
       action.kind === InstallActionKinds.RUN_FORGE_PROCESSOR,
@@ -118,7 +126,12 @@ export const repairMissingForgeProcessorOutputs = async (
     `[${slug}] ${brokenIndices.size}/${processors.length} processor output(s) broken — re-running focused plan (${focusedActions.length}/${plan.actions.length} actions)`,
   );
 
-  await kit.install.run(focusedPlan, signal ? { signal } : undefined);
+  const runPlan =
+    options.runPlan ??
+    (async (planToRun: InstallPlan): Promise<void> => {
+      await kit.install.run(planToRun, options.signal ? { signal: options.signal } : undefined);
+    });
+  await runPlan(focusedPlan);
 
   return { ranProcessors: true, reranCount: brokenIndices.size };
 };

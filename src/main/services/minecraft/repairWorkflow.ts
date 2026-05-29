@@ -1,4 +1,9 @@
-import { Loaders, type ProgressListener, type RepairAllReport } from '@loontail/minecraft-kit';
+import {
+  type InstallPlan,
+  Loaders,
+  type ProgressListener,
+  type RepairAllReport,
+} from '@loontail/minecraft-kit';
 import { loadLocalManifest } from '@main/services/bundle/manifestRepo';
 import type { ClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
@@ -14,6 +19,11 @@ import { isTargetReady } from './runtimeState';
 type RepairOptions = {
   readonly signal: AbortSignal;
   readonly onEvent: ProgressListener;
+};
+
+type ForgeProcessorHealOptions = {
+  readonly signal: AbortSignal;
+  readonly runPlan: (plan: InstallPlan) => Promise<void>;
 };
 
 export type RepairFailureFinalizationInput = {
@@ -91,7 +101,7 @@ export const healForgeProcessors = async (
   env: ManagerEnv,
   slug: ClientSlug,
   ctx: Context,
-  signal: AbortSignal,
+  options: ForgeProcessorHealOptions,
 ): Promise<void> => {
   if (ctx.target.loader.type !== Loaders.FORGE) {
     return;
@@ -100,7 +110,7 @@ export const healForgeProcessors = async (
     env.kit,
     slug,
     ctx.target,
-    signal,
+    options,
   );
   if (processorOutcome.ranProcessors) {
     env.logger.info(`[${slug}] repair: re-ran ${processorOutcome.reranCount} forge processor(s)`);

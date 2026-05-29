@@ -9,7 +9,10 @@ vi.hoisted(() => {
 });
 
 import {
+  DownloadCategories,
   EventTypes,
+  InstallActionKinds,
+  InstallPhases,
   type InstallPlan,
   Loaders,
   type MinecraftKit,
@@ -230,6 +233,105 @@ describe('runRepair', () => {
       status: InstallStatuses.INSTALLED,
       paused: false,
     });
+    expect(ops.has(SLUG)).toBe(false);
+  });
+
+  it('uses planned progress for Forge processor healing', async () => {
+    const forgeLibrary = `${CLIENT_FOLDER}/libraries/net/minecraftforge/forge.jar`;
+    const processorOutput = `${CLIENT_FOLDER}/versions/forge/processed.jar`;
+    const forgeTarget = {
+      ...emptyTarget,
+      loader: { type: Loaders.FORGE },
+    } as unknown as Target;
+    const processorPlan: InstallPlan = {
+      ...installPlan(),
+      target: forgeTarget,
+      actions: [
+        {
+          kind: InstallActionKinds.DOWNLOAD_FILE,
+          url: 'https://files.test.invalid/forge.jar',
+          target: forgeLibrary,
+          expectedSize: 100,
+          category: DownloadCategories.FORGE_LIBRARY,
+        },
+        {
+          kind: InstallActionKinds.RUN_FORGE_PROCESSOR,
+          index: 0,
+          classpath: [forgeLibrary],
+          args: [],
+          outputs: { [processorOutput]: 'expected-sha1' },
+        },
+      ],
+      totalActions: 2,
+      totalBytes: 100,
+    };
+    const op: RepairOp = { kind: OpKinds.REPAIR, abort: new AbortController() };
+    const kit = {
+      repair: {
+        all: vi.fn(async () => ({
+          verifications: [],
+          repairs: new Map(),
+          bytesDownloaded: 0,
+          durationMs: 1,
+        })),
+      },
+      install: {
+        plan: vi.fn(async () => processorPlan),
+        run: vi.fn(async (_plan: InstallPlan, options?: OperationOptions) => {
+          const file = {
+            url: 'https://files.test.invalid/forge.jar',
+            target: forgeLibrary,
+            category: DownloadCategories.FORGE_LIBRARY,
+          };
+          options?.onEvent?.({
+            type: EventTypes.INSTALL_PHASE_CHANGED,
+            phase: InstallPhases.INSTALLING_FORGE,
+            previous: null,
+          });
+          options?.onEvent?.({
+            type: EventTypes.DOWNLOAD_STARTED,
+            file,
+            expectedSize: 100,
+          });
+          options?.onEvent?.({
+            type: EventTypes.DOWNLOAD_PROGRESS,
+            file,
+            bytesDownloaded: 50,
+            totalBytes: 100,
+          });
+        }),
+      },
+    } as unknown as MinecraftKit;
+    const ops = new Map<ClientSlug, Op>([[SLUG, op]]);
+    const env = makeEnv(kit, ops);
+    const context = {
+      ...makeContext(),
+      target: forgeTarget,
+    } as unknown as Context;
+
+    await runRepair(env, SLUG, context, op);
+
+    expect(kit.install.run).toHaveBeenCalledWith(
+      expect.objectContaining({ totalActions: 2 }),
+      expect.objectContaining({
+        signal: op.abort.signal,
+        onEvent: expect.any(Function),
+      }),
+    );
+    expect(env.broadcaster.progress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        slug: SLUG,
+        stage: ProgressStages.LOADER,
+        totalBytes: 100,
+      }),
+    );
+    expect(env.broadcaster.progress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        slug: SLUG,
+        stage: ProgressStages.FINALIZE,
+        overallPercent: 100,
+      }),
+    );
     expect(ops.has(SLUG)).toBe(false);
   });
 
