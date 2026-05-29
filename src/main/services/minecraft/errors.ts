@@ -32,6 +32,7 @@ const KIT_CODE_TO_LAUNCHER_CODE: Partial<Record<MinecraftKitErrorCode, Minecraft
 
 export const classifyError = (error: unknown, signal?: AbortSignal): MinecraftErrorCode => {
   if (signal?.aborted) return MinecraftErrorCodes.ABORTED;
+  if (error instanceof ManagerError) return error.code;
   if (isMinecraftKitError(error)) {
     return KIT_CODE_TO_LAUNCHER_CODE[error.code] ?? MinecraftErrorCodes.KIT_ERROR;
   }

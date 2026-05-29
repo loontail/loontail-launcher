@@ -25,6 +25,7 @@ import type { SyncPlan } from '@main/services/bundle/plan';
 import type { SyncTask } from '@main/services/bundle/runner';
 import {
   ClientOperationDomains,
+  ClientOperationResources,
   createClientOperationLocks,
 } from '@main/services/clientOperationLocks';
 import { BundleErrorCodes, BundleSyncStatuses } from '@shared/contracts/bundle';
@@ -254,7 +255,11 @@ describe('BundleManager pause cleanup', () => {
   it('rejects manual bundle sync while a minecraft writer lock is held', async () => {
     managerMocks.getClient.mockResolvedValue({ bundleSlug: BUNDLE_SLUG });
     const operationLocks = createClientOperationLocks();
-    const minecraftLock = operationLocks.acquire(SLUG, ClientOperationDomains.MINECRAFT);
+    const minecraftLock = operationLocks.acquire({
+      slug: SLUG,
+      domain: ClientOperationDomains.MINECRAFT,
+      resources: [ClientOperationResources.CLIENT_FOLDER],
+    });
     if (minecraftLock.kind !== 'acquired') throw new Error('Expected minecraft lock');
 
     try {

@@ -4,6 +4,7 @@ import {
   ClientOperationDomains,
   type ClientOperationLease,
   type ClientOperationLocks,
+  ClientOperationResources,
   createClientOperationLocks,
 } from '@main/services/clientOperationLocks';
 import { getClient } from '@main/services/clients';
@@ -33,6 +34,10 @@ import { type EmitProgress, type SyncTask, runSyncPhases } from './runner';
 import { type ActiveSync, createActiveSync, createSyncTask, resetTaskForResume } from './syncState';
 
 const logger = scopedLogger('bundle.manager');
+const BUNDLE_WRITE_RESOURCES = [
+  ClientOperationResources.CLIENT_FOLDER,
+  ClientOperationResources.BUNDLE_MANIFEST,
+] as const;
 
 type PreparedPlanSource = {
   force: boolean;
@@ -229,6 +234,7 @@ export class BundleManager {
     const launchWait = active.forLaunch ? this.createAwaiter(active) : null;
     this.activeSyncs.set(slug, active);
     this.activeLocks.set(slug, lock);
+    lock.setCancel(() => this.cancelSync(slug));
 
     await this.executePreparedSync(active, task, {
       force: req.force === true,
@@ -351,7 +357,11 @@ export class BundleManager {
   }
 
   private acquireWriteLock(slug: ClientSlug): ClientOperationLease {
-    const result = this.operationLocks.acquire(slug, ClientOperationDomains.BUNDLE);
+    const result = this.operationLocks.acquire({
+      slug,
+      domain: ClientOperationDomains.BUNDLE,
+      resources: BUNDLE_WRITE_RESOURCES,
+    });
     if (result.kind === 'acquired') return result.lease;
     throw new BundleError(
       BundleErrorCodes.OP_IN_FLIGHT,

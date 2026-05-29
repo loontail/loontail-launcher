@@ -1,10 +1,14 @@
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import {
   AuthModes,
   EventTypes,
   type LaunchAuth,
+  type LaunchComposition,
   asAzureClientId,
   asPlayerUuid,
+  resolveLaunchVersion,
+  targetPaths,
   toOnlineAuth,
 } from '@loontail/minecraft-kit';
 import {
@@ -39,6 +43,11 @@ const YGGDRASIL_PLACEHOLDER_CLIENT_ID = asAzureClientId('00000000-0000-0000-0000
 // Cloudflare blocks bare `Java/...`, so give that JVM traffic a launcher UA.
 const YGGDRASIL_HTTP_AGENT_NAME = 'LoontailLauncher';
 
+class LaunchPreflightError extends ManagerError {}
+
+const isLaunchPreflightError = (error: unknown): error is LaunchPreflightError =>
+  error instanceof LaunchPreflightError;
+
 const sanitizeHttpAgentToken = (value: string): string => {
   const token = value.trim().replace(/[^0-9A-Za-z.+_-]/g, '-');
   return token.length > 0 ? token : 'dev';
@@ -56,6 +65,57 @@ const resolveAuthlibInjectorJar = (): string => {
     );
   }
   return resolveAuthlibInjectorJarPath();
+};
+
+const requireLaunchFile = async (
+  filePath: string,
+  label: string,
+  code: typeof MinecraftErrorCodes.RUNTIME_ERROR | typeof MinecraftErrorCodes.NOT_INSTALLED,
+): Promise<void> => {
+  try {
+    await fs.access(filePath);
+  } catch {
+    throw new LaunchPreflightError(code, `Launch preflight failed: missing ${label}: ${filePath}`);
+  }
+};
+
+const verifyLaunchPreflight = async (
+  ctx: Context,
+  composition: LaunchComposition,
+): Promise<void> => {
+  await requireLaunchFile(
+    composition.javaPath,
+    'Java executable',
+    MinecraftErrorCodes.RUNTIME_ERROR,
+  );
+
+  let versionId = ctx.target.minecraft.version;
+  try {
+    versionId = (await resolveLaunchVersion(ctx.target)).versionId;
+  } catch (error) {
+    throw new LaunchPreflightError(MinecraftErrorCodes.NOT_INSTALLED, errorMessage(error));
+  }
+
+  await requireLaunchFile(
+    targetPaths.versionJson(ctx.target.directory, versionId),
+    'version JSON',
+    MinecraftErrorCodes.NOT_INSTALLED,
+  );
+  await requireLaunchFile(
+    targetPaths.versionJar(ctx.target.directory, ctx.target.minecraft.version),
+    'client jar',
+    MinecraftErrorCodes.NOT_INSTALLED,
+  );
+
+  if (composition.classpath.length === 0) {
+    throw new LaunchPreflightError(
+      MinecraftErrorCodes.NOT_INSTALLED,
+      'Launch preflight failed: classpath is empty',
+    );
+  }
+  for (const classpathFile of composition.classpath) {
+    await requireLaunchFile(classpathFile, 'classpath file', MinecraftErrorCodes.NOT_INSTALLED);
+  }
 };
 
 export const endLaunch = (env: ManagerEnv, slug: ClientSlug, error?: unknown): void => {
@@ -174,6 +234,11 @@ export const runLaunch = async (
       restoreInstalled();
       return;
     }
+    await verifyLaunchPreflight(ctx, composition);
+    if (startupSignal.aborted) {
+      restoreInstalled();
+      return;
+    }
     const consoleEnabled = ctx.resolved.launch.console;
     const clientTitle = ctx.client.title || slug;
     consoleHub.setActiveSession({
@@ -248,6 +313,13 @@ export const runLaunch = async (
   } catch (error) {
     if (startupSignal.aborted) {
       restoreInstalled();
+      return;
+    }
+    if (isLaunchPreflightError(error)) {
+      const message = errorMessage(error);
+      launchLogger.warn(`[${slug}] launch preflight failed - ${message}`, error);
+      env.emitError(slug, error.code, message);
+      env.emitStatus({ slug, status: InstallStatuses.NOT_INSTALLED, paused: false });
       return;
     }
     env.logger.error(`[${slug}] launch failed`, error);

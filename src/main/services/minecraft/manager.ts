@@ -4,6 +4,8 @@ import {
   ClientOperationDomains,
   type ClientOperationLease,
   type ClientOperationLocks,
+  type ClientOperationResource,
+  ClientOperationResources,
   createClientOperationLocks,
 } from '@main/services/clientOperationLocks';
 import {
@@ -33,6 +35,15 @@ import { isAnythingInstalled, isTargetReady } from './runtimeState';
 import { runUninstall } from './uninstall';
 
 const logger = scopedLogger('minecraft');
+const MINECRAFT_WRITE_RESOURCES = [
+  ClientOperationResources.CLIENT_FOLDER,
+  ClientOperationResources.RUNTIME_COMPONENT,
+] as const;
+const MINECRAFT_DELETE_RESOURCES = [
+  ClientOperationResources.CLIENT_FOLDER,
+  ClientOperationResources.RUNTIME_COMPONENT,
+  ClientOperationResources.BUNDLE_MANIFEST,
+] as const;
 
 // Optional hook the bundle service installs at boot; awaited after the
 // implicit install step in startLaunch so a play click syncs the bundle
@@ -120,6 +131,7 @@ export class MinecraftManager {
       throw error;
     });
     const op = beginInstall(this.env, slug, ctx, { fresh: true });
+    lock.setCancel(() => this.cancel(slug));
     // runInstall handles errors internally (emits via handleInstallFailure) and
     // rethrows for the launch path; in the fire-and-forget case we only need
     // the final INSTALLED status on success.
@@ -193,6 +205,7 @@ export class MinecraftManager {
       }
       const op: Op = { kind: OpKinds.REPAIR, abort: new AbortController() };
       this.ops.set(slug, op);
+      lock.setCancel(() => this.cancel(slug));
       this.env.emitStatus({ slug, status: InstallStatuses.REPAIRING, paused: false });
 
       // runRepair never throws; it handles errors internally via emitError +
@@ -208,7 +221,7 @@ export class MinecraftManager {
 
   async uninstall(slug: ClientSlug): Promise<void> {
     this.requireIdle(slug);
-    const lock = this.acquireWriteLock(slug);
+    const lock = this.acquireWriteLock(slug, MINECRAFT_DELETE_RESOURCES);
     const resolved = resolveClientSettings(getSettings(), slug);
     try {
       await runUninstall(
@@ -233,6 +246,7 @@ export class MinecraftManager {
       const op = beginInstall(this.env, slug, ctx, {
         fresh: !(await isAnythingInstalled(ctx.clientFolder)),
       });
+      lock.setCancel(() => this.cancel(slug));
       try {
         await runInstall(this.env, slug, ctx, op);
       } catch (error) {
@@ -305,8 +319,15 @@ export class MinecraftManager {
     }
   }
 
-  private acquireWriteLock(slug: ClientSlug): ClientOperationLease {
-    const result = this.operationLocks.acquire(slug, ClientOperationDomains.MINECRAFT);
+  private acquireWriteLock(
+    slug: ClientSlug,
+    resources: readonly ClientOperationResource[] = MINECRAFT_WRITE_RESOURCES,
+  ): ClientOperationLease {
+    const result = this.operationLocks.acquire({
+      slug,
+      domain: ClientOperationDomains.MINECRAFT,
+      resources,
+    });
     if (result.kind === 'acquired') return result.lease;
     throw new ManagerError(
       MinecraftErrorCodes.OP_IN_FLIGHT,

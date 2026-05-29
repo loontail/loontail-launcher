@@ -2,6 +2,7 @@ import type { MinecraftKit, Target } from '@loontail/minecraft-kit';
 import {
   ClientOperationDomains,
   type ClientOperationLocks,
+  ClientOperationResources,
   createClientOperationLocks,
 } from '@main/services/clientOperationLocks';
 import type { Broadcaster } from '@main/services/minecraft/broadcast';
@@ -221,7 +222,11 @@ describe('MinecraftManager.startLaunch', () => {
   it('rejects repair while a bundle writer lock is held for the same client', async () => {
     resetMocks();
     const operationLocks = createClientOperationLocks();
-    const bundleLock = operationLocks.acquire(SLUG, ClientOperationDomains.BUNDLE);
+    const bundleLock = operationLocks.acquire({
+      slug: SLUG,
+      domain: ClientOperationDomains.BUNDLE,
+      resources: [ClientOperationResources.CLIENT_FOLDER],
+    });
     if (bundleLock.kind !== 'acquired') throw new Error('Expected bundle lock');
 
     try {

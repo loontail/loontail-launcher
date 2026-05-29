@@ -141,6 +141,7 @@ const start = async (): Promise<void> => {
 
   let disposed = false;
   const drain = async (): Promise<void> => {
+    clientOperationLocks.cancelAll();
     // Reverse-init order so consumers tear down before the infrastructure they depend on.
     await Promise.allSettled([
       updaterService.dispose(),
