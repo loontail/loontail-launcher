@@ -1,4 +1,5 @@
 import type { MinecraftKit } from '@loontail/minecraft-kit';
+import { migrateStoredAuthSecrets } from '@main/infra/store';
 import type { Router } from '@main/ipc/router';
 import { createMojangAuth } from './mojangAuth';
 import { registerAuthRoutes } from './routes';
@@ -15,6 +16,7 @@ export const createAuthService = (router: Router, kit: MinecraftKit): AuthServic
   const mojangAuth = createMojangAuth(kit);
   return {
     init: async () => {
+      migrateStoredAuthSecrets();
       registerAuthRoutes(router, yggdrasilAuth, mojangAuth);
     },
     dispose: async () => {},

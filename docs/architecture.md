@@ -189,7 +189,9 @@ not a main-internal bus.
 Currently shipping services:
 
 - `app` — version info.
-- `auth` — Strapi `/auth/local` + `/users/me`, persisted JWT.
+- `auth` — Yggdrasil credential login plus Mojang/Microsoft browser sign-in.
+  Account metadata is persisted in `electron-store`; bearer and refresh
+  tokens are stored through Electron `safeStorage`.
 - `system` — RAM range, disk space, folder pick, OS path open.
 - `settings` — `launcherSettings` CRUD + per-client overrides.
 - `skin` — uploads / clears Minecraft skin & cape via skins-registry.
@@ -225,11 +227,20 @@ There is no global app store. There is no Redux.
 ## 7. Persistence
 
 - `electron-store` in `userData/` holds:
-  - `auth` — `{ jwt, user }` or `null`.
+  - `auth` — non-secret account metadata or `null`: provider, username/profile
+    data, UUID/XUID, client id, token expiry, and skin/cape URLs when provided
+    by the upstream profile.
   - `launcherSettings` — `memory`, `storage`, `launch`, per-client overrides keyed by `ClientSlug`.
   - `schemaVersion` — integer; bumped on incompatible schema changes. Each
     bump adds a step to the `MIGRATIONS` map in `main/infra/store.ts`; an
     out-of-band stored version aborts startup with a typed error.
+- Auth token material is not stored in plaintext `electron-store`. Yggdrasil
+  `accessToken`/`clientToken` and Mojang `accessToken`/`refreshToken` are
+  encrypted with Electron `safeStorage` into `userData/auth-session.bin`.
+  `safeStorage` uses Windows DPAPI and macOS Keychain. On Linux the launcher
+  accepts only libsecret or KWallet backends; `basic_text` and unavailable
+  encryption clear the local session and require sign-in instead of falling
+  back to plaintext storage.
 - Client install directories: `{clientsFolder}/{slug}/` (the user-configured
   folder, or its per-client override). `clientsFolder` lives under
   `app.getPath('userData')` by default.
