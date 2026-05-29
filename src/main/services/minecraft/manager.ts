@@ -86,7 +86,7 @@ export class MinecraftManager {
     try {
       const ctx = await buildContext(this.kit, slug);
       return {
-        status: (await isTargetReady(ctx.target))
+        status: (await isTargetReady(this.kit, ctx.target))
           ? InstallStatuses.INSTALLED
           : InstallStatuses.NOT_INSTALLED,
         paused: false,
@@ -196,7 +196,7 @@ export class MinecraftManager {
     const ctx = await buildContext(this.kit, slug);
     const checkedAccount = requireAccount(account);
 
-    if (!(await isTargetReady(ctx.target))) {
+    if (!(await isTargetReady(this.kit, ctx.target))) {
       logger.info(`[${slug}] play: target version missing on disk — installing first`);
       const op = beginInstall(this.env, slug, ctx, {
         fresh: !(await isAnythingInstalled(ctx.clientFolder)),
