@@ -160,6 +160,8 @@ export class MinecraftManager {
       op.abort.abort();
     } else if (op.kind === OpKinds.BUNDLE_SYNCING) {
       op.abort.abort();
+    } else if (op.kind === OpKinds.LAUNCH_STARTING) {
+      op.abort.abort();
     }
   }
 
@@ -246,7 +248,11 @@ export class MinecraftManager {
     for (const slug of slugs) {
       const op = this.ops.get(slug);
       if (!op) continue;
-      if (op.kind === OpKinds.INSTALL || op.kind === OpKinds.REPAIR) {
+      if (
+        op.kind === OpKinds.INSTALL ||
+        op.kind === OpKinds.REPAIR ||
+        op.kind === OpKinds.LAUNCH_STARTING
+      ) {
         this.cancel(slug);
       }
     }

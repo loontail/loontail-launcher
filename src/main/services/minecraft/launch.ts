@@ -26,7 +26,7 @@ import { app } from 'electron';
 import type { Context } from './context';
 import type { ManagerEnv } from './env';
 import { ManagerError, classifyError, errorMessage } from './errors';
-import { OpKinds } from './ops';
+import { type LaunchStartingOp, OpKinds } from './ops';
 
 const launchLogger = scopedLogger('minecraft.launch');
 
@@ -130,6 +130,16 @@ export const runLaunch = async (
   ctx: Context,
   account: Account,
 ): Promise<void> => {
+  const startupOp: LaunchStartingOp = {
+    kind: OpKinds.LAUNCH_STARTING,
+    abort: new AbortController(),
+  };
+  const startupSignal = startupOp.abort.signal;
+  const restoreInstalled = (): void => {
+    env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
+  };
+
+  env.ops.set(slug, startupOp);
   env.emitStatus({ slug, status: InstallStatuses.LAUNCHING, paused: false });
   try {
     const resolved = resolveLaunchAuth(account);
@@ -146,6 +156,10 @@ export const runLaunch = async (
       launcherName: 'elixir',
       launcherVersion: app.getVersion(),
     });
+    if (startupSignal.aborted) {
+      restoreInstalled();
+      return;
+    }
     const consoleEnabled = ctx.resolved.launch.console;
     const clientTitle = ctx.client.title || slug;
     consoleHub.setActiveSession({
@@ -157,6 +171,7 @@ export const runLaunch = async (
     consoleHub.recordSystem('Launching…', { code: 'console.system.launching', slug });
     if (consoleEnabled) openConsoleWindow();
     const session = env.kit.launch.run(composition, {
+      signal: startupSignal,
       onEvent: (event) => {
         switch (event.type) {
           case EventTypes.LAUNCH_STARTING:
@@ -191,6 +206,11 @@ export const runLaunch = async (
         }
       },
     });
+    if (startupSignal.aborted) {
+      session.abort('user-stop');
+      restoreInstalled();
+      return;
+    }
     env.ops.set(slug, { kind: OpKinds.LAUNCH, session, consoleEnabled });
     env.emitStatus({ slug, status: InstallStatuses.RUNNING, paused: false });
     consoleHub.emitState({ slug, status: ConsoleStatuses.RUNNING, clientTitle });
@@ -212,14 +232,20 @@ export const runLaunch = async (
         env.logger.error(`[${slug}] endLaunch threw`, error);
       });
   } catch (error) {
+    if (startupSignal.aborted) {
+      restoreInstalled();
+      return;
+    }
     env.logger.error(`[${slug}] launch failed`, error);
-    env.emitError(slug, classifyError(error), errorMessage(error));
+    env.emitError(slug, classifyError(error, startupSignal), errorMessage(error));
     env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
     const message = errorMessage(error);
     consoleHub.emitState({ slug, status: ConsoleStatuses.ERROR, message });
     consoleHub.recordSystem(`Process error: ${message}`, { slug });
     if (!consoleHub.hasWindow()) openConsoleWindow();
     throw error;
+  } finally {
+    if (env.ops.get(slug) === startupOp) env.ops.delete(slug);
   }
 };
 

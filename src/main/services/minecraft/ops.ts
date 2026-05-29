@@ -6,6 +6,7 @@ export const OpKinds = {
   REPAIR: 'repair',
   UNINSTALL: 'uninstall',
   BUNDLE_SYNCING: 'bundle-syncing',
+  LAUNCH_STARTING: 'launch-starting',
   LAUNCH: 'launch',
 } as const;
 
@@ -31,18 +32,23 @@ export type BundleSyncingOp = {
   kind: typeof OpKinds.BUNDLE_SYNCING;
   abort: AbortController;
 };
+export type LaunchStartingOp = {
+  kind: typeof OpKinds.LAUNCH_STARTING;
+  abort: AbortController;
+};
 export type LaunchOp = {
   kind: typeof OpKinds.LAUNCH;
   session: LaunchSession;
   consoleEnabled: boolean;
 };
 
-export type Op = InstallOp | RepairOp | UninstallOp | BundleSyncingOp | LaunchOp;
+export type Op = InstallOp | RepairOp | UninstallOp | BundleSyncingOp | LaunchStartingOp | LaunchOp;
 
 export const OP_TO_STATUS: Record<OpKind, InstallStatus> = {
   [OpKinds.INSTALL]: InstallStatuses.INSTALLING,
   [OpKinds.REPAIR]: InstallStatuses.REPAIRING,
   [OpKinds.UNINSTALL]: InstallStatuses.UNINSTALLING,
   [OpKinds.BUNDLE_SYNCING]: InstallStatuses.LAUNCHING,
+  [OpKinds.LAUNCH_STARTING]: InstallStatuses.LAUNCHING,
   [OpKinds.LAUNCH]: InstallStatuses.RUNNING,
 };

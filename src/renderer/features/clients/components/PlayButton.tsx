@@ -1,6 +1,7 @@
 import { localizeBundleError, useStartBundle } from '@renderer/features/bundle';
 import {
   localizeMinecraftError,
+  useCancelInstall,
   useInstallClient,
   useLaunchClient,
   useStopClient,
@@ -11,7 +12,7 @@ import type { Client } from '@shared/contracts/client';
 import { type InstallStatus, InstallStatuses } from '@shared/contracts/minecraft';
 import type { LoaderChoice } from '@shared/contracts/settings';
 import { isLoaderAvailable } from '@shared/domain/loader';
-import { Download, Loader2, Play, RefreshCw, RotateCcw, Square } from 'lucide-react';
+import { Download, Loader2, Play, RefreshCw, RotateCcw, Square, X } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LoaderChoiceModal } from './LoaderChoiceModal';
@@ -95,6 +96,7 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
 
   const install = useInstallClient();
   const launch = useLaunchClient();
+  const cancel = useCancelInstall();
   const stop = useStopClient();
   const startBundle = useStartBundle();
   const [loaderModalOpen, setLoaderModalOpen] = useState(false);
@@ -199,9 +201,14 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
 
     case PlayButtonActions.LAUNCHING:
       return (
-        <ActionButton disabled>
-          <Loader2 size={16} className="animate-spin" />
-          {t('clients.launching')}
+        <ActionButton
+          onClick={() => void cancel.mutateAsync(slug)}
+          disabled={cancel.isPending}
+          className="bg-destructive text-destructive-foreground"
+          title={t('clients.launching')}
+        >
+          <X size={16} />
+          {t('clients.cancel')}
         </ActionButton>
       );
 
