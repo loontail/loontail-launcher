@@ -1,9 +1,12 @@
+import { scopedLogger } from '@main/infra/logger';
 import { clearStoredAuth, getStoredAuth, setStoredAuth } from '@main/infra/store';
 import { type Account, accountFromSession } from '@shared/contracts/account';
-import type { LoginPayload, LoginResult } from '@shared/contracts/auth';
+import type { LoginPayload, LoginResult, YggdrasilSession } from '@shared/contracts/auth';
 import type { MojangAuth } from './mojangAuth';
 import { enrichYggdrasilAccount, verifySession } from './verify';
 import type { YggdrasilAuth } from './yggdrasilAuth';
+
+const logger = scopedLogger('auth');
 
 export const login = async (
   yggdrasilAuth: YggdrasilAuth,
@@ -21,12 +24,25 @@ export const fetchCurrentUser = (
   mojangAuth: MojangAuth,
 ): Promise<Account | null> => verifySession(yggdrasilAuth, mojangAuth);
 
-export const logout = async (yggdrasilAuth: YggdrasilAuth): Promise<void> => {
+const invalidateYggdrasilSession = (
+  yggdrasilAuth: YggdrasilAuth,
+  session: YggdrasilSession,
+): void => {
+  // Server invalidation is best-effort; local sign-out has already completed.
+  void yggdrasilAuth
+    .signOut(session)
+    .catch((error: unknown) =>
+      logger.warn('Yggdrasil sign-out cleanup failed after local logout', error),
+    );
+};
+
+export const logout = (yggdrasilAuth: YggdrasilAuth): Promise<void> => {
   const session = getStoredAuth();
-  if (session?.provider === 'yggdrasil') {
-    await yggdrasilAuth.signOut(session);
-  }
   clearStoredAuth();
+  if (session?.provider === 'yggdrasil') {
+    invalidateYggdrasilSession(yggdrasilAuth, session);
+  }
+  return Promise.resolve();
 };
 
 // Synchronous "what's the active account" probe for callers (e.g. launch
