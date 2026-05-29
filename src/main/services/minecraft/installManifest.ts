@@ -5,9 +5,8 @@ import { Loaders, type Target } from '@loontail/minecraft-kit';
 import { scopedLogger } from '@main/infra/logger';
 import { z } from 'zod';
 
-const SIDECAR_DIR = '.elixir';
-const MANIFESTS_DIR = 'manifests';
-const TARGET_INSTALL_MANIFEST_FILE = 'minecraft.json';
+const SIDECAR_DIR = '.loontail';
+const TARGET_INSTALL_MANIFEST_FILE = 'manifest.json';
 const TARGET_INSTALL_MANIFEST_VERSION = 1;
 
 const logger = scopedLogger('minecraft.installManifest');
@@ -64,7 +63,7 @@ const loaderVersionFor = (target: Target): string | null => {
 };
 
 export const targetInstallManifestPath = (clientFolder: string): string =>
-  path.join(clientFolder, SIDECAR_DIR, MANIFESTS_DIR, TARGET_INSTALL_MANIFEST_FILE);
+  path.join(clientFolder, SIDECAR_DIR, TARGET_INSTALL_MANIFEST_FILE);
 
 export const createTargetInstallManifest = (
   target: Target,

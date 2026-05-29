@@ -35,9 +35,7 @@ describe('resolveSafeEntryPath', () => {
 });
 
 describe('bundleManifestPath', () => {
-  it('places the manifest under .elixir/manifests/bundle.json', () => {
-    expect(bundleManifestPath(CLIENT)).toBe(
-      path.join(CLIENT, '.elixir', 'manifests', 'bundle.json'),
-    );
+  it('places the manifest under .loontail/bundle.json', () => {
+    expect(bundleManifestPath(CLIENT)).toBe(path.join(CLIENT, '.loontail', 'bundle.json'));
   });
 });

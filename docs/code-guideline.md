@@ -237,7 +237,7 @@ Aligned with the official Electron security checklist; non-negotiable.
   only acceptable for `localhost` / `127.0.0.1` in development.
 - Define a restrictive CSP. `connect-src` is built from the resolved
   `mainConfig.apiUrl` so the dev origin (`http://localhost:1337`) and the
-  prod origin (`https://api.elixir.tld`) both work without editing the
+  prod origin (`https://api.loontail.tld`) both work without editing the
   CSP file. See `src/main/infra/session.ts` for the live definitions.
 
 **Permissions:**

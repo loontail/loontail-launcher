@@ -1,6 +1,6 @@
 // Workers that pull from the pending-downloads queue in parallel. Higher = more
 // concurrent sockets, lower = gentler on slow upstreams; 16 is the same value
-// the elixir-app reference implementation settled on.
+// the launcher reference implementation settled on.
 export const BUNDLE_DOWNLOAD_CONCURRENCY = 16;
 
 // Cap follow-the-redirect hops per file. Strapi uploads are usually direct, so

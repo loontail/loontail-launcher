@@ -180,6 +180,9 @@ describe('target install manifest', () => {
     const currentTarget = target(directory);
     await saveCurrentTargetInstallManifest(directory, currentTarget);
 
+    expect(targetInstallManifestPath(directory)).toBe(
+      path.join(directory, '.loontail', 'manifest.json'),
+    );
     await expect(loadTargetInstallManifest(directory)).resolves.toMatchObject({
       version: 1,
       targetId: KIT_TARGET_ID,

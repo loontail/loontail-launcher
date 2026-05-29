@@ -39,7 +39,7 @@ describe('ManifestRepository', () => {
     expect(await loadLocalManifest(dir)).toEqual(sample);
   });
 
-  it('writes through .elixir/manifests/bundle.json', async () => {
+  it('writes through .loontail/bundle.json', async () => {
     await saveLocalManifest(dir, sample);
     const fileExists = await fs
       .access(bundleManifestPath(dir))

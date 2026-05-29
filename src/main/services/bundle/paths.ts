@@ -2,13 +2,12 @@ import path from 'node:path';
 import { BundleErrorCodes } from '@shared/contracts/bundle';
 import { BundleError } from './errors';
 
-const SIDECAR_DIR = '.elixir';
-const MANIFESTS_DIR = 'manifests';
+const SIDECAR_DIR = '.loontail';
 const BUNDLE_MANIFEST_FILE = 'bundle.json';
 
 // Resolve where the local bundle manifest lives for a given client install.
 export const bundleManifestPath = (clientFolder: string): string =>
-  path.join(clientFolder, SIDECAR_DIR, MANIFESTS_DIR, BUNDLE_MANIFEST_FILE);
+  path.join(clientFolder, SIDECAR_DIR, BUNDLE_MANIFEST_FILE);
 
 // Reject anything that escapes the client folder (absolute paths, `..`
 // segments, drive letters on Windows). Returns the resolved absolute path on

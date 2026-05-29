@@ -1,6 +1,6 @@
 import { Marked, Renderer } from 'marked';
 
-const DESCRIPTION_LINK_ALLOWED_HOSTS = ['api.elixir.tld'] as const;
+const DESCRIPTION_LINK_ALLOWED_HOSTS = ['api.loontail.tld'] as const;
 const LINK_TARGET = '_blank';
 const LINK_REL = 'noreferrer noopener';
 const MIN_HEADING_DEPTH = 1;

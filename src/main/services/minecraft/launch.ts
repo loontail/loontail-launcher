@@ -227,7 +227,7 @@ export const runLaunch = async (
         ? { memory: { maxMb: ctx.resolved.memory.allocatedRamMb } }
         : {}),
       fullscreen: ctx.resolved.launch.fullscreen,
-      launcherName: 'elixir',
+      launcherName: 'loontail',
       launcherVersion: app.getVersion(),
     });
     if (startupSignal.aborted) {
