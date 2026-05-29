@@ -333,6 +333,37 @@ describe('BundleManager pause cleanup', () => {
     expect(resolved).toEqual(['resolved']);
   });
 
+  it('does not complete or save a manifest when delete work pauses', async () => {
+    vi.useRealTimers();
+    managerMocks.getClient.mockResolvedValue({ bundleSlug: BUNDLE_SLUG });
+    managerMocks.buildPlan.mockResolvedValueOnce({
+      ...EMPTY_PLAN,
+      toDelete: ['mods/old.jar'],
+    });
+    managerMocks.runSyncPhases.mockImplementationOnce(async (task: SyncTask) => {
+      task.paused = true;
+      task.pendingDeletes = ['mods/old.jar'];
+      return { deletedAny: true };
+    });
+
+    const broadcaster = makeBroadcaster();
+    const healer = makeHealer();
+    const manager = new BundleManager(broadcaster, healer);
+
+    await manager.startSync({ slug: SLUG });
+
+    const internals = manager as unknown as {
+      activeSyncs: Map<ClientSlug, ActiveSyncShape>;
+    };
+    expect(internals.activeSyncs.has(SLUG)).toBe(true);
+    expect(managerMocks.saveLocalManifest).not.toHaveBeenCalled();
+    expect(healer.healAfterDeletes).not.toHaveBeenCalled();
+    expect(statusEvents(broadcaster)).toEqual([
+      BundleSyncStatuses.FETCHING_MANIFEST,
+      BundleSyncStatuses.PLANNING,
+    ]);
+  });
+
   it('keeps syncForLaunch pending across pause and resolves after resume completes', async () => {
     vi.useRealTimers();
     managerMocks.getClient.mockResolvedValue({ bundleSlug: BUNDLE_SLUG });

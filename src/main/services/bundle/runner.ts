@@ -168,6 +168,7 @@ const runDeletePhase = async (task: SyncTask, emit: EmitProgress): Promise<Phase
   if (task.pendingDeletes.length === 0) return { deletedAny: false };
   maybeEmit(task, BundleSyncStatuses.DELETING, emit, true);
   let deletedAny = false;
+  let completedDeletes = 0;
   for (const relativePath of task.pendingDeletes) {
     if (task.cancelled || task.paused) break;
     let target: string;
@@ -191,6 +192,7 @@ const runDeletePhase = async (task: SyncTask, emit: EmitProgress): Promise<Phase
         // File already gone — count it as cleaned. We still don't mark
         // deletedAny because no actual file removal occurred and we have no
         // signal to heal from it.
+        completedDeletes += 1;
         continue;
       }
       throw new BundleError(
@@ -198,8 +200,13 @@ const runDeletePhase = async (task: SyncTask, emit: EmitProgress): Promise<Phase
         `Failed to delete ${relativePath}: ${errorMessage(err)}`,
       );
     }
+    completedDeletes += 1;
     task.processedFiles += 1;
     maybeEmit(task, BundleSyncStatuses.DELETING, emit);
+  }
+  if (task.cancelled || task.paused) {
+    task.pendingDeletes = task.pendingDeletes.slice(completedDeletes);
+    return { deletedAny };
   }
   task.pendingDeletes = [];
   return { deletedAny };
@@ -213,6 +220,9 @@ export const runSyncPhases = async (task: SyncTask, emit: EmitProgress): Promise
     return { deletedAny: false };
   }
   const deleteResult = await runDeletePhase(task, emit);
-  if (task.cancelled) throw new BundleError(BundleErrorCodes.ABORTED, 'Sync cancelled');
+  if (task.cancelled || task.paused) {
+    if (task.cancelled) throw new BundleError(BundleErrorCodes.ABORTED, 'Sync cancelled');
+    return deleteResult;
+  }
   return deleteResult;
 };
