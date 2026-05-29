@@ -106,25 +106,37 @@ const progressStageForAspect = (event: Parameters<ProgressListener>[0]): Progres
   return aspect === undefined ? null : PROGRESS_STAGE_FOR_ASPECT[aspect];
 };
 
-export const createRepairProgressAdapter = (
+type ThrottledProgress = {
+  readonly stage: ProgressStage;
+  readonly bytesDownloaded: number;
+  readonly totalBytes: number;
+  readonly currentFile: string | undefined;
+};
+
+type ThrottledProgressEmitter = {
+  readonly emit: (progress: ThrottledProgress) => void;
+  readonly dispose: () => void;
+};
+
+const createThrottledProgressEmitter = (
   env: ManagerEnv,
   slug: ClientSlug,
-): MinecraftProgressAdapter => {
-  let stage: ProgressStage = ProgressStages.PREPARE;
-  let bytesDownloaded = 0;
-  let totalBytes = 0;
-  let currentFile: string | undefined;
+): ThrottledProgressEmitter => {
+  let current: ThrottledProgress | null = null;
   let lastEmittedAt = 0;
   let pendingFlush: NodeJS.Timeout | null = null;
 
   const flush = (): void => {
     lastEmittedAt = Date.now();
     pendingFlush = null;
+    if (current === null) return;
+    const { stage, bytesDownloaded, totalBytes, currentFile } = current;
+    const percent = totalBytes > 0 ? Math.min(100, (bytesDownloaded / totalBytes) * 100) : 0;
     const event: MinecraftProgressEvent = {
       slug,
       stage,
-      stagePercent: totalBytes > 0 ? Math.min(100, (bytesDownloaded / totalBytes) * 100) : 0,
-      overallPercent: totalBytes > 0 ? Math.min(100, (bytesDownloaded / totalBytes) * 100) : 0,
+      stagePercent: percent,
+      overallPercent: percent,
       bytesDownloaded,
       totalBytes,
       ...(currentFile !== undefined ? { currentFile } : {}),
@@ -138,16 +150,31 @@ export const createRepairProgressAdapter = (
     pendingFlush = null;
   };
 
-  const scheduleFlush = (): void => {
-    const elapsed = Date.now() - lastEmittedAt;
-    if (elapsed >= PROGRESS_THROTTLE_MS) {
-      clearPendingFlush();
-      flush();
-    } else if (pendingFlush === null) {
-      pendingFlush = setTimeout(flush, PROGRESS_THROTTLE_MS - elapsed);
-      if (typeof pendingFlush.unref === 'function') pendingFlush.unref();
-    }
+  return {
+    emit: (progress) => {
+      current = progress;
+      const elapsed = Date.now() - lastEmittedAt;
+      if (elapsed >= PROGRESS_THROTTLE_MS) {
+        clearPendingFlush();
+        flush();
+      } else if (pendingFlush === null) {
+        pendingFlush = setTimeout(flush, PROGRESS_THROTTLE_MS - elapsed);
+        if (typeof pendingFlush.unref === 'function') pendingFlush.unref();
+      }
+    },
+    dispose: clearPendingFlush,
   };
+};
+
+export const createRepairProgressAdapter = (
+  env: ManagerEnv,
+  slug: ClientSlug,
+): MinecraftProgressAdapter => {
+  const emitter = createThrottledProgressEmitter(env, slug);
+  let stage: ProgressStage = ProgressStages.PREPARE;
+  let bytesDownloaded = 0;
+  let totalBytes = 0;
+  let currentFile: string | undefined;
 
   const setStage = (nextStage: ProgressStage | null): void => {
     if (nextStage === null || nextStage === stage) return;
@@ -155,6 +182,10 @@ export const createRepairProgressAdapter = (
     bytesDownloaded = 0;
     totalBytes = 0;
     currentFile = undefined;
+  };
+
+  const emit = (): void => {
+    emitter.emit({ stage, bytesDownloaded, totalBytes, currentFile });
   };
 
   const onEvent: ProgressListener = (event) => {
@@ -166,21 +197,21 @@ export const createRepairProgressAdapter = (
         bytesDownloaded = event.bytesDownloaded;
         totalBytes = event.totalBytes;
         currentFile = event.file.target;
-        scheduleFlush();
+        emit();
         return;
       case EventTypes.DOWNLOAD_STARTED:
         setStage(
           progressStageForAspect(event) ?? progressStageForDownloadCategory(event.file.category),
         );
         currentFile = event.file.target;
-        scheduleFlush();
+        emit();
         return;
       case EventTypes.VERIFY_FILE_CHECKED:
         setStage(
           progressStageForAspect(event) ?? progressStageForVerifyCategory(event.file.category),
         );
         currentFile = event.file.path;
-        scheduleFlush();
+        emit();
         return;
       default:
         return;
@@ -189,7 +220,7 @@ export const createRepairProgressAdapter = (
 
   return {
     onEvent,
-    dispose: clearPendingFlush,
+    dispose: emitter.dispose,
   };
 };
 
