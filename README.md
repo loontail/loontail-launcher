@@ -12,7 +12,7 @@ Loontail Minecraft launcher built on Electron + React + Tailwind v4.
 
 ## Requirements
 
-- Node.js 20+
+- Node.js 22.12+
 - npm
 
 ## Getting started

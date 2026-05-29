@@ -12,6 +12,9 @@
     "type": "git",
     "url": "git+https://github.com/loontail/loontail-launcher.git"
   },
+  "engines": {
+    "node": ">=22.12"
+  },
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
@@ -30,7 +33,7 @@
   },
   "dependencies": {
     "@fontsource/nunito": "^5.0.0",
-    "@loontail/minecraft-kit": "0.8.10",
+    "@loontail/minecraft-kit": "0.8.11",
     "@loontail/yggdrasil-client": "^0.0.6",
     "@loontail/yggdrasil-core": "^0.0.6",
     "@splidejs/react-splide": "^0.7.12",
