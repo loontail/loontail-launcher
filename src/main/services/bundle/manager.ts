@@ -217,6 +217,7 @@ export class BundleManager {
     }
     const task = createSyncTask(slug, clientFolder);
     const active = createActiveSync(task, bundleSlug, options.forLaunch);
+    const launchWait = active.forLaunch ? this.createAwaiter(active) : null;
     this.activeSyncs.set(slug, active);
 
     await this.executePreparedSync(active, task, {
@@ -229,6 +230,7 @@ export class BundleManager {
         return manifest;
       },
     });
+    await launchWait;
   }
 
   private async continuePausedSync(active: ActiveSync): Promise<void> {
@@ -270,6 +272,9 @@ export class BundleManager {
       }
 
       const { deletedAny } = await runSyncPhases(task, emit);
+      if (task.paused) {
+        return;
+      }
       if (deletedAny) {
         this.emitStatus(task.slug, BundleSyncStatuses.HEALING);
         await this.healer.healAfterDeletes(task.slug, plan.bundleOwnedRelativePaths, {
@@ -277,12 +282,15 @@ export class BundleManager {
           onEvent: createHealProgressListener(task.slug, emit),
         });
       }
+      if (task.paused) {
+        return;
+      }
       await this.completePreparedSync(active, BundleSyncStatuses.COMPLETED);
     } catch (err) {
       const code = classifyBundleError(err, task.abort.signal);
       if (code === BundleErrorCodes.ABORTED && task.cancelled) {
         this.emitStatus(task.slug, BundleSyncStatuses.CANCELLED);
-        this.rejectAwaiters(active, this.toError(err));
+        this.rejectAwaiters(active, this.toBundleError(err, code));
         return;
       }
       if (code === BundleErrorCodes.ABORTED && task.paused) {
@@ -290,7 +298,7 @@ export class BundleManager {
       }
       this.emitError(task.slug, code, errorMessage(err));
       this.emitStatus(task.slug, BundleSyncStatuses.ERROR);
-      this.rejectAwaiters(active, this.toError(err));
+      this.rejectAwaiters(active, this.toBundleError(err, code));
     } finally {
       if (!task.paused || task.cancelled) {
         this.activeSyncs.delete(task.slug);
@@ -340,14 +348,20 @@ export class BundleManager {
     this.broadcaster.error({ slug, code, message });
   }
 
+  private createAwaiter(active: ActiveSync): Promise<void> {
+    return new Promise((resolve, reject) => {
+      active.awaiters.push({ resolve, reject });
+    });
+  }
+
   private resolveAwaiters(active: ActiveSync): void {
     const waiters = active.awaiters.splice(0, active.awaiters.length);
-    for (const w of waiters) w.resolve();
+    for (const waiter of waiters) waiter.resolve();
   }
 
   private rejectAwaiters(active: ActiveSync, err: Error): void {
     const waiters = active.awaiters.splice(0, active.awaiters.length);
-    for (const w of waiters) w.reject(err);
+    for (const waiter of waiters) waiter.reject(err);
   }
 
   private armPauseIdleTimer(slug: ClientSlug, active: ActiveSync): void {
@@ -380,9 +394,9 @@ export class BundleManager {
     this.activeSyncs.delete(slug);
   }
 
-  private toError(err: unknown): Error {
-    if (err instanceof Error) return err;
-    return new Error(String(err));
+  private toBundleError(err: unknown, code: BundleErrorCode): BundleError {
+    if (err instanceof BundleError) return err;
+    return new BundleError(code, errorMessage(err));
   }
 
   // Called on app shutdown to abort every active sync — cooperative pause/cancel

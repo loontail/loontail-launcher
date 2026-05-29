@@ -11,12 +11,14 @@ const managerMocks = vi.hoisted(() => {
     getClient: vi.fn(),
     getSettings: vi.fn(),
     loadLocalManifest: vi.fn(),
+    runSyncPhases: vi.fn(),
     saveLocalManifest: vi.fn(),
   };
 });
 
 import { BUNDLE_PAUSED_SYNC_MAX_IDLE_MS } from '@main/constants/bundle';
 import type { BundleBroadcaster } from '@main/services/bundle/broadcast';
+import { BundleError } from '@main/services/bundle/errors';
 import type { Healer } from '@main/services/bundle/healer';
 import { BundleManager } from '@main/services/bundle/manager';
 import type { SyncPlan } from '@main/services/bundle/plan';
@@ -51,6 +53,14 @@ vi.mock('@main/services/bundle/plan', () => ({
   buildPlan: managerMocks.buildPlan,
 }));
 
+vi.mock('@main/services/bundle/runner', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@main/services/bundle/runner')>();
+  return {
+    ...actual,
+    runSyncPhases: managerMocks.runSyncPhases,
+  };
+});
+
 type Awaiter = { resolve: () => void; reject: (err: Error) => void };
 
 type ActiveSyncShape = {
@@ -75,6 +85,24 @@ const EMPTY_PLAN: SyncPlan = {
   toSkip: [],
   bundleOwnedRelativePaths: new Set(),
   bytesTotal: 0,
+};
+
+const DOWNLOAD_ENTRY = {
+  path: 'mods/example.jar',
+  name: 'example.jar',
+  size: 1024,
+  isDir: false,
+  sha256: 'example-sha256',
+  url: 'https://cdn.test.invalid/mods/example.jar',
+};
+
+const DOWNLOAD_PLAN: SyncPlan = {
+  toDownload: [DOWNLOAD_ENTRY],
+  toUpdate: [],
+  toDelete: [],
+  toSkip: [],
+  bundleOwnedRelativePaths: new Set([DOWNLOAD_ENTRY.path]),
+  bytesTotal: DOWNLOAD_ENTRY.size,
 };
 
 const launcherSettings = (): LauncherSettings => ({
@@ -151,6 +179,7 @@ const resetManagerMocks = (): void => {
   managerMocks.getClient.mockReset();
   managerMocks.getSettings.mockReset();
   managerMocks.loadLocalManifest.mockReset();
+  managerMocks.runSyncPhases.mockReset();
   managerMocks.saveLocalManifest.mockReset();
 
   managerMocks.buildPlan.mockResolvedValue(EMPTY_PLAN);
@@ -162,11 +191,25 @@ const resetManagerMocks = (): void => {
   managerMocks.getClient.mockResolvedValue(null);
   managerMocks.getSettings.mockReturnValue(launcherSettings());
   managerMocks.loadLocalManifest.mockResolvedValue(null);
+  managerMocks.runSyncPhases.mockResolvedValue({ deletedAny: false });
   managerMocks.saveLocalManifest.mockResolvedValue(undefined);
 };
 
 const statusEvents = (broadcaster: BundleBroadcaster) =>
   vi.mocked(broadcaster.status).mock.calls.map(([event]) => event.status);
+
+const mockPausedLaunchPhase = (): void => {
+  managerMocks.runSyncPhases.mockImplementationOnce(async (task: SyncTask) => {
+    await new Promise<void>((resolve) => {
+      if (task.abort.signal.aborted) {
+        resolve();
+        return;
+      }
+      task.abort.signal.addEventListener('abort', () => resolve(), { once: true });
+    });
+    throw new BundleError(BundleErrorCodes.ABORTED, 'Sync paused');
+  });
+};
 
 describe('BundleManager pause cleanup', () => {
   beforeEach(() => {
@@ -288,5 +331,83 @@ describe('BundleManager pause cleanup', () => {
     expect(resumeStatuses).toEqual([BundleSyncStatuses.PLANNING, BundleSyncStatuses.UP_TO_DATE]);
     expect(resumeStatuses.at(-1)).toBe(freshStatuses.at(-1));
     expect(resolved).toEqual(['resolved']);
+  });
+
+  it('keeps syncForLaunch pending across pause and resolves after resume completes', async () => {
+    vi.useRealTimers();
+    managerMocks.getClient.mockResolvedValue({ bundleSlug: BUNDLE_SLUG });
+    managerMocks.buildPlan.mockResolvedValueOnce(DOWNLOAD_PLAN).mockResolvedValueOnce(EMPTY_PLAN);
+    mockPausedLaunchPhase();
+
+    const broadcaster = makeBroadcaster();
+    const manager = new BundleManager(broadcaster, makeHealer());
+    let settled = false;
+    const launchResult = manager.syncForLaunch(SLUG).then(
+      () => {
+        settled = true;
+        return { kind: 'resolved' as const };
+      },
+      (error: unknown) => {
+        settled = true;
+        return { kind: 'rejected' as const, error };
+      },
+    );
+
+    await vi.waitFor(() => {
+      expect(managerMocks.runSyncPhases).toHaveBeenCalledTimes(1);
+    });
+
+    manager.pauseSync(SLUG);
+
+    await vi.waitFor(() => {
+      expect(statusEvents(broadcaster)).toContain(BundleSyncStatuses.PAUSED);
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    manager.resumeSync(SLUG);
+
+    await expect(launchResult).resolves.toEqual({ kind: 'resolved' });
+    expect(statusEvents(broadcaster)).toEqual([
+      BundleSyncStatuses.FETCHING_MANIFEST,
+      BundleSyncStatuses.PLANNING,
+      BundleSyncStatuses.PAUSED,
+      BundleSyncStatuses.PLANNING,
+      BundleSyncStatuses.UP_TO_DATE,
+    ]);
+  });
+
+  it('rejects paused syncForLaunch when the paused sync is cancelled', async () => {
+    vi.useRealTimers();
+    managerMocks.getClient.mockResolvedValue({ bundleSlug: BUNDLE_SLUG });
+    managerMocks.buildPlan.mockResolvedValueOnce(DOWNLOAD_PLAN);
+    mockPausedLaunchPhase();
+
+    const broadcaster = makeBroadcaster();
+    const manager = new BundleManager(broadcaster, makeHealer());
+    const launchResult = manager.syncForLaunch(SLUG).then(
+      () => ({ kind: 'resolved' as const }),
+      (error: unknown) => ({ kind: 'rejected' as const, error }),
+    );
+
+    await vi.waitFor(() => {
+      expect(managerMocks.runSyncPhases).toHaveBeenCalledTimes(1);
+    });
+
+    manager.pauseSync(SLUG);
+
+    await vi.waitFor(() => {
+      expect(statusEvents(broadcaster)).toContain(BundleSyncStatuses.PAUSED);
+    });
+
+    manager.cancelSync(SLUG);
+
+    const result = await launchResult;
+    expect(result.kind).toBe('rejected');
+    if (result.kind === 'rejected') {
+      expect(result.error).toMatchObject({ code: BundleErrorCodes.ABORTED });
+    }
+    expect(statusEvents(broadcaster)).toContain(BundleSyncStatuses.CANCELLED);
   });
 });
