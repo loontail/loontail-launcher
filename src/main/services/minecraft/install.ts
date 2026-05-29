@@ -10,7 +10,7 @@ import { saveCurrentTargetInstallManifest } from './installManifest';
 import { type InstallOp, OpKinds } from './ops';
 import { createPlannedProgressAdapter, runWithProgressAdapter } from './progressAdapter';
 import { runtimePathFor } from './runtimeFs';
-import { invalidateRuntimeVerification, isAnythingInstalled } from './runtimeState';
+import { isAnythingInstalled } from './runtimeState';
 import { isUnderClientsRoot } from './uninstall';
 
 export const beginInstall = (
@@ -203,7 +203,6 @@ export const runInstall = async (
     await handleInstallFailure(env, slug, ctx, op, error);
     throw error;
   } finally {
-    invalidateRuntimeVerification(ctx.target);
     env.ops.delete(slug);
   }
 };

@@ -12,9 +12,12 @@ import type { Context } from './context';
 import type { ManagerEnv } from './env';
 import { classifyError, errorMessage } from './errors';
 import { repairMissingForgeProcessorOutputs } from './forgeProcessorHealing';
-import { saveCurrentTargetInstallManifest } from './installManifest';
-import { ReadinessPolicyKinds, resolveTargetReadinessPolicy } from './readinessPolicy';
+import {
+  hasCurrentTargetInstallManifest,
+  saveCurrentTargetInstallManifest,
+} from './installManifest';
 import { runtimePathFor } from './runtimeFs';
+import { isAnythingInstalled } from './runtimeState';
 
 type RepairOptions = {
   readonly signal: AbortSignal;
@@ -42,15 +45,20 @@ const loadBundleOwnedPaths = async (ctx: Context): Promise<ReadonlySet<string> |
   return new Set(Object.keys(manifest.files));
 };
 
+// Cheap presence check mirroring the status seed: after a repair cancel/failure
+// report INSTALLED when the durable manifest matches and files are present,
+// otherwise the caller's not-ready status. No hash/manifest verification.
 const emitReadinessStatus = async (
   env: ManagerEnv,
   slug: ClientSlug,
   ctx: Context,
   notReadyStatus: typeof InstallStatuses.ERROR | typeof InstallStatuses.NOT_INSTALLED,
 ): Promise<void> => {
-  const readiness = await resolveTargetReadinessPolicy(env.kit, ctx);
-  const status =
-    readiness.kind === ReadinessPolicyKinds.INSTALLED ? InstallStatuses.INSTALLED : notReadyStatus;
+  const [hasCurrentManifest, installed] = await Promise.all([
+    hasCurrentTargetInstallManifest(ctx.clientFolder, ctx.target),
+    isAnythingInstalled(ctx.clientFolder),
+  ]);
+  const status = hasCurrentManifest && installed ? InstallStatuses.INSTALLED : notReadyStatus;
   env.emitStatus({ slug, status, paused: false });
 };
 

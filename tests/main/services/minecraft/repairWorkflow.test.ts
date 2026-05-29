@@ -7,10 +7,23 @@ import {
 } from '@loontail/minecraft-kit';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.hoisted(() => {
+const workflowMocks = vi.hoisted(() => {
   process.env.API_URL ??= 'http://test.invalid';
   process.env.API_TOKEN ??= 'test-token';
+  return {
+    hasCurrentTargetInstallManifest: vi.fn(),
+    isAnythingInstalled: vi.fn(),
+  };
 });
+
+vi.mock('@main/services/minecraft/installManifest', () => ({
+  hasCurrentTargetInstallManifest: workflowMocks.hasCurrentTargetInstallManifest,
+  saveCurrentTargetInstallManifest: vi.fn(),
+}));
+
+vi.mock('@main/services/minecraft/runtimeState', () => ({
+  isAnythingInstalled: workflowMocks.isAnythingInstalled,
+}));
 
 import type { Context } from '@main/services/minecraft/context';
 import type { ManagerEnv } from '@main/services/minecraft/env';
@@ -47,7 +60,7 @@ const logger = () => ({
   warn: vi.fn(),
 });
 
-const env = (kit: MinecraftKit): ManagerEnv => {
+const env = (): ManagerEnv => {
   const broadcaster = {
     status: vi.fn(),
     progress: vi.fn(),
@@ -55,7 +68,7 @@ const env = (kit: MinecraftKit): ManagerEnv => {
     error: vi.fn(),
   };
   return {
-    kit,
+    kit: {} as MinecraftKit,
     broadcaster,
     ops: new Map<ClientSlug, never>(),
     logger: logger(),
@@ -67,18 +80,17 @@ const env = (kit: MinecraftKit): ManagerEnv => {
   };
 };
 
-const kitWithReadiness = (isReady: boolean): MinecraftKit =>
-  ({
-    verify: {
-      targetReady: {
-        run: vi.fn(async () => ({ isReady })),
-      },
-    },
-  }) as unknown as MinecraftKit;
+// Drive the cheap presence check (durable manifest + on-disk files) that
+// emitReadinessStatus now uses instead of kit hash verification.
+const presence = (installed: boolean): void => {
+  workflowMocks.hasCurrentTargetInstallManifest.mockResolvedValue(installed);
+  workflowMocks.isAnythingInstalled.mockResolvedValue(installed);
+};
 
 describe('repair workflow finalization', () => {
-  it('finalizes cancellation from readiness without emitting errors', async () => {
-    const operationEnv = env(kitWithReadiness(false));
+  it('finalizes cancellation as not-installed when the install is no longer present', async () => {
+    presence(false);
+    const operationEnv = env();
 
     await finalizeRepairCancellation(operationEnv, SLUG, context());
 
@@ -91,8 +103,22 @@ describe('repair workflow finalization', () => {
     });
   });
 
-  it('finalizes repair failure with mapped error and readiness status', async () => {
-    const operationEnv = env(kitWithReadiness(false));
+  it('finalizes cancellation as installed when files are still present', async () => {
+    presence(true);
+    const operationEnv = env();
+
+    await finalizeRepairCancellation(operationEnv, SLUG, context());
+
+    expect(operationEnv.broadcaster.status).toHaveBeenLastCalledWith({
+      slug: SLUG,
+      status: InstallStatuses.INSTALLED,
+      paused: false,
+    });
+  });
+
+  it('finalizes repair failure with mapped error and presence-based status', async () => {
+    presence(false);
+    const operationEnv = env();
     const error = new MinecraftKitError(
       MinecraftKitErrorCodes.INTEGRITY_HASH_MISMATCH,
       'Library hash mismatch',

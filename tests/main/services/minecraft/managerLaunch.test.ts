@@ -22,14 +22,6 @@ const orchestrationMocks = vi.hoisted(() => {
     getSettings: vi.fn(),
     hasCurrentTargetInstallManifest: vi.fn(),
     isAnythingInstalled: vi.fn(),
-    isTargetReady: vi.fn(),
-    readinessKinds: {
-      INSTALLED: 'installed',
-      NEEDS_INSTALL: 'needs-install',
-      NEEDS_REPAIR: 'needs-repair',
-      UNVERIFIED: 'unverified',
-    },
-    resolveTargetReadinessPolicy: vi.fn(),
     runInstall: vi.fn(),
     runLaunch: vi.fn(),
     runRepair: vi.fn(),
@@ -46,12 +38,7 @@ vi.mock('@main/services/minecraft/context', () => ({
 }));
 
 vi.mock('@main/services/minecraft/runtimeState', () => ({
-  RuntimeVerificationCacheModes: {
-    USE: 'use',
-    BYPASS: 'bypass',
-  },
   isAnythingInstalled: orchestrationMocks.isAnythingInstalled,
-  isTargetReady: orchestrationMocks.isTargetReady,
 }));
 
 vi.mock('@main/services/minecraft/installManifest', () => ({
@@ -59,9 +46,7 @@ vi.mock('@main/services/minecraft/installManifest', () => ({
 }));
 
 vi.mock('@main/services/minecraft/readinessPolicy', () => ({
-  ReadinessPolicyKinds: orchestrationMocks.readinessKinds,
   resolveClientInstallPresence: vi.fn(),
-  resolveTargetReadinessPolicy: orchestrationMocks.resolveTargetReadinessPolicy,
 }));
 
 vi.mock('@main/services/settings/settings', () => ({
@@ -142,8 +127,6 @@ const resetMocks = (): void => {
   orchestrationMocks.getSettings.mockReset();
   orchestrationMocks.hasCurrentTargetInstallManifest.mockReset();
   orchestrationMocks.isAnythingInstalled.mockReset();
-  orchestrationMocks.isTargetReady.mockReset();
-  orchestrationMocks.resolveTargetReadinessPolicy.mockReset();
   orchestrationMocks.runInstall.mockReset();
   orchestrationMocks.runLaunch.mockReset();
   orchestrationMocks.runRepair.mockReset();
@@ -153,12 +136,6 @@ const resetMocks = (): void => {
   orchestrationMocks.getSettings.mockReturnValue(launcherSettings());
   orchestrationMocks.hasCurrentTargetInstallManifest.mockResolvedValue(true);
   orchestrationMocks.isAnythingInstalled.mockResolvedValue(false);
-  orchestrationMocks.isTargetReady.mockResolvedValue(true);
-  orchestrationMocks.resolveTargetReadinessPolicy.mockResolvedValue({
-    kind: orchestrationMocks.readinessKinds.INSTALLED,
-    status: InstallStatuses.INSTALLED,
-    freshInstall: false,
-  });
   orchestrationMocks.runInstall.mockResolvedValue(undefined);
   orchestrationMocks.runLaunch.mockResolvedValue(undefined);
   orchestrationMocks.runRepair.mockResolvedValue(true);
@@ -176,7 +153,6 @@ describe('MinecraftManager.startLaunch', () => {
     // The lenient preflight inside runLaunch is the only launch-time gate now —
     // startLaunch neither verifies hashes nor reinstalls implicitly.
     expect(orchestrationMocks.runInstall).not.toHaveBeenCalled();
-    expect(orchestrationMocks.resolveTargetReadinessPolicy).not.toHaveBeenCalled();
     expect(orchestrationMocks.runLaunch).toHaveBeenCalledWith(
       expect.any(Object),
       SLUG,

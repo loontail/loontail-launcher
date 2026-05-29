@@ -9,7 +9,6 @@ const statusMocks = vi.hoisted(() => {
     getSettings: vi.fn(),
     hasCurrentTargetInstallManifest: vi.fn(),
     isAnythingInstalled: vi.fn(),
-    isTargetReady: vi.fn(),
     resolveClientInstallPresence: vi.fn(),
     setClientOverride: vi.fn(),
   };
@@ -24,12 +23,7 @@ vi.mock('@main/services/minecraft/context', () => ({
 }));
 
 vi.mock('@main/services/minecraft/runtimeState', () => ({
-  RuntimeVerificationCacheModes: {
-    USE: 'use',
-    BYPASS: 'bypass',
-  },
   isAnythingInstalled: statusMocks.isAnythingInstalled,
-  isTargetReady: statusMocks.isTargetReady,
 }));
 
 vi.mock('@main/services/minecraft/installManifest', () => ({
@@ -38,7 +32,6 @@ vi.mock('@main/services/minecraft/installManifest', () => ({
 
 vi.mock('@main/services/minecraft/readinessPolicy', () => ({
   resolveClientInstallPresence: statusMocks.resolveClientInstallPresence,
-  resolveTargetReadinessPolicy: vi.fn(),
 }));
 
 vi.mock('@main/services/settings/settings', () => ({
@@ -80,14 +73,12 @@ const resetStatusMocks = (): void => {
   statusMocks.getSettings.mockReset();
   statusMocks.hasCurrentTargetInstallManifest.mockReset();
   statusMocks.isAnythingInstalled.mockReset();
-  statusMocks.isTargetReady.mockReset();
   statusMocks.resolveClientInstallPresence.mockReset();
   statusMocks.setClientOverride.mockReset();
 
   statusMocks.getSettings.mockReturnValue(launcherSettings());
   statusMocks.hasCurrentTargetInstallManifest.mockResolvedValue(true);
   statusMocks.isAnythingInstalled.mockResolvedValue(false);
-  statusMocks.isTargetReady.mockResolvedValue(true);
   statusMocks.resolveClientInstallPresence.mockResolvedValue(InstallStatuses.INSTALLED);
 };
 
