@@ -362,11 +362,29 @@ describe('applySettingsMigrations', () => {
     );
   });
 
-  it('crashes module load when stored state is behind code with no migration step', async () => {
-    writeStore({ [STORE_KEY_SCHEMA_VERSION]: 0 });
-    await expect(loadStoreModule()).rejects.toThrow(
-      'Missing schema migration step from version 0 to 1',
-    );
+  it('migrates a version-0 store to the current version at module load', async () => {
+    writeStore({
+      [STORE_KEY_LAUNCHER_SETTINGS]: {
+        memory: { allocatedRamMb: 4096 },
+        storage: { clientsFolder: '/tmp/clients' },
+        launch: { console: true, fullscreen: false },
+        clients: {},
+      },
+      [STORE_KEY_SCHEMA_VERSION]: 0,
+    });
+
+    const { getStoredLauncherSettings } = await loadStoreModule();
+    expect(getStoredLauncherSettings().memory.allocatedRamMb).toBe(4096);
+
+    const persisted = JSON.parse(fs.readFileSync(storeFile, 'utf8'));
+    expect(persisted[STORE_KEY_SCHEMA_VERSION]).toBe(CURRENT_SCHEMA_VERSION);
+  });
+
+  it('supplies a migration step for every version up to CURRENT_SCHEMA_VERSION', async () => {
+    const { applySettingsMigrations } = await loadStoreModule();
+    expect(() =>
+      applySettingsMigrations(settingsFixture(), 0, CURRENT_SCHEMA_VERSION),
+    ).not.toThrow();
   });
 });
 

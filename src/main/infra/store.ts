@@ -102,7 +102,12 @@ type MigrationFn = (settings: LauncherSettings) => LauncherSettings;
 
 // Indexed by the version we're migrating FROM. Add entries as the schema
 // evolves; runMigrations applies them in order until CURRENT_SCHEMA_VERSION.
-const MIGRATIONS: Record<number, MigrationFn> = {};
+// 0 → 1 is an identity step: version-0 settings are structurally identical to
+// version 1, so the bump only stamps the version. Without it any pre-versioning
+// store (schemaVersion 0) would throw at module load and crash the main process.
+const MIGRATIONS: Record<number, MigrationFn> = {
+  0: (settings) => settings,
+};
 
 // Apply the migration steps from `fromVersion` up to `toVersion`, in order.
 // A gap in the chain would silently corrupt user state, so a missing step
