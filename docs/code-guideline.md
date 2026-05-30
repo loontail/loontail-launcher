@@ -449,6 +449,25 @@ constant, not an inline literal.
   by X flow") — it rots and clutters.
 - Multi-line docstrings are unnecessary. If explanation is required, one short
   line above the function is enough.
+- **Forbidden patterns** — delete on sight, never add:
+  - Section-divider banners: `// ---- X ----`, `// ==== X ====`, `// Public API`,
+    `// Internal`. The `private` keyword and file layout already mark structure.
+  - Comments that paraphrase the next identifier: `// loop over files`,
+    `// set status to ready`, `// Plan + tracker + run`, and per-field / per-prop
+    labels that restate the name (`// the text to copy` above `text: string`).
+  - Empty-catch labels like `// skip unreadable file` — an empty `catch {}` is
+    self-evident. Comment a `catch` only when **why** swallowing is safe is
+    non-obvious.
+- **Keep** — these are the point of the rule, never strip them: platform quirks
+  (e.g. "Cloudflare blocks a bare Java user-agent"), race / abort / cleanup
+  invariants (cooperative pause/cancel), wire-shape coercions
+  (`exactOptionalPropertyTypes`, Strapi `null` → empty), non-obvious default
+  values, schema-migration gap guards.
+- **Rule of thumb:** if deleting the comment loses information a careful reader
+  could not recover from the code in ~10 seconds, keep it; otherwise delete it.
+- Strip decorative / what-restating comments whenever you touch a file — do not
+  let them accumulate. A blanket regex sweep is **not** allowed: it would destroy
+  the high-value "why" comments above. Removal is per-comment judgement.
 
 ## 11. Tests
 
