@@ -141,9 +141,22 @@ const verifyLaunchPreflight = async (
       'Launch preflight failed: classpath is empty',
     );
   }
-  for (const classpathFile of composition.classpath) {
-    await requireLaunchFile(classpathFile, 'classpath file', MinecraftErrorCodes.NOT_INSTALLED);
-  }
+  // Classpath entries are independent, so fan the fs.access checks out — a Forge
+  // classpath can hold 100+ jars and a sequential walk adds visible launch
+  // latency on a cold disk. Promise.all still fails fast on the first miss.
+  await Promise.all(
+    composition.classpath.map((classpathFile) => {
+      // An empty entry would make fs.access('') resolve against the CWD and
+      // silently pass, masking a malformed version JSON.
+      if (!classpathFile) {
+        throw new LaunchPreflightError(
+          MinecraftErrorCodes.NOT_INSTALLED,
+          'Launch preflight failed: classpath contains an empty entry',
+        );
+      }
+      return requireLaunchFile(classpathFile, 'classpath file', MinecraftErrorCodes.NOT_INSTALLED);
+    }),
+  );
 };
 
 export const endLaunch = (env: ManagerEnv, slug: ClientSlug, error?: unknown): void => {

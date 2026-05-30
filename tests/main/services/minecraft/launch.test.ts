@@ -386,6 +386,61 @@ describe('runLaunch', () => {
     expect(launchMocks.openConsoleWindow).toHaveBeenCalled();
   });
 
+  it('surfaces an empty classpath as a repairable not-installed error, staying installed', async () => {
+    const fixture = await createLaunchFixture();
+    const launchComposition = composition(fixture.composition.directory, {
+      javaPath: fixture.javaPath,
+      classpath: [],
+    });
+    const compose = vi.fn(async () => launchComposition);
+    const run = vi.fn();
+    const kit = { launch: { compose, run } } as unknown as MinecraftKit;
+    const ops = new Map<ClientSlug, Op>();
+    const managerEnv = env(kit, ops);
+
+    await expect(runLaunch(managerEnv, SLUG, fixture.ctx, account())).resolves.toBeUndefined();
+
+    expect(run).not.toHaveBeenCalled();
+    expect(ops.has(SLUG)).toBe(false);
+    expect(managerEnv.emitError).toHaveBeenCalledWith(
+      SLUG,
+      MinecraftErrorCodes.NOT_INSTALLED,
+      expect.stringContaining('classpath is empty'),
+    );
+    expect(managerEnv.broadcaster.status).toHaveBeenLastCalledWith({
+      slug: SLUG,
+      status: InstallStatuses.INSTALLED,
+      paused: false,
+    });
+  });
+
+  it('rejects an empty-string classpath entry as a repairable not-installed error', async () => {
+    const fixture = await createLaunchFixture();
+    const launchComposition = composition(fixture.composition.directory, {
+      javaPath: fixture.javaPath,
+      classpath: ['', fixture.clientJarPath],
+    });
+    const compose = vi.fn(async () => launchComposition);
+    const run = vi.fn();
+    const kit = { launch: { compose, run } } as unknown as MinecraftKit;
+    const ops = new Map<ClientSlug, Op>();
+    const managerEnv = env(kit, ops);
+
+    await expect(runLaunch(managerEnv, SLUG, fixture.ctx, account())).resolves.toBeUndefined();
+
+    expect(run).not.toHaveBeenCalled();
+    expect(managerEnv.emitError).toHaveBeenCalledWith(
+      SLUG,
+      MinecraftErrorCodes.NOT_INSTALLED,
+      expect.stringContaining('empty entry'),
+    );
+    expect(managerEnv.broadcaster.status).toHaveBeenLastCalledWith({
+      slug: SLUG,
+      status: InstallStatuses.INSTALLED,
+      paused: false,
+    });
+  });
+
   it('surfaces a compose missing-version-JSON kit error as a repairable not-installed error', async () => {
     const fixture = await createLaunchFixture();
     const compose = vi.fn(async () => {
