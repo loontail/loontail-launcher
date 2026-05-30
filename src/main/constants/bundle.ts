@@ -7,10 +7,7 @@ export const BUNDLE_DOWNLOAD_CONCURRENCY = 16;
 // 5 is plenty of slack for CDN-style edges (302 → 301 → 200).
 export const BUNDLE_DOWNLOAD_MAX_REDIRECTS = 5;
 
-// Throttle for renderer progress emissions. Lower = smoother bars, higher =
-// fewer IPC round-trips. 100 ms is the smallest interval the human eye reads
-// as "fluid".
-export const BUNDLE_DOWNLOAD_PROGRESS_THROTTLE_MS = 100;
+export { PROGRESS_THROTTLE_MS as BUNDLE_DOWNLOAD_PROGRESS_THROTTLE_MS } from '@shared/constants';
 
 // Sliding window for instantaneous download speed (bytes/sec readout).
 export const BUNDLE_DOWNLOAD_SPEED_WINDOW_MS = 1000;

@@ -10,6 +10,7 @@ import {
   type VerifyFileCategory,
   createInstallProgressTracker,
 } from '@loontail/minecraft-kit';
+import { createThrottledEmitter } from '@main/infra/throttledEmitter';
 import type { ClientSlug } from '@shared/contracts/ids';
 import {
   type MinecraftProgressEvent,
@@ -18,7 +19,6 @@ import {
 } from '@shared/contracts/minecraft';
 import type { ManagerEnv } from './env';
 
-const PROGRESS_THROTTLE_MS = 100;
 const PROGRESS_STAGE_FOR_ASPECT: Record<VerificationKind, ProgressStage> = {
   [VerificationKinds.MINECRAFT]: ProgressStages.MINECRAFT,
   [VerificationKinds.RUNTIME]: ProgressStages.RUNTIME,
@@ -113,24 +113,12 @@ type ThrottledProgress = {
   readonly currentFile: string | undefined;
 };
 
-type ThrottledProgressEmitter = {
-  readonly emit: (progress: ThrottledProgress) => void;
-  readonly dispose: () => void;
-};
-
-const createThrottledProgressEmitter = (
+export const createRepairProgressAdapter = (
   env: ManagerEnv,
   slug: ClientSlug,
-): ThrottledProgressEmitter => {
-  let current: ThrottledProgress | null = null;
-  let lastEmittedAt = 0;
-  let pendingFlush: NodeJS.Timeout | null = null;
-
-  const flush = (): void => {
-    lastEmittedAt = Date.now();
-    pendingFlush = null;
-    if (current === null) return;
-    const { stage, bytesDownloaded, totalBytes, currentFile } = current;
+): MinecraftProgressAdapter => {
+  const emitter = createThrottledEmitter<ThrottledProgress>((progress) => {
+    const { stage, bytesDownloaded, totalBytes, currentFile } = progress;
     const percent = totalBytes > 0 ? Math.min(100, (bytesDownloaded / totalBytes) * 100) : 0;
     const event: MinecraftProgressEvent = {
       slug,
@@ -142,35 +130,7 @@ const createThrottledProgressEmitter = (
       ...(currentFile !== undefined ? { currentFile } : {}),
     };
     env.broadcaster.progress(event);
-  };
-
-  const clearPendingFlush = (): void => {
-    if (pendingFlush === null) return;
-    clearTimeout(pendingFlush);
-    pendingFlush = null;
-  };
-
-  return {
-    emit: (progress) => {
-      current = progress;
-      const elapsed = Date.now() - lastEmittedAt;
-      if (elapsed >= PROGRESS_THROTTLE_MS) {
-        clearPendingFlush();
-        flush();
-      } else if (pendingFlush === null) {
-        pendingFlush = setTimeout(flush, PROGRESS_THROTTLE_MS - elapsed);
-        if (typeof pendingFlush.unref === 'function') pendingFlush.unref();
-      }
-    },
-    dispose: clearPendingFlush,
-  };
-};
-
-export const createRepairProgressAdapter = (
-  env: ManagerEnv,
-  slug: ClientSlug,
-): MinecraftProgressAdapter => {
-  const emitter = createThrottledProgressEmitter(env, slug);
+  });
   let stage: ProgressStage = ProgressStages.PREPARE;
   let bytesDownloaded = 0;
   let totalBytes = 0;
@@ -185,7 +145,7 @@ export const createRepairProgressAdapter = (
   };
 
   const emit = (): void => {
-    emitter.emit({ stage, bytesDownloaded, totalBytes, currentFile });
+    emitter.push({ stage, bytesDownloaded, totalBytes, currentFile });
   };
 
   const onEvent: ProgressListener = (event) => {

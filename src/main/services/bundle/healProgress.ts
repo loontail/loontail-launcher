@@ -1,13 +1,19 @@
 import { EventTypes, type ProgressListener } from '@loontail/minecraft-kit';
+import { createThrottledEmitter } from '@main/infra/throttledEmitter';
 import { BundleSyncStatuses } from '@shared/contracts/bundle';
 import type { ClientSlug } from '@shared/contracts/ids';
 import type { EmitProgress } from './runner';
 
-const HEAL_PROGRESS_THROTTLE_MS = 100;
-
 export type HealProgressListener = {
   readonly onEvent: ProgressListener;
   readonly dispose: () => void;
+};
+
+type HealProgress = {
+  readonly verifiedFiles: number;
+  readonly bytesDownloaded: number;
+  readonly totalBytes: number;
+  readonly currentFile: string | undefined;
 };
 
 export const createHealProgressListener = (
@@ -18,36 +24,19 @@ export const createHealProgressListener = (
   let bytesDownloaded = 0;
   let totalBytes = 0;
   let currentFile: string | undefined;
-  let lastEmittedAt = 0;
-  let pendingFlush: NodeJS.Timeout | null = null;
 
-  const flush = (): void => {
-    lastEmittedAt = Date.now();
-    pendingFlush = null;
+  const emitter = createThrottledEmitter<HealProgress>((value) => {
     emit(slug, BundleSyncStatuses.HEALING, {
-      processedFiles: verifiedFiles,
-      ...(totalBytes > 0 ? { bytesDownloaded, bytesTotal: totalBytes } : {}),
-      ...(currentFile !== undefined ? { currentFile } : {}),
+      processedFiles: value.verifiedFiles,
+      ...(value.totalBytes > 0
+        ? { bytesDownloaded: value.bytesDownloaded, bytesTotal: value.totalBytes }
+        : {}),
+      ...(value.currentFile !== undefined ? { currentFile: value.currentFile } : {}),
     });
-  };
+  });
 
-  const clearPendingFlush = (): void => {
-    if (pendingFlush === null) return;
-    clearTimeout(pendingFlush);
-    pendingFlush = null;
-  };
-
-  const scheduleFlush = (): void => {
-    const elapsed = Date.now() - lastEmittedAt;
-    if (elapsed >= HEAL_PROGRESS_THROTTLE_MS) {
-      clearPendingFlush();
-      flush();
-      return;
-    }
-    if (pendingFlush === null) {
-      pendingFlush = setTimeout(flush, HEAL_PROGRESS_THROTTLE_MS - elapsed);
-      if (typeof pendingFlush.unref === 'function') pendingFlush.unref();
-    }
+  const push = (): void => {
+    emitter.push({ verifiedFiles, bytesDownloaded, totalBytes, currentFile });
   };
 
   const onEvent: ProgressListener = (event) => {
@@ -55,17 +44,17 @@ export const createHealProgressListener = (
       case EventTypes.VERIFY_FILE_CHECKED:
         verifiedFiles += 1;
         currentFile = event.file.path;
-        scheduleFlush();
+        push();
         return;
       case EventTypes.DOWNLOAD_STARTED:
         currentFile = event.file.target;
-        scheduleFlush();
+        push();
         return;
       case EventTypes.DOWNLOAD_PROGRESS:
         bytesDownloaded = event.bytesDownloaded;
         totalBytes = event.totalBytes;
         currentFile = event.file.target;
-        scheduleFlush();
+        push();
         return;
       default:
         return;
@@ -74,6 +63,6 @@ export const createHealProgressListener = (
 
   return {
     onEvent,
-    dispose: clearPendingFlush,
+    dispose: emitter.dispose,
   };
 };

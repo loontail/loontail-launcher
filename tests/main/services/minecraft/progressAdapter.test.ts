@@ -81,7 +81,7 @@ describe('createRepairProgressAdapter', () => {
     adapter.dispose();
   });
 
-  it('cleans up timers on dispose and stops emitting afterwards', () => {
+  it('flushes the pending progress on dispose and stops emitting afterwards', () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
     const { env, progress } = makeEnv();
@@ -92,14 +92,19 @@ describe('createRepairProgressAdapter', () => {
 
     // A second event within the throttle window schedules a pending flush
     // instead of emitting immediately.
-    adapter.onEvent(verifyEvent(`${CLIENT_FOLDER}/b.jar`));
+    const lastFile = `${CLIENT_FOLDER}/b.jar`;
+    adapter.onEvent(verifyEvent(lastFile));
     expect(progress).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(1);
 
+    // dispose flushes the pending event so the final count is never dropped,
+    // then cancels the timer.
     adapter.dispose();
+    expect(progress).toHaveBeenCalledTimes(2);
+    expect(progress).toHaveBeenLastCalledWith(expect.objectContaining({ currentFile: lastFile }));
     expect(vi.getTimerCount()).toBe(0);
 
     vi.advanceTimersByTime(1000);
-    expect(progress).toHaveBeenCalledTimes(1);
+    expect(progress).toHaveBeenCalledTimes(2);
   });
 });

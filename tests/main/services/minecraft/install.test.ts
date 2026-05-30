@@ -274,7 +274,7 @@ describe('runRepair', () => {
     expect(ops.has(SLUG)).toBe(false);
   });
 
-  it('clears pending repair progress before the terminal status settles', async () => {
+  it('flushes the final repair progress before the terminal status settles', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
     try {
@@ -311,11 +311,16 @@ describe('runRepair', () => {
         status: InstallStatuses.INSTALLED,
         paused: false,
       });
-      expect(env.broadcaster.progress).not.toHaveBeenCalled();
+      // dispose flushes the pending repair progress so the last file count
+      // reaches the renderer before the terminal status.
+      expect(env.broadcaster.progress).toHaveBeenCalledTimes(1);
+      expect(env.broadcaster.progress).toHaveBeenCalledWith(
+        expect.objectContaining({ currentFile: pendingFile }),
+      );
 
       vi.advanceTimersByTime(101);
 
-      expect(env.broadcaster.progress).not.toHaveBeenCalled();
+      expect(env.broadcaster.progress).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();
     }

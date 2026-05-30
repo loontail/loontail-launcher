@@ -405,7 +405,7 @@ describe('BundleManager pause cleanup', () => {
     ]);
   });
 
-  it('clears pending heal progress before sync reaches a terminal status', async () => {
+  it('flushes the final heal progress before sync reaches a terminal status', async () => {
     vi.setSystemTime(0);
     managerMocks.getClient.mockResolvedValue({ bundleSlug: BUNDLE_SLUG });
     managerMocks.buildPlan.mockResolvedValueOnce({
@@ -438,11 +438,16 @@ describe('BundleManager pause cleanup', () => {
       BundleSyncStatuses.HEALING,
       BundleSyncStatuses.COMPLETED,
     ]);
-    expect(broadcaster.progress).not.toHaveBeenCalled();
+    // dispose flushes the pending heal progress so the renderer's file count is
+    // not left stale before the terminal status.
+    expect(broadcaster.progress).toHaveBeenCalledTimes(1);
+    expect(broadcaster.progress).toHaveBeenCalledWith(
+      expect.objectContaining({ status: BundleSyncStatuses.HEALING, processedFiles: 1 }),
+    );
 
     vi.advanceTimersByTime(101);
 
-    expect(broadcaster.progress).not.toHaveBeenCalled();
+    expect(broadcaster.progress).toHaveBeenCalledTimes(1);
   });
 
   it('keeps syncForLaunch pending across pause and resolves after resume completes', async () => {
