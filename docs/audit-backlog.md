@@ -1927,6 +1927,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### ERR-07 — MIGRATIONS object is empty while CURRENT_SCHEMA_VERSION = 1; any version-0 store file will crash module load
 
+- **Status:** DONE — 2026-05-31 · commit 379096f
 - **Category:** Error handling · **Priority:** P1 · **Risk:** High · _(auditor: testability)_
 - **Area:** src/main/infra/store.ts:105, src/shared/constants/storeKeys.ts:8
 - **Problem:** MIGRATIONS is defined as {} (empty record) at line 105 of store.ts while CURRENT_SCHEMA_VERSION is 1. If a user has a pre-existing store with schemaVersion=0 (any install before CURRENT_SCHEMA_VERSION was bumped to 1), runMigrations() at module load time calls applySettingsMigrations(settings, 0, 1, {}) which throws 'Missing schema migration step from version 0 to 1'. This crashes the Electron main process before any window opens. The existing test at line 365 of store.test.ts confirms this is a crash path.
