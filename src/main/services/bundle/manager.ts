@@ -246,14 +246,23 @@ export class BundleManager {
 
   private async continuePausedSync(active: ActiveSync): Promise<void> {
     const { task } = active;
-    // Re-plan from current disk state so files completed before pause are
-    // skipped via the sha256 fast-path.
-    resetTaskForResume(task);
+    try {
+      // Re-plan from current disk state so files completed before pause are
+      // skipped via the sha256 fast-path.
+      resetTaskForResume(task);
 
-    await this.executePreparedSync(active, task, {
-      force: false,
-      loadRemoteManifest: () => active.remoteManifest,
-    });
+      await this.executePreparedSync(active, task, {
+        force: false,
+        loadRemoteManifest: () => active.remoteManifest,
+      });
+    } catch (err) {
+      // executePreparedSync drops the active sync on its own exit paths. Reaching
+      // here means resume threw before/around it (and resumeSync swallows the
+      // rejection), so drop it or the slug stays wedged with an undead lock for
+      // the rest of the session. dropActiveSync is idempotent.
+      this.dropActiveSync(task.slug);
+      throw err;
+    }
   }
 
   private async executePreparedSync(
