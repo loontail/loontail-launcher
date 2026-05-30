@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { scopedLogger } from '@main/infra/logger';
-import type { LocalManifest } from '@shared/contracts/bundle';
+import { type LocalManifest, LocalManifestSchema } from '@shared/contracts/bundle';
 import { bundleManifestPath } from './paths';
 
 const logger = scopedLogger('bundle.manifest');
@@ -10,20 +10,12 @@ export const loadLocalManifest = async (clientFolder: string): Promise<LocalMani
   const target = bundleManifestPath(clientFolder);
   try {
     const raw = await fs.readFile(target, 'utf8');
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== 'object') return null;
-    const candidate = parsed as Partial<LocalManifest>;
-    if (
-      typeof candidate.bundleSlug !== 'string' ||
-      typeof candidate.manifestHash !== 'string' ||
-      typeof candidate.syncedAt !== 'string' ||
-      !candidate.files ||
-      typeof candidate.files !== 'object'
-    ) {
+    const parsed = LocalManifestSchema.safeParse(JSON.parse(raw));
+    if (!parsed.success) {
       logger.warn(`Local bundle manifest at ${target} is malformed; discarding`);
       return null;
     }
-    return candidate as LocalManifest;
+    return parsed.data;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
     logger.warn(`Failed to read local bundle manifest at ${target}`, err);

@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import { enumFromConst } from './enum';
-import type { BundleSlug } from './ids';
-import { ClientSlugSchema } from './ids';
+import { BundleSlugSchema, ClientSlugSchema } from './ids';
 
 // Stable string constants for the lifecycle of a bundle sync. The renderer
 // reads these to decide what affordance to show (Download / Pause / Resume /
@@ -73,19 +72,23 @@ export const RemoteManifestSchema = z.record(z.string(), z.array(RemoteManifestE
 
 export type RemoteManifest = z.infer<typeof RemoteManifestSchema>;
 
-export type LocalManifestFile = {
-  sha256: string;
-  size: number;
-};
+export const LocalManifestFileSchema = z.object({
+  sha256: z.string(),
+  size: z.number().int().nonnegative(),
+});
 
-export type LocalManifest = {
-  bundleSlug: BundleSlug;
+export type LocalManifestFile = z.infer<typeof LocalManifestFileSchema>;
+
+export const LocalManifestSchema = z.object({
+  bundleSlug: BundleSlugSchema,
   // SHA-256 of the raw remote manifest JSON we synced from. Lets the renderer
   // detect "manifest changed upstream" cheaply on next checkStatus.
-  manifestHash: string;
-  syncedAt: string;
-  files: Record<string, LocalManifestFile>;
-};
+  manifestHash: z.string(),
+  syncedAt: z.string(),
+  files: z.record(z.string(), LocalManifestFileSchema),
+});
+
+export type LocalManifest = z.infer<typeof LocalManifestSchema>;
 
 export const BundleStatusEventSchema = z.object({
   slug: ClientSlugSchema,
