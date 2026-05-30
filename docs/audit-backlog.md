@@ -1865,6 +1865,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### ERR-01 — NO_BUNDLE_SLUG error code is defined and mapped in errorCopy.ts but never actually thrown
 
+- **Status:** DONE — 2026-05-31 · commit 5ad39c0
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: download-install-flow)_
 - **Area:** src/shared/contracts/bundle.ts, src/renderer/features/bundle/errorCopy.ts, src/main/services/bundle/manager.ts
 - **Problem:** BundleErrorCodes.NO_BUNDLE_SLUG is defined (shared/contracts/bundle.ts line 40), has a localization key in errorCopy.ts (line 5), but is never thrown anywhere in the service. The manager.ts runSync branch where client.bundleSlug is null emits BundleSyncStatuses.NO_BUNDLE and returns — not an error. The code that would logically use NO_BUNDLE_SLUG either does not exist or uses UNKNOWN.
@@ -3441,6 +3442,43 @@ or blocked work. Pick the highest-priority available task (P0 → P1 → P2 → 
 _None._ No task this cycle changed `@loontail/minecraft-kit` or `loontail-yggdrasil`.
 
 ## Session log
+
+### 2026-05-31 (session 4)
+
+- **Done (6 task IDs across 6 commits):**
+  - `ERR-07` (P1, High) — added an identity `0 → 1` step to `MIGRATIONS` in
+    `store.ts`; a pre-versioning store (`schemaVersion 0`) now migrates at module
+    load instead of crashing the main process. Replaced the crash-asserting test
+    with a migrate-and-persist test plus a coverage pin · commit 379096f
+  - `ERR-04` (P1) — added `DISK_ERROR`/`FORGE_ERROR` launcher codes and expanded
+    `KIT_CODE_TO_LAUNCHER_CODE` to cover the disk/archive/manifest/forge/verify and
+    launch-path auth kit codes; `MANIFEST_NOT_FOUND` now maps to `INTEGRITY_ERROR`,
+    not `NETWORK_ERROR`. New i18n keys + table-driven classifyError tests · commit 2ea7b40
+  - `ERR-05` (P1) — `withClassifiedKitError` wraps the install/repair/launch route
+    handlers so a raw `MinecraftKitError` escaping `buildContext` is reclassified to
+    a coded `ManagerError` instead of collapsing to `IpcHandlerFailed` · commit 9e50a00
+  - `ERR-06` (P1) — extracted `clearLauncherCache`; the success toast now fires only
+    after the disk clear resolves and a warn toast surfaces a disk-clear failure
+    instead of a misleading success · commit d9ef873
+  - `UI-06` (P3) — `formatBytes` guards `bytes < 1` so fractional byte counts no
+    longer index `SIZE_UNITS` out of bounds (`NaN B`) · commit 3aa3480
+  - `ERR-01` (P3) — removed the never-thrown `NO_BUNDLE_SLUG` bundle error code and
+    its i18n keys (the null-bundleSlug branch is a legitimate `NO_BUNDLE` status,
+    not an error, so throwing was not the right resolution) · commit 5ad39c0
+- **Packages built / pending publish:** none.
+- **Blocked:** none.
+- **Verification:** `npm run verify` — lint, typecheck, test (380 tests, up from
+  356), build all green.
+- **Notes:** ERR-04's real kit codes differ from the audit's assumed names
+  (`FILESYSTEM_WRITE_ERROR`/`ARCHIVE_INVALID`/… rather than
+  `DISK_WRITE_FAILED`/`EXTRACT_FAILED`); mapping follows the actual
+  `MinecraftKitErrorCodes` union. The new `routes.test.ts` uses the system-routes
+  fake-router pattern.
+- **Suggested next batch:** the remaining renderer state-leak quick-wins (`UI-04`
+  status-seed factory, `UI-05` BundleEventsListener), the `forgeProcessorActionsCache`
+  unbounded-growth fix (summary item 6), `UI-01`/`UI-02` auth error-state cleanups,
+  then the architecture P2 cluster (`AUTH-01`/`02`/`06`/`07`, `CC-15` store
+  import-time side-effects).
 
 ### 2026-05-31 (session 3)
 
