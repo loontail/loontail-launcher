@@ -7,6 +7,66 @@
 
 **Totals:** 156 tasks — P0: 4 · P1: 30 · P2: 65 · P3: 57. Touch `minecraft-kit`: 12. Touch `yggdrasil`: 2.
 
+## 0. Working agreement — read before starting
+
+This backlog is executed across **many sessions**. To stop finished work from being
+redone, every task carries a **Status** line. This section is the operating contract for
+any session that works this file.
+
+### Status values (per task)
+- `- **Status:** TODO` — not started (default).
+- `- **Status:** IN PROGRESS — <YYYY-MM-DD>` — claimed this session (set it if you stop mid-task).
+- `- **Status:** DONE — <YYYY-MM-DD> · commit <shortsha>[ · pkg:<name>]` — finished and committed.
+- `- **Status:** BLOCKED — <reason>` — cannot proceed; record why.
+
+Find remaining work with a search for `**Status:** TODO`. **Never** reopen a task that is `DONE`.
+
+### Selecting a batch
+- Take **3–10 tasks per session**: up to ~10 when they are quick / low-risk / share files
+  (e.g. §6.1 quick wins); **3–5** when medium/large or risky. Group by area, flow, or shared
+  files to reuse context and avoid merge churn.
+- Prefer higher priority first (P0 → P1 → P2 → P3), but bundling related quick-wins is fine.
+- If a task's prerequisite is not met, mark it `BLOCKED — <reason>` and move on.
+
+### Per-task definition of done
+1. Implement following `docs/architecture.md`, `docs/code-guideline.md`, `docs/ui-guideline.md`
+   and `AGENTS.md`. Match the surrounding code style; default to **no comments** (guideline §10).
+2. Add/adjust the tests the task names (guideline §11). Run the relevant tests + `tsc` + `biome`.
+3. Commit (below), then flip the task's **Status** to `DONE — <date> · commit <shortsha>`.
+
+### Commits (per AGENTS.md)
+- **One commit per task** (or per tightly-coupled pair). Conventional Commits, imperative
+  subject ≤72 chars, reference the id, e.g. `fix(ipc): serialize domain errors over the bridge (LL-090)`.
+- Commit from each repo's own root with the user's git identity. **Never** add a Claude / AI
+  `Co-Authored-By` trailer. One concern per commit. Body explains the **why**.
+- Gate before committing: `npm run lint && npm run typecheck && npm test` (the launcher also has
+  `npm run verify` for the full lint+typecheck+test+build set).
+
+### Tasks that change a library (`minecraft-kit` / `loontail-yggdrasil`)
+Sibling sources are at `e:\workspace\elixir\minecraft-kit` and `e:\workspace\elixir\loontail-yggdrasil`.
+1. Make the change in the **package source**, add its tests, and build it (`npm run build` in that package).
+2. **Vendor the build into the launcher now** so it consumes it: copy the package's `dist/` over
+   `loontail-launcher/node_modules/@loontail/<pkg>/dist/`
+   (yggdrasil = `@loontail/yggdrasil-core` and/or `@loontail/yggdrasil-client`).
+3. Commit the package repo (from its own root) **and** the launcher change as separate commits.
+4. **Do NOT `npm publish` and do NOT bump the pinned version yet.** Add the package to
+   **“Pending package release”** below. The maintainer publishes to npm at the very end, then asks
+   to bump the versions in `package.json`.
+
+### Skills (AGENTS.md)
+- Follow `AGENTS.md`. When a task matches a project skill in `.codex/skills/` (e.g. `code-refactoring`,
+  `improve-codebase-architecture`, `refactor-plan`, `tdd`, `backend-testing`, `bug-triage`, `diagnose`,
+  `security-best-practices`), read its `SKILL.md` first and follow that workflow.
+- Use Claude Code skills where they help: `/code-review` and `/simplify` after a change, `verify` / `run`
+  to exercise the app. For 3+ file / cross-module tasks, the swarm/agent guidance in `AGENTS.md` /
+  `CLAUDE.md` applies (named agents or a workflow).
+
+### End of session
+1. Every finished task is `DONE` (with commit sha); every stopped task is `IN PROGRESS` or `BLOCKED`.
+2. Append a dated entry to the **Session log** (below).
+3. Send the maintainer a short summary: done (ids + commits) · blocked (+ reasons) · packages built and
+   awaiting npm publish · suggested next batch.
+
 ## 1. Executive summary
 
 1. The launcher is a **mature, carefully-engineered codebase** that closely follows its own documented architecture. This audit produced **156 verified findings** (P0: 4, P1: 30, P2: 65, P3: 57) across 12 areas; an adversarial verification pass corrected or down-scoped ~45 of them and rejected 2 as inaccurate. The defects are concentrated, not systemic.
@@ -73,6 +133,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-001"></a>
 #### LL-001 · Shell-redirect junk files litter repo root and minecraft-kit root; .gitignore does not guard them
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P1 · **Effort:** quick · **Change risk:** low · **Flow:** Cross-cutting (no single flow)
 - **Area:** e:\workspace\elixir\loontail-launcher\ root (13 zero-byte untracked files: '({,', '({,-', ',+', '[A-Z][a-z]+', '[result.kind', 'fs.rm(dir', 's.key', 'stage', 'undefined)', 'version', '{,', '{,+', '{,-'); e:\workspace\elixir\minecraft-kit\ root (7 files: 'a.kind', 'e.type', 'i.path', 'result.kind', 'verification.isValid)', '{,', '{,-'); .gitignore
 - **Problem:** Zero-byte files with names like '({,', 'fs.rm(dir', '[result.kind', 'undefined)' sit at the launcher repo root, and seven more at the minecraft-kit root. They are shell-redirect artifacts (a stray `> ({,` etc. from copy-pasted command fragments). All are untracked (git status shows them as '??'), so they permanently pollute `git status`, risk being accidentally `git add .`-ed into a commit, and clutter the working tree. The .gitignore (node_modules/out/dist/build/*.log/*.tsbuildinfo/.env) has no rule that would catch these names.
@@ -85,6 +146,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-002"></a>
 #### LL-002 · Layer boundaries are not lint-enforced; architecture doc overstates enforcement
 
+- **Status:** TODO
 - **Category:** architecture · **Priority:** P1 · **Effort:** medium · **Change risk:** low · **Flow:** Cross-cutting (no single flow)
 - **Area:** biome.json:26-49 (linter.rules has no noRestrictedImports / boundary rule); docs/architecture.md:63 ('Hard rules (enforced by linter and tsconfig paths)') and the three bullets at :65-67; tsconfig.main.json, tsconfig.renderer.json
 - **Problem:** The doc claims renderer/main/shared boundaries are 'enforced by linter and tsconfig paths', but biome.json defines no import-restriction rule (no `noRestrictedImports`, no boundary plugin — confirmed the entire linter.rules block). The only real enforcement is structural tsconfig path separation: tsconfig.renderer.json omits the `@main/*` alias and includes only src/renderer+src/shared, so `import '@main/...'` from the renderer fails to resolve. But that does NOT stop a relative import like `../../main/foo`, and nothing stops `shared/` from importing `node:fs`/`electron`/`react` — purity there is currently maintained by convention only (verified clean today: grep for node:/electron/react imports under src/shared returned zero matches, but unguarded).
@@ -97,6 +159,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-003"></a>
 #### LL-003 · Bundle and Minecraft services have a module-level circular dependency
 
+- **Status:** TODO
 - **Category:** architecture · **Priority:** P1 · **Effort:** medium · **Change risk:** medium · **Flow:** Repair flow
 - **Area:** src/main/services/bundle/healer.ts:3 (imports verifyAndRepairExceptBundle from @main/services/minecraft/bundleHealing); src/main/services/minecraft/repairWorkflow.ts:8 (imports loadLocalManifest from @main/services/bundle/manifestRepo); note bundleHealing.ts:10 itself imports buildContext from minecraft/context, so the shared logic is not trivially poolable to a neutral leaf
 - **Problem:** bundle/healer.ts imports `verifyAndRepairExceptBundle` from the minecraft service (line 3), while minecraft/repairWorkflow.ts imports `loadLocalManifest` from the bundle service (line 8). That is a bidirectional bundle<->minecraft import edge at module-resolution time. The doc (§5) permits cross-service direct imports but implies a layered, non-cyclic graph ('the router is a renderer->main edge, not a main-internal bus'). The cycle also means bundle-ownership logic (`createBundleRepairIssueFilter`, `verifyAndRepairExceptBundle`) lives inside the minecraft service even though it is fundamentally bundle-domain knowledge.
@@ -109,6 +172,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-004"></a>
 #### LL-004 · Shared operation-lock registry is defaulted to a fresh instance in four places — silent loss of cross-domain mutual exclusion
 
+- **Status:** TODO
 - **Category:** architecture · **Priority:** P0 · **Effort:** quick · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/main/services/minecraft/index.ts:24 and bundle/index.ts:24 (factory param `operationLocks: ClientOperationLocks = createClientOperationLocks()`); minecraft/manager.ts:62 and bundle/manager.ts:86 (constructor param same default); index.ts:95,104-105 (single shared instance threaded in); manager.ts:9 / bundle/manager.ts:8 still import createClientOperationLocks
 - **Problem:** The whole point of clientOperationLocks is to make bundle-sync and minecraft-install/repair mutually exclusive on the same client folder. That invariant requires ONE registry shared across both services. But the shared instance is passed as an optional parameter that defaults to `createClientOperationLocks()` in FOUR independent spots (both service factories and both manager constructors), and both managers also still `import { createClientOperationLocks }` (manager.ts:9 / bundle/manager.ts:8) though index.ts always injects. If any caller (a future refactor, a test, a new entry point) constructs a manager/service without threading the exact same instance, each gets its own empty registry and the cross-domain lock silently becomes a no-op — bundle and minecraft can then mutate the same folder concurrently with no compile error and no runtime warning.
@@ -121,6 +185,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-005"></a>
 #### LL-005 · Infrastructure modules kit.ts and clientOperationLocks.ts sit loose under services/ instead of infra/
 
+- **Status:** TODO
 - **Category:** architecture · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Cross-cutting (no single flow)
 - **Area:** src/main/services/kit.ts (loose 8-line file, not a <name>/ folder, no init/dispose); src/main/services/clientOperationLocks.ts (loose 166-line file, pure factory, no IPC, no lifecycle); contrast docs/architecture.md §3.2 lines 96-104 (services/<name>/ folders vs infra/ for low-level integrations)
 - **Problem:** Both kit.ts and clientOperationLocks.ts live directly under src/main/services/ as bare files, but neither is a domain service: kit.ts is a single-statement factory wrapping the @loontail/minecraft-kit construction (a low-level integration), and clientOperationLocks.ts is a generic in-memory mutual-exclusion registry (cross-cutting infrastructure). Neither exposes the `init(ctx)`/`dispose()` Service shape, neither registers IPC routes, and both are consumed by multiple real services. The doc reserves services/<name>/ for 'one folder per domain capability' (line 96) and infra/ for 'low-level integrations' (line 100).
@@ -133,6 +198,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-006"></a>
 #### LL-006 · Architecture doc is significantly out of date: bundle service undocumented, non-existent launch service still described
 
+- **Status:** TODO
 - **Category:** docs · **Priority:** P1 · **Effort:** quick · **Change risk:** low · **Flow:** Cross-cutting (no single flow)
 - **Area:** docs/architecture.md:177-180 (init-order line omits bundle) and :189-205 ('Currently shipping services' list omits bundle); docs/architecture.md:277 ('Launched via child_process.spawn from main/services/launch/') and :337 (tree comment 'services/<name>/ # domain services (settings, bundle, launch, updater)' lists a phantom 'launch')
 - **Problem:** The architecture doc's authoritative service list (§5, lines 189-205) and init-order line (lines 178-180: app->auth->system->settings->skin->clients->servers->media->minecraft->console->updater) omit `bundle` completely — yet bundle is wired into index.ts (factory at line 105, init at line 123, between minecraft and console) and cross-coupled into the launch flow via attachLaunchHook (index.ts:108-110). Meanwhile §8.2 line 277 says launch happens 'from main/services/launch/' and the §12 tree comment at line 337 lists 'launch' as a domain service — but services/launch/ does not exist (launch logic lives in services/minecraft/launch.ts).
@@ -146,6 +212,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-007"></a>
 #### LL-007 · Per-service event broadcasters duplicate the same window.isDestroyed()+webContents.send boilerplate
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** IPC flow
 - **Area:** src/main/services/minecraft/broadcast.ts:10-27 (4 repetitions); src/main/services/bundle/broadcast.ts:9-22 (3 repetitions); src/main/services/updater/index.ts:25-28 (inline broadcast, 1 repetition)
 - **Problem:** Three places independently re-implement the identical guarded send: `if (window.isDestroyed()) return; window.webContents.send(channel, payload);`. minecraft/broadcast.ts repeats it four times (status/progress/log/error), bundle/broadcast.ts three times (status/progress/error), updater/index.ts inlines it once in its `broadcast` closure. Each is a hand-rolled copy of the same destroyed-window guard.
@@ -158,6 +225,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-008"></a>
 #### LL-008 · minecraft dispose does not await in-flight teardown while bundle dispose does — asymmetric cancellation in the Promise.allSettled drain
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P3 · **Effort:** medium · **Change risk:** medium · **Flow:** Launch flow
 - **Area:** src/main/services/minecraft/index.ts:32-34 (`dispose: async () => { manager.cancelAll(); }` — cancelAll is synchronous and only fires AbortControllers); src/main/services/bundle/index.ts:33-35 (`dispose: async () => { await manager.cancelAll(); }`, where bundle cancelAll awaits a 250ms grace timer); index.ts:144,146-159 drain()
 - **Problem:** MinecraftManager.cancelAll() (manager.ts:276-289) is synchronous: it only calls `cancel(slug)` which calls `op.abort.abort()` (manager.ts:172-186) — it signals in-flight install/repair ops to stop but does not await the detached `void runInstall(...)`/`void finishRepair(...)` promises to settle. BundleManager.cancelAll() (bundle/manager.ts:448-454) is async and awaits a fixed 250ms grace window after signalling. So in drain()'s Promise.allSettled the minecraft dispose resolves immediately even though the install/repair async work it just aborted is still unwinding. Note the finding's original 'orphaned game process' concern is wrong: cancelAll deliberately leaves a running game alone (only LAUNCH_STARTING, not a spawned session, is aborted — see the manager.ts:274-275 comment).
@@ -171,6 +239,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-009"></a>
 #### LL-009 · tsconfig.test.json is not a project reference, so `tsc -b` skips it; tests typechecked by a separate appended invocation
 
+- **Status:** TODO
 - **Category:** testing · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Cross-cutting (no single flow)
 - **Area:** tsconfig.json:3-7 (references main/preload/renderer only); tsconfig.test.json:1-18 (noEmit, no composite, includes tests/** + env.d.ts + vitest.config.ts); package.json:24 (`typecheck: tsc -b --noEmit && tsc --noEmit -p tsconfig.test.json`)
 - **Problem:** The solution-style tsconfig.json references only main, preload, and renderer projects (lines 3-7). tsconfig.test.json (which typechecks tests/**) is excluded from the build graph and is instead typechecked by a second, separate `tsc --noEmit -p tsconfig.test.json` appended to the typecheck script (package.json:24). Because tsconfig.test.json is noEmit / not composite and not referenced, `tsc -b` does not incrementally track it, and a developer running `tsc -b` directly (or an IDE using the solution file) will not typecheck tests at all.
@@ -183,6 +252,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-010"></a>
 #### LL-010 · System route open-path allowed-roots computation is security-relevant domain logic living in routes.ts
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Cross-cutting (no single flow)
 - **Area:** src/main/services/system/routes.ts:19-29 (getOpenPathAllowedRoots iterates Object.values(settings.clients) overrides, reads override.storage.clientFolder / override.runtime.path, appends userData + clientsFolder, filters Boolean); imports getSettings from @main/services/settings/settings (line 11)
 - **Problem:** registerSystemRoutes embeds a non-trivial, security-relevant function `getOpenPathAllowedRoots` (lines 19-29) that walks every client override in launcher settings to build the allowlist of folders the user is permitted to open via shell.openPath. This is domain/policy logic (which paths are safe to expose), not a thin IPC wrapper. The doc's service shape (§3.2 line 99) says routes.ts should be 'thin wrappers over the core'; this allowlist gates filesystem exposure and should be unit-testable in isolation.
@@ -195,6 +265,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-011"></a>
 #### LL-011 · buildContext writes persisted settings as a side effect during a read-shaped 'build context' call
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P2 · **Effort:** medium · **Change risk:** medium · **Flow:** Profile / version flow
 - **Area:** src/main/services/minecraft/context.ts:46-52 (persistClientOverride to drop a stale loader override), :60-62 (persist a chosen loaderOverride), :72-80 (persist runtime: undefined to clear a stale runtime ref)
 - **Problem:** buildContext is named and used like a pure resolver (install/launch/repair and bundleHealing.verifyAndRepairExceptBundle all call it to assemble a Context), but it performs up to three persisted-settings writes as side effects: clearing a stale loader override (line 51), persisting a loaderOverride when it differs from persisted (line 61), and clearing a stale runtime ref (line 78). These mutations to launcherSettings happen implicitly every time any minecraft op builds its context, so a 'repair' or a bundle heal can silently rewrite user settings.
@@ -208,6 +279,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-012"></a>
 #### LL-012 · Most services hand-duplicate an identical Service type and empty no-op dispose; no shared Service interface exists
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Cross-cutting (no single flow)
 - **Area:** src/main/services/app/index.ts:4-7,13; clients/index.ts:6-9,15; settings/index.ts:5-8,17; system/index.ts; servers/index.ts; media/index.ts; skin/index.ts; auth/index.ts:9-12,22 — each re-declares `type XService = { init: () => Promise<void>; dispose: () => Promise<void> }` and most have `dispose: async () => {}`
 - **Problem:** Eight services declare their own structurally-identical `type <Name>Service = { init: () => Promise<void>; dispose: () => Promise<void> }`, and the simple ones (app, clients, settings, system, servers, media, skin, auth) all use a no-op `dispose: async () => {}`. There is no shared `Service` interface in code, so each service re-declares the shape. Separately, the doc §5 (lines 168-171) shows `init(ctx: ServiceContext): Promise<void>` — but no service implements a ctx-taking init: all take deps via the factory and `init()` is zero-arg. So the doc and code already disagree on the lifecycle signature.
@@ -220,6 +292,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-013"></a>
 #### LL-013 · Console and updater services place IPC route registration and listener wiring inline in index.ts instead of a routes.ts
 
+- **Status:** TODO
 - **Category:** architecture · **Priority:** P3 · **Effort:** medium · **Change risk:** low · **Flow:** Cross-cutting (no single flow)
 - **Area:** src/main/services/console/index.ts:16-31 (router.handle calls inline in the init closure, no routes.ts/<name>.ts); src/main/services/updater/index.ts:64-116 (router.handle handlers + autoUpdater.on/removeListener wiring inline in init/dispose); contrast app/clients/settings which delegate to a routes.ts
 - **Problem:** The documented service shape (§3.2 lines 96-99) is index.ts (lifecycle) + <name>.ts (core) + routes.ts (thin IPC wrappers). console/ and updater/ have neither routes.ts nor <name>.ts — all IPC handlers and (for updater) the autoUpdater event listeners are defined inline inside the init closure of index.ts. updater/index.ts is 117 lines mixing feed-URL construction (line 67), event handlers (37-62), in-flight state (34-35), and route handlers (83-106) in one file.
@@ -232,6 +305,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-014"></a>
 #### LL-014 · bootstrap and several services deep-import settings/settings.ts internals instead of the service barrel
 
+- **Status:** TODO
 - **Category:** architecture · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Cross-cutting (no single flow)
 - **Area:** 8 deep importers of @main/services/settings/settings: src/main/bootstrap/seed.ts:2, bootstrap/sweepOrphans.ts:3, services/system/routes.ts:11, services/minecraft/manager.ts (getSettings/persistClientOverride), services/minecraft/context.ts:3-6, services/minecraft/readinessPolicy.ts, services/bundle/manager.ts:11; settings/index.ts exports only createSettingsService (not getSettings/writeSettings/setClientOverride)
 - **Problem:** The settings service's public surface (settings/index.ts) exports only createSettingsService; getSettings/writeSettings/setClientOverride/patchLauncherSettings live in settings/settings.ts. Yet 8 modules (verified via grep) import the deep path `@main/services/settings/settings` directly, bypassing the service's index.ts barrel. The doc (§3.4 line 129) treats index.ts as the only file other parts may import from. Contrast clients/index.ts:4 which DOES re-export getClient/getClients — so clients is consistent and settings is not.
@@ -246,6 +320,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-015"></a>
 #### LL-015 · normalizeError leaks non-ERROR_CODES error shapes (incl. MinecraftKitError) across the bridge
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P1 · **Effort:** medium · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/main/ipc/router.ts:49-57 (normalizeError); wrapForTransport:63-64; reachable via src/main/services/minecraft/context.ts:64 (unguarded kit.targets.resolve)
 - **Problem:** normalizeError returns `error as IpcError` for ANY object with `code` and `message` (router.ts:50-52). MinecraftKitError extends Error with a `code` (e.g. 'MANIFEST_NOT_FOUND'), `message`, a frozen `context`, and a `toJSON()` (verified at node_modules/@loontail/minecraft-kit/dist/index.mjs:80-98). buildContext calls `kit.targets.resolve(...)` unguarded (context.ts:64); a kit failure there propagates synchronously through startInstall/startRepair/startLaunch (manager.ts:119/196/229) into the router handler. normalizeError passes it through verbatim, and wrapForTransport's JSON.stringify invokes toJSON() — shipping kit `code`/`context`/`name`. On the preload side isIpcError (errors.ts:9-17) rejects it (kit code not in ERROR_CODES), so tryUnwrapIpcError returns null and the renderer receives a raw Error, not a structured IpcError.
@@ -258,6 +333,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-016"></a>
 #### LL-016 · Console window gets full IPC privilege via trusted-sender check despite being sandbox:false
 
+- **Status:** TODO
 - **Category:** IPC · **Priority:** P1 · **Effort:** medium · **Change risk:** medium · **Flow:** IPC flow
 - **Area:** src/main/ipc/trustedSender.ts:43-50; src/main/windows/consoleWindow.ts:35 (sandbox:false)
 - **Problem:** createTrustedSenderCheck returns true for EITHER the main window OR the console window for EVERY channel (trustedSender.ts:46-49). The console window is created with sandbox:false (consoleWindow.ts:35). It only uses console.getInitial/clear/copyAll/copyText invoke channels plus console.* events (verified at src/renderer/console/api.ts:10-28), yet it can invoke auth.login, minecraft.launch, settings.setLauncher, system.openPath, etc. There is no per-channel allow-list scoping a sender to a channel group.
@@ -270,6 +346,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-017"></a>
 #### LL-017 · Router validates args by cast only — Zod parsing is opt-in per handler, not enforced by the contract
 
+- **Status:** TODO
 - **Category:** IPC · **Priority:** P1 · **Effort:** large · **Change risk:** medium · **Flow:** IPC flow
 - **Area:** src/main/ipc/router.ts:69-87 (casts `rawArgs as IpcArgs<TChannel>` at line 78); per-route parseIpcArgs calls in services/*/routes.ts
 - **Problem:** The router never validates args; it casts `rawArgs as IpcArgs<TChannel>` (router.ts:78) and relies on each handler to call parseIpcArgs. Coverage happens to be complete today (verified across auth/system/settings/minecraft/bundle/servers/clients/skin routes), but nothing structurally guarantees it: a future payload channel whose handler forgets parseIpcArgs silently trusts renderer input. The docs say the router 'validates arguments through the Zod schema co-located with the channel' (architecture.md:159-161), but that responsibility currently lives in handlers.
@@ -282,6 +359,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-018"></a>
 #### LL-018 · No compile-time coverage guard between IPC_EVENTS values and IpcEventPayloads keys
 
+- **Status:** TODO
 - **Category:** IPC · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** IPC flow
 - **Area:** src/shared/ipc/channels.ts:64-79 (IPC_EVENTS, IpcEventName) vs src/shared/ipc/contract.ts:95-108 (IpcEventPayloads)
 - **Problem:** Channels have a bidirectional guard (IpcChannelsCoverContract, channels.ts:55-62). Events do not. IPC_EVENTS (the runtime string map used by every webContents.send) is never type-checked against IpcEventPayloads (the map keying preload on()). IpcEventName (channels.ts:79) is exported/re-exported (ipc/index.ts:2) but never used as a constraint. A typo in an IPC_EVENTS value, or a payload key added without an IPC_EVENTS entry (or vice versa), compiles cleanly and silently breaks the event at runtime.
@@ -294,6 +372,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-019"></a>
 #### LL-019 · Server→client events use raw webContents.send with no shared typed emit helper — payload/name pairing unchecked
 
+- **Status:** TODO
 - **Category:** IPC · **Priority:** P2 · **Effort:** medium · **Change risk:** low · **Flow:** IPC flow
 - **Area:** src/main/services/minecraft/broadcast.ts:10-27; src/main/services/bundle/broadcast.ts:9-22; src/main/services/updater/index.ts:25-28; src/main/infra/notifier.ts:13-21; src/main/infra/consoleHub.ts:225-227 + consoleWindowSink.ts:26-34
 - **Problem:** Every emitter calls window.webContents.send(IPC_EVENTS.x, payload) directly. There is no single typed emit(event, payload) helper tying IPC_EVENTS name to IpcEventPayloads[name]. consoleHub.sendToWindow / ConsoleWindowSink.send take (channel: string, payload: unknown) (consoleWindowSink.ts:26) — fully untyped, so a wrong channel or wrong-shaped payload for console.lines/state/bufferReset is not caught. The per-broadcaster methods (minecraft/bundle) get payload typing from their own method signatures, but there is no end-to-end binding of name↔payload.
@@ -306,6 +385,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-020"></a>
 #### LL-020 · parseIpcArgs throws a bare IpcError object, relying on router's duck-typed normalizeError to forward it
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/main/ipc/parseArgs.ts:12-19 (throws plain {code,message,details}); coupled to router.ts:50-52
 - **Problem:** parseIpcArgs throws a plain object literal IpcError (parseArgs.ts:13-18), not an Error. It only survives transport because normalizeError's loose `'code' in error && 'message' in error` check passes it through. This is the same fragile duck-typing flagged in the normalizeError finding: if normalizeError is tightened to require an Error or a registry-valid code, the validation error path changes behavior. The two modules are coupled through an implicit contract with no direct test (the only test of the pass-through is router.test.ts:120-136 using a hand-built {code,message}, not parseIpcArgs).
@@ -318,6 +398,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-021"></a>
 #### LL-021 · Renderer cannot recover IpcError details cleanly — details are packed into Error.message before rehydration
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/preload/index.ts:17-29 (invokeWithStructuredErrors); src/shared/ipc/errors.ts:26-37 (tryUnwrapIpcError); src/main/ipc/router.ts:63-64 (wrapForTransport)
 - **Problem:** The structured-error transport packs the entire IpcError JSON (sentinel + {code,message,details}) into Error.message, then tryUnwrapIpcError parses it back. In dev builds the full details (stack, zod format(), kit context) are serialized into the message string; if any catch site upstream of the preload api wrapper logs raw.message before rehydration, it logs the sentinel+JSON blob. In prod, details ARE already omitted (devDetailsFor returns undefined when packaged at router.ts:36-37, and parseArgs.ts:16 strips details when app.isPackaged), so there is no production stack leak.
@@ -331,6 +412,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-022"></a>
 #### LL-022 · Renderer-side events are not validated against their Zod schemas despite schemas existing
 
+- **Status:** TODO
 - **Category:** IPC · **Priority:** P2 · **Effort:** medium · **Change risk:** low · **Flow:** IPC flow
 - **Area:** src/preload/index.ts:33-44 (on() casts payload to IpcEventPayloads[TEvent]); schemas exist e.g. src/shared/contracts/minecraft.ts:87-122, src/shared/contracts/bundle.ts:115-145
 - **Problem:** The preload on() handler casts the incoming payload `(_event, payload: IpcEventPayloads[TEvent])` with no runtime validation (preload/index.ts:37), even though full Zod schemas exist (MinecraftStatusEventSchema, MinecraftProgressEventSchema, MinecraftErrorEventSchema, Bundle equivalents). The renderer feature handler consumes them by cast (minecraft/events.ts:77-96 destructures fields directly). Invoke args ARE validated on the main side; events crossing main→renderer are trusted blindly, so a main-side payload bug surfaces as a malformed React state update rather than a caught validation error, and the authored schemas go unused on entry.
@@ -343,6 +425,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-023"></a>
 #### LL-023 · media.* channels are split across two service modules, obscuring channel ownership
 
+- **Status:** TODO
 - **Category:** architecture · **Priority:** P3 · **Effort:** medium · **Change risk:** low · **Flow:** Cross-cutting (no single flow)
 - **Area:** src/main/services/media/routes.ts:5-8 (mediaClearCache/mediaGetCacheSize) vs src/main/services/skin/routes.ts:7-14 (mediaUploadSkin/mediaClearSkin)
 - **Problem:** The four media.* channels are registered by two different services: skin/routes.ts owns media.uploadSkin + media.clearSkin (skin/routes.ts:8,13), while media/routes.ts owns media.clearCache + media.getCacheSize (media/routes.ts:6-7). The channel namespace 'media.' does not map to a single service, so 'who handles media.uploadSkin' is non-obvious (it is the skin service, not media).
@@ -355,6 +438,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-024"></a>
 #### LL-024 · Architecture doc's IPC contract example and updater section are stale vs the real contract
 
+- **Status:** TODO
 - **Category:** docs · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Cross-cutting (no single flow)
 - **Area:** docs/architecture.md:139-153 (IpcContract/IpcEvents example) and docs/architecture.md:204-205 (updater)
 - **Problem:** The doc's IpcContract sample lists 'bundle.status' as an invoke channel returning BundleStatus and 'settings.setClient' (architecture.md:143,145), neither of which exists — the real contract has bundle.checkStatus → BundleInstallState (contract.ts:83) and settings.setClientOverride (contract.ts:48). The events example uses an 'IpcEvents' map and 'bundle.reset' (architecture.md:149-152), but the code uses IpcEventPayloads and console.bufferReset (contract.ts:95-108; no bundle.reset). Lines 204-205 document the updater as 'electron-updater' with states 'checking/available/downloading/ready/error', but updater/index.ts:5 imports autoUpdater from 'electron' (Squirrel) and never emits DOWNLOADING (onUpdateAvailable emits AVAILABLE at updater/index.ts:49).
@@ -368,6 +452,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-025"></a>
 #### LL-025 · isDestroyed() guard duplicated across every broadcaster method instead of a single send wrapper
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** IPC flow
 - **Area:** src/main/services/minecraft/broadcast.ts:11-26 (4x guard); src/main/services/bundle/broadcast.ts:10-21 (3x); src/main/services/updater/index.ts:26-27; src/main/infra/notifier.ts:14-21
 - **Problem:** createBroadcaster repeats `if (window.isDestroyed()) return; window.webContents.send(...)` in all four minecraft methods and three bundle methods; updater and notifier each have their own. ConsoleWindowSink.send (consoleWindowSink.ts:26-34) and notifier.send (notifier.ts:14-21) already wrap send in try/catch to survive the race between isDestroyed() and send(), but the minecraft/bundle/updater broadcasters do NOT — they only check isDestroyed() and can still throw if the window is torn down between the check and the send.
@@ -380,6 +465,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-026"></a>
 #### LL-026 · errorCodes registry duplicates the union and the const object by hand, allowing silent drift
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/shared/constants/errorCodes.ts:1-22 (ErrorCode union literal-listed separately from ERROR_CODES values)
 - **Problem:** ErrorCode is a hand-written union of string literals (errorCodes.ts:1-10) AND ERROR_CODES is a separate const object whose values must match it via `satisfies Record<string, ErrorCode>` (line 22). `satisfies` only checks values ARE ErrorCodes, not that every ErrorCode is present in the object. isIpcError (errors.ts:15) validates against Object.values(ERROR_CODES), so the const object is the real registry; the union is a redundant second source. A code added to ERROR_CODES but omitted from the union, or dropped from the object but left in the union, is not fully caught.
@@ -392,6 +478,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-027"></a>
 #### LL-027 · Launcher re-implements an error-code registry + isErrorCode model already exported by the kit/ygg packages
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P3 · **Effort:** medium · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/shared/constants/errorCodes.ts + src/shared/ipc/errors.ts vs @loontail/minecraft-kit (MinecraftKitErrorCodes/isMinecraftKitError/isErrorCode) and @loontail/yggdrasil-core (YggdrasilCoreErrorCodes/isYggdrasilCoreError)
 - **Problem:** The launcher hand-rolls a code registry + type guard pattern that both sibling packages already ship. The launcher's IpcError model is legitimately its own boundary set, but the kit→IpcError mapping has no shared adapter: each consumer maps kit codes ad hoc. There are three parallel registries — launcher ERROR_CODES (errorCodes.ts), the contract's MinecraftErrorCodes (minecraft.ts:53-67), and kit MinecraftKitErrorCodes — with manual translation at minecraft/errors.ts:14-35 (KIT_CODE_TO_LAUNCHER_CODE). This ad-hoc mapping is the same fragility that lets the normalizeError leak through (the router has no kit→IpcError adapter at all).
@@ -405,6 +492,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-028"></a>
 #### LL-028 · Write lock can leak on synchronous throw between acquireWriteLock and executePreparedSync
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P1 · **Effort:** medium · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/manager.ts:231-249 (acquireWriteLock → executePreparedSync handoff)
 - **Problem:** acquireWriteLock (line 231) takes a ClientOperationLease, then createSyncTask (232), createActiveSync (233), createAwaiter (234), activeSyncs.set (235), activeLocks.set (236), and lock.setCancel (237) run with NO try/finally before the awaited executePreparedSync (239) takes over cleanup. If anything in 232-237 throws synchronously — most dangerously BEFORE activeLocks.set (236) — the lease is held by operationLocks but is unreachable by dropActiveSync (which only releases what is in activeLocks). That leaks the lease and wedges the slug for the session. The original finding's NO_BUNDLE framing is incorrect: runSync returns at 221-222 BEFORE acquireWriteLock, so that path is safe; the real (narrow) gap is the unbracketed acquisition-to-handoff window.
@@ -418,6 +506,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-029"></a>
 #### LL-029 · Download phase has no per-file retry — one transient 5xx aborts the whole sync
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P1 · **Effort:** medium · **Change risk:** medium · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/download.ts:87-103 (followRedirects), runner.ts:113-141 (runDownloadPhase)
 - **Problem:** requestOnce/followRedirects perform exactly one request attempt per URL; any non-2xx terminal (line 100), socket reset, or timeout (lines 70-77) throws immediately with no retry/backoff. In runDownloadPhase, the first worker error sets firstError and drains pendingDownloads (line 126), failing the entire sync of potentially hundreds of files. Manifest entries carry a single url and a known sha256, which would make idempotent GET retries safe.
@@ -429,6 +518,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-030"></a>
 #### LL-030 · Resume never refreshes the remote manifest or its hash — persists a possibly stale signature
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P1 · **Effort:** medium · **Change risk:** medium · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/manager.ts:252-262 (continuePausedSync), 336-349 (persistLocalManifest), constants/bundle.ts:24 (5-min idle window)
 - **Problem:** continuePausedSync passes loadRemoteManifest: () => active.remoteManifest (line 260) — the object captured at pause time — and never re-fetches or re-hashes. A paused sync may sit idle up to BUNDLE_PAUSED_SYNC_MAX_IDLE_MS (5 min). On resume the plan is rebuilt against the OLD remote manifest, and persistLocalManifest writes active.remoteManifestHash (line 342) from before the pause. If upstream changed during the pause, the local manifest claims a manifestHash that no longer matches reality, and getInstallState's drift check (line 196-197, manifestHash === local.manifestHash) reports signatureMatches=true incorrectly until the next full sync.
@@ -440,6 +530,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-031"></a>
 #### LL-031 · BundleManager mixes 6+ responsibilities — extract AwaiterRegistry, PauseTimer, ProgressEventFactory, SyncRegistry
 
+- **Status:** TODO
 - **Category:** architecture · **Priority:** P2 · **Effort:** large · **Change risk:** medium · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/manager.ts (468-line file: 47-77 progress factory, 393-407 awaiters, 409-437 pause timer, 330-349 persistence, 80-81/377-383 dual maps)
 - **Problem:** manager.ts conflates: (1) progress event construction (makeProgressEvent/createEmit, top-level fns reaching into task internals, 47-77), (2) write-lock lifecycle (acquireWriteLock/dropActiveSync/activeLocks), (3) awaiter promise registry (createAwaiter/resolve/reject, 393-407), (4) pause-idle timer bookkeeping (arm/clear/expire, 409-437), (5) local manifest persistence (336-349), (6) status/error broadcast wiring. It holds two parallel Maps (activeSyncs, activeLocks) keyed by the same slug whose lifecycles must stay in lock-step by hand.
@@ -453,6 +544,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-032"></a>
 #### LL-032 · activeSyncs and activeLocks are two parallel Maps mutated in lock-step by hand
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P2 · **Effort:** medium · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/manager.ts:80-81 (maps), 235-236 (populate), 377-383 (dropActiveSync)
 - **Problem:** The manager keys two separate Maps (activeSyncs, activeLocks) by ClientSlug. They are populated together (235-236) and torn down together in dropActiveSync (377-383), but nothing enforces consistency. cancelSync's paused branch calls dropActiveSync (line 166) while the non-paused branch defers teardown to executePreparedSync's finally (324-326), so the two paths drop the pair at different sites and a future edit could delete from one Map but not the other.
@@ -464,6 +556,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-033"></a>
 #### LL-033 · BundleSyncStatus is flag-soup string union driving control flow, not a discriminated union
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P2 · **Effort:** large · **Change risk:** medium · **Flow:** Renderer / UI flow
 - **Area:** src/shared/contracts/bundle.ts:7-49 (BundleSyncStatuses + BUSY_BUNDLE_STATUSES); manager.ts emits 13 statuses with no payload
 - **Problem:** BundleSyncStatus is a 13-member flat string union (bundle.ts:7-21). Terminal vs in-flight vs paused is distinguished only by an out-of-band BUSY_BUNDLE_STATUSES Set (43-49) kept in sync by hand. Status-specific data (error code/message, progress snapshot) rides on separate sibling events (BundleErrorEvent, BundleProgressEvent) rather than as a discriminated payload, so the renderer correlates three event streams to reconstruct one state machine. No assertNever exhaustiveness check exists over these statuses anywhere.
@@ -476,6 +569,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-034"></a>
 #### LL-034 · getInstallState fabricates signatureMatches:true and installed:false while a sync is active
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P2 · **Effort:** medium · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/manager.ts:170-178
 - **Problem:** When a sync is active, getInstallState returns {installed:false, signatureMatches:true, progress: active.lastProgress} (172-177). signatureMatches:true is a fabricated constant unrelated to on-disk-vs-remote, and installed:false is reported even when a fully-installed client is merely mid-re-sync (e.g. a force/repair on an already-installed bundle). The renderer uses installed/signatureMatches to pick affordances, so repairing an installed bundle momentarily reports it as not installed.
@@ -487,6 +581,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-035"></a>
 #### LL-035 · Hand-rolled sha256 streaming duplicated 3x; minecraft-kit centralizes file integrity
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P2 · **Effort:** medium · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/download.ts:128/146-148, plan.ts:36-43 (hashFile), api.ts:21 (sha256 string)
 - **Problem:** createHash('sha256') stream/string hashing is re-implemented in three bundle files: download.ts:128 verifies the streamed body, plan.hashFile (36-43) re-hashes on-disk files, api.ts:21 hashes the manifest text. minecraft-kit centralizes file integrity in its verify/repair pipeline (algorithm 'sha1'|'sha256', index.d.ts:2695/2700 — verified), and the launcher already depends on kit for healing.
@@ -498,6 +593,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-036"></a>
 #### LL-036 · Cooperative pause re-implemented with boolean flags + AbortController abuse instead of kit's PauseController
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P2 · **Effort:** large · **Change risk:** medium · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/manager.ts:114-124/126-143, runner.ts:93-94, syncState.ts:60-70
 - **Problem:** Pause sets task.paused=true and abort.abort() to interrupt in-flight downloads (manager.ts:118-121), then re-creates a fresh AbortController on resume (resetTaskForResume, syncState.ts:63). Workers cooperatively check task.paused at file boundaries (runner.ts:94, runSyncPhases 217/223). minecraft-kit exports PauseController (index.d.ts:1113, confirmed in export list) — a cooperative pause primitive with waitWhilePaused() at safe checkpoints, designed to be independent from AbortSignal so abort and pause don't conflate. The healer path already drives kit operations.
@@ -509,6 +605,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-037"></a>
 #### LL-037 · Progress throttling + speed-window logic hand-rolled in two places; kit ships createInstallProgressTracker
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P3 · **Effort:** medium · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/runner.ts:59-91 (maybeEmit), healProgress.ts:6-79; constants/bundle.ts:13 vs healProgress.ts:6
 - **Problem:** runner.maybeEmit (59-91) implements time-throttled emission + a sliding speed window; healProgress.ts (6-79) implements a second, separate throttle (HEAL_PROGRESS_THROTTLE_MS=100 hardcoded at line 6, with pendingFlush setTimeout/unref/clearPendingFlush/scheduleFlush). minecraft-kit exports createInstallProgressTracker(plan, {throttleMs}) (index.d.ts:2884 — confirmed) plus ProgressStages, an aggregator built for throttle + byte/file accounting, already used implicitly by the healer's kit calls.
@@ -521,6 +618,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-038"></a>
 #### LL-038 · In-flight downloads continue after the first worker error before abort propagates
 
+- **Status:** TODO
 - **Category:** performance · **Priority:** P3 · **Effort:** medium · **Change risk:** medium · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/runner.ts:121-130 (worker fan-out catch), download.ts:160-170
 - **Problem:** When one worker throws, the catch only does task.pendingDownloads.length = 0 (runner.ts:126) to stop NEW pulls; it does NOT call task.abort.abort(). Other workers' currently-streaming downloads run to completion (download.ts only aborts on options.signal, lines 160-170). So on a hard failure the sync keeps streaming up to BUNDLE_DOWNLOAD_CONCURRENCY-1 more files before Promise.all (line 130) settles, even though the sync is doomed.
@@ -532,6 +630,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-039"></a>
 #### LL-039 · completePreparedSync persists manifest then emits terminal status — persist failure invisible beyond a warn
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/main/services/bundle/manager.ts:330-349 (completePreparedSync + persistLocalManifest)
 - **Problem:** persistLocalManifest swallows save errors with a warn (346-348) and never demotes the op — correctly following the 'do not demote a successful op on trailing bookkeeping failure' guideline. But completePreparedSync awaits persist (331) THEN emits COMPLETED/UP_TO_DATE and resolves awaiters (332-333). If saveLocalManifest fails, the user sees COMPLETED, but the next getInstallState (187) finds no/stale local manifest and reports installed:false or a signatureMatches mismatch — a silent inconsistency between the broadcast 'completed' and persisted state, surfaced only as a warn log.
@@ -543,6 +642,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-040"></a>
 #### LL-040 · Unused/duplicated error codes and test-only exports leak into the contract and manager
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/shared/contracts/bundle.ts:51-64 (BundleErrorCodes); manager.ts:216 (UNKNOWN for client-not-found), 466-467 (_internals/type re-export)
 - **Problem:** BundleErrorCodes defines NO_BUNDLE_SLUG (bundle.ts:52) but the missing-bundle path uses BundleSyncStatuses.NO_BUNDLE (manager.ts:221) and never emits that code; runSync throws UNKNOWN for 'Client not found' (manager.ts:216) where a dedicated code would be clearer. manager.ts:466 exports _internals = { flattenRemote } 'only for tests' and re-exports ActiveSync/SyncPlan types — test-only surface in the production module.
@@ -556,6 +656,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-041"></a>
 #### LL-041 · cleanEmptyDirs invoked per-deleted-file — redundant syscalls and repeated warns on a locked dir
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/runner.ts:145-165 (cleanEmptyDirs), 188 (call site)
 - **Problem:** cleanEmptyDirs walks parents after each delete and rmdir's empty ones. On ENOTEMPTY it returns (correct, 156-157), on ENOENT it keeps walking (154-155), but on any other error (EPERM/EACCES from AV/locks on Windows) it logs a warn and returns (159-160). It is invoked per-deleted-file (line 188), so on a large delete set with a locked directory it re-attempts and re-warns for every sibling delete, and the partially-cleaned tree is never reconciled.
@@ -567,6 +668,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-042"></a>
 #### LL-042 · resumeSync silently spawns a fresh sync when no paused entry exists, swallowing failures
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/manager.ts:126-134 (resumeSync no-active branch), routes.ts:21-24
 - **Problem:** When resumeSync is called for a slug with no activeSyncs entry, it fire-and-forgets void this.startSync({slug}).catch(warn) (manager.ts:130-132). The IPC handler (routes.ts:21-24) returns void synchronously, so the renderer's 'Resume' click can trigger a brand-new full sync whose failure is only logged in main, never surfaced to the UI. A user expecting to resume a paused download instead silently starts (and possibly fails) a fresh one.
@@ -579,6 +681,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-043"></a>
 #### LL-043 · downloadEntry recomputes sha256 over the full stream every run with no Range/partial-file resume
 
+- **Status:** TODO
 - **Category:** performance · **Priority:** P3 · **Effort:** large · **Change risk:** high · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/download.ts:108-205, syncState.ts:60-70 (resetTaskForResume), runner.ts:99-110
 - **Problem:** downloadEntry always writes ${dest}.tmp from byte 0 with no HTTP Range/resume — a paused-then-resumed large file is fully re-downloaded and re-hashed (resetTaskForResume zeroes bytesDownloaded, syncState.ts:65). The .tmp from a prior interrupted run is unconditionally rm'd (download.ts:122). For multi-hundred-MB assets over a flaky link this is wasteful.
@@ -592,6 +695,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-044"></a>
 #### LL-044 · Repair progress adapter re-implements kit's createInstallProgressTracker by hand
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P1 · **Effort:** medium · **Change risk:** medium · **Flow:** Repair flow
 - **Area:** src/main/services/minecraft/progressAdapter.ts:104-225 (createRepairProgressAdapter, createThrottledProgressEmitter, progressStageForDownloadCategory/VerifyCategory/Aspect)
 - **Problem:** The install path uses the kit's createInstallProgressTracker (progressAdapter.ts:52-67, createPlannedProgressAdapter), but the repair path (createRepairProgressAdapter, lines 169-225) hand-rolls a parallel ~120-line state machine: a 100ms throttle (createThrottledProgressEmitter), manual stage transitions on DOWNLOAD/VERIFY events, and three bespoke category->stage maps. The kit's d.ts for InstallProgressTracker (line 2848-2864) states onEvent can be wired into 'install.run / repair.run' alike, duplicating aggregation/throttling/percent logic the kit owns.
@@ -604,6 +708,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-045"></a>
 #### LL-045 · Manual launch preflight file-walk duplicates kit.verify.targetReady
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P1 · **Effort:** medium · **Change risk:** medium · **Flow:** Launch flow
 - **Area:** src/main/services/minecraft/launch.ts:97-146 (requireLaunchFile, verifyLaunchPreflight)
 - **Problem:** verifyLaunchPreflight hand-walks java path, resolveLaunchVersion, versionJson, versionJar, and every classpath entry with fs.access (lines 109-146). The kit exports kit.verify.targetReady.run(target) -> TargetReadinessResult { isReady, issues } (d.ts 2528-2534, 3665-3666) that aggregates every launch-critical aspect for the target, with each issue tagged kind: VerificationKind (runtime/minecraft/forge/fabric, d.ts 2516-2518).
@@ -616,6 +721,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-046"></a>
 #### LL-046 · Forge processor healing reaches into kit-internal action shapes (InstallActionKinds, RunForgeProcessorAction.outputs) and re-hashes by hand
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P1 · **Effort:** large · **Change risk:** high · **Flow:** Repair flow
 - **Area:** src/main/services/minecraft/forgeProcessorHealing.ts:45-187 (processorActionsFrom, processorOutputsOk, brokenProcessorIndices, repairMissingForgeProcessorOutputs); also rememberForgeProcessorActions cache
 - **Problem:** This 188-line module reaches deep into kit internals: filters plan.actions by InstallActionKinds.RUN_FORGE_PROCESSOR (lines 48-51), reads RunForgeProcessorAction.outputs/index (92, 105), re-implements streaming SHA-1 (sha1OfFile, 64-76) to decide which processors to re-run, then synthesizes a focused InstallPlan ({...plan, totalActions, totalBytes}, 168-173). The kit owns the Forge install/processor pipeline and exports planForgeRepair (d.ts 4342), repairAll, and processor events.
@@ -629,6 +735,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-047"></a>
 #### LL-047 · Kit coupling surface is unbounded — no adapter narrows kit-internal contracts behind services/kit.ts
 
+- **Status:** TODO
 - **Category:** architecture · **Priority:** P1 · **Effort:** large · **Change risk:** medium · **Flow:** Cross-cutting (no single flow)
 - **Area:** src/main/services/kit.ts:1-9 (createKit only); coupling spread across launch.ts:3-22, forgeProcessorHealing.ts:4-13, progressAdapter.ts:1-12, repairWorkflow.ts:1-7, installManifest.ts:13/45 (createRequire of kit package.json)
 - **Problem:** services/kit.ts is only a 9-line factory (new MinecraftKit). Every minecraft module imports kit types and value-constants directly: EventTypes, InstallActionKinds, DownloadCategories, VerifyFileCategories, VerificationKinds, RunForgeProcessorAction, ProgressListener, RepairAllReport, targetPaths, resolveLaunchVersion, toOnlineAuth, asAzureClientId, etc. architecture.md 8.3 names this accepted-but-deliberate coupling but provides no adapter boundary, so the surface is as wide as the kit's public+semi-internal API.
@@ -642,6 +749,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-048"></a>
 #### LL-048 · Uninstall operation is uncancellable and unguarded against in-flight reads despite holding a delete lock
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P2 · **Effort:** medium · **Change risk:** medium · **Flow:** Error / recovery flow
 - **Area:** src/main/services/minecraft/uninstall.ts:22-59 (runUninstall); ops.ts:27 (UninstallOp has no abort); manager.ts:172-186 (cancel — no UNINSTALL branch); manager.ts:276-289 (cancelAll — excludes UNINSTALL)
 - **Problem:** UninstallOp = { kind } has no AbortController (ops.ts:27), cancel() (manager.ts:172-186) has no branch for UNINSTALL, and cancelAll() (manager.ts:281-285) only cancels INSTALL/REPAIR/LAUNCH_STARTING. So a recursive fs.rm of a large client folder (uninstall.ts:34) cannot be interrupted; the user is stuck on UNINSTALLING until rm completes or fails. The delete lock (CLIENT_FOLDER+RUNTIME_COMPONENT+BUNDLE_MANIFEST) is acquired correctly but the operation offers no escape hatch.
@@ -654,6 +762,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-049"></a>
 #### LL-049 · Post-install bundle hook runs after the write-lock is released, leaving a brief pre-bundle-lock window
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P2 · **Effort:** medium · **Change risk:** medium · **Flow:** Download / install flow
 - **Area:** src/main/services/minecraft/manager.ts:128-152 (startInstall .then/.finally) and 316-336 (finishRepair); install.ts:134 (runInstall deletes op in finally)
 - **Problem:** startInstall does runInstall(...).then(async () => { lock.release(); emit INSTALLED; await this.launchHook(slug); }).finally(() => lock.release()). The minecraft write lock (CLIENT_FOLDER+RUNTIME_COMPONENT) is released BEFORE awaiting launchHook (the bundle sync), and runInstall already deletes the op in its own finally (install.ts:134). So between INSTALLED emission and the bundle hook acquiring ITS lock, the slug shows no in-flight minecraft op and the CLIENT_FOLDER lock is briefly free. finishRepair (316-336) has the same shape: lock released before the post-repair bundle hook.
@@ -667,6 +776,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-050"></a>
 #### LL-050 · requireIdle + lock acquire is a two-step TOCTOU window; startLaunch acquires no lock
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P2 · **Effort:** medium · **Change risk:** medium · **Flow:** IPC flow
 - **Area:** src/main/services/minecraft/manager.ts:116-123, 188-200, 211-225, 227-266 (requireIdle then acquireWriteLock); startLaunch (227) does requireIdle but acquires NO operation lock for the launch itself
 - **Problem:** Each write entrypoint calls requireIdle(slug) (checks the ops map) and then separately acquireWriteLock (operationLocks). These are two non-atomic steps over two data structures. startInstall/startRepair/uninstall set their op only AFTER awaits (buildContext at 119/196/229), widening the window where requireIdle has passed but no op/lock is set yet. startLaunch (227) acquires NO operation lock at all for the launch — it relies on requireIdle plus a late BundleSyncingOp insertion (243) and the bundle hook's own lock; the actual game launch (runLaunch) holds no CLIENT_FOLDER lock.
@@ -680,6 +790,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-051"></a>
 #### LL-051 · verifyAndRepairBase returns RepairAllReport but runRepair discards it, then re-resolves/re-plans
 
+- **Status:** TODO
 - **Category:** performance · **Priority:** P2 · **Effort:** medium · **Change risk:** low · **Flow:** Repair flow
 - **Area:** src/main/services/minecraft/repairWorkflow.ts:78-99 (verifyAndRepairBase returns RepairAllReport); repair.ts:40 (return value ignored); repairWorkflow.ts:111-114 (launchVersionResolvable re-resolves); forgeProcessorHealing.ts:138 (re-plans via kit.install.plan)
 - **Problem:** verifyAndRepairBase runs kit.repair.all and returns the full RepairAllReport (verifications, repairs map, bytesDownloaded), but runRepair (repair.ts:40) calls it without assigning the result. Then ensureLaunchable independently calls resolveLaunchVersion again (repairWorkflow.ts:111-114) and healForgeProcessors independently re-runs kit.install.plan (forgeProcessorHealing.ts:138). So the repair workflow performs sequential verify/plan/resolve passes over the same target, much of which the first repair.all already computed.
@@ -691,6 +802,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-052"></a>
 #### LL-052 · launch.ts (383 lines) mixes auth resolution, JVM-arg building, preflight, process supervision, and console wiring
 
+- **Status:** TODO
 - **Category:** architecture · **Priority:** P2 · **Effort:** medium · **Change risk:** medium · **Flow:** Launch flow
 - **Area:** src/main/services/minecraft/launch.ts:1-383 — resolveLaunchAuth (183-226), buildYggdrasil*Arg/sanitize (78-95), verifyLaunchPreflight (109-146), runLaunch event switch + supervision (228-377), endLaunch (148-171)
 - **Problem:** A single file owns five distinct concerns. runLaunch alone spans ~150 lines (228-377) with a deeply nested onEvent switch (291-322), four separate startupSignal.aborted checks (263,269,274,324,350), console-hub side effects interleaved with status emission, and a triple-.catch exited-promise supervision chain (339-348). resolveLaunchAuth embeds Yggdrasil placeholder-client-id and HTTP-agent sanitation logic.
@@ -704,6 +816,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-053"></a>
 #### LL-053 · endLaunch always emits INSTALLED on game exit and blindly deletes the op without ownership check
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Launch flow
 - **Area:** src/main/services/minecraft/launch.ts:148-171 (endLaunch) and 339-348 (session.exited handler)
 - **Problem:** endLaunch unconditionally emits status INSTALLED after the game process exits (line 170) and deletes the op (line 149) without checking whether env.ops.get(slug) still references this launch's LaunchOp. Because the game session is long-lived and the manager intentionally leaves launches alone at shutdown, by the time the process exits the slug's true on-disk state could differ, and a foreign op could be clobbered.
@@ -717,6 +830,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-054"></a>
 #### LL-054 · installManifest re-implements assertNever and kit-version discovery instead of using kit exports
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Cross-cutting (no single flow)
 - **Area:** src/main/services/minecraft/installManifest.ts:13,37-50 (createRequire + parsePackageVersion + local assertNever)
 - **Problem:** installManifest defines its own assertNever (lines 48-50) although the kit exports assertNever with an identical (value: never) => never signature (d.ts:764). It also derives MINECRAFT_KIT_VERSION via createRequire('@loontail/minecraft-kit/package.json') (lines 13,45) and a bespoke parsePackageVersion (37-43) to stamp manifests, reaching into the package's package.json at runtime.
@@ -729,6 +843,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-055"></a>
 #### LL-055 · Hand-rolled SHA-1 hashing in forge healing duplicates integrity validation the kit owns
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P3 · **Effort:** medium · **Change risk:** low · **Flow:** Repair flow
 - **Area:** src/main/services/minecraft/forgeProcessorHealing.ts:64-98 (sha1OfFile, fileMissing, processorOutputsOk)
 - **Problem:** sha1OfFile (64-76) streams a file through node:crypto and compares to action.outputs hashes, and processorOutputsOk (91-98) walks declared outputs. This is integrity-verification logic the kit performs internally for every install/verify action (INTEGRITY_HASH_MISMATCH path) and is conceptually the same shape as buffer validation the loontail packages centralize (e.g. validatePngBuffer in yggdrasil-core).
@@ -741,6 +856,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-056"></a>
 #### LL-056 · Kit-error -> launcher-code mapping is incomplete and silently collapses unknown failures to KIT_ERROR
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/main/services/minecraft/errors.ts:14-35 (KIT_CODE_TO_LAUNCHER_CODE, classifyError)
 - **Problem:** KIT_CODE_TO_LAUNCHER_CODE maps only 11 kit codes; everything else falls through to MinecraftErrorCodes.KIT_ERROR (line 32). The kit exports a much larger MinecraftKitErrorCodes set (and isErrorCode), but the launcher has no compile-time guarantee that newly added kit codes get a deliberate mapping — they silently become the generic KIT_ERROR, losing the renderer's ability to offer a targeted action (e.g. a disk-space or permission code becoming a vague 'kit error').
@@ -753,6 +869,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-057"></a>
 #### LL-057 · Forge processor action cache is an unbounded module-global Map with no live eviction caller
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Repair flow
 - **Area:** src/main/services/minecraft/forgeProcessorHealing.ts:18,53-62 (forgeProcessorActionsCache, rememberForgeProcessorActions, clearForgeProcessorActionCache)
 - **Problem:** forgeProcessorActionsCache (line 18) is a process-lifetime module-level Map keyed by JSON.stringify([directory, version, fullVersion, installerUrl]) that is only ever cleared by the exported clearForgeProcessorActionCache (60-62) — and a repo grep finds NO caller of it in src/. Each distinct Forge target install/repair adds an entry holding the full RunForgeProcessorAction[] for the process lifetime.
@@ -765,6 +882,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-058"></a>
 #### LL-058 · No tests cover bundleHealing.verifyAndRepairExceptBundle or the repair->ensureLaunchable fallback path
 
+- **Status:** TODO
 - **Category:** testing · **Priority:** P2 · **Effort:** medium · **Change risk:** low · **Flow:** Repair flow
 - **Area:** src/main/services/minecraft/bundleHealing.ts:65-102 (verifyAndRepairExceptBundle, createBundleRepairIssueFilter); repairWorkflow.ts:122-134 (ensureLaunchable full-install fallback)
 - **Problem:** There are tests for repairWorkflow finalization, forgeProcessorHealing, launch, progress adapter, status, readiness, uninstall, install, context, installManifest, and errors — but there is NO bundleHealing test file (verified: tests/main/services/minecraft/ has no bundle* file), so createBundleRepairIssueFilter / verifyAndRepairExceptBundle (the bundle-owned-issue filter + path normalization via toBundleKey) have no direct coverage. ensureLaunchable's fallback IS partially tested (repairWorkflow.test.ts:155-198 covers trigger/skip), so that half of the original claim is inaccurate.
@@ -778,6 +896,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-059"></a>
 #### LL-059 · buildContext persists settings (persistClientOverride) as a side effect during the launch read path
 
+- **Status:** TODO
 - **Category:** architecture · **Priority:** P3 · **Effort:** medium · **Change risk:** medium · **Flow:** Profile / version flow
 - **Area:** src/main/services/minecraft/context.ts:46-80 (drops stale loader override 48-52, fresh loaderOverride 60-62, stale runtime ref 72-80) invoked from manager.startLaunch:229 and startRepair/startInstall
 - **Problem:** buildContext is called on every install/repair/launch and persists settings mid-resolve: it drops a stale loader override (48-52), persists a freshly-chosen loaderOverride (60-62), and clears a stale runtime ref (72-80) via persistClientOverride. So a launch — conceptually read-only until the process spawns — mutates persisted client settings as a side effect of building its context, and startLaunch holds no operation lock when it does so (manager.ts:229).
@@ -792,6 +911,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-060"></a>
 #### LL-060 · Successful token refresh demoted to forced logout when the trailing safeStorage write throws
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P1 · **Effort:** medium · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/main/services/auth/verify.ts:60,70; src/main/infra/store.ts:295-307
 - **Problem:** verifySession() persists a freshly rotated session via setStoredAuth(result.session) after a successful validate/refresh. setStoredAuth (store.ts:300-306) wraps writeAuthSecret + store.set in a try/catch that, on ANY failure (transient safeStorage hiccup, disk error), calls clearStoredAuth() and re-throws. That throw propagates up through verifySession -> fetchCurrentUser -> the authMe IPC handler, so a user whose token was just successfully refreshed is both wiped from disk and reported as logged out to the renderer.
@@ -804,6 +924,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-061"></a>
 #### LL-061 · Concurrent authMe calls have no in-flight de-duplication; overlapping Yggdrasil refreshes can rotate over each other
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P2 · **Effort:** medium · **Change risk:** medium · **Flow:** Auth / session flow
 - **Area:** src/main/services/auth/verify.ts:44-72; src/main/services/auth/yggdrasilAuth.ts:80-114; src/renderer/features/auth/hooks.ts:41-48
 - **Problem:** fetchCurrentUser/verifySession has no single-flight guard. The renderer's useCurrentUser query (hooks.ts:41-48) plus the launch path's getStoredAccount and window-refocus refetches can trigger overlapping authMe invocations. Each independently reads the stored session, may call client.refresh (which rotates the Yggdrasil access/client token pair, invalidating the previous one), then setStoredAuth. Two concurrent refreshes mean the second rotation can invalidate the token the first just persisted; last-writer-wins ordering can store a token the server already superseded, intermittently forcing a real logout on the next verify.
@@ -816,6 +937,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-062"></a>
 #### LL-062 · Yggdrasil validate transient/HTTP errors are swallowed as 'offline', skipping the refresh that could rotate a near-expiry token
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P2 · **Effort:** medium · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/main/services/auth/yggdrasilAuth.ts:80-114 (validate catch at :87-91)
 - **Problem:** In verifySession, the validate() call's catch (yggdrasilAuth.ts:87-91) treats EVERY non-network error as 'offline' (line 90 warns then returns offline). The happy path only proceeds to refresh when validate RESOLVES false (line 86 returns ok on true, otherwise falls through). So a validate that THROWS an HTTP_ERROR (5xx, 400, 403, invalid-response) short-circuits to 'offline' and never attempts the refresh that could rotate a near-expiry token. Meanwhile a validate that returns false ALWAYS falls through to refresh even on a definitively-bad token.
@@ -827,6 +949,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-063"></a>
 #### LL-063 · Account (username + skin/cape URLs) persisted to renderer localStorage for 7 days and used to gate signed-in UI before main re-verifies
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/renderer/shared/lib/queryPersister.ts:13-16,28-35; src/shared/constants/queryKeys.ts:2-3,29-31; src/renderer/app/App.tsx:56-80
 - **Problem:** The TanStack persister dehydrates every successful query except the 'app' and 'servers' roots (queryPersister.ts:13-16). The 'auth' root (QUERY_KEYS.auth.me) is therefore written to window.localStorage (key loontail-query-cache-v1) and rehydrated for up to QUERY_PERSIST_MAX_AGE_MS (7 days). App.tsx:59-80 gates the authenticated shell on this 'user' value (isAuthenticated = !isAuthPending && user != null) before main re-verifies, so a stale persisted account renders the signed-in shell on launch even if main has already cleared the session (expired token, or safeStorage cleared on Linux basic_text). The account object (username, skin/cape URLs) also sits in plaintext localStorage.
@@ -839,6 +962,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-064"></a>
 #### LL-064 · Kit error-code string literals hard-coded instead of MinecraftKitErrorCodes constants
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/main/services/auth/mojangAuth.ts:165,202,203; src/main/services/auth/routes.ts:24
 - **Problem:** isErrorCode(error, 'AUTH_CANCELLED') (mojangAuth.ts:165, routes.ts:24), isErrorCode(error, 'AUTH_REFRESH_FAILED') (mojangAuth.ts:202), and isErrorCode(error, 'AUTH_MINECRAFT_FAILED') (mojangAuth.ts:203) pass raw string literals. The kit exports MinecraftKitErrorCodes ({AUTH_CANCELLED, AUTH_REFRESH_FAILED, AUTH_MINECRAFT_FAILED, ...}) as a typed const object. The literals are unvalidated against the kit's union — a typo or upstream rename compiles fine and silently never matches, so a cancelled sign-in would be logged as a failure and an expired refresh misclassified as offline.
@@ -851,6 +975,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-065"></a>
 #### LL-065 · Unsafe context cast in mojangAuth bypasses the typed MinecraftKitErrorContext.httpStatus field
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/main/services/auth/mojangAuth.ts:204
 - **Problem:** verifyMojangSession narrows the 401 case with `(error as { context?: { httpStatus?: number } }).context?.httpStatus` (mojangAuth.ts:204). The kit exports MinecraftKitErrorContext with a typed `readonly httpStatus?: number` (d.ts:855), and isErrorCode(error, 'AUTH_MINECRAFT_FAILED') at line 203 has already narrowed `error` to `MinecraftKitError & { code: ... }` whose `.context` is `Readonly<MinecraftKitErrorContext>` (d.ts:883). The structural cast is therefore both unnecessary and unsafe — it would silently accept an unrelated shape.
@@ -863,6 +988,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-066"></a>
 #### LL-066 · Two parallel login-error taxonomies (LoginErrorCode vs shared IpcError ERROR_CODES) with a dead/duplicate mapping table
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P2 · **Effort:** medium · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/shared/contracts/auth.ts:111-121; src/main/services/auth/yggdrasilAuth.ts:28-33; src/main/services/auth/routes.ts:22-27; src/renderer/features/auth/hooks.ts:15-31; src/shared/constants/errorCodes.ts:6-7,17-18
 - **Problem:** Auth login uniquely returns a LoginResult discriminated union carrying its own LOGIN_ERROR_CODE enum (auth.ts:111-121), while the rest of the app uses the architecture-doc IpcError {code,message} model with ERROR_CODES. The shared ERROR_CODES defines AuthNetworkError and AuthInvalidCredentials (errorCodes.ts:6-7,17-18), but the auth routes never emit them — they emit LoginErrorCode instead (routes.ts, login()/signIn()). The renderer keeps an IPC_LOGIN_ERROR_CODES table (hooks.ts:15-25) mapping every ERROR_CODE to a LoginErrorCode just in case an IpcError leaks through. AuthNetworkError/AuthInvalidCredentials are effectively dead constants on the emit side.
@@ -875,6 +1001,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-067"></a>
 #### LL-067 · isNetworkFailure duplicates the package's isYggdrasilClientErrorCode helper
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/main/services/auth/yggdrasilAuth.ts:25-26
 - **Problem:** isNetworkFailure(error) (yggdrasilAuth.ts:25-26) re-implements `error instanceof YggdrasilClientError && error.code === YggdrasilClientErrorCodes.NETWORK`. yggdrasil-client already exports isYggdrasilClientErrorCode(value, code) which is exactly this narrowing (d.ts:89). The local isHttpStatus (yggdrasilAuth.ts:20-23) additionally checks context.status, so it is a legitimate local helper — only the network check is a duplicate.
@@ -886,6 +1013,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-068"></a>
 #### LL-068 · getStoredAuth performs a write (legacy-secret migration) as a side effect of a read on the legacy-session path
 
+- **Status:** TODO
 - **Category:** architecture · **Priority:** P3 · **Effort:** medium · **Change risk:** medium · **Flow:** Auth / session flow
 - **Area:** src/main/infra/store.ts:262-289 (migrateLegacyAuthSession at :247-260, invoked from getStoredAuth:266)
 - **Problem:** getStoredAuth() is a pure-looking getter but, when the raw store value matches the legacy plaintext AuthSession shape (store.ts:265), calls migrateLegacyAuthSession -> setStoredAuth (writeAuthSecret + store.set) mid-read (:266,249). getStoredAuth is called from the launch path (launch.ts:184), skin uploads (skin.ts:21), and every verifySession. On that legacy path a safeStorage failure triggers clearStoredAuth and silently logs the user out at, e.g., launch time. The dedicated migrateStoredAuthSecrets() runs once at auth init (index.ts:19), so the in-getter migration is redundant for the normal path.
@@ -898,6 +1026,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-069"></a>
 #### LL-069 · yggdrasilAuth.verifySession/signIn (token-rotation logic) and verify.ts have no unit coverage
 
+- **Status:** TODO
 - **Category:** testing · **Priority:** P2 · **Effort:** medium · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** tests/main/services/auth/yggdrasilAuth.test.ts (only covers signOut); src/main/services/auth/yggdrasilAuth.ts:51-114; src/main/services/auth/verify.ts:44-72
 - **Problem:** yggdrasilAuth.test.ts exercises only signOut. signIn's error mapping (403->InvalidCredentials, 429->RateLimited, NETWORK->NetworkError, else Unknown via loginErrorFromError, yggdrasilAuth.ts:28-33,51-74) and verifySession's validate->refresh->expired/offline state machine (:80-114) — the most failure-prone, race-prone logic in the area — are completely untested. verify.ts (the provider-agnostic dispatcher with expired/offline/setStoredAuth branching) is also untested directly: auth.test.ts mocks verifySession (auth.test.ts:45-48) rather than exercising it.
@@ -911,6 +1040,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-070"></a>
 #### LL-070 · mojangAuth.ts mixes URL-allowlist, OAuth orchestration, session projection, and verify in one module — split the pure helpers for testability
 
+- **Status:** TODO
 - **Category:** architecture · **Priority:** P3 · **Effort:** medium · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/main/services/auth/mojangAuth.ts:1-213
 - **Problem:** One 213-line module owns: the Microsoft authorize-URL allowlist (parseUrl/isMicrosoftAuthorizeUrl/openMicrosoftAuthorizeUrl :88-127), kit-session->launcher-session projection (fromKitSession/withRefreshedProfile :46-86), the AbortController-guarded browser sign-in (:146-174), cancel (:177-180), and verify/refresh (:188-210). The URL-validation and session-projection helpers are pure and security-relevant (the allowlist is the shell.openExternal gate) but are reachable today only through the factory closure that holds activeController and the kit instance, making targeted tests awkward (the existing test drives the whole run()).
@@ -923,6 +1053,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-071"></a>
 #### LL-071 · Yggdrasil session-construction logic duplicated between signIn and refresh
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/shared/contracts/auth.ts:63-83; src/main/services/auth/yggdrasilAuth.ts:57-65,98-106
 - **Problem:** yggdrasilAuth builds the next YggdrasilSession with identical undashUuid normalization in two places (signIn :57-65 and refresh :98-106), inviting copy-paste divergence. Separately, shared/contracts/auth.ts declares its own YggdrasilProfileSchema/YggdrasilSessionSchema while yggdrasil-core exports YggdrasilSessionSchema/GameProfileSchema and the undashed-hex refinement (isUuidUndashed, already imported in auth.ts:7,64). The launcher's session is a deliberately narrower storage shape so full 1:1 reuse is not possible, but the profile-id normalization concept is re-expressed.
@@ -935,6 +1066,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-072"></a>
 #### LL-072 · Cancelled Mojang sign-in is mapped to LOGIN_ERROR_CODE.Unknown, relying on renderer cancelledRef timing to suppress a spurious error
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P3 · **Effort:** medium · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/main/services/auth/routes.ts:22-27,43-51; src/renderer/features/auth/hooks.ts:96,107-123
 - **Problem:** When the user cancels, the kit throws AUTH_CANCELLED; routes.ts mojangFailureCode maps it to LOGIN_ERROR_CODE.Unknown (routes.ts:24, with a comment acknowledging this). The IPC layer returns {ok:false, error:'UNKNOWN'} and the renderer suppresses it only because cancelledRef.current is true at that moment (hooks.ts:115-117). If the cancel races (cancelMojangLogin fires but the result resolves before cancelledRef flips, or a non-user abort occurs), the user sees a generic 'Unknown' error for a normal cancellation.
@@ -946,6 +1078,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-073"></a>
 #### LL-073 · No bounded retry/backoff on transient auth network failures; single attempt then offline/error
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P3 · **Effort:** medium · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/main/services/auth/yggdrasilAuth.ts:80-114 (validate/refresh); src/main/services/auth/mojangAuth.ts:188-210 (refresh/profile.read)
 - **Problem:** Both providers make a single network attempt for validate/refresh/profile.read. A transient blip (DNS hiccup, 502 from a restarting Yggdrasil server) on startup verify immediately yields 'offline' (keeping a possibly-stale session) or, for login, surfaces NetworkError. There is no short bounded retry/backoff for the idempotent verify calls.
@@ -957,6 +1090,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-074"></a>
 #### LL-074 · verifyMojangSession refreshes on a local clock and has no fallback when refresh fails transiently but the access token is still valid
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P3 · **Effort:** medium · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/main/services/auth/mojangAuth.ts:188-209
 - **Problem:** needsRefresh is Date.now() > session.expiresAt - 60_000 using the local system clock (mojangAuth.ts:189-190). If the user's clock is skewed forward, every verify forces a refresh; if the kit's refresh then fails for any non-AUTH_REFRESH_FAILED reason (transient AUTH_MINECRAFT/network), the catch returns 'offline' (:207-208) and the still-valid access token is never exercised via profile.read. Conversely a skewed-back clock can let an actually-expired token take the profile.read path.
@@ -970,6 +1104,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-075"></a>
 #### LL-075 · PlayButton.tsx (343L) bundles the whole install/launch/repair UI state machine with rendering and five mutations
 
+- **Status:** TODO
 - **Category:** architecture · **Priority:** P1 · **Effort:** medium · **Change risk:** medium · **Flow:** Launch flow
 - **Area:** src/renderer/features/clients/components/PlayButton.tsx:123-343 (and selector 45-121)
 - **Problem:** The PlayButton component is 343 lines. Beyond the pure `selectPlayButtonAction` selector (good), the component body (123-343) wires five mutation hooks (install/launch/cancel/stop/startBundle), derives loader-choice logic (persistedLoader/needsLoaderChoice/beginInstall/startOrPickLoader 139-159), localizes two error families (198, 308), and renders 12 distinct action branches. The orchestration concern (which action + the imperative handlers) is interleaved with the JSX for every branch.
@@ -982,6 +1117,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-076"></a>
 #### LL-076 · Lucide icons sized via the `size` prop instead of Tailwind `size-N` classes across ~25 call sites
 
+- **Status:** TODO
 - **Category:** UI · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Renderer / UI flow
 - **Area:** src/renderer/features/clients/components/PlayButton.tsx:208,221,233,241,254,262,270,281,289,301,319,336; ClientOverview.tsx:140; install/ProgressControls.tsx:24,29,34; install/InstallStepper.tsx:9,10,11; install/ProgressBody.tsx:37 (Pause size={9}); shared/ui/Toast/ToastItem.tsx:143,166,175; console/ConsoleCrashBanner.tsx:20
 - **Problem:** Icons are sized with the numeric SVG `size` prop (e.g. `<Play size={16} />`, `<Pause size={9} />`) in dozens of places. The rest of the codebase (FolderInfoBlock.tsx:84,112 size-5/size-3.5; ConsoleHeader.tsx:21; ConsoleToolbar.tsx; ConsoleLogBody.tsx:107; UpdaterBadge.tsx) correctly uses `className="size-4"` / `size-5`. Both conventions are live simultaneously.
@@ -995,6 +1131,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-077"></a>
 #### LL-077 · Arbitrary `text-[Npx]` font sizes bypass the defined typography tokens (--text-caption/eyebrow/microlabel)
 
+- **Status:** TODO
 - **Category:** UI · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Renderer / UI flow
 - **Area:** src/renderer/features/clients/components/install/ActionButton.tsx:12 (text-[14px]); install/ProgressBody.tsx:35 (text-[13px]),47 (text-[14px]); ServersInfo.tsx:76 (text-[13px]); console/ConsoleLogBody.tsx:44 (text-[12.5px]),85 (text-[10.5px]),88 (text-[9.5px]); console/ConsoleHeader.tsx:42 (text-[9.5px]); console/ConsoleToolbar.tsx:67 (text-[10.5px]); features/updater/UpdaterBadge.tsx:62 (text-[9px]); features/app-bar/components/AppBar.tsx:24 (text-[9px])
 - **Problem:** index.css declares the typographic scale as tokens (`--text-eyebrow: 11px`, `--text-caption: 12px`, `--text-microlabel: 10px`, lines 63-65, used as `text-eyebrow`/`text-caption`/`text-microlabel`). Yet many components hardcode one-off sizes — `text-[13px]`, `text-[14px]`, `text-[12.5px]`, `text-[10.5px]`, `text-[9.5px]`, `text-[9px]` — that don't correspond to any token or the Tailwind scale.
@@ -1007,6 +1144,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-078"></a>
 #### LL-078 · `rounded-xl` / `rounded-2xl` used where only sm/md/lg radius tokens are allowed
 
+- **Status:** TODO
 - **Category:** UI · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Renderer / UI flow
 - **Area:** src/renderer/features/clients/components/ServersInfo.tsx:22,42,62 (rounded-xl); install/InstallProgress.tsx:29 (rounded-2xl); shared/ui/Toast/ToastItem.tsx:141 (rounded-xl)
 - **Problem:** The radius system is exactly the tokens declared in index.css (62-65): `--radius-xs` (2px), `--radius-sm` (0.5rem), `--radius-md` (0.875rem), `--radius-lg` (1.25rem) plus `rounded-full`. There is no `--radius-xl`/`--radius-2xl`. But server cards use `rounded-xl`, the install progress card uses `rounded-2xl`, and the toast uses `rounded-xl` — Tailwind defaults (0.75rem / 1rem) that are NOT project tokens.
@@ -1019,6 +1157,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-079"></a>
 #### LL-079 · Raw `rgba(255,255,255,0.10)` color literal inside an inline `style` box-shadow
 
+- **Status:** TODO
 - **Category:** UI · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Renderer / UI flow
 - **Area:** src/renderer/features/clients/components/ClientOverview.tsx:134-137
 - **Problem:** The settings gear button sets `style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10), 0 6px 18px -8px var(--color-glow-overlay-md)' }}`. This hardcodes a raw `rgba()` white literal AND uses an inline style for a non-computed value. The second half already correctly references the `--color-glow-overlay-md` token, so the pattern for doing it right is right there.
@@ -1032,6 +1171,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-080"></a>
 #### LL-080 · Two divergent `formatBytes` implementations produce inconsistent size formatting
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Cross-cutting (no single flow)
 - **Area:** src/renderer/features/settings/components/FolderInfoBlock.tsx:9-17 vs src/renderer/features/clients/components/install/progressFormat.ts:1-11
 - **Problem:** FolderInfoBlock defines its own `formatBytes` that only ever emits GB (2 decimals) or MB (0 decimals) — e.g. 500 bytes renders as '0 MB'. progressFormat.ts defines a different `formatBytes` over the full B/KB/MB/GB/TB scale with variable precision. The two are used in sibling features for the same conceptual job (human-readable byte size) and disagree on output.
@@ -1044,6 +1184,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-081"></a>
 #### LL-081 · Three parallel error-code→i18n-key lookup tables with identical shape and no shared helper
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/renderer/features/bundle/errorCopy.ts:4-20; src/renderer/features/minecraft/errorCopy.ts:4-24; src/renderer/features/auth/components/LoginForm.tsx:9-15 (ERROR_COPY_KEYS)
 - **Problem:** Three independent implementations of the same pattern: a `Record<SomeErrorCode, string>` keyed by an as-const codes object, plus a `localizeX(code, message, t) => t(key, { message })`. bundle/errorCopy and minecraft/errorCopy are structurally identical apart from the codes enum and key prefix; LoginForm inlines the Record but resolves the key directly in JSX.
@@ -1057,6 +1198,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-082"></a>
 #### LL-082 · errorCopy localizers interpolate a raw upstream `message` into a localized template
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/renderer/features/bundle/errorCopy.ts:19-20; src/renderer/features/minecraft/errorCopy.ts:20-24; consumed at PlayButton.tsx:198,308
 - **Problem:** Both localizers do `t(KEY_BY_CODE[code], { message })`, splicing the IpcError.message string straight into a translated string. That message originates in the main process / minecraft-kit and is English (and may be a raw exception string). So a non-English user gets a localized shell wrapping an English (or stack-ish) fragment, and the displayed text quality depends on whatever the main process happened to put in `message`.
@@ -1069,6 +1211,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-083"></a>
 #### LL-083 · FolderInfoBlock has 14 props and embeds byte formatting + disk-ratio math (logic in a component)
 
+- **Status:** TODO
 - **Category:** UI · **Priority:** P2 · **Effort:** medium · **Change risk:** medium · **Flow:** Profile / version flow
 - **Area:** src/renderer/features/settings/components/FolderInfoBlock.tsx:19-34 (14-prop type), 9-17 (formatBytes), 65-73 (ratio math), 14/16 (hardcoded 'GB'/'MB' units)
 - **Problem:** FolderInfoBlockProps declares 14 props (folder, folderSize, folderSizeLoading, pathLoading, heading, description, path, onOpen, onChange, openLabel, changeLabel, showDiskUsage, overridden, disabled). The component also computes diskUsedRatio/folderRatio/clampedFolderRatio/restUsedRatio inline (68-73) and carries a private formatBytes (11-17) with hardcoded 'GB'/'MB' unit strings that are not localized.
@@ -1081,6 +1224,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-084"></a>
 #### LL-084 · ActionButton concatenates Tailwind class strings with `+` instead of composing via cn()
 
+- **Status:** TODO
 - **Category:** UI · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Renderer / UI flow
 - **Area:** src/renderer/features/clients/components/install/ActionButton.tsx:11-21
 - **Problem:** VARIANT_CLASSES builds each variant by string `+` concatenation across multiple lines (e.g. `'h-12 ... ' + 'shadow-... ' + 'hover:...'`). The codebase's convention (and shadcn's) is to pass class fragments as separate arguments to cn(), which the same file already does at the call site (28-34).
@@ -1093,6 +1237,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-085"></a>
 #### LL-085 · Renderer re-implements PNG/texture normalization via canvas but skips the dimension/PNG validation yggdrasil-core already exports
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P2 · **Effort:** medium · **Change risk:** medium · **Flow:** Auth / session flow
 - **Area:** src/renderer/features/skin/texture.ts:1-32 (normalizeTextureToPng); features/skin/hooks.ts:92,98 (call sites in saveAll)
 - **Problem:** texture.ts hand-rolls image decode → canvas → toBlob('image/png') → ArrayBuffer to coerce a user-picked file to PNG, with bespoke Error throws ('Failed to decode texture image', 'PNG encoding failed'). yggdrasil-core already exports validatePngBuffer/assertPngBuffer and SKIN_VALID_DIMENSIONS/CAPE_VALID_DIMENSIONS (verified in dist d.ts lines 779-795), and project memory records 'PNG validation lives in core — do not re-implement in launcher.' The canvas path re-encodes ANY decodable image (jpg/webp) to PNG without validating skin/cape dimensions before upload.
@@ -1105,6 +1250,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-086"></a>
 #### LL-086 · ClientSettingsModal (208L) acts as an orchestrator with eight hooks and seven async handlers in the component body
 
+- **Status:** TODO
 - **Category:** architecture · **Priority:** P2 · **Effort:** medium · **Change risk:** medium · **Flow:** Profile / version flow
 - **Area:** src/renderer/features/clients/components/ClientSettingsModal.tsx:34-103
 - **Problem:** The modal wires ~10 query/mutation hooks, derives currentRuntime/hasAnyOverride/loaderOverridden, and defines six async handlers (handleRamSave/handleToggleConsole/handleToggleFullscreen/handleResetAll/handleChangeFolder/handleOpenFolder) plus the uninstall flow before rendering. It already delegates the actual UI to sub-section components, but the controller logic lives in the component at 208 lines.
@@ -1118,6 +1264,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-087"></a>
 #### LL-087 · ProgressBody uses dir="rtl" + <bdi> as a CSS hack to truncate file paths from the left
 
+- **Status:** TODO
 - **Category:** UI · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/renderer/features/clients/components/install/ProgressBody.tsx:71-78
 - **Problem:** The current-file row sets `dir="rtl"` with `text-left` and wraps the path in `<bdi>` purely to make `truncate` ellipsize the START of the path (so the filename stays visible). This repurposes bidirectional-text semantics for a visual truncation effect, which is fragile (RTL flips punctuation/segment order in edge cases) and non-obvious; no explanatory comment is present.
@@ -1130,6 +1277,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-088"></a>
 #### LL-088 · ClientsPage selects the default active client in a useEffect instead of deriving it during render
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Renderer / UI flow
 - **Area:** src/renderer/features/clients/components/ClientsPage.tsx:14-23
 - **Problem:** An effect watches `clients`/`activeClientId` and, when the stored active id no longer exists, calls setActiveClientId(first.id). The activeClient is then derived as `clients.find(...) ?? null` (line 23). This produces a render with activeClient=null (no overview) before the effect runs and commits the new id, causing a transient empty frame and an extra render whenever the client list loads or changes.
@@ -1142,6 +1290,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-089"></a>
 #### LL-089 · Repeated bordered-card surface pattern is copy-pasted instead of using a shared Card/Surface primitive
 
+- **Status:** TODO
 - **Category:** UI · **Priority:** P3 · **Effort:** medium · **Change risk:** low · **Flow:** Renderer / UI flow
 - **Area:** src/renderer/features/clients/components/ServersInfo.tsx:22,42,62; settings/components/FolderInfoBlock.tsx:81,110; shared/ui/SettingsGroup.tsx:36; ClientOverview.tsx:100,107 (chips); install/InstallProgress.tsx:29
 - **Problem:** The 'rounded border bg-surface/card + padding + backdrop-blur' card shell is re-declared with slightly different class strings in many places (`rounded-md border border-border bg-card p-4`, `rounded-xl border border-edge bg-surface px-4 py-3 backdrop-blur-sm`, `rounded-2xl border border-edge bg-surface p-5 backdrop-blur-md`). There is a SettingsGroup primitive for the settings surface but nothing for the glass/surface cards in the clients feature, so each reinvents the shell (and picks divergent radii/tokens — see the radius finding).
@@ -1156,6 +1305,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-090"></a>
 #### LL-090 · IpcError JSON.stringify drops `message` for every thrown Error subclass (SkinError/ManagerError/BundleError)
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P0 · **Effort:** quick · **Change risk:** low · **Flow:** IPC flow
 - **Area:** src/main/ipc/router.ts:49-64 (normalizeError + wrapForTransport); src/main/services/skin/errors.ts:3-11; src/main/services/minecraft/errors.ts:4-12; src/main/services/bundle/errors.ts:3-11
 - **Problem:** normalizeError() treats any value with `code`+`message` in scope as an IpcError and returns it unchanged: `return error as IpcError`. SkinError, ManagerError and BundleError all extend Error and satisfy that `in` check (message is inherited via the prototype). wrapForTransport then does `JSON.stringify(ipcError)`. But `Error.prototype.message` is a NON-enumerable own property in V8, so JSON.stringify of an Error subclass serializes only the enumerable own props (`code`, `name`) and OMITS `message`. The preload's tryUnwrapIpcError then parses `{code, name}`, isIpcError() fails because `typeof candidate.message !== 'string'`, returns null, and the raw `Error("...[object Object]...")` surfaces in the renderer instead of a structured error. The router unit test at tests/main/ipc/router.test.ts:120 only throws a PLAIN object (`{code, message}`) which DOES stringify fully, so it never catches this — the Error-subclass path is untested.
@@ -1168,6 +1318,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-091"></a>
 #### LL-091 · Domain error codes (MinecraftErrorCodes/BundleErrorCodes) thrown to IPC are rejected by isIpcError — disjoint code namespaces
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P0 · **Effort:** medium · **Change risk:** medium · **Flow:** IPC flow
 - **Area:** src/shared/ipc/errors.ts:9-17 (isIpcError); src/shared/constants/errorCodes.ts:1-22; src/main/services/minecraft/manager.ts:291-314 (requireIdle/acquireWriteLock throw ManagerError); src/main/services/bundle/manager.ts:206-231 (runSync throws BundleError)
 - **Problem:** isIpcError() validates `code` against `Object.values(ERROR_CODES)`. ERROR_CODES contains only UNKNOWN/IPC_*/AUTH_*/SETTINGS_*/SKIN_*. But ManagerError carries MinecraftErrorCodes values ('opInFlight','noAccount',...) and BundleError carries BundleErrorCodes values ('opInFlight','noClientFolder',...). These are thrown synchronously from minecraft.install/launch/repair/uninstall and bundle.start IPC routes. Even after the message-serialization bug above is fixed, isIpcError still returns false because the domain code is not in the IpcError registry, so the preload refuses to rehydrate it. The renderer mutation rejects with a raw opaque Error and the carefully-built renderer code tables (errorCopy.ts, REPAIRABLE_ERROR_CODES) never run for the throw-path (they only run for the EVENT path).
@@ -1180,6 +1331,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-092"></a>
 #### LL-092 · No unified toIpcError(): five parallel error models and ad-hoc per-call translation
 
+- **Status:** TODO
 - **Category:** architecture · **Priority:** P1 · **Effort:** medium · **Change risk:** medium · **Flow:** IPC flow
 - **Area:** src/main/ipc/router.ts:49-57; src/main/services/minecraft/errors.ts:14-35 (KIT_CODE_TO_LAUNCHER_CODE); src/main/services/bundle/errors.ts:13-17; src/main/services/skin/errors.ts; src/main/services/auth/yggdrasilAuth.ts:28-33 + routes.ts:22-27 (two more bespoke mappers)
 - **Problem:** Error translation is scattered: minecraft/errors.ts maps MinecraftKitError→MinecraftErrorCode; bundle/errors.ts classifies BundleError; yggdrasilAuth.ts maps YggdrasilClientError→LoginErrorCode; auth/routes.ts maps kit/TypeError→LoginErrorCode; router.ts has its own normalizeError. Each is a separate hand-written table with overlapping concerns (ABORTED, NETWORK appear in 3 of them). There is no single boundary function that takes an arbitrary thrown value and produces the IpcError that crosses the wire. This is the root cause of the two P0 bugs above and makes adding a code an N-place edit.
@@ -1192,6 +1344,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-093"></a>
 #### LL-093 · Dead error codes AUTH_NETWORK_ERROR / AUTH_INVALID_CREDENTIALS are never produced
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/shared/constants/errorCodes.ts:6-7,17-18; consumed only at src/renderer/features/auth/hooks.ts:20-21 and tests/renderer/features/auth/hooks.test.ts
 - **Problem:** ERROR_CODES.AuthNetworkError and AuthInvalidCredentials are mapped in the renderer's IPC_LOGIN_ERROR_CODES table, but a repo-wide search finds NO main-process producer. The actual auth flow returns a discriminated LoginResult ({ok:false, error: LoginErrorCode}) from yggdrasilAuth.ts/auth routes.ts — it never throws an IpcError with these codes. So loginErrorCodeFromRejection's branches for these two codes are unreachable except via the test that fabricates them.
@@ -1204,6 +1357,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-094"></a>
 #### LL-094 · IPC router logs EVERY handler failure at logger.error, including expected/recoverable ones
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P1 · **Effort:** quick · **Change risk:** low · **Flow:** IPC flow
 - **Area:** src/main/ipc/router.ts:80-84
 - **Problem:** The router catch does `logger.error(`Channel ${channel} failed`, ipcError)` unconditionally for all thrown values, including IPC_UNTRUSTED_SENDER (a security probe, not a user-initiated failure), IPC_INVALID_ARGS (a validation reject), and OP_IN_FLIGHT (a benign double-click race that the UI immediately recovers from by re-reading status). Per code-guideline §9, logger.error is reserved for 'an operation the user initiated failed and was NOT recovered'; recovered/expected conditions are warn.
@@ -1216,6 +1370,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-095"></a>
 #### LL-095 · Updater inFlight flag can stick true if download starts but never completes or errors
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P2 · **Effort:** medium · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/main/services/updater/index.ts:34,37-62,88-106
 - **Problem:** inFlight is set true on 'checking-for-update' and cleared only on 'update-not-available', 'update-downloaded', or 'error'. On 'update-available' it stays true (intentional, to keep the 'downloading…' UI). But Squirrel's autoUpdater has no progress/timeout guarantee: if the background .nupkg download stalls or the network drops without emitting an 'error' event, inFlight never clears, and the updaterCheck handler permanently short-circuits ('skipped (already in flight)'). There is no terminal timeout and no way to re-arm a check.
@@ -1227,6 +1382,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-096"></a>
 #### LL-096 · Skin Yggdrasil upload logs error then rethrows — surfaced failure logged twice and via wrong helper
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/main/services/skin/skin.ts:103-106 (logger.error + throwUploadError); compounded by router.ts:82 logging again
 - **Problem:** uploadSkinYggdrasil catches the upload failure, calls logger.error('Yggdrasil texture upload failed', {kind, error}) and then throwUploadError(...) which throws a SkinError that propagates up through the IPC route. The router catch then logs the same failure a SECOND time at error (router.ts:82). So one user-visible skin upload failure produces two error log lines. The same pattern exists in uploadSkinMojang (skin.ts:153). By contrast clearSkin (skin.ts:192,206) correctly logs at warn because those failures are swallowed/recovered. The upload error here is genuinely user-visible, so error level is correct — but the double log is not.
@@ -1239,6 +1395,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-097"></a>
 #### LL-097 · SkinError reuses the IpcError ERROR_CODES space while Minecraft/Bundle invent their own — inconsistent code modeling
 
+- **Status:** TODO
 - **Category:** architecture · **Priority:** P2 · **Effort:** medium · **Change risk:** medium · **Flow:** IPC flow
 - **Area:** src/main/services/skin/errors.ts:1-11 (SkinError code: ErrorCode); vs src/main/services/minecraft/errors.ts:4-12 (ManagerError code: MinecraftErrorCode); vs src/main/services/bundle/errors.ts:3-11 (BundleError code: BundleErrorCode)
 - **Problem:** SkinError is typed with the shared ERROR_CODES ErrorCode union (SKIN_UPLOAD_FAILED/SKIN_NOT_AUTHENTICATED live in errorCodes.ts), so it round-trips through isIpcError correctly. But Minecraft and Bundle errors use their own domain code enums in contracts/*.ts that are NOT in ERROR_CODES. Three sibling services model 'the code I throw' three different ways. This inconsistency is the structural reason the P0 namespace bug exists for two of them but not the third.
@@ -1251,6 +1408,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-098"></a>
 #### LL-098 · isIpcError gates on a closed ERROR_CODES registry, so any new IpcError code from main is silently dropped at the preload
 
+- **Status:** TODO
 - **Category:** IPC · **Priority:** P1 · **Effort:** quick · **Change risk:** low · **Flow:** IPC flow
 - **Area:** src/shared/ipc/errors.ts:9-37 (isIpcError used by tryUnwrapIpcError); src/preload/index.ts:23-28
 - **Problem:** tryUnwrapIpcError only rehydrates the payload if isIpcError passes, and isIpcError requires `Object.values(ERROR_CODES).includes(code)`. The envelope is already authenticated by the IPC_ERROR_SENTINEL (it came from our own main router). Gating additionally on a hard-coded enum means: the moment main throws a code not yet added to the renderer's ERROR_CODES copy (e.g. a freshly added code, or a domain code per the P0 finding), the structured error is discarded and a raw '[object Object]' Error reaches the renderer. The registry check is doing double duty as both validation and an allowlist, and failing closed in the wrong direction.
@@ -1263,6 +1421,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-099"></a>
 #### LL-099 · bundle getInstallState swallows real failures as 'up-to-date', and tryGetClient masks not-found vs transient errors
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P2 · **Effort:** medium · **Change risk:** medium · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/manager.ts:194-201 (drift check catch), 351-357 (tryGetClient catch-all)
 - **Problem:** getInstallState's drift check catches ANY fetchRemoteManifest failure and assumes signatureMatches=true ('assume up-to-date'). That is correct for offline/transient network, but it also swallows a genuine MANIFEST_INVALID/404 (bundle removed upstream) as 'up to date', so the UI shows Play with stale files and no update affordance. Separately, tryGetClient (line 351) catches everything and returns null, conflating 'client genuinely not found' with 'transient clients-API error' — runSync then throws UNKNOWN 'Client not found' for what may be a network blip.
@@ -1275,6 +1434,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-100"></a>
 #### LL-100 · startInstall releases the operation lock twice (in .then and .finally) — confusing redundancy around launchHook
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/minecraft/manager.ts:128-151; idempotency at src/main/services/clientOperationLocks.ts:138-148
 - **Problem:** runInstall(...).then() calls lock.release() at line 130 (before awaiting launchHook), and .finally() calls lock.release() again at line 150. The lease is idempotent (clientOperationLocks.ts:139 guards with `if (released) return`), so it's not a leak — but the double release obscures intent: the lock is dropped BEFORE the post-install bundle sync runs, meaning the bundle service must re-acquire its own lock during launchHook. A reader cannot tell from this code whether the early release is deliberate (it is — to let bundle acquire) or a bug. The redundant .finally release is pure noise.
@@ -1288,6 +1448,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-101"></a>
 #### LL-101 · errorMessage() is duplicated verbatim across minecraft and bundle error modules
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Cross-cutting (no single flow)
 - **Area:** src/main/services/minecraft/errors.ts:37-38 and src/main/services/bundle/errors.ts:19-20 (identical `error instanceof Error ? error.message : String(error)`); near-duplicate inline at src/main/services/skin/skin.ts:29
 - **Problem:** The same errorMessage helper is defined twice verbatim in minecraft and bundle error modules, and a third near-identical inline variant lives in skin.ts:29 (`error instanceof Error ? error.message : 'Unknown error'`). Three private copies drift independently and none handles the kit/ygg structured-error message extraction (e.g. responseBody) that skin.ts had to re-implement inline as extractMojangMessage (skin.ts:37-57).
@@ -1301,6 +1462,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-102"></a>
 #### LL-102 · Install/launch failure events collapse unmapped kit codes to KIT_ERROR, losing the failure class the renderer needs
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/main/services/minecraft/errors.ts:14-35 (KIT_CODE_TO_LAUNCHER_CODE partial map + classifyError); src/main/services/minecraft/install.ts:86-89; src/main/services/minecraft/launch.ts:153,367 (emitError on the EVENT channel)
 - **Problem:** KIT_CODE_TO_LAUNCHER_CODE is a Partial map covering ~10 kit codes; classifyError collapses every other MinecraftKitErrorCode to KIT_ERROR. install/launch failures are delivered to the renderer via the EVENT channel (env.emitError → MinecraftErrorEvent {slug,code,message}), which carries only the launcher code + a message string — the original kit code is lost for the renderer, so its errorCopy table cannot distinguish unmapped kit failure classes (they all render as 'kitError').
@@ -1313,6 +1475,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-103"></a>
 #### LL-103 · Renderer PlayButton status switch uses a default fallthrough instead of assertNever exhaustiveness
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Renderer / UI flow
 - **Area:** src/renderer/features/clients/components/PlayButton.tsx:101-121 (selectPlayButtonAction switch has default fallthrough)
 - **Problem:** selectPlayButtonAction closes its switch with `default: return PlayButtonActions.INSTALL` instead of assertNever(status). InstallStatus is a discriminated union; the switch explicitly handles UNKNOWN/REPAIRING/UNINSTALLING/LAUNCHING/RUNNING/INSTALLED/UNVERIFIED/ERROR, with INSTALLING handled before the switch (line 91) and NOT_INSTALLED intentionally falling to default→INSTALL. A newly added InstallStatus would silently map to INSTALL (treating an in-progress/error state as 'ready to download') and compile clean.
@@ -1326,6 +1489,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-104"></a>
 #### LL-104 · Skin upload mutation has no code-aware error handling or localization (no localizeSkinError)
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/renderer/features/skin/hooks.ts:19-30 (useUploadSkin), 32-43 (useClearSkin); producer src/main/services/skin/skin.ts:170-178
 - **Problem:** uploadSkin throws SkinError with codes SKIN_UPLOAD_FAILED / SKIN_NOT_AUTHENTICATED and human messages (including the extracted Mojang reason from extractMojangMessage). But useUploadSkin's mutation has no onError and no localization of the IpcError code — the message bubbles up raw (and, due to the #1 serialization bug, may be lost entirely). There is no skin equivalent of localizeMinecraftError/localizeBundleError (confirmed: those two exist, localizeSkinError does not), so a banned-skin reason or 'not authenticated' is shown (at best) as the raw English service string, bypassing i18n.
@@ -1338,6 +1502,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-105"></a>
 #### LL-105 · notifier.send swallows all send failures with an empty catch and no log
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/main/infra/notifier.ts:13-21
 - **Problem:** send() wraps webContents.send in try/catch with an empty body and a comment ('renderer torn down between checks — drop the push'). That is the right call for the teardown race, but it also silently swallows ANY send failure (serialization error in the payload, an unexpected throw), so a malformed NotificationPayload would vanish with zero trace. notifier is the sink for uncaughtException/unhandledRejection (index.ts:49,54), making a silent drop here the worst place to lose a signal.
@@ -1352,6 +1517,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-106"></a>
 #### LL-106 · Bundle download promise never settles when signal is already aborted
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P0 · **Effort:** quick · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/download.ts:54-83 (requestOnce)
 - **Problem:** In requestOnce, req is added to currentRequests at line 54, then onAbort is defined (55-57), then the early-abort branch (58-64) calls onAbort() (which does req.destroy(error)) and `return`s at line 61. The req.on('error') / req.on('timeout') / req.on('close') handlers that reject() and delete from currentRequests are only registered at lines 65-81, AFTER the early return. On the pre-aborted path none of them are attached, so the destroy error is unobserved, the response callback (line 50) never fires, and the Promise<IncomingMessage> can never settle. The 60s request timeout is also never wired (its handler is below the return too), so there is no safety net. A worker can reach this state via a real race: runDownloadWorker passes its `while (!task.cancelled && !task.paused)` check (runner.ts:94), shift()s an entry, and then cancelSync/pauseSync calls task.abort.abort() before the worker enters requestOnce — at which point options.signal.aborted is true on entry.
@@ -1364,6 +1530,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-107"></a>
 #### LL-107 · getInstallState re-fetches remote manifest with no in-flight dedup or short-TTL cache
 
+- **Status:** TODO
 - **Category:** performance · **Priority:** P2 · **Effort:** medium · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/manager.ts:194-201 (getInstallState drift check); src/main/services/bundle/routes.ts:31-34 (bundleCheckStatus handler)
 - **Problem:** bundleCheckStatus → getInstallState performs a network fetchRemoteManifest(client.bundleSlug) on every call to compute signatureMatches, plus loadLocalManifest reads+JSON.parses the sidecar each time. There is no dedup of concurrent same-slug calls and no caching, so a status-heavy screen (mount + focus + client switch + per-card) fires several near-simultaneous IPC calls that each trigger an independent HTTP round-trip and full schema parse.
@@ -1376,6 +1543,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-108"></a>
 #### LL-108 · getFolderSize walks the entire client tree (tens of thousands of stats) on every IPC call
 
+- **Status:** TODO
 - **Category:** performance · **Priority:** P1 · **Effort:** medium · **Change risk:** low · **Flow:** Renderer / UI flow
 - **Area:** src/main/infra/system.ts:97-141 (walkDirectorySize/getFolderSize); invoked via src/main/services/system/routes.ts:41 from src/renderer/features/settings/hooks.ts:116-129 (useFolderSize)
 - **Problem:** getFolderSize does a full recursive readdir+stat walk of the client folder. A Minecraft install holds tens of thousands of files (assets/objects); the comment at system.ts:68 acknowledges this. The renderer caches with FOLDER_SIZE_STALE_TIME_MS and a debounce, but every cache-miss (client switch, settings open) re-walks the whole tree from scratch — no main-side memoization and no incremental/cached size. WALK_CONCURRENCY=16 caps libuv pressure but total stat count is O(files).
@@ -1387,6 +1555,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-109"></a>
 #### LL-109 · buildPlan does fully sequential await-in-loop disk checks with no parallelism cap
 
+- **Status:** TODO
 - **Category:** performance · **Priority:** P2 · **Effort:** medium · **Change risk:** medium · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/plan.ts:73-131 (buildPlan main loop), 36-43 (hashFile), 45-52 (exists)
 - **Problem:** buildPlan iterates remoteEntries with a for…of and awaits exists()/hashFile() one entry at a time. In force/repair mode every file falls through to the disk-hash fast path (lines 120-130) and is hashed strictly serially (hashFile streams the whole file), so planning a 10k-file bundle is a single-threaded chain of thousands of awaited fs ops. Unlike system.ts (createLimiter at WALK_CONCURRENCY) there is no bounded parallelism here.
@@ -1399,6 +1568,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-110"></a>
 #### LL-110 · Sliding speed window can read a near-zero elapsed and report a transiently inflated KB/s
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/runner.ts:67-91 (maybeEmit speed calc), 113-117 (runDownloadPhase window init)
 - **Problem:** maybeEmit computes speed = speedWindowBytes/elapsed*1000 (guarded by elapsed>0) and only AFTER computing resets the window when elapsed > SPEED_WINDOW_MS (lines 75-78). Right after a window roll, the next emit computes the rate over a partial sub-window (the bytes since the reset over a short elapsed), so the KB/s readout can jump between the full-window average and a higher/lower partial-window value at each roll boundary.
@@ -1411,6 +1581,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-111"></a>
 #### LL-111 · cancelAll uses a fixed 250ms sleep as a shutdown grace window instead of joining real cleanup
 
+- **Status:** TODO
 - **Category:** flow · **Priority:** P2 · **Effort:** medium · **Change risk:** medium · **Flow:** Error / recovery flow
 - **Area:** src/main/services/bundle/manager.ts:448-454 (cancelAll)
 - **Problem:** cancelAll cancels every active sync then unconditionally awaits setTimeout(graceMs=250) to let the runners' finally blocks (tmp cleanup, manifest writes) land. This is a guess: if a saveLocalManifest write or tmp rm takes >250ms (slow disk / antivirus on Windows — exactly the case download.ts:173-178/195-199 call out) the app can quit mid-write; if everything finished in 5ms the shutdown still blocks the full 250ms. There is no actual await of the in-flight task promises.
@@ -1423,6 +1594,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-112"></a>
 #### LL-112 · forgeProcessor output verification hashes every output strictly serially
 
+- **Status:** TODO
 - **Category:** performance · **Priority:** P2 · **Effort:** medium · **Change risk:** medium · **Flow:** Repair flow
 - **Area:** src/main/services/minecraft/forgeProcessorHealing.ts:91-98 (processorOutputsOk), 100-108 (brokenProcessorIndices), 64-85 (sha1OfFile/fileMissing)
 - **Problem:** processorOutputsOk loops Object.entries(action.outputs) awaiting fileMissing(stat) then sha1OfFile (full stream read) one output at a time, and brokenProcessorIndices loops every processor serially. Forge processor outputs include multi-MB jars (srg/extra/client). On every repair preflight — including the cached-clean fast path (lines 128-136) — this rehashes all outputs sequentially with no concurrency cap, blocking the repair on a serial hash chain.
@@ -1434,6 +1606,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-113"></a>
 #### LL-113 · Forge-processor verification re-runs kit.install.plan to recover output actions on cache miss
 
+- **Status:** TODO
 - **Category:** performance · **Priority:** P2 · **Effort:** medium · **Change risk:** medium · **Flow:** Repair flow
 - **Area:** src/main/services/minecraft/forgeProcessorHealing.ts:138-142 (cache miss → kit.install.plan); src/main/services/minecraft/repairWorkflow.ts:132 (ensureLaunchable → kit.install.plan); src/main/services/minecraft/repair.ts:41-48
 - **Problem:** forgeProcessorActionsCache is an in-memory module Map (line 18) cleared on every process start. On the first repair after restart it has no entry, so repairMissingForgeProcessorOutputs calls the full kit.install.plan(target) (138) purely to extract RunForgeProcessor actions. Separately, ensureLaunchable also calls kit.install.plan (repairWorkflow.ts:132). In a single runRepair flow (repair.ts:40-48), healForgeProcessors and ensureLaunchable each call install.plan independently, so for a Forge target with broken processors and an unresolvable launch version the plan is computed twice.
@@ -1446,6 +1619,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-114"></a>
 #### LL-114 · Media protocol reads the whole cached file into a Buffer and serves it non-streamed
 
+- **Status:** TODO
 - **Category:** performance · **Priority:** P2 · **Effort:** medium · **Change risk:** low · **Flow:** Renderer / UI flow
 - **Area:** src/main/services/media/protocol.ts:21-39 (registerMediaProtocol handler); src/main/services/media/mediaCache.ts:75-91 (fetchCachedMedia readBuffer)
 - **Problem:** On every cache:// request fetchCachedMedia does readBuffer (full readFile into memory, mediaCache.ts:77) and the protocol handler wraps cached.body (a Buffer) in a Response cast to ReadableStream (protocol.ts:32). Large images (or many concurrent <img> loads in a grid) each load the entire file into a Buffer in main, then hand a Buffer to Electron's Response. There is no streaming (createReadStream), and on the disk-hit path the mime is re-guessed from the URL extension (mediaCache.ts:79 guessMimeFromUrl) rather than stored.
@@ -1457,6 +1631,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-115"></a>
 #### LL-115 · Remote manifest is flattened/iterated multiple times per sync (plan + persist)
 
+- **Status:** TODO
 - **Category:** performance · **Priority:** P3 · **Effort:** medium · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/plan.ts:64 (flattenEntries) + 65-67 (bundleOwnedRelativePaths map); src/main/services/bundle/manifestSnapshot.ts:4-14 (flattenRemote); src/main/services/bundle/manager.ts:277 (buildPlan) + 337 (flattenRemote in persist)
 - **Problem:** For a single sync the remote manifest is walked to flat form multiple times: buildPlan calls flattenEntries (plan.ts:64) and separately builds bundleOwnedRelativePaths by mapping the same entries (65-67); then persistLocalManifest calls flattenRemote (manager.ts:337 → manifestSnapshot.ts) which re-walks Object.values(manifest) to build the files map. normalizePathForSet runs a regex replace on every path on each pass.
@@ -1469,6 +1644,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-116"></a>
 #### LL-116 · saveLocalManifest / saveTargetInstallManifest rename-over-existing lacks the pre-remove download.ts uses
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/manifestRepo.ts:34-45 (saveLocalManifest); src/main/services/minecraft/installManifest.ts:110-119 (saveTargetInstallManifest); compare download.ts:189-193
 - **Problem:** saveLocalManifest writes tmp then fs.rename(tmp, target) (manifestRepo.ts:44). download.ts:189-193 explicitly documents that on Windows fs.rename fails when the destination exists and therefore removes the destination first. saveLocalManifest and saveTargetInstallManifest (installManifest.ts:118) do NOT pre-remove, so a rename-over-existing can throw on Windows. In persistLocalManifest the throw is caught and only warns (manager.ts:344-348), so the practical effect is a successful sync that silently fails to persist its manifest — meaning the NEXT sync re-downloads/rehashes everything because the local-manifest fast-path is stale.
@@ -1480,6 +1656,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-117"></a>
 #### LL-117 · Manifest fetch reads+validates the whole body for the drift check that only needs the hash; no size cap
 
+- **Status:** TODO
 - **Category:** performance · **Priority:** P3 · **Effort:** medium · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/api.ts:73-93 (fetchRemoteManifest: response.text → JSON.parse → RemoteManifestSchema.safeParse → sha256(rawText))
 - **Problem:** fetchRemoteManifest reads the full body as text (line 73), JSON.parses it, runs RemoteManifestSchema.safeParse over the entire decoded object (83), then hashes the raw text (92) — multiple full passes over a manifest that can be large for a big modpack, with no upper size guard before parsing/validating. For the getInstallState drift check (manager.ts:196-197) only manifestHash is compared, so the full schema validation is wasted there. There is no max-bytes limit before allocation/validation on a network-controlled payload.
@@ -1493,6 +1670,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-118"></a>
 #### LL-118 · resolveClientFolder allocates the full resolved settings object just to read one field
 
+- **Status:** TODO
 - **Category:** performance · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Profile / version flow
 - **Area:** src/main/services/bundle/manager.ts:359-362 (resolveClientFolder); src/main/services/minecraft/context.ts:37-79 (buildContext); src/shared/domain/settingsResolution.ts:9-46
 - **Problem:** resolveClientSettings rebuilds the full ResolvedClientSettings object (including the diff sub-object, settingsResolution.ts:39-44) on every call. resolveClientFolder (manager.ts:359-362) calls it purely to read storage.clientFolder. In one sync/launch flow it is invoked several times: runSync→resolveClientFolder, getInstallState→resolveClientFolder, and buildContext (context.ts:38) resolves once plus a second time after clearStaleClientRuntimeRef (context.ts:79). Each call re-reads getSettings() and recomputes RAM/folder/console/fullscreen + the diff.
@@ -1504,6 +1682,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-119"></a>
 #### LL-119 · currentRequests Set can leak entries on the abort-before-listeners path
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/download.ts:54-83 (requestOnce add/delete lifecycle); 87-103 (followRedirects loops requestOnce per hop)
 - **Problem:** requestOnce adds req to currentRequests at line 54 and removes it only in the error (66) and close (79) handlers. On the pre-aborted early return (58-61, same root cause as the P0) the req is never deleted from the Set. followRedirects calls requestOnce per hop; the per-hop request is normally deleted on its close, but the Set is the authority cancelSync uses to destroy in-flight sockets, so a stale never-deleted handle pollutes that tracking.
@@ -1518,6 +1697,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-120"></a>
 #### LL-120 · updater fsm untested
 
+- **Status:** TODO
 - **Category:** testing · **Priority:** P1 · **Effort:** medium · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** renderer/features/updater/events.ts:38-118
 - **Problem:** toastFor/triggerAutoCheck dedup+wasUserInitiated none exported/tested
@@ -1530,6 +1710,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-121"></a>
 #### LL-121 · verifySession untested
 
+- **Status:** TODO
 - **Category:** testing · **Priority:** P1 · **Effort:** medium · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** main/services/auth/verify.ts:44-72
 - **Problem:** 6 branches; auth.test.ts:45-48 mocks verify away
@@ -1542,6 +1723,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-122"></a>
 #### LL-122 · auth refresh untested
 
+- **Status:** TODO
 - **Category:** testing · **Priority:** P1 · **Effort:** quick · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** main/services/auth/mojangAuth.ts:188-210;yggdrasilAuth.ts:80-114
 - **Problem:** no needsRefresh/AUTH_REFRESH_FAILED; yggdrasil only signOut
@@ -1554,6 +1736,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-123"></a>
 #### LL-123 · MIGRATIONS gap-throw untested
 
+- **Status:** TODO
 - **Category:** testing · **Priority:** P1 · **Effort:** medium · **Change risk:** medium · **Flow:** Cross-cutting (no single flow)
 - **Area:** main/infra/store.ts:105-131
 - **Problem:** v=1 MIGRATIONS={}; stored-0 throws at load; tests write CURRENT
@@ -1566,6 +1749,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-124"></a>
 #### LL-124 · IPC arg-validation contract test
 
+- **Status:** TODO
 - **Category:** testing · **Priority:** P2 · **Effort:** large · **Change risk:** medium · **Flow:** IPC flow
 - **Area:** shared/ipc/contract.ts:39-90
 - **Problem:** type-only; nothing stops a new channel shipping unvalidated
@@ -1581,6 +1765,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-125"></a>
 #### LL-125 · Re-implemented SHA-1/SHA-256 file hashing instead of a shared kit/core utility
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P2 · **Effort:** medium · **Change risk:** low · **Flow:** Repair flow
 - **Area:** src/main/services/minecraft/forgeProcessorHealing.ts:64-76 (sha1OfFile), src/main/services/bundle/plan.ts:36-43 (hashFile sha256), src/main/services/bundle/download.ts:127-159 (inline createHash('sha256'))
 - **Problem:** Three separate hand-rolled streaming-hash helpers exist: forgeProcessorHealing.ts hashes files with sha1 (returns null on error), bundle/plan.ts hashFile hashes with sha256 (rejects on error), and bundle/download.ts inlines createHash('sha256') in the download write stream. Each wires data/end/error events and handles errors differently. The kit already computes exactly these hashes internally for its integrity:verified / integrity:mismatch events (kit d.ts ~2693-2701 shows algorithm: 'sha1' | 'sha256') but exports NO reusable hashFile helper (confirmed: grep of the kit index.d.ts for hashFile/hashesMatch/computeHash returns nothing).
@@ -1592,6 +1777,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-126"></a>
 #### LL-126 · Forge-processor output healing is generic kit logic re-implemented in the launcher
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P1 · **Effort:** large · **Change risk:** high · **Flow:** Repair flow
 - **Area:** src/main/services/minecraft/forgeProcessorHealing.ts:1-187 (whole file), src/main/services/minecraft/repairWorkflow.ts:136-154 (healForgeProcessors)
 - **Problem:** forgeProcessorHealing.ts re-derives an install plan (kit.install.plan), filters RunForgeProcessorAction outputs (InstallActionKinds.RUN_FORGE_PROCESSOR), sha1-checks each declared output in action.outputs, and re-runs a focused plan keeping only broken processors (by action.index) plus their classpath deps. This is pure kit-domain knowledge (Forge install_profile processor graph, which generated outputs verify.forge does NOT track). The launcher's own comment at forgeProcessorHealing.ts:110-113 states 'kit.verify.forge only inspects libraries declared in the Forge version JSON, so processor outputs slip through'. The kit exposes repair.forge, repair.all, repair.fromError with a FORGE_PROCESSOR_FAILED supported code (kit d.ts:4384) but no 'verify processor outputs and re-run the missing ones', so the launcher reverse-engineers it against kit-internal action shapes.
@@ -1604,6 +1790,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-127"></a>
 #### LL-127 · ensureLaunchable full-replan ignores kit.repair.fromError / planRepairFromError
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P3 · **Effort:** medium · **Change risk:** medium · **Flow:** Repair flow
 - **Area:** src/main/services/minecraft/repairWorkflow.ts:122-134 (ensureLaunchable), :111-114 (launchVersionResolvable swallows the error), src/main/services/minecraft/repair.ts:45-48
 - **Problem:** ensureLaunchable falls back to a full kit.install.plan + run when resolveLaunchVersion still fails after repair.all + healForgeProcessors. The kit exposes kit.repair.fromError(input)/planRepairFromError which derive a focused plan from a typed MinecraftKitError (supported codes incl FORGE_PROCESSOR_FAILED, INTEGRITY_*, NETWORK_*; kit d.ts:4378-4416) with 'no full verify sweep'. ensureLaunchable does the heavyweight full re-plan instead.
@@ -1616,6 +1803,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-128"></a>
 #### LL-128 · skin.ts passes launcher SkinKinds literal into core validatePngBuffer without using core's SkinAssetKinds
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/main/services/skin/skin.ts:171 (validatePngBuffer(payload.buffer, payload.type)), src/shared/contracts/skin.ts:3-9 (SkinKinds duplicates core SkinAssetKinds)
 - **Problem:** shared/contracts/skin.ts declares SkinKinds = { SKIN: 'skin', CAPE: 'cape' }, a byte-for-byte duplicate of yggdrasil-core's SkinAssetKinds = { SKIN: 'skin', CAPE: 'cape' } (core d.ts:781-784). skin.ts:171 calls validatePngBuffer(payload.buffer, payload.type) where payload.type is the launcher's SkinKind, while validatePngBuffer's declared signature is (buffer, kind: SkinAssetKind) (core d.ts:794). It type-checks today only because the two string-literal unions happen to be structurally identical.
@@ -1629,6 +1817,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-129"></a>
 #### LL-129 · Yggdrasil skin upload re-implements AUTO variant detection that belongs in ygg-client.uploadSkin
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P3 · **Effort:** medium · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/main/services/skin/skin.ts:93-99 (manual detectSkinVariant then client.uploadSkin), compare Mojang path skin.ts:143-151 (variant: 'AUTO')
 - **Problem:** For the Yggdrasil path the launcher manually calls detectSkinVariant(new Uint8Array(payload.buffer)) (kit import) and passes the resolved concrete SkinVariant to YggdrasilClient.uploadSkin, whose signature accepts only variant?: SkinVariant (client d.ts:39-43). For the Mojang path it instead delegates detection to the kit via variant: 'AUTO' (kit's SkinVariantInput accepts 'AUTO', kit d.ts:479-497, 521). So the launcher carries detection wiring for one provider but not the other, splitting one concern (CLASSIC vs SLIM from PNG bytes) across launcher and package, and forces a kit import into the ygg path purely for detection.
@@ -1640,6 +1829,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-130"></a>
 #### LL-130 · shared/contracts/auth.ts re-declares Yggdrasil session/profile shapes that ygg-core already exports
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/shared/contracts/auth.ts:63-83 (YggdrasilProfileSchema/YggdrasilSessionSchema), src/main/services/auth/yggdrasilAuth.ts:53-65, 93-106 (builds session from issued.selectedProfile.id/.name with no runtime validation)
 - **Problem:** The launcher's YggdrasilSessionSchema/YggdrasilProfileSchema redefine accessToken/clientToken/selectedProfile fields that ygg-core ships as YggdrasilSessionSchema and GameProfileSchema (core d.ts:375, 439; GameProfile/YggdrasilSession types at 913-927 where YggdrasilSession.selectedProfile: GameProfile). The launcher's version is intentionally reshaped for persisted storage (flat profile.uuid undashed, provider literal, drops availableProfiles/user). yggdrasilAuth.ts:53-65 builds the stored session by reading client.authenticate()'s issued.selectedProfile.id/.name purely structurally — the wire response is validated nowhere on the launcher side.
@@ -1651,6 +1841,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-131"></a>
 #### LL-131 · MojangProfileSkinSchema duplicates kit's MojangProfileSkin shape by hand
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P3 · **Effort:** medium · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/shared/contracts/auth.ts:21-29 (MojangProfileSkinSchema), :52-56 (MojangProfileSchema) vs kit MojangProfileSkin (kit d.ts:189-194) and MinecraftProfile (kit d.ts:210-214)
 - **Problem:** MojangProfileSkinSchema is a hand-written Zod mirror of kit's MojangProfileSkin (id/state/url/variant; note the kit type does NOT have textureKey — the launcher schema adds an optional textureKey field the kit type lacks), annotated with z.ZodType<MojangProfileSkin>, and MojangProfileSchema re-spells kit's MinecraftProfile (uuid/username/skins; kit d.ts:210-214). The comment at auth.ts:21-22 explicitly acknowledges 'Mirror of kit's MojangProfileSkin shape'. If the kit adds/renames a skin field, this schema silently diverges (z.ZodType only checks assignability of the inferred type, not field completeness).
@@ -1663,6 +1854,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-132"></a>
 #### LL-132 · Bundle-path normalization for set membership duplicated across bundleHealing and bundle/plan
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Repair flow
 - **Area:** src/main/services/minecraft/bundleHealing.ts:27-28 (toBundleKey: path.relative + replace backslash) vs src/main/services/bundle/plan.ts:65-67 / normalizePathForSet in bundle/paths.ts:47
 - **Problem:** bundleHealing.ts toBundleKey(clientFolder, absPath) = path.relative(...).replace(/\\/g, '/') maps disk paths into the bundle manifest's forward-slash key space, while bundle/plan.ts uses normalizePathForSet (paths.ts:47, p.replace(/\\/g, '/')) for the same forward-slash normalization. The two normalizers must agree exactly for the bundle-owned-path filter (createBundleRepairIssueFilter) to match the manifest keys, yet they are defined independently in different modules.
@@ -1674,6 +1866,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-133"></a>
 #### LL-133 · Mojang upload error-body extraction is generic and could move to the kit error model
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P3 · **Effort:** medium · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/main/services/skin/skin.ts:33-65 (extractMojangMessage / throwMojangUploadError)
 - **Problem:** extractMojangMessage reads isMinecraftKitError(error).context.responseBody (accessible via MinecraftKitErrorContext's [key: string]: unknown index signature; kit d.ts:848-860), JSON-parses it, and pulls errorMessage / details.status to turn a raw Mojang profile-mutation error into a human string. This is knowledge of the Mojang Services error envelope ({ errorMessage, details: { status } }) — a domain the kit owns (it produced responseBody).
@@ -1685,6 +1878,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-134"></a>
 #### LL-134 · bundleHealing verifyAndRepairExceptBundle hand-rolls the kit verify->plan->run sequence
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P3 · **Effort:** medium · **Change risk:** medium · **Flow:** Repair flow
 - **Area:** src/main/services/minecraft/bundleHealing.ts:65-102 (verifyAndRepairExceptBundle) vs src/main/services/minecraft/repairWorkflow.ts:78-99 (verifyAndRepairBase uses kit.repair.all)
 - **Problem:** Two parallel repair orchestrations exist over the same kit primitives. verifyAndRepairBase delegates to kit.repair.all with shouldRepairIssue (RepairAllOptions.shouldRepairIssue; kit d.ts:3438-3439). verifyAndRepairExceptBundle instead manually sequences kit.verify.minecraft.run, counts issues, builds kit.repair.minecraft.plan({ from, shouldRepairIssue }) (RepairAspect.plan with RepairPlanOptions; kit d.ts:3421-3424, 3456), then kit.repair.minecraft.run — re-implementing the verify->plan->run dance that kit.repair.all already encapsulates.
@@ -1699,6 +1893,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-135"></a>
 #### LL-135 · BundleSlug brand never defined — bundle slugs flow as raw string
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P1 · **Effort:** medium · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/shared/contracts/ids.ts:5-7 (only ClientSlug/ClientId/UserId branded); src/shared/contracts/client.ts:37,72 (bundleSlug: z.union([z.string(),z.null()]).optional / string|null|undefined); src/shared/contracts/bundle.ts:107 (LocalManifest.bundleSlug: string); src/main/services/bundle/api.ts:39 fetchRemoteManifest(slug: string); src/main/services/bundle/manager.ts:196,218,243
 - **Problem:** The code-guideline §1 gives `type BundleSlug = string & { readonly __brand: 'BundleSlug' }` as THE canonical example of a branded domain id, yet ids.ts only brands ClientSlug/ClientId/UserId. `bundleSlug` is a plain `string` in the Client type, in LocalManifest, in API_ROUTES.bundleRegistry.manifest(slug: string), and across the whole bundle service. Because both a client slug and a bundle slug are bare strings, nothing stops passing a ClientSlug where a bundle slug is expected (or vice-versa) — exactly the bug brands exist to prevent. This is sharpened by bundle events (BundleStatusEvent/BundleProgressEvent/BundleErrorEvent) being keyed by ClientSlugSchema, so two different slug concepts coexist untyped.
@@ -1711,6 +1906,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-136"></a>
 #### LL-136 · Status/code enums list every member twice (as const + parallel z.enum) — silent drift
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P1 · **Effort:** quick · **Change risk:** low · **Flow:** IPC flow
 - **Area:** src/shared/contracts/bundle.ts:7-39 (BundleSyncStatuses then BundleSyncStatusSchema re-lists all 13), bundle.ts:51-81 (BundleErrorCodes then BundleErrorCodeSchema re-lists all 12); src/shared/contracts/minecraft.ts:9-35 (InstallStatuses + InstallStatusSchema, 10 each), minecraft.ts:37-51 (ProgressStages + ProgressStageSchema), minecraft.ts:53-85 (MinecraftErrorCodes + MinecraftErrorCodeSchema, 13 each)
 - **Problem:** Each status/code set is declared once as an `as const` object and then its values are typed out a SECOND time by hand inside a `z.enum([...])`. There is no compile-time link between the two lists: adding BundleSyncStatuses.FOO does not force adding it to BundleSyncStatusSchema, so the schema will silently reject a value the union accepts (or vice-versa). This is a runtime-validation hole, not just verbosity — an event carrying a newly-added status would fail Zod parse at the IPC boundary.
@@ -1723,6 +1919,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-137"></a>
 #### LL-137 · StrapiList<T> hand-written type duplicates StrapiListSchema
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** IPC flow
 - **Area:** src/shared/contracts/strapi.ts:43-66 (StrapiListSchema factory at 43-54, then StrapiList<T> type literally re-typed at 56-66)
 - **Problem:** StrapiListSchema(itemSchema) already defines the {data, meta:{pagination:{page,pageSize,pageCount,total}}} shape, but immediately below it the same structure is written a second time as a standalone generic `type StrapiList<T>`. The two can drift — e.g. adding `meta.pagination.start` to the schema would not update the type, and consumers (contract.ts:65 `StrapiList<Client>`, clients.ts, renderer api.ts) would type-check against the stale shape while runtime data carries the new field.
@@ -1735,6 +1932,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-138"></a>
 #### LL-138 · Client renderer type is a hand-maintained near-copy of inferred ClientResponse
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Profile / version flow
 - **Area:** src/shared/contracts/client.ts:20-48 (ClientResponseSchema → ClientResponse) vs 54-81 (Client typed out field-by-field); normalizeClient in src/main/services/clients/clientsApi.ts:61-86 spreads ClientResponse into Client
 - **Problem:** Client repeats ~20 fields that already exist on the inferred ClientResponse (id, documentId, createdAt, updatedAt, publishedAt, title, available, servers, screenshots, background, poster, titleImage, keywords) and only genuinely changes a handful (slug→ClientSlug, versions→string, description→string, id→ClientId). Adding a field to the Strapi schema requires editing two places; forgetting the second leaves normalizeClient's `...client` spread carrying an untyped field. The fields that DO differ are the only ones worth stating.
@@ -1747,6 +1945,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-139"></a>
 #### LL-139 · ErrorCode union is hand-maintained alongside ERROR_CODES const
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/shared/constants/errorCodes.ts:1-22 (type ErrorCode union of 9 strings at 1-10, ERROR_CODES const re-listing the same 9 at 12-22 with `satisfies Record<string, ErrorCode>`)
 - **Problem:** The literal union ErrorCode and the ERROR_CODES const list the same nine codes. `satisfies Record<string,ErrorCode>` only checks the const conforms to the union, not that the union is complete — adding a member to ERROR_CODES without adding it to the union still fails (the new value isn't assignable to ErrorCode, surfacing as a confusing error on the const), and adding to the union without the const leaves a code with no runtime constant. isIpcError (ipc/errors.ts:15) relies on Object.values(ERROR_CODES) for runtime membership, so the const is the real runtime source — the union should be derived from it.
@@ -1759,6 +1958,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-140"></a>
 #### LL-140 · Fragmented error model: bundle/minecraft/login codes disconnected from IpcError.code
 
+- **Status:** TODO
 - **Category:** error-handling · **Priority:** P2 · **Effort:** medium · **Change risk:** medium · **Flow:** Error / recovery flow
 - **Area:** src/shared/constants/errorCodes.ts ErrorCode (UPPER_SNAKE: AUTH_NETWORK_ERROR…) used by IpcError; src/shared/contracts/bundle.ts:51-64 BundleErrorCodes (camelCase: downloadFailed…); src/shared/contracts/minecraft.ts:53-67 MinecraftErrorCodes (camelCase: networkError…); src/shared/contracts/auth.ts:111-117 LOGIN_ERROR_CODE (UPPER_SNAKE NETWORK_ERROR…); src/shared/ipc/errors.ts:3-7 IpcError{code: ErrorCode}
 - **Problem:** There are FOUR independent, stylistically inconsistent error-code vocabularies (errorCodes.ErrorCode UPPER_SNAKE, BundleErrorCodes camelCase, MinecraftErrorCodes camelCase, LOGIN_ERROR_CODE UPPER_SNAKE). IpcError.code is the shared cross-process model, but the highest-traffic flows — bundle sync, minecraft install/launch, and login — define their OWN code sets that are NEVER unified with ErrorCode. They travel as separate event/result payloads (BundleErrorEvent/MinecraftErrorEvent/LoginResult) rather than as IpcError. The renderer must maintain parallel localization maps and the docs' promise of a single {code,message,details} error contract is only partly true. The casing split (UPPER_SNAKE vs camelCase) means 'network error' appears as AUTH_NETWORK_ERROR, networkError, and NETWORK_ERROR.
@@ -1772,6 +1972,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-141"></a>
 #### LL-141 · RAM_DEFAULT_FALLBACK_MB is dead — declared and re-exported, never consumed
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Cross-cutting (no single flow)
 - **Area:** src/shared/constants/settings.ts:3 (RAM_DEFAULT_FALLBACK_MB = 4096); re-exported src/shared/constants/index.ts:5; grep shows zero consumers outside the declaration/re-export (system.ts only uses RAM_MIN_MB/RAM_STEP_MB; computeDefaultRamMb derives from the range)
 - **Problem:** RAM_DEFAULT_FALLBACK_MB = 4096 is exported through the barrel but has no consumer anywhere in src/. The actual default-RAM logic (main/infra/system.ts computeDefaultRamMb) derives from the computed range, not this constant. It is dead code that looks load-bearing because it sits next to the live RAM_MIN_MB/RAM_STEP_MB.
@@ -1784,6 +1985,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-142"></a>
 #### LL-142 · Pure domain units resolveLoader and accountFromSession have no tests
 
+- **Status:** TODO
 - **Category:** testing · **Priority:** P1 · **Effort:** quick · **Change risk:** low · **Flow:** Launch flow
 - **Area:** src/shared/domain/loader.ts:13-33 (isLoaderAvailable, resolveLoader — discriminated 'resolved'/'ambiguous' union); src/shared/contracts/account.ts:18-36 (accountFromSession — provider branching). No test file references resolveLoader or accountFromSession (grep across tests/ returns nothing); only settings.test.ts and schemas.test.ts cover shared.
 - **Problem:** resolveLoader is non-trivial precedence logic (honour valid override → forge+fabric ambiguous → forge → fabric → vanilla) that directly gates which loader is launched; a regression silently launches the wrong loader or wrongly reports ambiguity. accountFromSession maps each session provider to the renderer Account and decides the active Mojang skin. Both are exactly the 'pure logic' §11.1 names as the default test target, yet neither is covered. The settings family IS thoroughly tested — these two pure units are the gap.
@@ -1796,6 +1998,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-143"></a>
 #### LL-143 · API_ROUTES.clients.list embeds populate field names as ad-hoc literals
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Profile / version flow
 - **Area:** src/shared/constants/apiRoutes.ts:5-16 (six 'populate[<field>]=true' strings hand-built inline)
 - **Problem:** The clients.list route builder hardcodes six Strapi relation names ('screenshots','background','poster','titleImage','keywords','servers') as raw query-string fragments. These field names are a contract with both the Strapi schema and the ClientResponseSchema (client.ts:39-45) — they must stay in lockstep. Today they live in two unrelated places: the populate list here and the schema fields in client.ts. Adding a relation to the Client schema but forgetting the populate (or vice-versa) yields silently missing media at runtime.
@@ -1808,6 +2011,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-144"></a>
 #### LL-144 · UploadSkinPayloadSchema accepts an unbounded ArrayBuffer at the IPC boundary
 
+- **Status:** TODO
 - **Category:** IPC · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/shared/contracts/skin.ts:13-18 (buffer: z.custom<ArrayBuffer>(v => v instanceof ArrayBuffer)); validated payload reaches main/services/skin/skin.ts:171 where validatePngBuffer runs only AFTER the IPC handler accepted it
 - **Problem:** The skin-upload IPC schema only checks the buffer is an ArrayBuffer — no maximum size. The renderer can hand main an arbitrarily large buffer that is fully marshalled across IPC and buffered in the main process before validatePngBuffer (yggdrasil-core) ever inspects it. §5 says validate at the boundary; a multi-hundred-MB ArrayBuffer is a trivially-triggerable memory-pressure vector and the PNG validator only catches it post-transfer. The package also exports SKIN_VALID_DIMENSIONS/CAPE_VALID_DIMENSIONS, so the legal byte ceiling is known.
@@ -1820,6 +2024,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-145"></a>
 #### LL-145 · Account is a flat type while its source AuthSession is discriminated
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P3 · **Effort:** medium · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** src/shared/contracts/account.ts:10-16 (Account{provider: AuthProvider; email/skin/cape: T|null}) derived from discriminated AuthSession (auth.ts:97-102)
 - **Problem:** AuthSession is a clean provider-discriminated union, but accountFromSession flattens it into an Account whose `provider` is a non-discriminating field and whose email/skin/cape are always-present nullables. This loses the invariant the union encodes: for a yggdrasil session skin/cape/email are ALWAYS null at construction (account.ts:21-25 hardcodes them), whereas for mojang skin may be present and cape is never set. Consumers can't tell 'null because this provider never supplies it' from 'null because enrichment hasn't run yet' — a real distinction the enrichment path (auth verify.ts) depends on.
@@ -1832,6 +2037,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-146"></a>
 #### LL-146 · setClientOverride: five near-identical default-equality compaction blocks
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P3 · **Effort:** medium · **Change risk:** medium · **Flow:** Profile / version flow
 - **Area:** src/shared/domain/settingsOverrides.ts:31-84 (setClientOverride): four hand-written if-blocks at 45-74 deleting a field when it equals the global default, then compactOverride at 15-29
 - **Problem:** setClientOverride repeats the same 'if override field === global default, delete it' shape four times (memory.allocatedRamMb, storage.clientFolder, launch.console, launch.fullscreen), each a slightly different copy. The folder branch uses joinClientFolder, the others compare scalars, but the structure is duplicated and easy to get subtly wrong (e.g. the loader/runtime fields are NOT compacted against any default — possibly intentional, but the asymmetry is undocumented). The function is the most complex unit in the domain and is the riskiest to extend (adding a new overridable field means another bespoke block).
@@ -1844,6 +2050,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-147"></a>
 #### LL-147 · Two parallel validators for LauncherSettings: Zod schema vs hand-rolled normalizer
 
+- **Status:** TODO
 - **Category:** architecture · **Priority:** P2 · **Effort:** medium · **Change risk:** medium · **Flow:** Profile / version flow
 - **Area:** src/shared/contracts/settings.ts (LauncherSettingsSchema/ClientSettingsOverrideSchema — full Zod) vs src/shared/domain/settingsNormalization.ts:10-99 (normalizeRuntimeRef, normalizeLoaderChoice, normalizeClientOverride, normalizeLauncherSettings — hand-rolled typeof guards over the SAME shapes); both run together in store.ts:316-317
 - **Problem:** There are two full validators for LauncherSettings: the Zod schema in contracts/settings.ts and a parallel hand-written typeof-guard normalizer in domain/settingsNormalization.ts. The hand-rolled one re-derives the legal shape (LOADER_VALUES set, typeof checks per field, slug !== 'undefined'/'null' filtering) that the Zod schema already encodes. §5 says 'inside the validated boundary, trust the types' — but normalization re-implements validation. getStoredLauncherSettings (store.ts:316-317) even runs BOTH: LauncherSettingsSchema.safeParse then normalizeLauncherSettings on the already-parsed data. Drift risk is concrete: ClientSettingsOverrideSchema and normalizeClientOverride must agree field-for-field, and they're maintained independently.
@@ -1856,6 +2063,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-148"></a>
 #### LL-148 · joinClientFolder re-implements platform path joining in shared/
 
+- **Status:** TODO
 - **Category:** dependency-extraction · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Profile / version flow
 - **Area:** src/shared/domain/settingsDefaults.ts:11-15 (joinClientFolder hand-checks trailing '/' or backslash and inserts a '/' separator)
 - **Problem:** joinClientFolder hand-rolls a slash/backslash-aware path join in the platform-agnostic shared layer because shared cannot import node:path. It picks '/' as the separator regardless of OS, then derives clientFolder used downstream as a real filesystem path. This is generic path logic; at minimum it should be a single well-tested helper rather than inline separator detection that silently normalizes Windows paths to forward slashes. The kit-extraction angle is weaker: the kit does NOT currently export a path-join helper, so 'move it into the kit' is a speculative new export, not a swap for an existing one.
@@ -1870,6 +2078,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-149"></a>
 #### LL-149 · Section-divider banner comments in bundle/manager.ts (exact §10-forbidden pattern)
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P2 · **Effort:** quick · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/manager.ts:89, :204, :465
 - **Problem:** Line 89: `// Public API ---------------------------------------------------------------`; line 204: `// Internal -----------------------------------------------------------------`; line 465: `// Plan helpers — exported only for tests.` The first two are textbook section-divider banners that convey nothing the code does not (the `private` keyword and class layout already mark the boundary).
@@ -1882,6 +2091,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-150"></a>
 #### LL-150 · Struct field-label restate comments in bundle/runner.ts
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/runner.ts:35, :39, :44 (type SyncTask block, lines 25-47)
 - **Problem:** Line 35: `// Throughput accounting for the renderer's KB/s readout.` above `bytesDownloaded`/`speedWindowStart`/`speedWindowBytes`; line 39: `// Per-file progress counters.` above `processedFiles`/`totalFiles`; line 44: `// Pending work queues — runner shifts from these as workers pull tasks.` above `pendingDownloads`/`pendingDeletes`. These label self-describing fields whose names already state the same thing.
@@ -1894,6 +2104,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-151"></a>
 #### LL-151 · One-line restate comments in minecraft install/uninstall and infra/system
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/minecraft/install.ts:93; src/main/infra/system.ts:117; src/main/services/bundle/api.ts:96
 - **Problem:** install.ts:93: `// Plan + tracker + run.` directly above `const tryInstall = async (...)` whose body is literally plan → tracker → run — pure restatement of the function body. system.ts:117: `// skip unreadable file` inside an empty `catch {}` that obviously skips. bundle/api.ts:96: `// Re-export so callers can instanceof without importing from infra.` borders on restate but encodes a real reason (avoid an infra import) so is a KEEP-or-trim judgement.
@@ -1906,6 +2117,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-152"></a>
 #### LL-152 · installSteps.ts mixes a few what-restate lines into otherwise excellent why-comments
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Renderer / UI flow
 - **Area:** src/renderer/features/clients/components/install/installSteps.ts:107-108, :130, :160-161; :33
 - **Problem:** Line 107-108: `// Apply per-stage progress fields to a step, skipping undefined to respect exactOptionalPropertyTypes.` — first clause restates `applyProgress`, only the second clause is a real why. Line 130: `// Mark every step strictly before current (in render order) as DONE.` restates the helper name/body. Line 160-161: `// Build the step-flow view ... Returns null when nothing is in progress — the card collapses immediately.` restates the function name but the null→collapse note is real. Line 33: `// 0..100, only meaningful when state is ACTIVE or PAUSED.` is borderline (the range is a real constraint).
@@ -1918,6 +2130,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-153"></a>
 #### LL-153 · Prop-documentation comments that restate the prop name (CopyButton, SettingsGroup)
 
+- **Status:** TODO
 - **Category:** UI · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Renderer / UI flow
 - **Area:** src/renderer/shared/ui/CopyButton.tsx:48; src/renderer/shared/ui/SettingsGroup.tsx:8-21 (partial)
 - **Problem:** CopyButton.tsx:48: `// The exact text written to the clipboard on click.` above a prop named `text` — restates the name. The neighbouring prop comments (variant 50-52, children/success-icon override 54-55, copyLabel/aria-label default 57-58) document genuinely non-obvious defaults and lean KEEP. SettingsGroup.tsx:8-21 similarly documents conditional-render rules ('Only shown when there is a header (i.e. when title is set OR rightSlot itself is non-null)') which is a real invariant, mixed with className-default descriptions that border on what-restate.
@@ -1930,6 +2143,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-154"></a>
 #### LL-154 · Field-label comments in bundleHealing.ts and plan.ts result types (mostly KEEP, a few trim)
 
+- **Status:** TODO
 - **Category:** code · **Priority:** P3 · **Effort:** quick · **Change risk:** low · **Flow:** Repair flow
 - **Area:** src/main/services/minecraft/bundleHealing.ts:15-16, :18, :20-22; src/main/services/bundle/plan.ts:18-20, :21
 - **Problem:** bundleHealing.ts:15-16: `// Files the bundle currently owns — never repaired even if kit verify flags them as wrong-sha1 (the bundle deliberately overrides vanilla).` and :20-22: `// True when the underlying verify call ran successfully (regardless of whether a repair was needed).` plan.ts:21: `// Sum of toDownload + toUpdate sizes (for the progress bar denominator).` These label result-struct fields; the ownership note and verify-vs-repair nuance encode real non-obvious semantics and KEEP, but plan.ts:21 edges into restate of an obvious sum.
@@ -1943,6 +2157,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-155"></a>
 #### LL-155 · Representative KEEP set — non-obvious 'why' comments the cleanup must NOT strip
 
+- **Status:** TODO
 - **Category:** docs · **Priority:** P1 · **Effort:** quick · **Change risk:** low · **Flow:** Cross-cutting (no single flow)
 - **Area:** src/main/services/bundle/manager.ts:119-120,152-153,158-159,444-447; src/main/services/minecraft/launch.ts:40-46,61-68; src/main/infra/store.ts:103-104,119-120,231-234; src/main/services/system/routes.ts:57-60; src/renderer/shared/lib/queryClient.ts:26-27,33-36; src/renderer/console/hooks/useConsoleStream.ts:121-122; src/main/config.ts:1-6; src/main/index.ts:1-6; src/renderer/shared/lib/queryPersister.ts:10-12
 - **Problem:** These comments encode invariants, workarounds, and platform caveats that are invisible from the code and would cause real bugs if a future edit ignored them: cooperative pause/cancel abort rationale (manager.ts:119-120,152-153,158-159,444-447), the zero-GUID Azure-id placeholder + Cloudflare-blocks-bare-Java-UA workaround (launch.ts:40-46), the kit-launch-is-offline-so-reclassify-as-repairable reasoning (launch.ts:61-68), the schema-migration gap-in-chain abort (store.ts:119-120) and legacy-session drop (store.ts:231-234), clipboard-via-main-because-permission-handler-denies-navigator (system/routes.ts:57-60), MutationCache-vs-defaultOptions fires-for-every-mutation (queryClient.ts:33-36), queueMicrotask-not-RAF-because-occluded-windows (useConsoleStream.ts:121-122), Vite-only-substitutes-literal-process.env-accesses (config.ts:1-6), Squirrel-startup-must-run-first (index.ts:1-6), and app-version-must-be-volatile-because-Squirrel-swaps-binary (queryPersister.ts:10-12).
@@ -1954,6 +2169,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-156"></a>
 #### LL-156 · Reinforce code-guideline §10 + strip meaningless comments repo-wide
 
+- **Status:** TODO
 - **Category:** docs · **Priority:** P1 · **Effort:** quick · **Change risk:** low · **Flow:** Cross-cutting (no single flow)
 - **Area:** docs/code-guideline.md §10 Comments (lines 442-451); applies to all of src/**/*.{ts,tsx}
 - **Problem:** §10 (docs/code-guideline.md lines 442-451) currently states the principle ('default no comments', 'only non-obvious why', 'no what', 'no ticket/author refs', 'no multi-line docstrings') but gives no REMOVE/KEEP exemplars and does not explicitly name the two patterns that still slipped into the codebase: section-divider banners (bundle/manager.ts:89,204) and prop/field-label restate comments. The rule is correct but under-specified for an automated enforcement pass.
@@ -2381,6 +2597,30 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 - [LL-024](#ll-024) — Architecture doc's IPC contract example and updater section are stale vs the real contract
 - [LL-155](#ll-155) — Representative KEEP set — non-obvious 'why' comments the cleanup must NOT strip
 - [LL-156](#ll-156) — Reinforce code-guideline §10 + strip meaningless comments repo-wide
+
+## Session log
+
+One entry per working session, newest at the bottom. Keep it terse.
+
+<!-- template — copy, fill, append:
+### <YYYY-MM-DD> — <n> task(s)
+- Done: LL-0xx (<sha>), LL-0yy (<sha>)
+- Packages built + vendored into launcher node_modules (await npm publish): <none | minecraft-kit | yggdrasil-core>
+- Blocked: LL-0zz — <reason>
+- Next suggested batch: LL-…, LL-…
+-->
+
+_No sessions yet._
+
+## Pending package release (publish at the very end, then bump pins)
+
+Tasks that modify a library leave its freshly built `dist/` **vendored** into the launcher's
+`node_modules`, but the package is **not** published and the launcher pin is **not** bumped yet.
+List packages with un-published changes here so the final release step knows what to publish and
+re-pin (the launcher pins `@loontail/minecraft-kit` to an exact version; yggdrasil pins are `^0.0.6`).
+
+- `@loontail/minecraft-kit` — _none yet_
+- `@loontail/yggdrasil-core` / `@loontail/yggdrasil-client` — _none yet_
 
 ## 9. Appendix — candidate findings rejected on verification
 
