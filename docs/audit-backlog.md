@@ -36,6 +36,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-01 — store.ts runs purgeLegacyAuth() and runMigrations() as module-level side-effects at import time
 
+- **Status:** DONE — 2026-05-31 · commit 263c086
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Medium · _(auditor: arch-boundaries)_
 - **Area:** src/main/infra/store.ts:147 (runMigrations), 261 (purgeLegacyAuth)
 - **Problem:** `purgeLegacyAuth()` and `runMigrations()` are called unconditionally at module load (lines 261, 147). These functions read from and write to the electron-store. Any file that imports from store.ts — directly or transitively — triggers store I/O at import time. This makes unit testing any consumer of `getStoredAuth` / `getStoredLauncherSettings` impossible without mocking the electron-store module globally.
@@ -358,6 +359,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-01 — forgeProcessorActionsCache is a process-global module-level mutable Map with no eviction
 
+- **Status:** DONE — 2026-05-31 · commit e30237e
 - **Category:** Code · **Priority:** P1 · **Risk:** Medium · _(auditor: arch-boundaries)_
 - **Area:** src/main/services/minecraft/forgeProcessorHealing.ts:18, clearForgeProcessorActionCache:60
 - **Problem:** `forgeProcessorActionsCache` is a module-level `Map<string, ...>` that accumulates an entry per (directory, mc-version, loader-version, installer-url) tuple every time an install plan is computed. It is never cleared in the normal lifecycle — `clearForgeProcessorActionCache` exists but is not called from MinecraftManager dispose or anywhere in the shipped flow. If a user installs and uninstalls many different Forge clients, the map grows unboundedly in memory for the process lifetime.
@@ -1232,6 +1234,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-04 — Module-level forgeProcessorActionsCache is never cleared on uninstall or client-folder change
 
+- **Status:** DONE — 2026-05-31 · commit e30237e
 - **Category:** Code · **Priority:** P1 · **Risk:** Medium · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/forgeProcessorHealing.ts
 - **Problem:** forgeProcessorActionsCache (line 18) is a module-level Map that lives for the full process lifetime. clearForgeProcessorActionCache() (line 60) is exported but never called from uninstall.ts, manager.ts, or any lifecycle hook. After an uninstall-reinstall cycle (e.g. Forge version bumped in Strapi), the cache key stays the same (target.directory + versions) and the stale processor list from the previous install silently skips the fresh check, causing the up-to-date shortcut to fire against a clean, empty folder.
@@ -1384,6 +1387,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-19 — forgeProcessorActionsCache is a module-level mutable singleton — hidden shared state, not disposed on uninstall
 
+- **Status:** DONE — 2026-05-31 · commit e30237e
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Medium · _(auditor: code-quality)_
 - **Area:** src/main/services/minecraft/forgeProcessorHealing.ts (L18)
 - **Problem:** `const forgeProcessorActionsCache = new Map<string, readonly RunForgeProcessorAction[]>()` at module level (L18) is a permanent, unscoped cache. `clearForgeProcessorActionCache()` exists (L61) but is never called from uninstall or from the test setup. If a client is uninstalled and reinstalled with a different Forge version, the old cached actions keyed by the prior target's full version may still be present. The cache key includes the target directory, installer URL, and minecraft version, but not the kit version — a kit upgrade could change processor semantics while the cache key stays the same.
@@ -1404,6 +1408,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-21 — forgeProcessorActionsCache is a module-level mutable Map — untestable global state
 
+- **Status:** DONE — 2026-05-31 · commit e30237e
 - **Category:** Code · **Priority:** P2 · **Risk:** Medium · _(auditor: error-logging-model)_
 - **Area:** src/main/services/minecraft/forgeProcessorHealing.ts lines 18, 60-62
 - **Problem:** forgeProcessorActionsCache (line 18) is a module-level Map that persists across repair calls in the same process lifetime. clearForgeProcessorActionCache (lines 60-62) is exported but never called from production code (only intended for tests). The cache is populated in rememberForgeProcessorActions (install.ts line 100) and consumed in repairMissingForgeProcessorOutputs. If a Forge version changes between install and repair without a restart, the stale cache can cause the repair to skip re-running processors.
@@ -1424,6 +1429,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-23 — forgeProcessorActionsCache is a module-level singleton that leaks between test runs
 
+- **Status:** DONE — 2026-05-31 · commit e30237e
 - **Category:** Testing · **Priority:** P1 · **Risk:** Medium · _(auditor: testability)_
 - **Area:** src/main/services/minecraft/forgeProcessorHealing.ts:18
 - **Problem:** forgeProcessorActionsCache is declared as a module-level Map at line 18. clearForgeProcessorActionCache() exists but is never called from tests in tests/main/services/minecraft/forgeProcessorHealing.test.ts (nor in install.test.ts which exercises rememberForgeProcessorActions). If tests run in the same module scope and one test seeds the cache, subsequent tests observe stale cache state.
@@ -1464,6 +1470,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-27 — Fix module-level `forgeProcessorActionsCache` singleton in forgeProcessorHealing.ts: it survives across test runs and between kit re-initialisations
 
+- **Status:** DONE — 2026-05-31 · commit e30237e
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Medium · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/minecraft/forgeProcessorHealing.ts
 - **Problem:** `forgeProcessorActionsCache` (line 18) is a module-level `Map` that is never cleared except via the exported `clearForgeProcessorActionCache()`. There is no caller of `clearForgeProcessorActionCache` visible in the service layer (only exported for tests). The cache is keyed by `(directory, minecraft.version, loader.fullVersion, installerUrl)` (lines 34-39), which is stable for a given install, but if the same process reinstalls a client at the same path with a different Forge version and the key changes, the old entry is never evicted.
@@ -1484,6 +1491,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-29 — `forgeProcessorActionsCache` is a module-level Map with no eviction — grows unbounded across repairs
 
+- **Status:** DONE — 2026-05-31 · commit e30237e
 - **Category:** Performance · **Priority:** P2 · **Risk:** Medium · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/minecraft/forgeProcessorHealing.ts
 - **Problem:** Line 18: `const forgeProcessorActionsCache = new Map<string, readonly RunForgeProcessorAction[]>();` — this cache is keyed by a JSON string of [directory, mcVersion, forgeVersion, installerUrl] and is never evicted except via `clearForgeProcessorActionCache()`. In a long-running launcher session where users install and repair multiple clients across different Forge versions, entries accumulate. `clearForgeProcessorActionCache()` is exported but it is unclear when (if ever) it is called from outside the module.
@@ -1944,6 +1952,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-01 — `LoginForm.tsx` merges Yggdrasil and Mojang error state from two different hooks, creating ambiguous error display
 
+- **Status:** DONE — 2026-05-31 · commit 7e58f23
 - **Category:** UI · **Priority:** P2 · **Risk:** Low · _(auditor: auth-session-flow)_
 - **Area:** src/renderer/features/auth/components/LoginForm.tsx:31
 - **Problem:** Line 31: `const displayedError = errorCode ?? mojang.errorCode;` combines the error state from `useLogin` (Yggdrasil) and `useMojangLogin` (Microsoft) into a single display expression. If both have an error simultaneously (e.g. a network error from a previous Yggdrasil attempt followed by a browser-open failure), the Mojang error is silently dropped. Also, `clearError` (called before Mojang sign-in at line 107) only clears the Yggdrasil error — `mojang.errorCode` has no external `clearError` call in the Microsoft button handler.
@@ -1954,6 +1963,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-02 — The `useCurrentUser` hook exposes `isPending` but not `isError`, so the renderer cannot distinguish 'loading' from 'auth server unreachable'
 
+- **Status:** DONE — 2026-05-31 · commit b680ee7
 - **Category:** UI · **Priority:** P3 · **Risk:** Low · _(auditor: auth-session-flow)_
 - **Area:** src/renderer/features/auth/hooks.ts:34-41
 - **Problem:** Lines 34-41: `useCurrentUser` returns `{ user, isPending }`. If `fetchCurrentUser` (the `authMe` IPC call) throws (e.g. the main process is not initialised, or an IPC error occurs), TanStack Query's `query.data` is `undefined` and `query.isPending` is `false`, but `query.isError` is `true`. The caller cannot distinguish 'network check in flight' from 'network check failed — using cached data' from 'not signed in'.
@@ -1975,6 +1985,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-04 — Status-seed concurrency queue is module-level mutable state — leaks across test runs
 
+- **Status:** DONE — 2026-05-31 · commit 7f3d665
 - **Category:** тестирование · **Priority:** P2 · **Risk:** Low · _(auditor: download-install-flow)_
 - **Area:** src/renderer/features/bundle/hooks.ts
 - **Problem:** activeStatusSeedCount (line 11), statusSeedQueue (line 12), and statusSeedRequests (line 13) are module-level variables. They persist for the entire lifetime of the module, which means test runs that import this module share state across tests unless they explicitly reset it. The _internals pattern used for bundle manager doesn't exist here, so there is no official reset path.
@@ -2615,6 +2626,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-15 — store.ts runs module-level side effects (runMigrations, purgeLegacyAuth) at import time — untestable and order-dependent
 
+- **Status:** DONE — 2026-05-31 · commit 263c086 (duplicate of AUTH-01)
 - **Category:** Architecture · **Priority:** P1 · **Risk:** Medium · _(auditor: code-quality)_
 - **Area:** src/main/infra/store.ts (L147, L261)
 - **Problem:** `runMigrations()` (L147) and `purgeLegacyAuth()` (L261) are called at module level (top-level statements, not inside a function). Any test that imports store.ts will execute these side effects, requiring a live electron-store or a mock. Module-level side effects also make the initialization order fragile — if `app.getPath` is called before Electron's `app.ready`, it throws.
@@ -3442,6 +3454,48 @@ or blocked work. Pick the highest-priority available task (P0 → P1 → P2 → 
 _None._ No task this cycle changed `@loontail/minecraft-kit` or `loontail-yggdrasil`.
 
 ## Session log
+
+### 2026-05-31 (session 5)
+
+- **Done (12 task IDs across 5 commits):**
+  - `DLI-01` (P1) + `REP-04` (P1) + `REP-19`/`REP-21`/`REP-27`/`REP-29` (P2) +
+    `REP-23` (P1) — the module-level `forgeProcessorActionsCache` singleton is
+    replaced by a `createForgeProcessorCache()` factory whose instance lives on
+    `ManagerEnv` (created in the `MinecraftManager` constructor). `install.ts`
+    seeds it, `repairWorkflow.ts` reads it, and `uninstall.ts` clears it — so the
+    cache is scoped to the service lifecycle, cleared on uninstall, and isolated
+    per test instead of leaking process-globally · commit e30237e
+  - `UI-04` (P2) — bundle status-seed concurrency state (`activeCount`, queue,
+    in-flight request map) moved out of module scope into a
+    `createStatusSeeder()` factory (`statusSeeder.ts`) with a `reset()`; the hook
+    uses one module instance and the seeder is unit-tested in isolation · commit 7f3d665
+  - `UI-02` (P3) — `useCurrentUser` now exposes `isError`/`error`; `App` treats a
+    failed auth check (user `undefined`, not `null`) as signed-out and renders the
+    login screen instead of a blank main area · commit b680ee7
+  - `UI-01` (P2) — `useMojangLogin` gained a `clearError`; the credentials submit
+    clears any stale Microsoft-flow error so the merged `displayedError` shows
+    only the active flow's error · commit 7e58f23
+  - `AUTH-01` (P2) + `CC-15` (P1, duplicate) — `runMigrations()` and
+    `purgeLegacyAuth()` are no longer import-time side effects; they live in an
+    exported `initStore()` called once from `main/index.ts` after `whenReady`.
+    Importing the store module is now I/O-free, with a test asserting no
+    migration/purge happens until `initStore()` runs · commit 263c086
+- **Packages built / pending publish:** none.
+- **Blocked:** none.
+- **Verification:** `npm run verify` — lint, typecheck, test (387 tests, up from
+  380), build all green.
+- **Notes:** `UI-01`'s suggested UI integration test was omitted — the repo has no
+  jsdom/testing-library setup and code-guideline §11 forbids UI component unit
+  tests; the error-clearing is trivial hook→component wiring. The forge-cache
+  cluster collapsed seven overlapping task IDs into one instance-scoping fix.
+- **Suggested next batch:** the auth/skin boundary cluster — `AUTH-02`
+  (`YggdrasilClient` module singleton → DI through a `createYggdrasilClient`
+  factory threaded into auth + skin services), `AUTH-06` (move `withRefreshedProfile`
+  onto the auth public surface), `AUTH-07` (skin service writes session state via
+  an auth-service method instead of `getStoredAuth`/`setStoredAuth`). These three
+  interlock (they all restructure skin's coupling to auth/yggdrasilClient/store)
+  and touch the user-sensitive auth path, so they want a dedicated pass with
+  routes/verify/auth/skin tests updated together.
 
 ### 2026-05-31 (session 4)
 
