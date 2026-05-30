@@ -1,4 +1,4 @@
-import type { MinecraftKit } from '@loontail/minecraft-kit';
+import { type MinecraftKit, assertNever } from '@loontail/minecraft-kit';
 import { scopedLogger } from '@main/infra/logger';
 import {
   ClientOperationDomains,
@@ -173,16 +173,29 @@ export class MinecraftManager {
   cancel(slug: ClientSlug): void {
     const op = this.ops.get(slug);
     if (!op) return;
-    if (op.kind === OpKinds.INSTALL) {
-      op.cancelled = true;
-      op.pauseController.resume();
-      op.abort.abort();
-    } else if (op.kind === OpKinds.REPAIR) {
-      op.abort.abort();
-    } else if (op.kind === OpKinds.BUNDLE_SYNCING) {
-      op.abort.abort();
-    } else if (op.kind === OpKinds.LAUNCH_STARTING) {
-      op.abort.abort();
+    switch (op.kind) {
+      case OpKinds.INSTALL:
+        op.cancelled = true;
+        op.pauseController.resume();
+        op.abort.abort();
+        return;
+      case OpKinds.REPAIR:
+      case OpKinds.BUNDLE_SYNCING:
+      case OpKinds.LAUNCH_STARTING:
+        op.abort.abort();
+        return;
+      case OpKinds.UNINSTALL:
+        // Uninstall is an atomic file removal with no abort controller, so there
+        // is nothing to interrupt. Warn so a Stop click during uninstall is
+        // traceable instead of vanishing as a silent no-op.
+        logger.warn(`[${slug}] cancel ignored: uninstall is not cancellable`);
+        return;
+      case OpKinds.LAUNCH:
+        // The spawned game session is owned by the kit; it is torn down via
+        // `stop()` (user-stop), never aborted here.
+        return;
+      default:
+        assertNever(op);
     }
   }
 
@@ -271,20 +284,28 @@ export class MinecraftManager {
     if (op?.kind === OpKinds.LAUNCH) op.session.abort('user-stop');
   }
 
-  // Called on app shutdown so install/repair ops are told to abort before the
-  // process exits. Launching ops are left alone — kit owns the spawned game
-  // session and killing it from here would interrupt the user's actual play.
+  // Called on app shutdown so abortable ops are told to stop before the process
+  // exits — including an in-flight bundle sync, whose open socket would
+  // otherwise block Electron's quit until the request times out.
   cancelAll(): void {
     const slugs = [...this.ops.keys()];
     for (const slug of slugs) {
       const op = this.ops.get(slug);
       if (!op) continue;
-      if (
-        op.kind === OpKinds.INSTALL ||
-        op.kind === OpKinds.REPAIR ||
-        op.kind === OpKinds.LAUNCH_STARTING
-      ) {
-        this.cancel(slug);
+      switch (op.kind) {
+        case OpKinds.INSTALL:
+        case OpKinds.REPAIR:
+        case OpKinds.BUNDLE_SYNCING:
+        case OpKinds.LAUNCH_STARTING:
+          this.cancel(slug);
+          break;
+        case OpKinds.UNINSTALL:
+        case OpKinds.LAUNCH:
+          // UNINSTALL is uninterruptible; LAUNCH is the user's live game session
+          // (kit-owned) — neither is aborted on shutdown.
+          break;
+        default:
+          assertNever(op);
       }
     }
   }
