@@ -15,7 +15,6 @@ import { scopedLogger } from '@main/infra/logger';
 import type { ClientSlug } from '@shared/contracts/ids';
 
 const logger = scopedLogger('forge.processors');
-const forgeProcessorActionsCache = new Map<string, readonly RunForgeProcessorAction[]>();
 
 export type ProcessorHealOutcome = {
   // True when target was Forge and at least one missing/wrong output was repaired.
@@ -50,15 +49,30 @@ const processorActionsFrom = (
       action.kind === InstallActionKinds.RUN_FORGE_PROCESSOR,
   );
 
-export const rememberForgeProcessorActions = (plan: InstallPlan): void => {
-  if (!isForgePlanTarget(plan.target)) return;
-  const key = forgeProcessorCacheKey(plan.target);
-  if (key === null) return;
-  forgeProcessorActionsCache.set(key, processorActionsFrom(plan.actions));
+export type ForgeProcessorCache = {
+  remember: (plan: InstallPlan) => void;
+  get: (target: Target) => readonly RunForgeProcessorAction[] | undefined;
+  clear: () => void;
 };
 
-export const clearForgeProcessorActionCache = (): void => {
-  forgeProcessorActionsCache.clear();
+// Scoped to the MinecraftManager lifecycle (created in its constructor, cleared
+// on uninstall) instead of a module-level singleton, so the entries can't leak
+// across clients or test runs and don't grow unbounded for the process lifetime.
+export const createForgeProcessorCache = (): ForgeProcessorCache => {
+  const entries = new Map<string, readonly RunForgeProcessorAction[]>();
+  return {
+    remember: (plan) => {
+      if (!isForgePlanTarget(plan.target)) return;
+      const key = forgeProcessorCacheKey(plan.target);
+      if (key === null) return;
+      entries.set(key, processorActionsFrom(plan.actions));
+    },
+    get: (target) => {
+      const key = forgeProcessorCacheKey(target);
+      return key === null ? undefined : entries.get(key);
+    },
+    clear: () => entries.clear(),
+  };
 };
 
 const sha1OfFile = async (filePath: string): Promise<string | null> => {
@@ -117,14 +131,14 @@ export const repairMissingForgeProcessorOutputs = async (
   kit: MinecraftKit,
   slug: ClientSlug,
   target: Target,
+  cache: ForgeProcessorCache,
   options: ProcessorHealOptions = {},
 ): Promise<ProcessorHealOutcome> => {
   if (target.loader.type !== Loaders.FORGE) {
     return { ranProcessors: false, reranCount: 0 };
   }
 
-  const cacheKey = forgeProcessorCacheKey(target);
-  const cachedProcessors = cacheKey === null ? undefined : forgeProcessorActionsCache.get(cacheKey);
+  const cachedProcessors = cache.get(target);
   if (cachedProcessors !== undefined) {
     const cachedBrokenIndices = await brokenProcessorIndices(cachedProcessors);
     if (cachedBrokenIndices.size === 0) {
@@ -139,7 +153,7 @@ export const repairMissingForgeProcessorOutputs = async (
     target,
     options.signal ? { signal: options.signal } : undefined,
   );
-  rememberForgeProcessorActions(plan);
+  cache.remember(plan);
   const processors = processorActionsFrom(plan.actions);
   if (processors.length === 0) return { ranProcessors: false, reranCount: 0 };
 

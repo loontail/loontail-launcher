@@ -25,6 +25,7 @@ import type { Broadcaster } from './broadcast';
 import { buildContext } from './context';
 import type { ManagerEnv } from './env';
 import { ManagerError } from './errors';
+import { createForgeProcessorCache } from './forgeProcessorHealing';
 import { beginInstall, runInstall } from './install';
 import { requireAccount, runLaunch } from './launch';
 import { OP_TO_STATUS, type Op, OpKinds, type RepairOp } from './ops';
@@ -64,6 +65,7 @@ export class MinecraftManager {
       kit,
       broadcaster,
       ops: this.ops,
+      forgeProcessorCache: createForgeProcessorCache(),
       logger,
       emitStatus: (payload: MinecraftStatusEvent) => broadcaster.status(payload),
       emitError: (slug, code, message) => broadcaster.error({ slug, code, message }),

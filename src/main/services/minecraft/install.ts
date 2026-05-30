@@ -6,7 +6,6 @@ import { InstallStatuses } from '@shared/contracts/minecraft';
 import type { Context } from './context';
 import type { ManagerEnv } from './env';
 import { classifyError } from './errors';
-import { rememberForgeProcessorActions } from './forgeProcessorHealing';
 import { persistTargetInstallManifest } from './installManifest';
 import { type InstallOp, OpKinds } from './ops';
 import { createPlannedProgressAdapter, runWithProgressAdapter } from './progressAdapter';
@@ -86,7 +85,7 @@ const tryInstall = async (
   op: InstallOp,
 ): Promise<void> => {
   const plan = await env.kit.install.plan(ctx.target, { signal: op.abort.signal });
-  rememberForgeProcessorActions(plan);
+  env.forgeProcessorCache.remember(plan);
   env.logger.info(
     `[${slug}] install: plan ready — ${plan.totalActions} actions, ${plan.totalBytes} bytes`,
   );

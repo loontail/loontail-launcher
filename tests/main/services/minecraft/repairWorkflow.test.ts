@@ -33,6 +33,7 @@ vi.mock('@main/services/minecraft/runtimeState', () => ({
 
 import type { Context } from '@main/services/minecraft/context';
 import type { ManagerEnv } from '@main/services/minecraft/env';
+import { createForgeProcessorCache } from '@main/services/minecraft/forgeProcessorHealing';
 import {
   ensureLaunchable,
   finalizeRepairCancellation,
@@ -78,6 +79,7 @@ const env = (): ManagerEnv => {
     kit: {} as MinecraftKit,
     broadcaster,
     ops: new Map<ClientSlug, never>(),
+    forgeProcessorCache: createForgeProcessorCache(),
     logger: logger(),
     emitStatus: broadcaster.status,
     emitError: vi.fn(),

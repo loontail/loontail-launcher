@@ -132,6 +132,7 @@ export const healForgeProcessors = async (
     env.kit,
     slug,
     ctx.target,
+    env.forgeProcessorCache,
     options,
   );
   if (processorOutcome.ranProcessors) {

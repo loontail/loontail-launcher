@@ -35,6 +35,7 @@ export const runUninstall = async (
     await fs.rm(folder, { recursive: true, force: true });
     await clearTargetInstallManifest(folder);
     env.clearRuntimeOverride(slug);
+    env.forgeProcessorCache.clear();
     env.emitStatus({ slug, status: InstallStatuses.NOT_INSTALLED, paused: false });
   } catch (error) {
     env.logger.error(`[${slug}] uninstall failed`, error);
@@ -49,6 +50,7 @@ export const runUninstall = async (
     if (!(await isAnythingInstalled(folder))) {
       env.logger.warn(`[${slug}] uninstall: residual files remain but markers are gone`);
       env.clearRuntimeOverride(slug);
+      env.forgeProcessorCache.clear();
       env.emitStatus({ slug, status: InstallStatuses.NOT_INSTALLED, paused: false });
     } else {
       env.emitError(slug, MinecraftErrorCodes.UNINSTALL_LOCKED, errorMessage(error));

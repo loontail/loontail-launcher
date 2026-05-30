@@ -12,6 +12,7 @@ import {
 } from '@loontail/minecraft-kit';
 import type { Context } from '@main/services/minecraft/context';
 import type { ManagerEnv } from '@main/services/minecraft/env';
+import { createForgeProcessorCache } from '@main/services/minecraft/forgeProcessorHealing';
 import { runInstall } from '@main/services/minecraft/install';
 import {
   createTargetInstallManifest,
@@ -152,6 +153,7 @@ const env = (kit: MinecraftKit, ops: Map<ClientSlug, Op>): ManagerEnv => {
     kit,
     broadcaster,
     ops,
+    forgeProcessorCache: createForgeProcessorCache(),
     logger: logger(),
     emitStatus: broadcaster.status,
     emitError: vi.fn(),

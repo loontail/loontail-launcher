@@ -11,8 +11,8 @@ import {
   type Target,
 } from '@loontail/minecraft-kit';
 import {
-  clearForgeProcessorActionCache,
-  rememberForgeProcessorActions,
+  type ForgeProcessorCache,
+  createForgeProcessorCache,
   repairMissingForgeProcessorOutputs,
 } from '@main/services/minecraft/forgeProcessorHealing';
 import { asClientSlug } from '@shared/contracts/ids';
@@ -22,6 +22,7 @@ const SLUG = asClientSlug('forge-client');
 const OUTPUT_CONTENT = 'processor-output';
 
 let tempRoot = '';
+let cache: ForgeProcessorCache;
 
 const sha1 = (value: string): string => createHash('sha1').update(value).digest('hex');
 
@@ -69,12 +70,11 @@ const processorPlan = (processorOutput: string): InstallPlan => ({
 });
 
 beforeEach(async () => {
-  clearForgeProcessorActionCache();
+  cache = createForgeProcessorCache();
   tempRoot = await fs.mkdtemp(path.join(tmpdir(), 'forge-healing-'));
 });
 
 afterEach(async () => {
-  clearForgeProcessorActionCache();
   if (tempRoot) {
     await fs.rm(tempRoot, { recursive: true, force: true });
     tempRoot = '';
@@ -86,14 +86,14 @@ describe('repairMissingForgeProcessorOutputs', () => {
     const processorOutput = path.join(tempRoot, 'versions', 'forge', 'processed.jar');
     await fs.mkdir(path.dirname(processorOutput), { recursive: true });
     await fs.writeFile(processorOutput, OUTPUT_CONTENT, 'utf8');
-    rememberForgeProcessorActions(processorPlan(processorOutput));
+    cache.remember(processorPlan(processorOutput));
     const kit = {
       install: {
         plan: vi.fn(),
       },
     } as unknown as MinecraftKit;
 
-    await expect(repairMissingForgeProcessorOutputs(kit, SLUG, target())).resolves.toEqual({
+    await expect(repairMissingForgeProcessorOutputs(kit, SLUG, target(), cache)).resolves.toEqual({
       ranProcessors: false,
       reranCount: 0,
     });
@@ -106,7 +106,7 @@ describe('repairMissingForgeProcessorOutputs', () => {
     await fs.mkdir(path.dirname(processorOutput), { recursive: true });
     await fs.writeFile(processorOutput, 'broken-output', 'utf8');
     const plan = processorPlan(processorOutput);
-    rememberForgeProcessorActions(plan);
+    cache.remember(plan);
     const runPlan = vi.fn();
     const kit = {
       install: {
@@ -115,7 +115,7 @@ describe('repairMissingForgeProcessorOutputs', () => {
     } as unknown as MinecraftKit;
 
     await expect(
-      repairMissingForgeProcessorOutputs(kit, SLUG, target(), { runPlan }),
+      repairMissingForgeProcessorOutputs(kit, SLUG, target(), cache, { runPlan }),
     ).resolves.toEqual({
       ranProcessors: true,
       reranCount: 1,
@@ -128,5 +128,26 @@ describe('repairMissingForgeProcessorOutputs', () => {
         totalBytes: 100,
       }),
     );
+  });
+
+  it('replans after clear() drops the clean cached entry', async () => {
+    const processorOutput = path.join(tempRoot, 'versions', 'forge', 'processed.jar');
+    await fs.mkdir(path.dirname(processorOutput), { recursive: true });
+    await fs.writeFile(processorOutput, OUTPUT_CONTENT, 'utf8');
+    const plan = processorPlan(processorOutput);
+    cache.remember(plan);
+    cache.clear();
+    const kit = {
+      install: {
+        plan: vi.fn(async () => plan),
+      },
+    } as unknown as MinecraftKit;
+
+    await expect(repairMissingForgeProcessorOutputs(kit, SLUG, target(), cache)).resolves.toEqual({
+      ranProcessors: false,
+      reranCount: 0,
+    });
+
+    expect(kit.install.plan).toHaveBeenCalledWith(target(), undefined);
   });
 });

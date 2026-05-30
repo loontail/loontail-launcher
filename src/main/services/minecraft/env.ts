@@ -3,12 +3,14 @@ import type { scopedLogger } from '@main/infra/logger';
 import type { ClientSlug } from '@shared/contracts/ids';
 import type { MinecraftErrorCode, MinecraftStatusEvent } from '@shared/contracts/minecraft';
 import type { Broadcaster } from './broadcast';
+import type { ForgeProcessorCache } from './forgeProcessorHealing';
 import type { Op } from './ops';
 
 export type ManagerEnv = {
   kit: MinecraftKit;
   broadcaster: Broadcaster;
   ops: Map<ClientSlug, Op>;
+  forgeProcessorCache: ForgeProcessorCache;
   logger: ReturnType<typeof scopedLogger>;
   emitStatus: (payload: MinecraftStatusEvent) => void;
   emitError: (slug: ClientSlug, code: MinecraftErrorCode, message: string) => void;

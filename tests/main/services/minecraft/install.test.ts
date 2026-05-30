@@ -32,6 +32,7 @@ import {
 import { bundleManifestPath } from '@main/services/bundle/paths';
 import type { Context } from '@main/services/minecraft/context';
 import type { ManagerEnv } from '@main/services/minecraft/env';
+import { createForgeProcessorCache } from '@main/services/minecraft/forgeProcessorHealing';
 import { type Op, OpKinds, type RepairOp } from '@main/services/minecraft/ops';
 import { runRepair } from '@main/services/minecraft/repair';
 import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
@@ -116,6 +117,7 @@ const makeEnv = (kit: MinecraftKit, ops: Map<ClientSlug, Op>): ManagerEnv => {
     kit,
     broadcaster,
     ops,
+    forgeProcessorCache: createForgeProcessorCache(),
     logger: makeLogger(),
     emitStatus: broadcaster.status,
     emitError: vi.fn(),
