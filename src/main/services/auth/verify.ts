@@ -4,7 +4,7 @@ import { type Account, accountFromSession } from '@shared/contracts/account';
 import type { YggdrasilSession } from '@shared/contracts/auth';
 import type { MojangAuth } from './mojangAuth';
 import type { YggdrasilAuth } from './yggdrasilAuth';
-import { fetchTextures } from './yggdrasilClient';
+import type { FetchTextures } from './yggdrasilClient';
 
 const logger = scopedLogger('auth.verify');
 
@@ -14,6 +14,7 @@ const logger = scopedLogger('auth.verify');
 export const enrichYggdrasilAccount = async (
   session: YggdrasilSession,
   fallback: Account,
+  fetchTextures: FetchTextures,
 ): Promise<Account> => {
   try {
     const textures = await fetchTextures(session.profile.uuid);
@@ -38,6 +39,7 @@ export const enrichYggdrasilAccount = async (
 export const verifySession = async (
   yggdrasilAuth: YggdrasilAuth,
   mojangAuth: MojangAuth,
+  fetchTextures: FetchTextures,
 ): Promise<Account | null> => {
   const session = getStoredAuth();
   if (session === null) return null;
@@ -54,7 +56,11 @@ export const verifySession = async (
       return accountFromSession(session);
     }
     setStoredAuth(result.session);
-    return enrichYggdrasilAccount(result.session, accountFromSession(result.session));
+    return enrichYggdrasilAccount(
+      result.session,
+      accountFromSession(result.session),
+      fetchTextures,
+    );
   }
 
   const result = await mojangAuth.verifyMojangSession(session);

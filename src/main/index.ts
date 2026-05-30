@@ -17,6 +17,7 @@ import { createRouter } from '@main/ipc/router';
 import { createTrustedSenderCheck } from '@main/ipc/trustedSender';
 import { createAppService } from '@main/services/app';
 import { createAuthService } from '@main/services/auth';
+import { createYggdrasilClient } from '@main/services/auth/yggdrasilClient';
 import { createBundleService } from '@main/services/bundle';
 import { createClientOperationLocks } from '@main/services/clientOperationLocks';
 import { createClientsService } from '@main/services/clients';
@@ -97,12 +98,13 @@ const start = async (): Promise<void> => {
   const router = createRouter(createTrustedSenderCheck(mainWindow));
 
   const kit = createKit();
+  const yggdrasilGateway = createYggdrasilClient();
   const clientOperationLocks = createClientOperationLocks();
   const appService = createAppService(router);
-  const authService = createAuthService(router, kit);
+  const authService = createAuthService(router, kit, yggdrasilGateway);
   const systemService = createSystemService(router, mainWindow);
   const settingsService = createSettingsService(router, mainWindow);
-  const skinService = createSkinService(router, kit);
+  const skinService = createSkinService(router, kit, yggdrasilGateway, authService.session);
   const clientsService = createClientsService(router);
   const serversService = createServersService(router);
   const mediaService = createMediaService(router);

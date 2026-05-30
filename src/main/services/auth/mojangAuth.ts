@@ -1,14 +1,11 @@
 import { asAzureClientId, isErrorCode } from '@loontail/minecraft-kit';
-import type {
-  MojangSession as KitMojangSession,
-  MinecraftKit,
-  MinecraftProfile,
-} from '@loontail/minecraft-kit';
+import type { MojangSession as KitMojangSession, MinecraftKit } from '@loontail/minecraft-kit';
 import { mainConfig } from '@main/config';
 import { HTTP_UNAUTHORIZED } from '@main/constants/http';
 import { scopedLogger } from '@main/infra/logger';
 import type { MojangSession } from '@shared/contracts/auth';
 import { shell } from 'electron';
+import { withRefreshedProfile } from './session';
 
 const logger = scopedLogger('auth.mojang');
 // The kit's authorize URL is built for Microsoft personal accounts only.
@@ -69,20 +66,6 @@ export type MojangAuth = {
   cancelMojangLogin: () => void;
   verifyMojangSession: (session: MojangSession) => Promise<VerifyMojangResult>;
 };
-
-// Mojang profile.* mutations already return the updated profile, so the caller
-// passes it in instead of triggering another GET.
-export const withRefreshedProfile = (
-  session: MojangSession,
-  profile: MinecraftProfile,
-): MojangSession => ({
-  ...session,
-  profile: {
-    uuid: profile.uuid,
-    username: profile.username,
-    skins: [...profile.skins],
-  },
-});
 
 const parseUrl = (raw: string): URL | null => {
   try {

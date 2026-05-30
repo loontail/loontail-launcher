@@ -1,13 +1,15 @@
 import type { MinecraftKit } from '@loontail/minecraft-kit';
+import type { AuthSessionPort } from '@main/services/auth/session';
+import type { YggdrasilGateway } from '@main/services/auth/yggdrasilClient';
 import { createSkinHandlers } from '@main/services/skin/skin';
 import { ERROR_CODES } from '@shared/constants';
 import type { YggdrasilSession } from '@shared/contracts/auth';
 import { SkinKinds } from '@shared/contracts/skin';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const storeMocks = vi.hoisted(() => ({
-  getStoredAuth: vi.fn(),
-  setStoredAuth: vi.fn(),
+const authSessionMocks = vi.hoisted(() => ({
+  current: vi.fn(),
+  updateMojangProfile: vi.fn(),
 }));
 
 const yggClientMocks = vi.hoisted(() => ({
@@ -30,16 +32,6 @@ const loggerMocks = vi.hoisted(() => ({
   error: vi.fn(),
 }));
 
-vi.mock('@main/infra/store', () => ({
-  getStoredAuth: storeMocks.getStoredAuth,
-  setStoredAuth: storeMocks.setStoredAuth,
-}));
-
-vi.mock('@main/services/auth/yggdrasilClient', () => ({
-  fetchTextures: fetchTexturesMock,
-  getYggdrasilClient: () => yggClientMocks,
-}));
-
 vi.mock('@main/services/media/mediaCache', () => ({
   prewarmMediaCache: mediaCacheMocks.prewarmMediaCache,
   invalidateMediaCache: mediaCacheMocks.invalidateMediaCache,
@@ -47,10 +39,6 @@ vi.mock('@main/services/media/mediaCache', () => ({
 
 vi.mock('@main/infra/logger', () => ({
   scopedLogger: () => loggerMocks,
-}));
-
-vi.mock('@main/services/auth/mojangAuth', () => ({
-  withRefreshedProfile: vi.fn(),
 }));
 
 vi.mock('@loontail/yggdrasil-core', () => ({
@@ -63,6 +51,15 @@ vi.mock('@loontail/minecraft-kit', () => ({
 }));
 
 const kitStub = {} as unknown as MinecraftKit;
+
+const gateway = {
+  client: yggClientMocks,
+  fetchTextures: fetchTexturesMock,
+} as unknown as YggdrasilGateway;
+
+const authSession = authSessionMocks as unknown as AuthSessionPort;
+
+const makeSkinHandlers = () => createSkinHandlers(kitStub, gateway, authSession);
 
 const yggdrasilSession = (token = 'access'): YggdrasilSession => ({
   provider: 'yggdrasil',
@@ -91,13 +88,13 @@ afterEach(() => {
 describe('uploadSkin (yggdrasil)', () => {
   it('retries the post-upload texture lookup until the new URL propagates', async () => {
     vi.useFakeTimers();
-    storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
+    authSessionMocks.current.mockReturnValue(yggdrasilSession());
     fetchTexturesMock
       .mockResolvedValueOnce({ skin: null, cape: null })
       .mockResolvedValueOnce({ skin: null, cape: null })
       .mockResolvedValueOnce({ skin: { url: 'https://skins/new' }, cape: null });
 
-    const { uploadSkin } = createSkinHandlers(kitStub);
+    const { uploadSkin } = makeSkinHandlers();
     const pending = uploadSkin(skinPayload());
     await vi.runAllTimersAsync();
 
@@ -111,10 +108,10 @@ describe('uploadSkin (yggdrasil)', () => {
 
   it('throws when the texture never appears after the retries', async () => {
     vi.useFakeTimers();
-    storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
+    authSessionMocks.current.mockReturnValue(yggdrasilSession());
     fetchTexturesMock.mockResolvedValue({ skin: null, cape: null });
 
-    const { uploadSkin } = createSkinHandlers(kitStub);
+    const { uploadSkin } = makeSkinHandlers();
     const pending = uploadSkin(skinPayload()).catch((error: unknown) => error);
     await vi.runAllTimersAsync();
     const error = await pending;
@@ -126,13 +123,13 @@ describe('uploadSkin (yggdrasil)', () => {
 
 describe('clearSkin (yggdrasil)', () => {
   it('invalidates the cache with the absolutised URLs from fetchTextures', async () => {
-    storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
+    authSessionMocks.current.mockReturnValue(yggdrasilSession());
     fetchTexturesMock.mockResolvedValue({
       skin: { url: 'https://api/textures/skin' },
       cape: { url: 'https://api/textures/cape' },
     });
 
-    const { clearSkin } = createSkinHandlers(kitStub);
+    const { clearSkin } = makeSkinHandlers();
     await clearSkin();
 
     expect(fetchTexturesMock).toHaveBeenCalledWith('0123456789abcdef0123456789abcdef');
@@ -141,11 +138,11 @@ describe('clearSkin (yggdrasil)', () => {
   });
 
   it('throws and skips cache invalidation when the server delete fails', async () => {
-    storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
+    authSessionMocks.current.mockReturnValue(yggdrasilSession());
     fetchTexturesMock.mockResolvedValue({ skin: { url: 'https://api/textures/skin' }, cape: null });
     yggClientMocks.deleteSkin.mockRejectedValue(new Error('429 Too Many Requests'));
 
-    const { clearSkin } = createSkinHandlers(kitStub);
+    const { clearSkin } = makeSkinHandlers();
 
     await expect(clearSkin()).rejects.toMatchObject({ code: ERROR_CODES.SkinClearFailed });
     expect(mediaCacheMocks.invalidateMediaCache).not.toHaveBeenCalled();

@@ -3,21 +3,29 @@ import { migrateStoredAuthSecrets } from '@main/infra/store';
 import type { Router } from '@main/ipc/router';
 import { createMojangAuth } from './mojangAuth';
 import { registerAuthRoutes } from './routes';
+import { type AuthSessionPort, createAuthSessionPort } from './session';
 import { createYggdrasilAuth } from './yggdrasilAuth';
-import { getYggdrasilClient } from './yggdrasilClient';
+import type { YggdrasilGateway } from './yggdrasilClient';
 
 export type AuthService = {
+  session: AuthSessionPort;
   init: () => Promise<void>;
   dispose: () => Promise<void>;
 };
 
-export const createAuthService = (router: Router, kit: MinecraftKit): AuthService => {
-  const yggdrasilAuth = createYggdrasilAuth(getYggdrasilClient());
+export const createAuthService = (
+  router: Router,
+  kit: MinecraftKit,
+  gateway: YggdrasilGateway,
+): AuthService => {
+  const yggdrasilAuth = createYggdrasilAuth(gateway.client);
   const mojangAuth = createMojangAuth(kit);
+  const session = createAuthSessionPort();
   return {
+    session,
     init: async () => {
       migrateStoredAuthSecrets();
-      registerAuthRoutes(router, yggdrasilAuth, mojangAuth);
+      registerAuthRoutes(router, yggdrasilAuth, mojangAuth, gateway.fetchTextures);
     },
     dispose: async () => {},
   };

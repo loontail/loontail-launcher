@@ -157,7 +157,7 @@ describe('registerAuthRoutes', () => {
       .fn()
       .mockRejectedValue(new MojangBrowserOpenError('Failed to open browser'));
 
-    registerAuthRoutes(router, yggdrasilAuth(vi.fn()), mojangAuth({ signInWithMojang }));
+    registerAuthRoutes(router, yggdrasilAuth(vi.fn()), mojangAuth({ signInWithMojang }), vi.fn());
 
     const handler = handlers.get(IPC_CHANNELS.authMojangSignIn);
     if (!handler) throw new Error('auth.mojangSignIn handler was not registered');
@@ -174,7 +174,7 @@ describe('registerAuthRoutes', () => {
     const session = mojangSessionWithSkin();
     const signInWithMojang = vi.fn().mockResolvedValue(session);
 
-    registerAuthRoutes(router, yggdrasilAuth(vi.fn()), mojangAuth({ signInWithMojang }));
+    registerAuthRoutes(router, yggdrasilAuth(vi.fn()), mojangAuth({ signInWithMojang }), vi.fn());
 
     const handler = handlers.get(IPC_CHANNELS.authMojangSignIn);
     if (!handler) throw new Error('auth.mojangSignIn handler was not registered');

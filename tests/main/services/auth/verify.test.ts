@@ -24,10 +24,6 @@ vi.mock('@main/infra/store', () => ({
   clearStoredAuth: storeMocks.clearStoredAuth,
 }));
 
-vi.mock('@main/services/auth/yggdrasilClient', () => ({
-  fetchTextures: fetchTexturesMock,
-}));
-
 vi.mock('@main/infra/logger', () => ({
   scopedLogger: () => loggerMocks,
 }));
@@ -79,14 +75,16 @@ describe('verifySession', () => {
     storeMocks.getStoredAuth.mockReturnValue(null);
     const ygg = yggAuth();
 
-    expect(await verifySession(ygg, mojangAuth())).toBeNull();
+    expect(await verifySession(ygg, mojangAuth(), fetchTexturesMock)).toBeNull();
     expect(ygg.verifySession).not.toHaveBeenCalled();
   });
 
   it('clears the session and returns null when yggdrasil reports expired', async () => {
     storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
 
-    expect(await verifySession(yggAuth({ kind: 'expired' }), mojangAuth())).toBeNull();
+    expect(
+      await verifySession(yggAuth({ kind: 'expired' }), mojangAuth(), fetchTexturesMock),
+    ).toBeNull();
     expect(storeMocks.clearStoredAuth).toHaveBeenCalledTimes(1);
     expect(storeMocks.setStoredAuth).not.toHaveBeenCalled();
   });
@@ -94,7 +92,11 @@ describe('verifySession', () => {
   it('keeps the cached yggdrasil account without a network fetch when offline', async () => {
     storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
 
-    const account = await verifySession(yggAuth({ kind: 'offline' }), mojangAuth());
+    const account = await verifySession(
+      yggAuth({ kind: 'offline' }),
+      mojangAuth(),
+      fetchTexturesMock,
+    );
 
     expect(account).toEqual({
       provider: 'yggdrasil',
@@ -116,7 +118,11 @@ describe('verifySession', () => {
       cape: { url: 'https://capes/c' },
     });
 
-    const account = await verifySession(yggAuth({ kind: 'ok', session: rotated }), mojangAuth());
+    const account = await verifySession(
+      yggAuth({ kind: 'ok', session: rotated }),
+      mojangAuth(),
+      fetchTexturesMock,
+    );
 
     expect(account).toEqual({
       provider: 'yggdrasil',
@@ -132,7 +138,11 @@ describe('verifySession', () => {
     storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
     const rotated = yggdrasilSession('rotated-access');
 
-    const account = await verifySession(yggAuth({ kind: 'ok', session: rotated }), mojangAuth());
+    const account = await verifySession(
+      yggAuth({ kind: 'ok', session: rotated }),
+      mojangAuth(),
+      fetchTexturesMock,
+    );
 
     expect(storeMocks.setStoredAuth).toHaveBeenCalledWith(rotated);
     expect(account).toEqual({
@@ -149,7 +159,11 @@ describe('verifySession', () => {
     const rotated = yggdrasilSession('rotated-access');
     fetchTexturesMock.mockRejectedValue(new Error('textures down'));
 
-    const account = await verifySession(yggAuth({ kind: 'ok', session: rotated }), mojangAuth());
+    const account = await verifySession(
+      yggAuth({ kind: 'ok', session: rotated }),
+      mojangAuth(),
+      fetchTexturesMock,
+    );
 
     expect(account).toMatchObject({ skin: null, cape: null });
     expect(loggerMocks.warn).toHaveBeenCalled();
@@ -158,14 +172,20 @@ describe('verifySession', () => {
   it('clears the session and returns null when mojang reports expired', async () => {
     storeMocks.getStoredAuth.mockReturnValue(mojangSession());
 
-    expect(await verifySession(yggAuth(), mojangAuth({ kind: 'expired' }))).toBeNull();
+    expect(
+      await verifySession(yggAuth(), mojangAuth({ kind: 'expired' }), fetchTexturesMock),
+    ).toBeNull();
     expect(storeMocks.clearStoredAuth).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the cached mojang account when offline without persisting', async () => {
     storeMocks.getStoredAuth.mockReturnValue(mojangSession());
 
-    const account = await verifySession(yggAuth(), mojangAuth({ kind: 'offline' }));
+    const account = await verifySession(
+      yggAuth(),
+      mojangAuth({ kind: 'offline' }),
+      fetchTexturesMock,
+    );
 
     expect(account).toMatchObject({ provider: 'mojang', username: 'player' });
     expect(storeMocks.setStoredAuth).not.toHaveBeenCalled();
@@ -176,7 +196,11 @@ describe('verifySession', () => {
     storeMocks.getStoredAuth.mockReturnValue(mojangSession());
     const rotated = mojangSession('rotated-player');
 
-    const account = await verifySession(yggAuth(), mojangAuth({ kind: 'ok', session: rotated }));
+    const account = await verifySession(
+      yggAuth(),
+      mojangAuth({ kind: 'ok', session: rotated }),
+      fetchTexturesMock,
+    );
 
     expect(storeMocks.setStoredAuth).toHaveBeenCalledWith(rotated);
     expect(account).toMatchObject({ provider: 'mojang', username: 'rotated-player' });

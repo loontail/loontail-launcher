@@ -12,6 +12,7 @@ import { IPC_CHANNELS } from '@shared/ipc';
 import { buildLoginResult, fetchCurrentUser, login, logout } from './auth';
 import { type MojangAuth, MojangBrowserOpenError } from './mojangAuth';
 import type { YggdrasilAuth } from './yggdrasilAuth';
+import type { FetchTextures } from './yggdrasilClient';
 
 // Map a kit-side sign-in failure to the renderer's `LoginErrorCode`. The
 // renderer's own `cancelledRef` already suppresses the user-cancel case, so we
@@ -29,15 +30,16 @@ export const registerAuthRoutes = (
   router: Router,
   yggdrasilAuth: YggdrasilAuth,
   mojangAuth: MojangAuth,
+  fetchTextures: FetchTextures,
 ): void => {
   router.handle(IPC_CHANNELS.authLogin, async (rawArgs) => {
     const payload = parseIpcArgs(LoginPayloadSchema, rawArgs, 'Invalid login payload');
-    return login(yggdrasilAuth, payload);
+    return login(yggdrasilAuth, payload, fetchTextures);
   });
 
   router.handle(IPC_CHANNELS.authMe, (rawArgs) => {
     assertNoIpcArgs(rawArgs, 'auth.me takes no arguments');
-    return fetchCurrentUser(yggdrasilAuth, mojangAuth);
+    return fetchCurrentUser(yggdrasilAuth, mojangAuth, fetchTextures);
   });
 
   router.handle(IPC_CHANNELS.authLogout, (rawArgs) => {
@@ -50,7 +52,7 @@ export const registerAuthRoutes = (
     try {
       const session = await mojangAuth.signInWithMojang();
       setStoredAuth(session);
-      return buildLoginResult(session);
+      return buildLoginResult(session, fetchTextures);
     } catch (error) {
       return { ok: false, error: mojangFailureCode(error) };
     }

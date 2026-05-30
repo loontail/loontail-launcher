@@ -10,6 +10,7 @@ import type {
 import type { MojangAuth } from './mojangAuth';
 import { enrichYggdrasilAccount, verifySession } from './verify';
 import type { YggdrasilAuth } from './yggdrasilAuth';
+import type { FetchTextures } from './yggdrasilClient';
 
 const logger = scopedLogger('auth');
 
@@ -17,10 +18,13 @@ const logger = scopedLogger('auth');
 // renderer-facing account. Yggdrasil textures live behind a separate endpoint
 // and need enrichment; the Microsoft/Mojang session already embeds the active
 // skin and exposes no cape API, so its account is returned without a fetch.
-export const buildLoginResult = async (session: AuthSession): Promise<LoginResult> => {
+export const buildLoginResult = async (
+  session: AuthSession,
+  fetchTextures: FetchTextures,
+): Promise<LoginResult> => {
   const account = accountFromSession(session);
   if (session.provider === 'yggdrasil') {
-    return { ok: true, user: await enrichYggdrasilAccount(session, account) };
+    return { ok: true, user: await enrichYggdrasilAccount(session, account, fetchTextures) };
   }
   return { ok: true, user: account };
 };
@@ -28,17 +32,19 @@ export const buildLoginResult = async (session: AuthSession): Promise<LoginResul
 export const login = async (
   yggdrasilAuth: YggdrasilAuth,
   payload: LoginPayload,
+  fetchTextures: FetchTextures,
 ): Promise<LoginResult> => {
   const result = await yggdrasilAuth.signIn(payload);
   if (!result.ok) return result;
   setStoredAuth(result.session);
-  return buildLoginResult(result.session);
+  return buildLoginResult(result.session, fetchTextures);
 };
 
 export const fetchCurrentUser = (
   yggdrasilAuth: YggdrasilAuth,
   mojangAuth: MojangAuth,
-): Promise<Account | null> => verifySession(yggdrasilAuth, mojangAuth);
+  fetchTextures: FetchTextures,
+): Promise<Account | null> => verifySession(yggdrasilAuth, mojangAuth, fetchTextures);
 
 const invalidateYggdrasilSession = (
   yggdrasilAuth: YggdrasilAuth,

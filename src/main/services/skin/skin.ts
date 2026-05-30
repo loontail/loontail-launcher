@@ -6,9 +6,8 @@ import {
 } from '@loontail/minecraft-kit';
 import { validatePngBuffer } from '@loontail/yggdrasil-core';
 import { scopedLogger } from '@main/infra/logger';
-import { getStoredAuth, setStoredAuth } from '@main/infra/store';
-import { withRefreshedProfile } from '@main/services/auth/mojangAuth';
-import { fetchTextures, getYggdrasilClient } from '@main/services/auth/yggdrasilClient';
+import type { AuthSessionPort } from '@main/services/auth/session';
+import type { FetchTextures, YggdrasilGateway } from '@main/services/auth/yggdrasilClient';
 import { invalidateMediaCache, prewarmMediaCache } from '@main/services/media/mediaCache';
 import { ERROR_CODES } from '@shared/constants';
 import type { AuthSession, MojangSession, YggdrasilSession } from '@shared/contracts/auth';
@@ -17,8 +16,8 @@ import { SkinError } from './errors';
 
 const logger = scopedLogger('skin');
 
-const requireSession = (): AuthSession => {
-  const session = getStoredAuth();
+const requireSession = (authSession: AuthSessionPort): AuthSession => {
+  const session = authSession.current();
   if (!session) {
     throw new SkinError(ERROR_CODES.SkinNotAuthenticated, 'No authenticated user');
   }
@@ -83,6 +82,7 @@ const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 const fetchUploadedTextureUrl = async (
   uuid: string,
   kind: typeof SkinKinds.SKIN | typeof SkinKinds.CAPE,
+  fetchTextures: FetchTextures,
 ): Promise<string | null> => {
   for (let attempt = 0; attempt < POST_UPLOAD_TEXTURE_RETRY_ATTEMPTS; attempt += 1) {
     const textures = await fetchTextures(uuid).catch(() => null);
@@ -102,8 +102,9 @@ const fetchUploadedTextureUrl = async (
 const uploadSkinYggdrasil = async (
   session: YggdrasilSession,
   payload: UploadSkinPayload,
+  gateway: YggdrasilGateway,
 ): Promise<UploadSkinResult> => {
-  const client = getYggdrasilClient();
+  const { client, fetchTextures } = gateway;
   const buffer = Buffer.from(payload.buffer);
 
   // Capture the previous URL before the upload so we can invalidate the
@@ -128,7 +129,11 @@ const uploadSkinYggdrasil = async (
     return throwUploadError('Upload to Yggdrasil failed', error);
   }
 
-  const updatedUrl = await fetchUploadedTextureUrl(session.profile.uuid, payload.type);
+  const updatedUrl = await fetchUploadedTextureUrl(
+    session.profile.uuid,
+    payload.type,
+    fetchTextures,
+  );
   if (!updatedUrl) {
     throw new SkinError(
       ERROR_CODES.SkinUploadFailed,
@@ -147,7 +152,11 @@ export type SkinHandlers = {
   clearSkin: () => Promise<void>;
 };
 
-export const createSkinHandlers = (kit: MinecraftKit): SkinHandlers => {
+export const createSkinHandlers = (
+  kit: MinecraftKit,
+  gateway: YggdrasilGateway,
+  authSession: AuthSessionPort,
+): SkinHandlers => {
   // Mojang flow: hand the PNG to `kit.auth.profile.uploadSkin`, which posts
   // it to api.minecraftservices.com/minecraft/profile/skins. Kit errors now
   // include Mojang's response body in the message (kit 0.8.8+), so
@@ -176,8 +185,7 @@ export const createSkinHandlers = (kit: MinecraftKit): SkinHandlers => {
       return throwMojangUploadError(error);
     }
 
-    const refreshed = withRefreshedProfile(session, profile);
-    setStoredAuth(refreshed);
+    const refreshed = authSession.updateMojangProfile(session, profile);
     const url = activeMojangSkinUrl(refreshed);
     if (url === null) {
       throw new SkinError(
@@ -194,15 +202,15 @@ export const createSkinHandlers = (kit: MinecraftKit): SkinHandlers => {
     if (!verdict.ok) {
       throw new SkinError(ERROR_CODES.SkinUploadFailed, verdict.reason);
     }
-    const session = requireSession();
-    if (session.provider === 'yggdrasil') return uploadSkinYggdrasil(session, payload);
+    const session = requireSession(authSession);
+    if (session.provider === 'yggdrasil') return uploadSkinYggdrasil(session, payload, gateway);
     return uploadSkinMojang(session, payload);
   };
 
   const clearSkin = async (): Promise<void> => {
-    const session = requireSession();
+    const session = requireSession(authSession);
     if (session.provider === 'yggdrasil') {
-      const client = getYggdrasilClient();
+      const { client, fetchTextures } = gateway;
       // Snapshot the URLs before deleting so we can invalidate the cache.
       const before = await fetchTextures(session.profile.uuid).catch(() => null);
       try {
@@ -225,7 +233,7 @@ export const createSkinHandlers = (kit: MinecraftKit): SkinHandlers => {
     // for the cape slot.
     try {
       const profile = await kit.auth.profile.resetSkin({ accessToken: session.accessToken });
-      setStoredAuth(withRefreshedProfile(session, profile));
+      authSession.updateMojangProfile(session, profile);
     } catch (error) {
       logger.warn('Failed to reset Mojang skin', error);
     }
