@@ -66,6 +66,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-04 — Mojang sign-in route skips skin enrichment, returning null skin on first login
 
+- **Status:** DONE — 2026-05-31 · commit 9491241
 - **Category:** Flow · **Priority:** P1 · **Risk:** Low · _(auditor: auth-session-flow)_
 - **Area:** src/main/services/auth/routes.ts:43-51
 - **Problem:** The `authMojangSignIn` handler at line 46-47 calls `setStoredAuth(session)` then immediately returns `{ ok: true, user: accountFromSession(session) }`. `accountFromSession` for a Mojang session reads the active skin URL from `session.profile.skins`, which is populated by the kit on login. However the Yggdrasil login path (auth.ts:18) wraps the result through `enrichYggdrasilAccount`. There is no parallel enrichment for the Mojang path — and no cape is ever set, since `accountFromSession` hardcodes `cape: null` for Mojang (account.ts:34). This is only cosmetically inconsistent today (Mojang cape is not supported), but the asymmetry means the two paths diverge silently.
@@ -76,6 +77,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-05 — `verifySession` fires `enrichYggdrasilAccount` (network call) on the 'offline' branch, defeating offline fallback
 
+- **Status:** DONE — 2026-05-31 · commit 9cd6715
 - **Category:** Flow · **Priority:** P1 · **Risk:** Low · _(auditor: auth-session-flow)_
 - **Area:** src/main/services/auth/verify.ts:57-61
 - **Problem:** When `yggdrasilAuth.verifySession` returns `{ kind: 'offline' }` (lines 57-58), the code calls `enrichYggdrasilAccount(session, accountFromSession(session))`, which internally calls `fetchTextures` — a network request to the same unreachable server. If the server is down `fetchTextures` throws or times out, and `enrichYggdrasilAccount` catches it (verify.ts:31-33) and returns the bare fallback. The offline path therefore always makes a redundant network attempt before returning the cached account, adding latency on every app start when the server is unavailable.
@@ -156,6 +158,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-13 — Magic number `60_000` (token expiry safety window) is an unexplained inline literal in `verifyMojangSession`
 
+- **Status:** DONE — 2026-05-31 · commit 8c4a375 (resolved with AUTH-19)
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: auth-session-flow)_
 - **Area:** src/main/services/auth/mojangAuth.ts:189
 - **Problem:** Line 189: `const safetyWindowMs = 60_000;` is a local constant defined inline with no explanation of why 60 seconds was chosen. Per code guidelines, domain numbers should be extracted and named. The choice of 60 seconds is also arguably too small for a network roundtrip-heavy token refresh path (the kit does MSAL refresh + profile read), but this is a design smell not a P0 bug.
@@ -216,6 +219,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-19 — Extract inline `safetyWindowMs = 60_000` magic literal in mojangAuth.ts to a named constant
 
+- **Status:** DONE — 2026-05-31 · commit 8c4a375
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/auth/mojangAuth.ts (L189-190)
 - **Problem:** `const safetyWindowMs = 60_000;` is declared inline inside `verifyMojangSession` (L189) with no module-level name. The value 60 000 ms has domain significance (token refresh safety window before expiry) but is indistinguishable from other 60-second timeouts (e.g. `BUNDLE_DOWNLOAD_REQUEST_TIMEOUT_MS = 60_000` in constants/bundle.ts).
@@ -226,6 +230,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-20 — Inline HTTP status codes 401/403 in mojangAuth.ts verifyMojangSession — extract to named constants
 
+- **Status:** DONE — 2026-05-31 · commit 8c4a375
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/auth/mojangAuth.ts (L204)
 - **Problem:** The integer `401` appears inline in `verifyMojangSession` at L204 (`if (httpStatus === 401) return { kind: 'expired' }`) with no named constant. `HTTP_FORBIDDEN = 403` is named in yggdrasilAuth.ts but not shared here. The value 401 is magic in context.
@@ -236,6 +241,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-21 — HTTP status code constants (403, 429) in yggdrasilAuth.ts are not shared with mojangAuth.ts
 
+- **Status:** DONE — 2026-05-31 · commit 8c4a375
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/auth/yggdrasilAuth.ts (L15-16), src/main/services/auth/mojangAuth.ts (L204)
 - **Problem:** `HTTP_FORBIDDEN = 403` and `HTTP_TOO_MANY_REQUESTS = 429` in yggdrasilAuth.ts are file-local. mojangAuth.ts hardcodes `401` inline. All three HTTP status codes belong to the auth error-classification domain and should be in a shared `src/main/constants/http.ts`.
@@ -246,6 +252,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-22 — Retire AUTH_NETWORK_ERROR and AUTH_INVALID_CREDENTIALS from ERROR_CODES — they are never thrown
 
+- **Status:** DONE — 2026-05-31 · commit b51feb0
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Low · _(auditor: error-logging-model)_
 - **Area:** src/shared/constants/errorCodes.ts, src/renderer/features/auth/hooks.ts
 - **Problem:** ERROR_CODES (errorCodes.ts lines 6-7) declares AuthNetworkError ('AUTH_NETWORK_ERROR') and AuthInvalidCredentials ('AUTH_INVALID_CREDENTIALS'). A grep over all of src/main shows zero usages — auth.login returns a discriminated LoginResult union ({ok,error}) instead of throwing coded errors through IPC. The renderer's IPC_LOGIN_ERROR_CODES map in hooks.ts lines 15-17 maps them to LoginErrorCode values, so those renderer branches are permanently dead.
@@ -418,6 +425,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-08 — Lock release not guarded by try/finally in executePreparedSync — lock leaks on continuePausedSync throw
 
+- **Status:** DONE — 2026-05-31 · commit ce377ff
 - **Category:** Error handling · **Priority:** P0 · **Risk:** High · _(auditor: download-install-flow)_
 - **Area:** src/main/services/bundle/manager.ts
 - **Problem:** acquireWriteLock (line 226) stores the lease in activeLocks, then executePreparedSync is called (line 234). dropActiveSync (line 372) releases the lock, but it is called only from catch (line 320) or from the finally block at line 318-322. When continuePausedSync calls executePreparedSync (line 253) and that call throws before reaching the catch, the finally at line 318-322 correctly runs — HOWEVER, if continuePausedSync itself throws (e.g. the re-plan via loadLocalManifest fails synchronously before executePreparedSync even starts), the outer resumeSync void-chain at line 137 swallows the error via .catch(warn), and dropActiveSync is never called. The active sync and lock remain in their maps forever, wedging the slug for the rest of the session.
@@ -798,6 +806,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-46 — Double lock.release() in startInstall causes double-release of ClientOperationLease
 
+- **Status:** DONE — 2026-05-31 · commit 89d9063
 - **Category:** Error handling · **Priority:** P0 · **Risk:** Low · _(auditor: state-async-perf)_
 - **Area:** src/main/services/minecraft/manager.ts
 - **Problem:** In startInstall (lines 127-151), lock.release() is called in the .then() success callback (line 129) AND unconditionally in the .finally() block (line 149). On the success path the lock is released twice. ClientOperationLease.release() (clientOperationLocks.ts line 139) has an idempotent guard, so no crash occurs, but the intent is clearly that only one release should fire. If a future maintainer removes the idempotency guard, or if the guard is relied on elsewhere to detect double-release bugs, this hidden double-call creates a silent invariant violation.
@@ -2330,6 +2339,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### IPC-01 — Router passes rawArgs to handlers without guaranteed Zod validation
 
+- **Status:** DONE — 2026-05-31 · commit 58f373e
 - **Category:** IPC · **Priority:** P0 · **Risk:** Medium · _(auditor: arch-boundaries)_
 - **Area:** src/main/ipc/router.ts:77, src/main/services/auth/routes.ts, src/main/services/app/routes.ts, src/main/services/media/routes.ts, src/main/services/console/index.ts
 - **Problem:** router.ts line 77 casts `rawArgs as IpcArgs<TChannel>` and passes it directly to the handler. Handlers that omit `parseIpcArgs` (e.g. `authMe`, `authLogout`, `authMojangCancel`, `settingsGet`, `mediaClearCache`, `mediaGetCacheSize`, `mediaClearSkin`, `consoleClear`, `consoleCopyAll`, `appGetVersion`, `systemGetRamRange`, `systemGetDefaultInstallFolder`) receive an unvalidated `unknown` value that TypeScript treats as the correct type. A malicious or buggy renderer can send arbitrary data without triggering IPC_INVALID_ARGS.
@@ -3371,3 +3381,44 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 - src/main/infra/http.ts — 14-line JSDoc block on a two-member string union type (AuthMode); lines 8-22
 - src/renderer/features/updater/events.ts — what-narrating component-mount comments above UpdaterEventsListener and UpdaterAutoCheck; lines 103-121
 - src/renderer/features/skin/hooks.ts — JSDoc block on useSkinEditor hook that restates its return shape; lines 45-50
+
+## 4. Status convention
+
+Tasks carry no `**Status:**` line until they are worked. A task with **no** Status
+line is available (treat as TODO); a task with `**Status:** DONE — <date> · commit <sha>`
+is finished and must not be touched. `IN PROGRESS` / `BLOCKED — <reason>` mark partial
+or blocked work. Pick the highest-priority available task (P0 → P1 → P2 → P3).
+
+## Pending package release
+
+_None._ No task this cycle changed `@loontail/minecraft-kit` or `loontail-yggdrasil`.
+
+## Session log
+
+### 2026-05-31
+
+- **Done (10 task IDs across 7 commits):**
+  - `IPC-01` (P0) — `assertNoIpcArgs` helper rejects payloads on every no-arg
+    channel; enforced across auth/app/settings/system/media/skin/console/updater
+    routes · commit 58f373e
+  - `DLI-46` (P0) — `startInstall` now releases the operation lock exactly once,
+    before the bundle-sync hook, via a `try/finally` (the early release was
+    intentional — the bundle sync shares the `CLIENT_FOLDER` lease) · commit 89d9063
+  - `DLI-08` (P0) — `continuePausedSync` drops the active sync on a throw before
+    planning so a failed resume can't wedge the slug for the session · commit ce377ff
+  - `AUTH-22` (P1) — removed never-thrown `AUTH_NETWORK_ERROR` /
+    `AUTH_INVALID_CREDENTIALS` codes and the dead renderer IPC map · commit b51feb0
+  - `AUTH-05` (P1) — offline yggdrasil verify returns the cached account without a
+    redundant texture fetch (mirrors the Mojang offline branch) · commit 9cd6715
+  - `AUTH-04` (P1) — both login paths route through a single `buildLoginResult`
+    helper; documents the Mojang-vs-Yggdrasil enrichment asymmetry · commit 9491241
+  - `AUTH-21` + `AUTH-20` + `AUTH-19` + `AUTH-13` — new `src/main/constants/http.ts`
+    (401/403/429); extracted the named `MOJANG_TOKEN_REFRESH_SAFETY_WINDOW_MS` · commit 8c4a375
+- **Packages built / pending publish:** none.
+- **Blocked:** none.
+- **Verification:** `npm run lint`, `npm run typecheck`, `npm test` (332 tests) all green.
+- **Notes:** the backlog as generated had no `**Status:**` lines and no §0 working
+  agreement — added a Status convention section (above) and started marking DONE tasks.
+- **Suggested next batch:** `DLI-09` (P1 — LocalManifest Zod schema), `AUTH-18` (P1 —
+  post-upload texture re-fetch retry), then the remaining auth quick-wins
+  (`AUTH-26`/`27`/`28`/`29` JSDoc cleanup, `AUTH-12` `fetchTextures` consistency).
