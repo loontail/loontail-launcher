@@ -4,22 +4,13 @@ import { LOGIN_ERROR_CODE } from '@shared/contracts';
 import { describe, expect, it } from 'vitest';
 
 describe('loginErrorCodeFromRejection', () => {
-  it('maps structured auth IPC errors to credential login errors', () => {
-    expect(
-      loginErrorCodeFromRejection({
-        code: ERROR_CODES.AuthInvalidCredentials,
-        message: 'invalid credentials',
-      }),
-    ).toBe(LOGIN_ERROR_CODE.InvalidCredentials);
-    expect(
-      loginErrorCodeFromRejection({
-        code: ERROR_CODES.AuthNetworkError,
-        message: 'network failed',
-      }),
-    ).toBe(LOGIN_ERROR_CODE.NetworkError);
+  it('maps a transport-level TypeError to a network login error', () => {
+    expect(loginErrorCodeFromRejection(new TypeError('fetch failed'))).toBe(
+      LOGIN_ERROR_CODE.NetworkError,
+    );
   });
 
-  it('falls back to UNKNOWN for generic IPC and preload failures', () => {
+  it('falls back to UNKNOWN for structured IPC errors and generic failures', () => {
     expect(
       loginErrorCodeFromRejection({
         code: ERROR_CODES.IpcHandlerFailed,

@@ -1,24 +1,20 @@
-import { ERROR_CODES, QUERY_KEYS } from '@shared/constants';
+import { QUERY_KEYS } from '@shared/constants';
 import {
   LOGIN_ERROR_CODE,
   type LoginErrorCode,
   type LoginPayload,
   type LoginResult,
 } from '@shared/contracts';
-import { isIpcError } from '@shared/ipc';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cancelMojangLogin, fetchCurrentUser, login, logout, signInWithMojang } from './api';
 
 const CURRENT_USER_STALE_TIME_MS = 5 * 60_000;
 
-const IPC_LOGIN_ERROR_CODES: Partial<Record<string, LoginErrorCode>> = {
-  [ERROR_CODES.AuthNetworkError]: LOGIN_ERROR_CODE.NetworkError,
-  [ERROR_CODES.AuthInvalidCredentials]: LOGIN_ERROR_CODE.InvalidCredentials,
-};
-
+// auth.login resolves to a discriminated LoginResult instead of throwing coded
+// IpcErrors, so the only rejections here are transport-level: undici surfaces a
+// dropped connection as a bare TypeError.
 export const loginErrorCodeFromRejection = (error: unknown): LoginErrorCode => {
-  if (isIpcError(error)) return IPC_LOGIN_ERROR_CODES[error.code] ?? LOGIN_ERROR_CODE.Unknown;
   if (error instanceof TypeError) return LOGIN_ERROR_CODE.NetworkError;
   return LOGIN_ERROR_CODE.Unknown;
 };
