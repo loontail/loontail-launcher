@@ -124,30 +124,32 @@ export class MinecraftManager {
     // runInstall handles errors internally (emits via handleInstallFailure) and
     // rethrows for the launch path; in the fire-and-forget case we only need
     // the final INSTALLED status on success.
-    void runInstall(this.env, slug, ctx, op)
-      .then(async () => {
+    void (async () => {
+      try {
+        await runInstall(this.env, slug, ctx, op);
+      } finally {
+        // Release before the bundle phase: the bundle sync acquires the same
+        // CLIENT_FOLDER lease, so holding it here would self-block with
+        // OP_IN_FLIGHT.
         lock.release();
-        // Mark Minecraft itself as installed BEFORE the bundle phase. The UI
-        // listens for INSTALLED to switch the progress card from "downloading
-        // minecraft" to "syncing bundle" (which only renders on top of an
-        // installed client).
-        this.env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
-        if (this.launchHook) {
-          try {
-            await this.launchHook(slug);
-          } catch (error) {
-            // Bundle failures surface via the bundle.error event channel; the
-            // Minecraft install itself is done, so we keep the INSTALLED state.
-            logger.warn(`[${slug}] install: bundle sync after install failed`, error);
-          }
+      }
+      // Mark Minecraft itself as installed BEFORE the bundle phase. The UI
+      // listens for INSTALLED to switch the progress card from "downloading
+      // minecraft" to "syncing bundle" (which only renders on top of an
+      // installed client).
+      this.env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
+      if (this.launchHook) {
+        try {
+          await this.launchHook(slug);
+        } catch (error) {
+          // Bundle failures surface via the bundle.error event channel; the
+          // Minecraft install itself is done, so we keep the INSTALLED state.
+          logger.warn(`[${slug}] install: bundle sync after install failed`, error);
         }
-      })
-      .catch(() => {
-        // Already reported by handleInstallFailure; nothing to do here.
-      })
-      .finally(() => {
-        lock.release();
-      });
+      }
+    })().catch(() => {
+      // runInstall failure already reported by handleInstallFailure; nothing to do.
+    });
   }
 
   pause(slug: ClientSlug): void {
