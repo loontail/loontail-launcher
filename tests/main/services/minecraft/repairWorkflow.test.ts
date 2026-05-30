@@ -13,7 +13,13 @@ const workflowMocks = vi.hoisted(() => {
   return {
     hasCurrentTargetInstallManifest: vi.fn(),
     isAnythingInstalled: vi.fn(),
+    resolveLaunchVersion: vi.fn(),
   };
+});
+
+vi.mock('@loontail/minecraft-kit', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@loontail/minecraft-kit')>();
+  return { ...actual, resolveLaunchVersion: workflowMocks.resolveLaunchVersion };
 });
 
 vi.mock('@main/services/minecraft/installManifest', () => ({
@@ -28,6 +34,7 @@ vi.mock('@main/services/minecraft/runtimeState', () => ({
 import type { Context } from '@main/services/minecraft/context';
 import type { ManagerEnv } from '@main/services/minecraft/env';
 import {
+  ensureLaunchable,
   finalizeRepairCancellation,
   finalizeRepairFailure,
 } from '@main/services/minecraft/repairWorkflow';
@@ -142,5 +149,51 @@ describe('repair workflow finalization', () => {
       status: InstallStatuses.ERROR,
       paused: false,
     });
+  });
+});
+
+describe('ensureLaunchable', () => {
+  it('runs a full install when the launch version JSON is missing', async () => {
+    workflowMocks.resolveLaunchVersion.mockRejectedValue(new Error('no installed version json'));
+    const plan = { totalActions: 3 };
+    const installPlan = vi.fn(async () => plan);
+    const runPlan = vi.fn(async () => undefined);
+    const operationEnv: ManagerEnv = {
+      ...env(),
+      kit: { install: { plan: installPlan } } as unknown as MinecraftKit,
+    };
+
+    await ensureLaunchable(operationEnv, SLUG, context(), {
+      signal: new AbortController().signal,
+      runPlan,
+    });
+
+    expect(installPlan).toHaveBeenCalledWith(
+      target,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(runPlan).toHaveBeenCalledWith(plan);
+  });
+
+  it('skips the install when the launch version resolves (already launchable)', async () => {
+    workflowMocks.resolveLaunchVersion.mockResolvedValue({
+      versionId: '1.20.1',
+      merged: {},
+      chain: [],
+    });
+    const installPlan = vi.fn();
+    const runPlan = vi.fn();
+    const operationEnv: ManagerEnv = {
+      ...env(),
+      kit: { install: { plan: installPlan } } as unknown as MinecraftKit,
+    };
+
+    await ensureLaunchable(operationEnv, SLUG, context(), {
+      signal: new AbortController().signal,
+      runPlan,
+    });
+
+    expect(installPlan).not.toHaveBeenCalled();
+    expect(runPlan).not.toHaveBeenCalled();
   });
 });

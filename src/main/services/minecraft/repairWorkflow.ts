@@ -3,6 +3,7 @@ import {
   Loaders,
   type ProgressListener,
   type RepairAllReport,
+  resolveLaunchVersion,
 } from '@loontail/minecraft-kit';
 import { loadLocalManifest } from '@main/services/bundle/manifestRepo';
 import type { ClientSlug } from '@shared/contracts/ids';
@@ -95,6 +96,41 @@ export const verifyAndRepairBase = async (
       : `[${slug}] repair: fixed ${broken.join(', ')}`,
   );
   return report;
+};
+
+export type EnsureLaunchableOptions = {
+  readonly signal: AbortSignal;
+  readonly runPlan: (plan: InstallPlan) => Promise<void>;
+};
+
+// True when the version JSON the launcher will launch can be resolved from disk.
+// resolveLaunchVersion throws for Forge/Fabric when no installed loader version
+// JSON exists (the case repair.all + healForgeProcessors cannot always bootstrap);
+// for vanilla it resolves from the manifest and never throws, so vanilla never
+// triggers the fallback (repair.all already writes the vanilla version JSON).
+const launchVersionResolvable = async (ctx: Context): Promise<boolean> =>
+  resolveLaunchVersion(ctx.target)
+    .then(() => true)
+    .catch(() => false);
+
+// Last-resort bootstrap. repair.all + healForgeProcessors fix the files of an
+// existing install but cannot always materialize a loader install from scratch
+// (the Forge installer -> processor -> version JSON chain). If the launch version
+// still cannot be resolved after them, run the full, idempotent (skip-on-correct)
+// install plan to build it. If even that cannot produce it, the thrown error is
+// surfaced as a real repair failure instead of a silently broken "success".
+export const ensureLaunchable = async (
+  env: ManagerEnv,
+  slug: ClientSlug,
+  ctx: Context,
+  options: EnsureLaunchableOptions,
+): Promise<void> => {
+  if (await launchVersionResolvable(ctx)) return;
+  env.logger.info(
+    `[${slug}] repair: launch version JSON missing — running a full install to rebuild it`,
+  );
+  const plan = await env.kit.install.plan(ctx.target, { signal: options.signal });
+  await options.runPlan(plan);
 };
 
 export const healForgeProcessors = async (

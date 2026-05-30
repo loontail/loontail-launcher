@@ -9,6 +9,7 @@ import {
   runWithProgressAdapter,
 } from './progressAdapter';
 import {
+  ensureLaunchable,
   finalizeRepairCancellation,
   finalizeRepairFailure,
   finalizeRepairSuccess,
@@ -38,6 +39,10 @@ export const runRepair = async (
       });
     await verifyAndRepairBase(env, slug, ctx, repairOptions);
     await healForgeProcessors(env, slug, ctx, {
+      signal: op.abort.signal,
+      runPlan: runPlannedInstallProgress,
+    });
+    await ensureLaunchable(env, slug, ctx, {
       signal: op.abort.signal,
       runPlan: runPlannedInstallProgress,
     });
