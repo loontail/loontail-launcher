@@ -50,8 +50,13 @@ vi.mock('@main/services/auth/verify', () => ({
 import { logout } from '@main/services/auth/auth';
 import { type MojangAuth, MojangBrowserOpenError } from '@main/services/auth/mojangAuth';
 import { registerAuthRoutes } from '@main/services/auth/routes';
+import { enrichYggdrasilAccount } from '@main/services/auth/verify';
 import type { YggdrasilAuth } from '@main/services/auth/yggdrasilAuth';
-import { LOGIN_ERROR_CODE, type YggdrasilSession } from '@shared/contracts/auth';
+import {
+  LOGIN_ERROR_CODE,
+  type MojangSession,
+  type YggdrasilSession,
+} from '@shared/contracts/auth';
 import { IPC_CHANNELS, type IpcArgs, type IpcContract, type IpcResult } from '@shared/ipc';
 
 type StoredHandler = (rawArgs: unknown) => Promise<unknown> | unknown;
@@ -81,6 +86,23 @@ const yggdrasilSession = (): YggdrasilSession => ({
   clientToken: 'client-token',
   profile: { uuid: '0123456789abcdef0123456789abcdef', name: 'someone' },
 });
+
+const ACTIVE_SKIN_URL = 'https://textures.example/skins/active.png';
+
+const mojangSessionWithSkin = (): MojangSession =>
+  ({
+    provider: 'mojang',
+    accessToken: 'access',
+    expiresAt: Date.UTC(2099, 0, 1),
+    refreshToken: 'refresh',
+    clientId: 'client',
+    xuid: 'xuid',
+    profile: {
+      uuid: 'uuid',
+      username: 'steve',
+      skins: [{ state: 'ACTIVE', url: ACTIVE_SKIN_URL }],
+    },
+  }) as unknown as MojangSession;
 
 const yggdrasilAuth = (signOut: YggdrasilAuth['signOut']): YggdrasilAuth => ({
   signIn: vi.fn(),
@@ -145,5 +167,29 @@ describe('registerAuthRoutes', () => {
       error: LOGIN_ERROR_CODE.BrowserOpenFailed,
     });
     expect(storeMocks.setStoredAuth).not.toHaveBeenCalled();
+  });
+
+  it('returns the active Mojang skin without enriching via the Yggdrasil path', async () => {
+    const { router, handlers } = createTestRouter();
+    const session = mojangSessionWithSkin();
+    const signInWithMojang = vi.fn().mockResolvedValue(session);
+
+    registerAuthRoutes(router, yggdrasilAuth(vi.fn()), mojangAuth({ signInWithMojang }));
+
+    const handler = handlers.get(IPC_CHANNELS.authMojangSignIn);
+    if (!handler) throw new Error('auth.mojangSignIn handler was not registered');
+
+    await expect(handler(undefined)).resolves.toEqual({
+      ok: true,
+      user: {
+        provider: 'mojang',
+        username: 'steve',
+        email: null,
+        skin: ACTIVE_SKIN_URL,
+        cape: null,
+      },
+    });
+    expect(storeMocks.setStoredAuth).toHaveBeenCalledWith(session);
+    expect(enrichYggdrasilAccount).not.toHaveBeenCalled();
   });
 });

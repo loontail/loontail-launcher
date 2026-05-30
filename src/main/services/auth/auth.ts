@@ -1,12 +1,29 @@
 import { scopedLogger } from '@main/infra/logger';
 import { clearStoredAuth, getStoredAuth, setStoredAuth } from '@main/infra/store';
 import { type Account, accountFromSession } from '@shared/contracts/account';
-import type { LoginPayload, LoginResult, YggdrasilSession } from '@shared/contracts/auth';
+import type {
+  AuthSession,
+  LoginPayload,
+  LoginResult,
+  YggdrasilSession,
+} from '@shared/contracts/auth';
 import type { MojangAuth } from './mojangAuth';
 import { enrichYggdrasilAccount, verifySession } from './verify';
 import type { YggdrasilAuth } from './yggdrasilAuth';
 
 const logger = scopedLogger('auth');
+
+// Single visible point where a freshly authenticated session becomes the
+// renderer-facing account. Yggdrasil textures live behind a separate endpoint
+// and need enrichment; the Microsoft/Mojang session already embeds the active
+// skin and exposes no cape API, so its account is returned without a fetch.
+export const buildLoginResult = async (session: AuthSession): Promise<LoginResult> => {
+  const account = accountFromSession(session);
+  if (session.provider === 'yggdrasil') {
+    return { ok: true, user: await enrichYggdrasilAccount(session, account) };
+  }
+  return { ok: true, user: account };
+};
 
 export const login = async (
   yggdrasilAuth: YggdrasilAuth,
@@ -15,8 +32,7 @@ export const login = async (
   const result = await yggdrasilAuth.signIn(payload);
   if (!result.ok) return result;
   setStoredAuth(result.session);
-  const account = await enrichYggdrasilAccount(result.session, accountFromSession(result.session));
-  return { ok: true, user: account };
+  return buildLoginResult(result.session);
 };
 
 export const fetchCurrentUser = (

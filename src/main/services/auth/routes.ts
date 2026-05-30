@@ -2,7 +2,6 @@ import { isErrorCode } from '@loontail/minecraft-kit';
 import { setStoredAuth } from '@main/infra/store';
 import { assertNoIpcArgs, parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
-import { accountFromSession } from '@shared/contracts/account';
 import {
   LOGIN_ERROR_CODE,
   type LoginErrorCode,
@@ -10,7 +9,7 @@ import {
   type LoginResult,
 } from '@shared/contracts/auth';
 import { IPC_CHANNELS } from '@shared/ipc';
-import { fetchCurrentUser, login, logout } from './auth';
+import { buildLoginResult, fetchCurrentUser, login, logout } from './auth';
 import { type MojangAuth, MojangBrowserOpenError } from './mojangAuth';
 import type { YggdrasilAuth } from './yggdrasilAuth';
 
@@ -51,7 +50,7 @@ export const registerAuthRoutes = (
     try {
       const session = await mojangAuth.signInWithMojang();
       setStoredAuth(session);
-      return { ok: true, user: accountFromSession(session) };
+      return buildLoginResult(session);
     } catch (error) {
       return { ok: false, error: mojangFailureCode(error) };
     }
