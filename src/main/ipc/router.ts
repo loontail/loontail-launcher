@@ -17,7 +17,7 @@ type Handler<TChannel extends keyof IpcContract> = (
   event: IpcMainInvokeEvent,
 ) => Promise<IpcResult<TChannel>> | IpcResult<TChannel>;
 
-export type SenderValidator = (event: IpcMainInvokeEvent) => boolean;
+export type SenderValidator = (event: IpcMainInvokeEvent, channel: keyof IpcContract) => boolean;
 
 export type Router = {
   handle: <TChannel extends keyof IpcContract>(
@@ -67,7 +67,7 @@ export const createRouter = (isTrustedSender: SenderValidator): Router => {
   ): void => {
     ipcMain.handle(channel, async (event, rawArgs: unknown) => {
       try {
-        if (!isTrustedSender(event)) {
+        if (!isTrustedSender(event, channel)) {
           const untrusted: IpcError = {
             code: ERROR_CODES.IpcUntrustedSender,
             message: 'Sender frame is not trusted',

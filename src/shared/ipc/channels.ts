@@ -49,6 +49,11 @@ export const IPC_CHANNELS = {
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
 
+// Channels the unsandboxed console window may invoke. Every other channel is
+// denied to it so a renderer compromise there cannot reach the full IPC surface
+// (auth.login, minecraft.launch, settings.setLauncher, system.openPath, …).
+export const CONSOLE_CHANNEL_PREFIX = 'console.';
+
 // Compile-time guard: every channel value must be a key in IpcContract, and
 // every IpcContract key must appear as a channel value. Adding/removing a
 // contract entry without updating IPC_CHANNELS (or vice versa) fails tsc.

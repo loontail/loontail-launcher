@@ -1,4 +1,4 @@
-export { IPC_CHANNELS, IPC_EVENTS } from './channels';
+export { CONSOLE_CHANNEL_PREFIX, IPC_CHANNELS, IPC_EVENTS } from './channels';
 export type { IpcChannel, IpcEventName } from './channels';
 export type {
   IpcArgs,
