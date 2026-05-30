@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { Loaders, type Target } from '@loontail/minecraft-kit';
+import { Loaders, type Target, assertNever } from '@loontail/minecraft-kit';
 import { SIDECAR_DIR } from '@main/constants/paths';
 import { scopedLogger } from '@main/infra/logger';
 import type { ClientSlug } from '@shared/contracts/ids';
@@ -45,10 +45,6 @@ const parsePackageVersion = (metadata: unknown): string => {
 
 const minecraftKitPackage: unknown = requirePackage('@loontail/minecraft-kit/package.json');
 const MINECRAFT_KIT_VERSION = parsePackageVersion(minecraftKitPackage);
-
-const assertNever = (value: never): never => {
-  throw new Error(`Unhandled loader: ${JSON.stringify(value)}`);
-};
 
 const loaderVersionFor = (target: Target): string | null => {
   switch (target.loader.type) {
