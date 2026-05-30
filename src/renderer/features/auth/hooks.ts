@@ -1,4 +1,4 @@
-import { ERROR_CODES, type ErrorCode, QUERY_KEYS } from '@shared/constants';
+import { ERROR_CODES, QUERY_KEYS } from '@shared/constants';
 import {
   LOGIN_ERROR_CODE,
   type LoginErrorCode,
@@ -12,20 +12,13 @@ import { cancelMojangLogin, fetchCurrentUser, login, logout, signInWithMojang } 
 
 const CURRENT_USER_STALE_TIME_MS = 5 * 60_000;
 
-const IPC_LOGIN_ERROR_CODES: Record<ErrorCode, LoginErrorCode> = {
-  [ERROR_CODES.Unknown]: LOGIN_ERROR_CODE.Unknown,
-  [ERROR_CODES.IpcInvalidArgs]: LOGIN_ERROR_CODE.Unknown,
-  [ERROR_CODES.IpcUntrustedSender]: LOGIN_ERROR_CODE.Unknown,
-  [ERROR_CODES.IpcHandlerFailed]: LOGIN_ERROR_CODE.Unknown,
+const IPC_LOGIN_ERROR_CODES: Partial<Record<string, LoginErrorCode>> = {
   [ERROR_CODES.AuthNetworkError]: LOGIN_ERROR_CODE.NetworkError,
   [ERROR_CODES.AuthInvalidCredentials]: LOGIN_ERROR_CODE.InvalidCredentials,
-  [ERROR_CODES.SettingsInvalidPayload]: LOGIN_ERROR_CODE.Unknown,
-  [ERROR_CODES.SkinUploadFailed]: LOGIN_ERROR_CODE.Unknown,
-  [ERROR_CODES.SkinNotAuthenticated]: LOGIN_ERROR_CODE.Unknown,
 };
 
 export const loginErrorCodeFromRejection = (error: unknown): LoginErrorCode => {
-  if (isIpcError(error)) return IPC_LOGIN_ERROR_CODES[error.code];
+  if (isIpcError(error)) return IPC_LOGIN_ERROR_CODES[error.code] ?? LOGIN_ERROR_CODE.Unknown;
   if (error instanceof TypeError) return LOGIN_ERROR_CODE.NetworkError;
   return LOGIN_ERROR_CODE.Unknown;
 };
