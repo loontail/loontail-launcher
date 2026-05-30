@@ -53,11 +53,15 @@ const NavigationButton = () => {
 };
 
 export const App = () => {
-  const { user, isPending: isAuthPending } = useCurrentUser();
+  const { user, isPending: isAuthPending, isError: isAuthError } = useCurrentUser();
   const { needsSetup, isPending: isSetupPending } = useNeedsSetup();
   const view = useCurrentView();
   const isAuthenticated = !isAuthPending && user !== null && user !== undefined;
   const isBootstrapping = isSetupPending || (!needsSetup && isAuthPending);
+  // A failed auth check (main not ready, IPC error) leaves `user` undefined, not
+  // null — fall back to the login screen so the user can retry instead of facing
+  // a blank main area.
+  const isSignedOut = user === null || isAuthError;
 
   return (
     <div className="flex h-full flex-col">
@@ -76,7 +80,7 @@ export const App = () => {
           </div>
         )}
         {!isBootstrapping && needsSetup && <SetupPage />}
-        {!isBootstrapping && !needsSetup && user === null && <LoginForm />}
+        {!isBootstrapping && !needsSetup && isSignedOut && <LoginForm />}
         {!isBootstrapping && !needsSetup && isAuthenticated && view === Views.HOME && (
           <ClientsPage />
         )}

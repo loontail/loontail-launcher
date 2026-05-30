@@ -33,7 +33,12 @@ export const useCurrentUser = () => {
     queryFn: fetchCurrentUser,
     staleTime: CURRENT_USER_STALE_TIME_MS,
   });
-  return { user: query.data, isPending: query.isPending };
+  return {
+    user: query.data,
+    isPending: query.isPending,
+    isError: query.isError,
+    error: query.error,
+  };
 };
 
 export const useLogin = () => {
