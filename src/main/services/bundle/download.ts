@@ -55,13 +55,10 @@ const requestOnce = (url: string, options: DownloadOptions): Promise<IncomingMes
     const onAbort = () => {
       req.destroy(new BundleError(BundleErrorCodes.ABORTED, 'Download aborted'));
     };
-    if (options.signal) {
-      if (options.signal.aborted) {
-        onAbort();
-        return;
-      }
-      options.signal.addEventListener('abort', onAbort, { once: true });
-    }
+    // Register the settle/cleanup listeners before the abort check. If the
+    // signal is already aborted on entry we reject explicitly here; otherwise a
+    // destroy would fire into a Promise with no error/close listener and the
+    // await would wedge forever — never releasing the operation lock (LL-106).
     req.on('error', (err) => {
       options.currentRequests.delete(req);
       options.signal?.removeEventListener('abort', onAbort);
@@ -79,6 +76,15 @@ const requestOnce = (url: string, options: DownloadOptions): Promise<IncomingMes
       options.currentRequests.delete(req);
       options.signal?.removeEventListener('abort', onAbort);
     });
+    if (options.signal) {
+      if (options.signal.aborted) {
+        options.currentRequests.delete(req);
+        req.destroy();
+        reject(new BundleError(BundleErrorCodes.ABORTED, 'Download aborted'));
+        return;
+      }
+      options.signal.addEventListener('abort', onAbort, { once: true });
+    }
     req.end();
   });
 

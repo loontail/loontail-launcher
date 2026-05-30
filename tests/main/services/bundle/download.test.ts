@@ -1,6 +1,11 @@
 import { once } from 'node:events';
 import fs from 'node:fs/promises';
-import http, { type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import http, {
+  type ClientRequest,
+  type IncomingMessage,
+  type Server,
+  type ServerResponse,
+} from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -87,6 +92,24 @@ describe('downloadEntry URL policy', () => {
     });
 
     await expect(fs.readFile(targetPath, 'utf8')).resolves.toBe(TEST_FILE_BODY);
+  });
+
+  it('rejects ABORTED and clears currentRequests when the signal is already aborted', async () => {
+    const currentRequests = new Set<ClientRequest>();
+    const controller = new AbortController();
+    controller.abort();
+    const targetPath = path.join(tempDir, TEST_ENTRY_PATH);
+
+    await expect(
+      downloadEntry(makeEntry('http://127.0.0.1:1/files/example.jar'), targetPath, {
+        currentRequests,
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ code: BundleErrorCodes.ABORTED });
+
+    expect(currentRequests.size).toBe(0);
+    await expect(exists(targetPath)).resolves.toBe(false);
+    await expect(exists(`${targetPath}.tmp`)).resolves.toBe(false);
   });
 
   it('rejects redirects to unexpected origins before writing the file', async () => {
