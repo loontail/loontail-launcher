@@ -20,13 +20,28 @@ const MOJANG_XUID_PATTERN = /^\d+$/;
 
 // Mirror of kit's `MojangProfileSkin` shape; kept here so the persisted-store
 // Zod schema can validate it without pulling kit's runtime into shared/.
-const MojangProfileSkinSchema: z.ZodType<MojangProfileSkin> = z.object({
+const MojangProfileSkinSchema = z.object({
   id: NonEmptyStringSchema,
   state: z.enum(['ACTIVE', 'INACTIVE']),
   url: NonEmptyStringSchema,
   variant: z.enum(['CLASSIC', 'SLIM']),
   textureKey: NonEmptyStringSchema.optional(),
 });
+
+// Compile-time guard: the mirror above must stay structurally identical to the
+// kit's `MojangProfileSkin`. The bare `z.object` (no `z.ZodType` cast) keeps
+// Zod's exhaustiveness, and the two-way `extends` check fails tsc if the kit
+// adds, renames, or retypes a field — forcing a schema update instead of
+// silently stripping the new field when a persisted session is rehydrated.
+type MojangProfileSkinShapeMatches = z.infer<
+  typeof MojangProfileSkinSchema
+> extends MojangProfileSkin
+  ? MojangProfileSkin extends z.infer<typeof MojangProfileSkinSchema>
+    ? true
+    : ['kit field missing from MojangProfileSkinSchema']
+  : ['schema field missing from kit MojangProfileSkin'];
+const _mojangProfileSkinShapeCheck: MojangProfileSkinShapeMatches = true;
+void _mojangProfileSkinShapeCheck;
 
 // The kit's `as*` brand validators are runtime imports that drag yauzl/stream
 // into the renderer bundle. Shared code carries the same primitive shape and
