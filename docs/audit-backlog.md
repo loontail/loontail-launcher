@@ -1710,7 +1710,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-121"></a>
 #### LL-121 · verifySession untested
 
-- **Status:** TODO
+- **Status:** DONE — 2026-05-30 · commit 919f807
 - **Category:** testing · **Priority:** P1 · **Effort:** medium · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** main/services/auth/verify.ts:44-72
 - **Problem:** 6 branches; auth.test.ts:45-48 mocks verify away
@@ -1723,7 +1723,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-122"></a>
 #### LL-122 · auth refresh untested
 
-- **Status:** TODO
+- **Status:** DONE — 2026-05-30 · commit 17860e0
 - **Category:** testing · **Priority:** P1 · **Effort:** quick · **Change risk:** low · **Flow:** Auth / session flow
 - **Area:** main/services/auth/mojangAuth.ts:188-210;yggdrasilAuth.ts:80-114
 - **Problem:** no needsRefresh/AUTH_REFRESH_FAILED; yggdrasil only signOut
@@ -1736,7 +1736,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-123"></a>
 #### LL-123 · MIGRATIONS gap-throw untested
 
-- **Status:** TODO
+- **Status:** DONE — 2026-05-30 · commit 220a8f7
 - **Category:** testing · **Priority:** P1 · **Effort:** medium · **Change risk:** medium · **Flow:** Cross-cutting (no single flow)
 - **Area:** main/infra/store.ts:105-131
 - **Problem:** v=1 MIGRATIONS={}; stored-0 throws at load; tests write CURRENT
@@ -1985,7 +1985,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-142"></a>
 #### LL-142 · Pure domain units resolveLoader and accountFromSession have no tests
 
-- **Status:** TODO
+- **Status:** DONE — 2026-05-30 · commit ea7e53d
 - **Category:** testing · **Priority:** P1 · **Effort:** quick · **Change risk:** low · **Flow:** Launch flow
 - **Area:** src/shared/domain/loader.ts:13-33 (isLoaderAvailable, resolveLoader — discriminated 'resolved'/'ambiguous' union); src/shared/contracts/account.ts:18-36 (accountFromSession — provider branching). No test file references resolveLoader or accountFromSession (grep across tests/ returns nothing); only settings.test.ts and schemas.test.ts cover shared.
 - **Problem:** resolveLoader is non-trivial precedence logic (honour valid override → forge+fabric ambiguous → forge → fabric → vanilla) that directly gates which loader is launched; a regression silently launches the wrong loader or wrongly reports ambiguity. accountFromSession maps each session provider to the renderer Account and decides the active Mojang skin. Both are exactly the 'pure logic' §11.1 names as the default test target, yet neither is covered. The settings family IS thoroughly tested — these two pure units are the gap.
@@ -2625,8 +2625,22 @@ One entry per working session, newest at the bottom. Keep it terse.
 - Blocked: none
 - Next suggested batch: P1 IPC/boundary continuation — LL-016 (per-channel
   trusted-sender scoping), LL-017 (enforce Zod parse in the router contract),
-  LL-097 (unify domain codes into the shared registry), plus the auth-FSM test
-  gaps LL-121/LL-122/LL-123 and pure-domain LL-142.
+  LL-097 (unify domain codes into the shared registry).
+
+### 2026-05-30 (cont.) — 4 task(s)
+- Done: LL-142 (ea7e53d), LL-121 (919f807), LL-122 (17860e0), LL-123 (220a8f7)
+- Focus: test gaps on failure-prone logic (exec-summary §9). Pure domain units
+  resolveLoader + accountFromSession (LL-142); the verify.ts provider-agnostic
+  verifySession matrix that auth.test.ts had mocked away (LL-121); the
+  token-refresh verify paths for mojang + yggdrasil (LL-122); and the schema
+  migration gap-throw — extracted pure `applySettingsMigrations` from store.ts
+  and covered gap/order/no-op + module-load crash (LL-123).
+- Packages built + vendored into launcher node_modules (await npm publish): none
+- Blocked: none
+- Next suggested batch: LL-016 (per-channel trusted-sender scoping, security P1),
+  LL-120 (extract + test the updater toast FSM), then the kit dependency-extraction
+  cluster (LL-044/045/046/047) or the SSOT quick-wins (LL-135 BundleSlug brand,
+  LL-136 enum drift). LL-017 (router Zod enforcement) is large — give it its own session.
 
 ## Pending package release (publish at the very end, then bump pins)
 
