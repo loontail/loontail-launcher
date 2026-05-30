@@ -204,14 +204,16 @@ export const createSkinHandlers = (kit: MinecraftKit): SkinHandlers => {
     if (session.provider === 'yggdrasil') {
       const client = getYggdrasilClient();
       // Snapshot the URLs before deleting so we can invalidate the cache.
-      const before = await client.getTextures(session.profile.uuid).catch(() => null);
+      const before = await fetchTextures(session.profile.uuid).catch(() => null);
       try {
         await Promise.all([
           client.deleteSkin({ accessToken: session.accessToken }),
           client.deleteCape({ accessToken: session.accessToken }),
         ]);
       } catch (error) {
-        logger.warn('Failed to clear textures on Yggdrasil server', error);
+        logger.error('Failed to clear textures on Yggdrasil server', error);
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        throw new SkinError(ERROR_CODES.SkinClearFailed, `Failed to clear textures: ${message}`);
       }
       if (before?.skin?.url) await invalidateMediaCache(before.skin.url);
       if (before?.cape?.url) await invalidateMediaCache(before.cape.url);

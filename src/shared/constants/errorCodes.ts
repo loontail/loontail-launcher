@@ -5,6 +5,7 @@ export const ERROR_CODES = {
   IpcHandlerFailed: 'IPC_HANDLER_FAILED',
   SettingsInvalidPayload: 'SETTINGS_INVALID_PAYLOAD',
   SkinUploadFailed: 'SKIN_UPLOAD_FAILED',
+  SkinClearFailed: 'SKIN_CLEAR_FAILED',
   SkinNotAuthenticated: 'SKIN_NOT_AUTHENTICATED',
 } as const;
 

@@ -123,3 +123,31 @@ describe('uploadSkin (yggdrasil)', () => {
     expect(mediaCacheMocks.prewarmMediaCache).not.toHaveBeenCalled();
   });
 });
+
+describe('clearSkin (yggdrasil)', () => {
+  it('invalidates the cache with the absolutised URLs from fetchTextures', async () => {
+    storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
+    fetchTexturesMock.mockResolvedValue({
+      skin: { url: 'https://api/textures/skin' },
+      cape: { url: 'https://api/textures/cape' },
+    });
+
+    const { clearSkin } = createSkinHandlers(kitStub);
+    await clearSkin();
+
+    expect(fetchTexturesMock).toHaveBeenCalledWith('0123456789abcdef0123456789abcdef');
+    expect(mediaCacheMocks.invalidateMediaCache).toHaveBeenCalledWith('https://api/textures/skin');
+    expect(mediaCacheMocks.invalidateMediaCache).toHaveBeenCalledWith('https://api/textures/cape');
+  });
+
+  it('throws and skips cache invalidation when the server delete fails', async () => {
+    storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
+    fetchTexturesMock.mockResolvedValue({ skin: { url: 'https://api/textures/skin' }, cape: null });
+    yggClientMocks.deleteSkin.mockRejectedValue(new Error('429 Too Many Requests'));
+
+    const { clearSkin } = createSkinHandlers(kitStub);
+
+    await expect(clearSkin()).rejects.toMatchObject({ code: ERROR_CODES.SkinClearFailed });
+    expect(mediaCacheMocks.invalidateMediaCache).not.toHaveBeenCalled();
+  });
+});
