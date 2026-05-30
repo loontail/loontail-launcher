@@ -76,6 +76,7 @@ import {
   STORE_KEY_SCHEMA_VERSION,
 } from '@shared/constants';
 import type { AuthSession } from '@shared/contracts/auth';
+import type { LauncherSettings } from '@shared/contracts/settings';
 
 const storeFile = path.join(tmpUserData, 'launcher.json');
 const authSecretFile = path.join(tmpUserData, 'auth-session.bin');
@@ -309,6 +310,63 @@ describe('clearStoredAuth', () => {
     expect(JSON.parse(fs.readFileSync(storeFile, 'utf8'))).toMatchObject({
       [STORE_KEY_AUTH]: null,
     });
+  });
+});
+
+const settingsFixture = (allocatedRamMb = 0): LauncherSettings => ({
+  memory: { allocatedRamMb },
+  storage: { clientsFolder: '' },
+  launch: { console: false, fullscreen: false },
+  clients: {},
+});
+
+describe('applySettingsMigrations', () => {
+  it('throws on a gap in the migration chain', async () => {
+    const { applySettingsMigrations } = await loadStoreModule();
+    expect(() => applySettingsMigrations(settingsFixture(), 0, 1, {})).toThrow(
+      'Missing schema migration step from version 0 to 1',
+    );
+  });
+
+  it('applies steps in order, threading each output into the next', async () => {
+    const { applySettingsMigrations } = await loadStoreModule();
+    const calls: number[] = [];
+    const migrations = {
+      0: (settings: LauncherSettings): LauncherSettings => {
+        calls.push(0);
+        return { ...settings, memory: { allocatedRamMb: 10 } };
+      },
+      1: (settings: LauncherSettings): LauncherSettings => {
+        calls.push(1);
+        return { ...settings, memory: { allocatedRamMb: settings.memory.allocatedRamMb + 5 } };
+      },
+    };
+
+    const result = applySettingsMigrations(settingsFixture(), 0, 2, migrations);
+
+    expect(calls).toEqual([0, 1]);
+    expect(result.memory.allocatedRamMb).toBe(15);
+  });
+
+  it('returns the settings unchanged when already at the target version', async () => {
+    const { applySettingsMigrations } = await loadStoreModule();
+    const settings = settingsFixture(4096);
+    expect(applySettingsMigrations(settings, 1, 1, {})).toBe(settings);
+  });
+
+  it('throws at the first missing step in a partial chain', async () => {
+    const { applySettingsMigrations } = await loadStoreModule();
+    const migrations = { 0: (settings: LauncherSettings): LauncherSettings => settings };
+    expect(() => applySettingsMigrations(settingsFixture(), 0, 2, migrations)).toThrow(
+      'Missing schema migration step from version 1 to 2',
+    );
+  });
+
+  it('crashes module load when stored state is behind code with no migration step', async () => {
+    writeStore({ [STORE_KEY_SCHEMA_VERSION]: 0 });
+    await expect(loadStoreModule()).rejects.toThrow(
+      'Missing schema migration step from version 0 to 1',
+    );
   });
 });
 
