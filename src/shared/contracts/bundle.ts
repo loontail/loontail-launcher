@@ -36,7 +36,6 @@ export const BUSY_BUNDLE_STATUSES: ReadonlySet<BundleSyncStatus> = new Set([
 ]);
 
 export const BundleErrorCodes = {
-  NO_BUNDLE_SLUG: 'noBundleSlug',
   NO_CLIENT_FOLDER: 'noClientFolder',
   MANIFEST_FETCH_FAILED: 'manifestFetchFailed',
   MANIFEST_INVALID: 'manifestInvalid',

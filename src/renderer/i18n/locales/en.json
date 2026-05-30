@@ -104,7 +104,6 @@
       }
     },
     "bundleError": {
-      "noBundleSlug": "This client has no bundle attached.",
       "noClientFolder": "Set the launcher install folder in System settings first.",
       "manifestFetchFailed": "Failed to fetch the bundle manifest. Check your connection and try again.",
       "manifestInvalid": "Bundle manifest is malformed. Contact the administrator.",

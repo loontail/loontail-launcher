@@ -2,7 +2,6 @@ import { type BundleErrorCode, BundleErrorCodes } from '@shared/contracts/bundle
 import type { TFunction } from 'i18next';
 
 const KEY_BY_CODE: Record<BundleErrorCode, string> = {
-  [BundleErrorCodes.NO_BUNDLE_SLUG]: 'clients.bundleError.noBundleSlug',
   [BundleErrorCodes.NO_CLIENT_FOLDER]: 'clients.bundleError.noClientFolder',
   [BundleErrorCodes.MANIFEST_FETCH_FAILED]: 'clients.bundleError.manifestFetchFailed',
   [BundleErrorCodes.MANIFEST_INVALID]: 'clients.bundleError.manifestInvalid',

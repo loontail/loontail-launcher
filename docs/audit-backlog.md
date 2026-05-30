@@ -1994,6 +1994,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-06 — progressFormat.ts formatBytes uses Math.log(0) path — formatBytes(0) works by guard but formatBytes for very small numbers (<1) logs negative
 
+- **Status:** DONE — 2026-05-31 · commit 3aa3480
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: download-install-flow)_
 - **Area:** src/renderer/features/clients/components/install/progressFormat.ts
 - **Problem:** formatBytes (line 3-8) guards bytes <= 0 and returns '0 B'. However, for 0 < bytes < 1 (e.g. fractional bytes from a calculation), Math.log(bytes)/Math.log(1024) is negative, Math.floor gives a negative unit index, Math.min clamps it to 0 (the SIZE_UNITS[0] 'B' case) only because 0 is the lower bound of the min. The unit calculation gives `Math.min(negative, 4)` which is the negative number, and `SIZE_UNITS[negative]` is undefined — the result is `NaN B`.
