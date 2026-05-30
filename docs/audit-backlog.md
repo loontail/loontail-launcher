@@ -1908,6 +1908,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### ERR-05 — toIpcError maps all MinecraftKitErrors to IpcHandlerFailed — hides classified launcher codes
 
+- **Status:** DONE — 2026-05-31 · commit 9e50a00
 - **Category:** IPC · **Priority:** P1 · **Risk:** Medium · _(auditor: error-logging-model)_
 - **Area:** src/main/ipc/toIpcError.ts lines 44-45, src/main/services/minecraft/errors.ts
 - **Problem:** In toIpcError (line 44), any MinecraftKitError that escapes a handler is mapped to ERROR_CODES.IpcHandlerFailed regardless of its internal code. However, classifyError in minecraft/errors.ts already converts kit errors to domain MinecraftErrorCodes via KIT_CODE_TO_LAUNCHER_CODE. If a kit error escapes the service layer without being caught and reclassified into a ManagerError first (e.g. from buildContext or kit.targets.resolve), toIpcError collapses it to IpcHandlerFailed and the renderer shows a generic error with no actionable code.

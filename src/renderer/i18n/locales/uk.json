@@ -262,7 +262,8 @@
       "languageDesc": "Змінити мову інтерфейсу",
       "logOut": "Вийти",
       "restartNow": "Перезапустити",
-      "cacheClearedToast": "Кеш очищено"
+      "cacheClearedToast": "Кеш очищено",
+      "cacheClearFailedToast": "Кеш у пам'яті очищено; не вдалося очистити дисковий кеш"
     }
   },
   "console": {

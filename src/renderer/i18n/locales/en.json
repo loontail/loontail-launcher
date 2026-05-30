@@ -262,7 +262,8 @@
       "languageDesc": "Change the interface language",
       "logOut": "Log out",
       "restartNow": "Restart now",
-      "cacheClearedToast": "Cache cleared"
+      "cacheClearedToast": "Cache cleared",
+      "cacheClearFailedToast": "In-memory cache cleared; disk cache clear failed"
     }
   },
   "console": {

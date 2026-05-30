@@ -9,12 +9,11 @@ import {
 import { Button } from '@renderer/shared/ui/Button';
 import { SettingsGroup } from '@renderer/shared/ui/SettingsGroup';
 import { SettingsRow } from '@renderer/shared/ui/SettingsRow';
-import { toast } from '@renderer/shared/ui/Toast';
-import { QUERY_KEY_ROOTS } from '@shared/constants';
 import { UpdaterStates } from '@shared/contracts/updater';
 import { useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { clearLauncherCache } from '../../clearCache';
 import { LanguageSwitcher } from '../LanguageSwitcher';
 
 const BYTES_PER_MB = 1024 * 1024;
@@ -45,20 +44,7 @@ export const LauncherSection = () => {
     updateStatus?.state === UpdaterStates.AVAILABLE ||
     updateStatus?.state === UpdaterStates.DOWNLOADING;
 
-  const handleClearCache = async () => {
-    queryClient.removeQueries({
-      predicate: (query) => {
-        const [first] = query.queryKey;
-        return first !== QUERY_KEY_ROOTS.auth && first !== QUERY_KEY_ROOTS.media;
-      },
-    });
-    try {
-      await clearMediaCache();
-    } catch {
-      // Disk cache clear is best-effort; the in-memory churn still happened.
-    }
-    toast.success(t('settings.launcher.cacheClearedToast'));
-  };
+  const handleClearCache = () => clearLauncherCache(queryClient, clearMediaCache, t);
 
   const handleCheckUpdates = () => {
     markUserInitiatedCheck();
