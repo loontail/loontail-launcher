@@ -1,8 +1,8 @@
 import path from 'node:path';
+import { SIDECAR_DIR } from '@main/constants/paths';
 import { BundleErrorCodes } from '@shared/contracts/bundle';
 import { BundleError } from './errors';
 
-const SIDECAR_DIR = '.loontail';
 const BUNDLE_MANIFEST_FILE = 'bundle.json';
 
 // Resolve where the local bundle manifest lives for a given client install.

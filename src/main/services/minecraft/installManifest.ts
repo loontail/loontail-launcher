@@ -2,11 +2,11 @@ import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
 import { Loaders, type Target } from '@loontail/minecraft-kit';
+import { SIDECAR_DIR } from '@main/constants/paths';
 import { scopedLogger } from '@main/infra/logger';
 import type { ClientSlug } from '@shared/contracts/ids';
 import { z } from 'zod';
 
-const SIDECAR_DIR = '.loontail';
 const TARGET_INSTALL_MANIFEST_FILE = 'manifest.json';
 const TARGET_INSTALL_MANIFEST_VERSION = 1;
 
