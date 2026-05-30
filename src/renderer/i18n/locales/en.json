@@ -56,7 +56,7 @@
     "checking": "Checking...",
     "repairing": "Repairing...",
     "repair": "Repair",
-    "repairOffer": "Looks like this client needs a quick fix — some game files may be missing or out of date. Run a repair?",
+    "repairOffer": "Some game files are missing or out of date. Repair this client?",
     "play": "Play",
     "update": "Update",
     "pause": "Pause",

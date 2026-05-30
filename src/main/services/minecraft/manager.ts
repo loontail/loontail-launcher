@@ -32,7 +32,6 @@ import { requireAccount, runLaunch } from './launch';
 import { OP_TO_STATUS, type Op, OpKinds, type RepairOp } from './ops';
 import { resolveClientInstallPresence } from './readinessPolicy';
 import { runRepair } from './repair';
-import { clientFolderHasContent } from './runtimeState';
 import { runUninstall } from './uninstall';
 
 const logger = scopedLogger('minecraft');
@@ -190,13 +189,11 @@ export class MinecraftManager {
     this.requireIdle(slug);
     const lock = this.acquireWriteLock(slug);
     try {
+      // No "is it installed enough" gate: buildContext already enforces a
+      // configured install folder (NO_CLIENT_FOLDER) and resolves the target, and
+      // kit.repair.all rebuilds whatever is missing on disk — including the version
+      // JSON — so repair runs from any state (a broken or even empty folder).
       const ctx = await buildContext(this.kit, slug);
-      // Allow repair whenever the client folder has any content, even when no
-      // version JSON is present — repair (kit.repair.all) rebuilds the missing
-      // version JSON. Only an empty/absent folder is "nothing to repair".
-      if (!(await clientFolderHasContent(ctx.clientFolder))) {
-        throw new ManagerError(MinecraftErrorCodes.NOT_INSTALLED, 'Client is not installed');
-      }
       const op: Op = { kind: OpKinds.REPAIR, abort: new AbortController() };
       this.ops.set(slug, op);
       lock.setCancel(() => this.cancel(slug));

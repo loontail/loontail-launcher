@@ -27,18 +27,3 @@ export const isAnythingInstalled = async (clientFolder: string): Promise<boolean
   }
   return false;
 };
-
-// Repair gate, deliberately more lenient than isAnythingInstalled: a broken
-// install whose version JSON is exactly what's missing still has a client folder
-// worth repairing (libraries/assets/runtime on disk). Gating repair on a present
-// version JSON would refuse to fix the very thing that's broken. We only refuse
-// when there is nothing on disk at all — that's an install, not a repair.
-export const clientFolderHasContent = async (clientFolder: string): Promise<boolean> => {
-  if (!clientFolder) return false;
-  try {
-    const entries = await fs.readdir(clientFolder);
-    return entries.length > 0;
-  } catch {
-    return false;
-  }
-};

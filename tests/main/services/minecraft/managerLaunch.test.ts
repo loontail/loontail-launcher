@@ -7,6 +7,7 @@ import {
 } from '@main/services/clientOperationLocks';
 import type { Broadcaster } from '@main/services/minecraft/broadcast';
 import type { Context } from '@main/services/minecraft/context';
+import { ManagerError } from '@main/services/minecraft/errors';
 import { OpKinds } from '@main/services/minecraft/ops';
 import type { Account } from '@shared/contracts/account';
 import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
@@ -19,7 +20,6 @@ const orchestrationMocks = vi.hoisted(() => {
   process.env.API_TOKEN ??= 'test-token';
   return {
     buildContext: vi.fn(),
-    clientFolderHasContent: vi.fn(),
     getSettings: vi.fn(),
     hasCurrentTargetInstallManifest: vi.fn(),
     isAnythingInstalled: vi.fn(),
@@ -40,7 +40,6 @@ vi.mock('@main/services/minecraft/context', () => ({
 
 vi.mock('@main/services/minecraft/runtimeState', () => ({
   isAnythingInstalled: orchestrationMocks.isAnythingInstalled,
-  clientFolderHasContent: orchestrationMocks.clientFolderHasContent,
 }));
 
 vi.mock('@main/services/minecraft/installManifest', () => ({
@@ -129,7 +128,6 @@ const resetMocks = (): void => {
   orchestrationMocks.getSettings.mockReset();
   orchestrationMocks.hasCurrentTargetInstallManifest.mockReset();
   orchestrationMocks.isAnythingInstalled.mockReset();
-  orchestrationMocks.clientFolderHasContent.mockReset();
   orchestrationMocks.runInstall.mockReset();
   orchestrationMocks.runLaunch.mockReset();
   orchestrationMocks.runRepair.mockReset();
@@ -139,7 +137,6 @@ const resetMocks = (): void => {
   orchestrationMocks.getSettings.mockReturnValue(launcherSettings());
   orchestrationMocks.hasCurrentTargetInstallManifest.mockResolvedValue(true);
   orchestrationMocks.isAnythingInstalled.mockResolvedValue(false);
-  orchestrationMocks.clientFolderHasContent.mockResolvedValue(false);
   orchestrationMocks.runInstall.mockResolvedValue(undefined);
   orchestrationMocks.runLaunch.mockResolvedValue(undefined);
   orchestrationMocks.runRepair.mockResolvedValue(true);
@@ -259,7 +256,6 @@ describe('MinecraftManager.startLaunch', () => {
     const manager = makeManager(broadcaster, operationLocks);
     const ctx = context();
     orchestrationMocks.buildContext.mockResolvedValue(ctx);
-    orchestrationMocks.clientFolderHasContent.mockResolvedValue(true);
 
     let bundleLockAcquired = false;
     const hook = vi.fn(async () => {
@@ -293,28 +289,27 @@ describe('MinecraftManager.startLaunch', () => {
     });
   });
 
-  it('repairs a broken install whose version JSON is missing (folder has content)', async () => {
+  it('runs repair from any on-disk state once the context builds (no install gate)', async () => {
     resetMocks();
     const manager = makeManager(makeBroadcaster());
+    // buildContext resolves the target; repair must run and let kit.repair.all
+    // rebuild whatever is missing, even with no version JSON / empty folder.
     orchestrationMocks.buildContext.mockResolvedValue(context());
-    // No version JSON on disk, but the client folder still has content: repair
-    // must run and rebuild it rather than refusing as "not installed".
-    orchestrationMocks.isAnythingInstalled.mockResolvedValue(false);
-    orchestrationMocks.clientFolderHasContent.mockResolvedValue(true);
 
     await manager.startRepair(SLUG);
 
     expect(orchestrationMocks.runRepair).toHaveBeenCalled();
   });
 
-  it('refuses repair when the client folder is empty or absent', async () => {
+  it('surfaces a missing install folder from buildContext instead of repairing', async () => {
     resetMocks();
     const manager = makeManager(makeBroadcaster());
-    orchestrationMocks.buildContext.mockResolvedValue(context());
-    orchestrationMocks.clientFolderHasContent.mockResolvedValue(false);
+    orchestrationMocks.buildContext.mockRejectedValue(
+      new ManagerError(MinecraftErrorCodes.NO_CLIENT_FOLDER, 'no folder'),
+    );
 
     await expect(manager.startRepair(SLUG)).rejects.toMatchObject({
-      code: MinecraftErrorCodes.NOT_INSTALLED,
+      code: MinecraftErrorCodes.NO_CLIENT_FOLDER,
     });
     expect(orchestrationMocks.runRepair).not.toHaveBeenCalled();
   });
