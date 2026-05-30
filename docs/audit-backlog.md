@@ -47,6 +47,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-02 — yggdrasilClient.ts exports a module-level mutable singleton `cached` — same testability problem as consoleHub
 
+- **Status:** DONE — 2026-05-31 · commit dcacdd0
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Medium · _(auditor: arch-boundaries)_
 - **Area:** src/main/services/auth/yggdrasilClient.ts:4-18
 - **Problem:** `let cached: YggdrasilClient | null = null` at line 4 is a mutable module-level singleton. `getYggdrasilClient()` returns the same instance across all callers. Auth service, skin service, and verify paths all share one client. Tests cannot inject a fake YggdrasilClient without mocking the module. The pattern contradicts how kit is handled (created by `createKit()` and passed through service factories).
@@ -57,6 +58,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-03 — MojangProfileSkinSchema in shared/contracts/auth.ts duplicates the kit's MojangProfileSkin type — comment acknowledges this but the duplication is never verified
 
+- **Status:** DONE — 2026-05-31 · commit a48d49a (resolved with AUTH-15)
 - **Category:** Dependency extraction · **Priority:** P3 · **Risk:** Low · _(auditor: arch-boundaries)_
 - **Area:** src/shared/contracts/auth.ts:23-29
 - **Problem:** `MojangProfileSkinSchema` at line 23 is a local re-definition of `MojangProfileSkin` from the kit. The comment 'Mirror of kit's MojangProfileSkin shape' acknowledges this. There is no compile-time assertion that the two types remain in sync. If the kit changes its skin shape (adds a field, changes a union), the stored-session Zod schema silently accepts the old shape, potentially persisting stale data.
@@ -89,6 +91,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-06 — `withRefreshedProfile` exported from mojangAuth.ts is consumed by skin.ts, creating a cross-service dependency
 
+- **Status:** DONE — 2026-05-31 · commit dcacdd0
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Low · _(auditor: auth-session-flow)_
 - **Area:** src/main/services/auth/mojangAuth.ts:76-86, src/main/services/skin/skin.ts:10
 - **Problem:** `skin.ts` imports `withRefreshedProfile` from `@main/services/auth/mojangAuth`. The skin service is a sibling service and should not reach into another service's internals. The guideline states cross-service communication should go via direct import of a public service API, not by importing internal helper functions from another service's module.
@@ -99,6 +102,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-07 — `skin.ts` calls `getStoredAuth`/`setStoredAuth` directly, bypassing the auth service boundary
 
+- **Status:** DONE — 2026-05-31 · commit dcacdd0
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Medium · _(auditor: auth-session-flow)_
 - **Area:** src/main/services/skin/skin.ts:9, :158, :204
 - **Problem:** `createSkinHandlers` (skin.ts) imports and calls `getStoredAuth` and `setStoredAuth` from `@main/infra/store` directly — the same low-level store layer that the auth service wraps. The skin service therefore manages stored session state (persisting refreshed Mojang profiles after skin upload/reset), which is auth service's responsibility. On lines 158 and 204, after a Mojang skin mutation the skin service writes the updated session via `setStoredAuth(withRefreshedProfile(...))`, maintaining auth invariants outside the auth module.
@@ -109,6 +113,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-08 — Unsafe `as { context?: { httpStatus?: number } }` cast in `verifyMojangSession` bypasses type safety
 
+- **Status:** DONE — 2026-05-31 · commit 8d4988b
 - **Category:** Code · **Priority:** P2 · **Risk:** Medium · _(auditor: auth-session-flow)_
 - **Area:** src/main/services/auth/mojangAuth.ts:204
 - **Problem:** Line 204: `const httpStatus = (error as { context?: { httpStatus?: number } }).context?.httpStatus;` uses a structural cast on an `unknown`-typed error after `isErrorCode` has returned true. `isErrorCode` only validates the error code string; it does not narrow the `context` property type. The cast bypasses the type system — if the kit changes the context shape, this silently reads `undefined` and the 401 branch is never taken, leaving an expired Mojang session as `'offline'` instead of `'expired'`.
@@ -172,6 +177,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-14 — `migrateStoredAuthSecrets` is a misleadingly named no-op wrapper in store.ts, exported and called at init time
 
+- **Status:** DONE — 2026-05-31 · commit 90ca1b4
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: auth-session-flow)_
 - **Area:** src/main/infra/store.ts:307-309, src/main/services/auth/index.ts:19
 - **Problem:** Lines 307-309 of store.ts: `export const migrateStoredAuthSecrets = (): void => { getStoredAuth(); };`. This function is a side-effect wrapper — calling `getStoredAuth()` triggers the legacy migration path (line 282: `AuthSessionSchema.safeParse` on the raw object detects old sessions stored without the metadata split and re-writes them). The export name implies it is migration-specific, but internally it is just a guarded `getStoredAuth`. The auth service calls it from `init()` (index.ts:19).
@@ -182,6 +188,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-15 — `MojangProfileSkinSchema` is a hand-rolled mirror of a kit type, creating a drift risk
 
+- **Status:** DONE — 2026-05-31 · commit a48d49a
 - **Category:** Dependency extraction · **Priority:** P2 · **Risk:** Medium · _(auditor: auth-session-flow)_
 - **Area:** src/shared/contracts/auth.ts:21-29
 - **Problem:** Lines 21-29: `MojangProfileSkinSchema` reproduces the shape of `MojangProfileSkin` from minecraft-kit using a `z.ZodType<MojangProfileSkin>` cast. The comment says it is 'kept here so the persisted-store Zod schema can validate it without pulling kit's runtime into shared/'. If the kit adds or renames a field on `MojangProfileSkin`, the schema silently fails to validate the new field (Zod's `object()` strips unknown keys by default), meaning the persisted session may lose fields silently on re-validation.
@@ -192,6 +199,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-16 — `validatePngBuffer` called with `payload.type` which is typed as `SkinKind` ('skin'|'cape'), but yggdrasil-core's signature may expect a different enum — the coupling is implicit
 
+- **Status:** DONE — 2026-05-31 · commit bf0c5a1
 - **Category:** Dependency extraction · **Priority:** P2 · **Risk:** Low · _(auditor: auth-session-flow)_
 - **Area:** src/main/services/skin/skin.ts:171
 - **Problem:** Line 171: `validatePngBuffer(payload.buffer, payload.type)` passes the launcher's `SkinKind` ('skin'|'cape') directly to the yggdrasil-core function. The public API of `validatePngBuffer` accepts a `TextureKind` from yggdrasil-core. These two string unions happen to be identical today, but they are defined independently with no compile-time constraint linking them. If yggdrasil-core renames or extends `TextureKind`, the call silently breaks at runtime.
@@ -3454,6 +3462,51 @@ or blocked work. Pick the highest-priority available task (P0 → P1 → P2 → 
 _None._ No task this cycle changed `@loontail/minecraft-kit` or `loontail-yggdrasil`.
 
 ## Session log
+
+### 2026-05-31 (session 6)
+
+- **Done (8 task IDs across 5 commits):**
+  - `AUTH-02` + `AUTH-06` + `AUTH-07` (P2) — the auth/skin boundary cluster.
+    The `getYggdrasilClient` module singleton is replaced by a
+    `createYggdrasilClient()` factory returning a `YggdrasilGateway`
+    (`{ client, fetchTextures }`), created once in `main/index.ts` and threaded
+    into both `createAuthService` and `createSkinService` like `kit`. `verify.ts`
+    / `auth.ts` / `routes.ts` now receive `fetchTextures` by parameter instead of
+    importing the singleton. `withRefreshedProfile` moved out of `mojangAuth.ts`
+    into a new `auth/session.ts`; the skin service no longer touches the store or
+    auth internals — it goes through an injected `AuthSessionPort`
+    (`current()` / `updateMojangProfile()`), making auth the single session
+    writer · commit dcacdd0
+  - `AUTH-08` (P2) — `verifyMojangSession` narrows the kit error with
+    `isMinecraftKitError` and reads the typed `context.httpStatus` instead of an
+    `as { context?: … }` structural cast · commit 8d4988b
+  - `AUTH-03` + `AUTH-15` (P3/P2) — dropped the `z.ZodType<MojangProfileSkin>`
+    cast (which disabled Zod exhaustiveness) and added a two-way `extends`
+    compile-time guard so the local skin-schema mirror fails tsc if the kit's
+    `MojangProfileSkin` shape ever drifts · commit a48d49a
+  - `AUTH-16` (P2) — compile-time assertion that the launcher's `SkinKind` stays
+    assignable to yggdrasil-core's `SkinAssetKind` (the real `validatePngBuffer`
+    param type) · commit bf0c5a1
+  - `AUTH-14` (P2) — renamed `migrateStoredAuthSecrets` →
+    `runAuthStoreMigrationIfNeeded` and documented the legacy-migration
+    side-effect baked into `getStoredAuth` · commit 90ca1b4
+- **Packages built / pending publish:** none.
+- **Blocked:** none.
+- **Verification:** `npm run verify` — lint, typecheck, test (387 tests), build
+  all green.
+- **Notes:** AUTH-03 and AUTH-15 are duplicates (same `MojangProfileSkinSchema`
+  drift), resolved by one guard. AUTH-16's audit text guessed `TextureKind`, but
+  the actual `validatePngBuffer` signature takes `SkinAssetKind` ('skin'|'cape');
+  the assertion targets the real type. The pre-existing 401→expired test in
+  `mojangAuth.test.ts` already covers the AUTH-08 path. Untracked stray files at
+  the launcher root (`pending.promise)`, `loggerMocks`, `({,`) are not from this
+  session and were left untouched.
+- **Suggested next batch:** `AUTH-17` (distinguish Yggdrasil server-error from
+  offline in `verifySession` — needs a new result kind threaded into `verify.ts`,
+  so size it as a small cluster), `AUTH-10` (add `LOGIN_ERROR_CODE.Cancelled` and
+  suppress it in the renderer's `useMojangLogin` instead of the `cancelledRef`
+  coupling — touches renderer), then `AUTH-11` (absolutize relative texture URLs
+  in the `loontail-yggdrasil` package — a package-change task).
 
 ### 2026-05-31 (session 5)
 
