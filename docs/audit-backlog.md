@@ -482,6 +482,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-13 — flattenEntries and flattenRemote are parallel implementations of the same manifest-flattening logic
 
+- **Status:** DONE — 2026-05-31 · commit 44a4bc8
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: download-install-flow)_
 - **Area:** src/main/services/bundle/plan.ts, src/main/services/bundle/manifestSnapshot.ts
 - **Problem:** flattenEntries (plan.ts line 25-34) iterates RemoteManifest, skips dirs, and returns a list of RemoteManifestEntry. flattenRemote (manifestSnapshot.ts line 4-14) iterates the same structure, skips dirs, skips entries without sha256, and returns the files Record. Both skip isDir entries. They diverge only in their output shape and the sha256 filter in flattenRemote.
@@ -956,6 +957,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-59 — plan.ts flattenEntries duplicates logic already present in manifestSnapshot.ts flattenRemote
 
+- **Status:** DONE — 2026-05-31 · commit 44a4bc8
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: state-async-perf)_
 - **Area:** src/main/services/bundle/plan.ts, src/main/services/bundle/manifestSnapshot.ts
 - **Problem:** plan.ts defines flattenEntries (line 25) which iterates RemoteManifest values, skips isDir entries, and collects RemoteManifestEntry objects. manifestSnapshot.ts defines flattenRemote (line 4) which does the same iteration, also skips isDir, but additionally filters out entries without sha256. Both functions loop Object.values(manifest) and filter entries — the manifest-walking pattern is duplicated.
@@ -1664,6 +1666,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-17 — verifyLaunchPreflight in launch.ts walks the entire classpath with sequential fs.access calls — O(N) serial I/O
 
+- **Status:** DONE — 2026-05-31 · commit f7c223f
 - **Category:** Performance · **Priority:** P3 · **Risk:** Low · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/launch.ts (lines 138-145)
 - **Problem:** The for...of loop at line 138 calls requireLaunchFile for each classpath entry sequentially. A Forge install can have 200+ classpath entries; sequential fs.access calls on a cold disk can add visible latency to the LAUNCHING phase.
@@ -1674,6 +1677,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-18 — launch.ts verifyLaunchPreflight iterates all classpath entries sequentially with fs.access — O(n) blocking on large classpaths
 
+- **Status:** DONE — 2026-05-31 · commit f7c223f
 - **Category:** Performance · **Priority:** P2 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/minecraft/launch.ts (L136-145)
 - **Problem:** `verifyLaunchPreflight` checks each classpath file with `await requireLaunchFile` in a sequential for-of loop (L143-145). A Forge install can have 50-150 classpath entries. Each `fs.access` call is sequential, adding 50-150 round-trips to the preflight before the game starts.
@@ -1704,6 +1708,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-21 — verifyLaunchPreflight in launch.ts walks classpath files sequentially with await in a loop
 
+- **Status:** DONE — 2026-05-31 · commit f7c223f
 - **Category:** Performance · **Priority:** P2 · **Risk:** Low · _(auditor: state-async-perf)_
 - **Area:** src/main/services/minecraft/launch.ts
 - **Problem:** verifyLaunchPreflight (line 109) calls requireLaunchFile sequentially for javaPath (line 113), versionJson (line 127), versionJar (line 131), and then iterates composition.classpath (line 143) with a for-of loop and awaits each fs.access call in sequence. A Minecraft classpath can contain 40-100 library jars. The sequential stat/access checks for all classpath entries serialise through the event loop one at a time.
@@ -1734,6 +1739,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-24 — verifyLaunchPreflight issues N sequential fs.access calls; not abstracted for injection
 
+- **Status:** DONE — 2026-05-31 · commit f7c223f
 - **Category:** Testing · **Priority:** P2 · **Risk:** Low · _(auditor: testability)_
 - **Area:** src/main/services/minecraft/launch.ts:109-146
 - **Problem:** verifyLaunchPreflight() (lines 109-146) makes multiple sequential fs.access and resolveLaunchVersion calls directly, with no injection point. The function is tested in launch.test.ts via real tmp dirs (createLaunchFixture), which is correct for integration coverage. However, edge cases (empty classpath, resolveLaunchVersion rejection) require specific filesystem state that is awkward to arrange.
@@ -1774,6 +1780,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-28 — Guard `verifyLaunchPreflight` classpath loop against empty-string entries
 
+- **Status:** DONE — 2026-05-31 · commit f7c223f
 - **Category:** Error handling · **Priority:** P2 · **Risk:** Low · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/minecraft/launch.ts
 - **Problem:** Lines 137-145 iterate `composition.classpath` and call `requireLaunchFile` for every entry. If kit ever returns an empty string in the classpath (e.g. from a malformed version JSON), `fs.access('')` resolves to the CWD and returns success, silently masking a broken classpath entry.
@@ -1868,6 +1875,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### ERR-02 — Deduplicate `errorMessage` helper defined in both bundle/errors.ts and minecraft/errors.ts
 
+- **Status:** DONE — 2026-05-31 · commit dff71a3
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/bundle/errors.ts (L19-20), src/main/services/minecraft/errors.ts (L37-38)
 - **Problem:** The one-liner `export const errorMessage = (error: unknown): string => error instanceof Error ? error.message : String(error);` is duplicated word-for-word in two separate error modules. Eleven other files import it from one or the other.
@@ -1878,6 +1886,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### ERR-03 — Remove dead `emitErrorEvent` from ManagerEnv — it is never called
 
+- **Status:** DONE — 2026-05-31 · commit 898a8f3
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/minecraft/env.ts (L19), src/main/services/minecraft/manager.ts (L71)
 - **Problem:** `ManagerEnv.emitErrorEvent` is declared in env.ts (L19) and wired in manager.ts constructor (L71), but grep across all service files shows it is never invoked from any module. `emitError(slug, code, message)` is used everywhere instead.
@@ -1950,6 +1959,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-03 — isBundleBusy duplicated between store.ts and installSteps.ts — divergence risk
 
+- **Status:** DONE — 2026-05-31 · commit 39a7d91
 - **Category:** Architecture · **Priority:** P1 · **Risk:** Medium · _(auditor: download-install-flow)_
 - **Area:** src/renderer/features/bundle/store.ts, src/renderer/features/clients/components/install/installSteps.ts
 - **Problem:** isBundleBusy is exported from store.ts (line 71) and re-defined privately in installSteps.ts (line 85) with identical logic. Both include PAUSED in the 'busy' set. If the set of busy statuses changes (e.g. a new VERIFYING status is added), only one copy gets updated.
@@ -2515,6 +2525,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-07 — Local assertNever in installManifest.ts duplicates the minecraft-kit export
 
+- **Status:** DONE — 2026-05-31 · commit 0fb03db
 - **Category:** Dependency extraction · **Priority:** P2 · **Risk:** Low · _(auditor: launch-flow)_
 - **Area:** src/main/services/minecraft/installManifest.ts:48-50
 - **Problem:** installManifest.ts defines its own private assertNever function (lines 48-50). minecraft-kit exports assertNever as a public symbol from @loontail/minecraft-kit core exports. The local copy is functionally identical.
@@ -2525,6 +2536,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-08 — Throttled-progress implementation is duplicated between progressAdapter.ts and healProgress.ts
 
+- **Status:** DONE — 2026-05-31 · commit c8cc5c2
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/progressAdapter.ts (lines 109-167), src/main/services/bundle/healProgress.ts (lines 1-79)
 - **Problem:** Both files implement the identical pending-flush throttle pattern: a let pendingFlush + lastEmittedAt + Date.now() + setTimeout + clearTimeout + unref() block. The logic is byte-for-byte equivalent except for the flush payload shape. PROGRESS_THROTTLE_MS (100 ms) and HEAL_PROGRESS_THROTTLE_MS (100 ms) are both 100 ms but defined in separate locations.
@@ -2535,6 +2547,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-09 — installManifest.ts re-implements assertNever instead of importing from minecraft-kit or shared
 
+- **Status:** DONE — 2026-05-31 · commit 0fb03db
 - **Category:** Dependency extraction · **Priority:** P3 · **Risk:** Low · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/installManifest.ts (lines 48-50)
 - **Problem:** assertNever is a local private function at line 48. minecraft-kit exports assertNever from its core surface. The guidelines explicitly state: 'do not re-implement what minecraft-kit already provides'.
@@ -2585,6 +2598,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-14 — Share `SIDECAR_DIR = '.loontail'` constant duplicated in paths.ts and installManifest.ts
 
+- **Status:** DONE — 2026-05-31 · commit 30dc0bf
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/bundle/paths.ts (L5), src/main/services/minecraft/installManifest.ts (L8)
 - **Problem:** The string literal `'.loontail'` is defined as `const SIDECAR_DIR` in both files independently. Both files construct paths under the same directory but neither imports from the other.
@@ -2615,6 +2629,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-17 — assertNever is re-implemented locally in installManifest.ts — import from minecraft-kit instead
 
+- **Status:** DONE — 2026-05-31 · commit 0fb03db
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/minecraft/installManifest.ts (L48-50)
 - **Problem:** `const assertNever = (value: never): never => { throw new Error(...) }` is re-implemented locally (L48-50) even though `assertNever` is already exported from `@loontail/minecraft-kit` (listed in the provided public exports) and is used in the codebase (e.g. it could be imported from the kit).
@@ -2635,6 +2650,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-19 — Replace local assertNever in installManifest.ts with imported assertNever from minecraft-kit
 
+- **Status:** DONE — 2026-05-31 · commit 0fb03db
 - **Category:** Dependency extraction · **Priority:** P2 · **Risk:** Low · _(auditor: error-logging-model)_
 - **Area:** src/main/services/minecraft/installManifest.ts lines 48-50
 - **Problem:** installManifest.ts lines 48-50 define a private assertNever that throws 'Unhandled loader: ...' — identical in semantics to the assertNever exported from @loontail/minecraft-kit (listed in the public exports). The guideline forbids re-implementing logic already in the dependency.
@@ -2785,6 +2801,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-34 — SIDECAR_DIR constant '.loontail' is duplicated in installManifest.ts and paths.ts
 
+- **Status:** DONE — 2026-05-31 · commit 30dc0bf
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: testability)_
 - **Area:** src/main/services/minecraft/installManifest.ts:8, src/main/services/bundle/paths.ts:5
 - **Problem:** Both installManifest.ts and paths.ts independently define const SIDECAR_DIR = '.loontail'. This is a magic string in two separate files; changing it in one would silently leave the other pointing at the old directory name.
@@ -2795,6 +2812,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-35 — assertNever re-implemented locally in installManifest.ts; already exported from minecraft-kit
 
+- **Status:** DONE — 2026-05-31 · commit 0fb03db
 - **Category:** Dependency extraction · **Priority:** P2 · **Risk:** Low · _(auditor: testability)_
 - **Area:** src/main/services/minecraft/installManifest.ts:48-50
 - **Problem:** installManifest.ts defines its own assertNever (lines 48-50). The minecraft-kit package already exports assertNever from @loontail/minecraft-kit (per the public exports list in the task spec).
@@ -2845,6 +2863,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-40 — Remove locally re-implemented `assertNever` in installManifest.ts; import from minecraft-kit
 
+- **Status:** DONE — 2026-05-31 · commit 0fb03db
 - **Category:** Dependency extraction · **Priority:** P2 · **Risk:** Low · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/minecraft/installManifest.ts
 - **Problem:** Lines 48-50 define a local `assertNever` function. `assertNever` is already exported from `@loontail/minecraft-kit` (listed in the KIT_API: `core: assertNever`).
@@ -3417,6 +3436,44 @@ or blocked work. Pick the highest-priority available task (P0 → P1 → P2 → 
 _None._ No task this cycle changed `@loontail/minecraft-kit` or `loontail-yggdrasil`.
 
 ## Session log
+
+### 2026-05-31 (session 3)
+
+- **Done (20 task IDs across 6 commits, + 1 confirmed already-resolved):**
+  - `ERR-02` (P2) — moved the duplicated `errorMessage` one-liner into
+    `src/main/infra/errorMessage.ts`; all 9 callsites and the test now import the
+    single copy · commit dff71a3
+  - `DLI-13` + `DLI-59` (P2) — extracted `flattenRemoteEntries` into
+    `bundle/manifestUtils.ts`; `plan.flattenEntries` and `manifestSnapshot.flattenRemote`
+    share one manifest-walk · commit 44a4bc8
+  - `CC-14` + `CC-34` (P2) — `SIDECAR_DIR` ('.loontail') now lives in
+    `src/main/constants/paths.ts`; bundle `paths.ts` and minecraft
+    `installManifest.ts` import it · commit 30dc0bf
+  - `LAU-17` + `LAU-18` + `LAU-21` + `LAU-24` + `LAU-28` (P2/P3) —
+    `verifyLaunchPreflight` fans the classpath fs.access checks out with
+    `Promise.all` (fails fast), guards empty-string entries, and gained tests for
+    the empty-classpath and empty-entry branches · commit f7c223f
+  - `CC-07` + `CC-09` + `CC-17` + `CC-19` + `CC-35` + `CC-40` (P2/P3) — deleted
+    the local `assertNever` in `installManifest.ts`; imported from
+    `@loontail/minecraft-kit` · commit 0fb03db
+  - `UI-03` (P1) — `installSteps.ts` reuses `isBundleBusy` from
+    `@renderer/features/bundle/store` instead of a private copy · commit 39a7d91
+  - `ERR-03` (P2) — removed the never-invoked `emitErrorEvent` from `ManagerEnv`
+    (env.ts + manager.ts) and the dead mocks/assertions in 5 tests · commit 898a8f3
+  - `CC-08` (P2) — already resolved by the session-2 `createThrottledEmitter`
+    extraction: both `progressAdapter.ts` and `healProgress.ts` consume the shared
+    emitter and the single `PROGRESS_THROTTLE_MS` · commit c8cc5c2 (no new work)
+- **Packages built / pending publish:** none.
+- **Blocked:** none.
+- **Verification:** `npm run verify` — lint, typecheck, test (356 tests), build all green.
+- **Notes:** `UI-03` had to import `isBundleBusy` from the `bundle/store` module
+  directly rather than the `@renderer/features/bundle` barrel: the barrel re-exports
+  `BundleEventsListener`, whose transitive `@renderer/i18n` import touches
+  `localStorage` at module load and crashes the node-env `installSteps` test.
+- **Suggested next batch:** the renderer state-leak quick-wins (`UI-04`
+  status-seed queue, `UI-05` BundleEventsListener subscription), the
+  `forgeProcessorActionsCache` unbounded-growth fix (summary item 6), and the
+  remaining error-model tasks (`KIT_CODE_TO_LAUNCHER_CODE` lossy mapping).
 
 ### 2026-05-31 (session 2)
 
