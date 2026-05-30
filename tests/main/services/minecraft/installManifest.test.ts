@@ -155,7 +155,6 @@ const env = (kit: MinecraftKit, ops: Map<ClientSlug, Op>): ManagerEnv => {
     logger: logger(),
     emitStatus: broadcaster.status,
     emitError: vi.fn(),
-    emitErrorEvent: vi.fn(),
     persistRuntime: vi.fn(),
     clearRuntimeOverride: vi.fn(),
   };

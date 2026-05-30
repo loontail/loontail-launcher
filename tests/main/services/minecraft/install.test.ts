@@ -119,7 +119,6 @@ const makeEnv = (kit: MinecraftKit, ops: Map<ClientSlug, Op>): ManagerEnv => {
     logger: makeLogger(),
     emitStatus: broadcaster.status,
     emitError: vi.fn(),
-    emitErrorEvent: vi.fn(),
     persistRuntime: vi.fn(),
     clearRuntimeOverride: vi.fn(),
   };
@@ -504,7 +503,6 @@ describe('runRepair', () => {
     );
     expect(repairSignal).toBe(op.abort.signal);
     expect(env.emitError).not.toHaveBeenCalled();
-    expect(env.emitErrorEvent).not.toHaveBeenCalled();
     expect(targetReady).not.toHaveBeenCalled();
     expect(env.broadcaster.status).toHaveBeenLastCalledWith({
       slug: SLUG,

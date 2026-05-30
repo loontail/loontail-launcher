@@ -17,7 +17,6 @@ import {
   type InstallStatus,
   InstallStatuses,
   MinecraftErrorCodes,
-  type MinecraftErrorEvent,
   type MinecraftStatusEvent,
 } from '@shared/contracts/minecraft';
 import type { LoaderChoice } from '@shared/contracts/settings';
@@ -68,7 +67,6 @@ export class MinecraftManager {
       logger,
       emitStatus: (payload: MinecraftStatusEvent) => broadcaster.status(payload),
       emitError: (slug, code, message) => broadcaster.error({ slug, code, message }),
-      emitErrorEvent: (payload: MinecraftErrorEvent) => broadcaster.error(payload),
       persistRuntime: (slug, runtime) => {
         try {
           persistClientOverride(slug, runtime === undefined ? { runtime: undefined } : { runtime });

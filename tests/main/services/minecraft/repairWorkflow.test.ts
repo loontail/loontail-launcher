@@ -81,7 +81,6 @@ const env = (): ManagerEnv => {
     logger: logger(),
     emitStatus: broadcaster.status,
     emitError: vi.fn(),
-    emitErrorEvent: vi.fn(),
     persistRuntime: vi.fn(),
     clearRuntimeOverride: vi.fn(),
   };
@@ -102,7 +101,6 @@ describe('repair workflow finalization', () => {
     await finalizeRepairCancellation(operationEnv, SLUG, context());
 
     expect(operationEnv.emitError).not.toHaveBeenCalled();
-    expect(operationEnv.emitErrorEvent).not.toHaveBeenCalled();
     expect(operationEnv.broadcaster.status).toHaveBeenLastCalledWith({
       slug: SLUG,
       status: InstallStatuses.NOT_INSTALLED,

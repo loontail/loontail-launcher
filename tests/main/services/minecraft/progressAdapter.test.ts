@@ -37,7 +37,6 @@ const makeEnv = () => {
     },
     emitStatus: broadcaster.status,
     emitError: vi.fn(),
-    emitErrorEvent: vi.fn(),
     persistRuntime: vi.fn(),
     clearRuntimeOverride: vi.fn(),
   } as unknown as ManagerEnv;
