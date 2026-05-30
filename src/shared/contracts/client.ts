@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { ClientId, ClientSlug } from './ids';
+import type { BundleSlug, ClientId, ClientSlug } from './ids';
 import { ServerSchema, StrapiEntitySchema, StrapiMediaSchema } from './strapi';
 
 export const KeywordSchema = StrapiEntitySchema.extend({
@@ -59,6 +59,7 @@ export type Client = Omit<
   | 'forgeVersion'
   | 'fabricVersion'
   | 'runtimeVersion'
+  | 'bundleSlug'
 > & {
   id: ClientId;
   slug: ClientSlug;
@@ -68,4 +69,5 @@ export type Client = Omit<
   forgeVersion?: string | null | undefined;
   fabricVersion?: string | null | undefined;
   runtimeVersion?: string | null | undefined;
+  bundleSlug?: BundleSlug | null | undefined;
 };

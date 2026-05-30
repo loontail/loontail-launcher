@@ -1,3 +1,5 @@
+import type { BundleSlug } from '@shared/contracts/ids';
+
 export const API_PATH_PREFIX = '/api';
 
 export const API_ROUTES = {
@@ -18,6 +20,6 @@ export const API_ROUTES = {
   bundleRegistry: {
     // Plugin route is content-api scoped; `httpRequest` prepends the shared
     // `/api` prefix, so we omit it here.
-    manifest: (slug: string) => `/bundle-registry/builds/${slug}/manifest`,
+    manifest: (slug: BundleSlug) => `/bundle-registry/builds/${slug}/manifest`,
   },
 } as const;

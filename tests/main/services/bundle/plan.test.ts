@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { buildPlan } from '@main/services/bundle/plan';
 import type { LocalManifest, RemoteManifest } from '@shared/contracts/bundle';
+import { asBundleSlug } from '@shared/contracts/ids';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
@@ -49,7 +50,7 @@ describe('buildPlan', () => {
     await fs.mkdir(path.join(dir, 'mods'), { recursive: true });
     await fs.writeFile(path.join(dir, 'mods/foo.jar'), 'foo');
     const local: LocalManifest = {
-      bundleSlug: 'b',
+      bundleSlug: asBundleSlug('b'),
       manifestHash: 'h',
       syncedAt: '2024-01-01',
       files: { 'mods/foo.jar': { sha256: sha256('foo'), size: 3 } },
@@ -64,7 +65,7 @@ describe('buildPlan', () => {
     await fs.mkdir(path.join(dir, 'mods'), { recursive: true });
     await fs.writeFile(path.join(dir, 'mods/foo.jar'), 'old');
     const local: LocalManifest = {
-      bundleSlug: 'b',
+      bundleSlug: asBundleSlug('b'),
       manifestHash: 'h',
       syncedAt: '2024-01-01',
       files: { 'mods/foo.jar': { sha256: sha256('old'), size: 3 } },
@@ -76,7 +77,7 @@ describe('buildPlan', () => {
   it('lists local-only files in toDelete', async () => {
     const remoteManifest = remote([{ path: 'mods/foo.jar', content: 'foo' }]);
     const local: LocalManifest = {
-      bundleSlug: 'b',
+      bundleSlug: asBundleSlug('b'),
       manifestHash: 'h',
       syncedAt: '2024-01-01',
       files: {
@@ -107,7 +108,7 @@ describe('buildPlan', () => {
     await fs.mkdir(path.join(dir, 'mods'), { recursive: true });
     await fs.writeFile(path.join(dir, 'mods/foo.jar'), 'tampered');
     const local: LocalManifest = {
-      bundleSlug: 'b',
+      bundleSlug: asBundleSlug('b'),
       manifestHash: 'h',
       syncedAt: '2024-01-01',
       files: { 'mods/foo.jar': { sha256: sha256('foo'), size: 3 } },

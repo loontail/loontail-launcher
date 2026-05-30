@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { enumFromConst } from './enum';
+import type { BundleSlug } from './ids';
 import { ClientSlugSchema } from './ids';
 
 // Stable string constants for the lifecycle of a bundle sync. The renderer
@@ -78,7 +79,7 @@ export type LocalManifestFile = {
 };
 
 export type LocalManifest = {
-  bundleSlug: string;
+  bundleSlug: BundleSlug;
   // SHA-256 of the raw remote manifest JSON we synced from. Lets the renderer
   // detect "manifest changed upstream" cheaply on next checkStatus.
   manifestHash: string;

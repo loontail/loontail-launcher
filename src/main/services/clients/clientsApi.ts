@@ -2,6 +2,7 @@ import { buildMediaUrl, httpGet } from '@main/infra/http';
 import { scopedLogger } from '@main/infra/logger';
 import { API_ROUTES } from '@shared/constants';
 import {
+  type BundleSlug,
   type Client,
   type ClientResponse,
   ClientResponseSchema,
@@ -9,6 +10,7 @@ import {
   type StrapiList,
   StrapiListSchema,
   type StrapiMedia,
+  asBundleSlug,
   asClientId,
   asClientSlug,
 } from '@shared/contracts';
@@ -52,10 +54,10 @@ const absolutizeMedia = (media: StrapiMedia): StrapiMedia => ({
 
 // Strapi may return an empty string for an unset bundleSlug customField; collapse
 // it (and other empty/falsy forms) to null so the manager treats it uniformly.
-const coerceBundleSlug = (input: unknown): string | null => {
+const coerceBundleSlug = (input: unknown): BundleSlug | null => {
   if (typeof input !== 'string') return null;
   const trimmed = input.trim();
-  return trimmed.length > 0 ? trimmed : null;
+  return trimmed.length > 0 ? asBundleSlug(trimmed) : null;
 };
 
 const normalizeClient = (client: ClientResponse): Client | null => {

@@ -1,6 +1,6 @@
 import type { ClientRequest } from 'node:http';
 import type { BundleProgressEvent, RemoteManifest } from '@shared/contracts/bundle';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { BundleSlug, ClientSlug } from '@shared/contracts/ids';
 import type { SyncPlan } from './plan';
 import type { SyncTask } from './runner';
 
@@ -9,7 +9,7 @@ export type ActiveSync = {
   lastProgress: BundleProgressEvent | null;
   remoteManifestHash: string;
   remoteManifest: RemoteManifest;
-  bundleSlug: string;
+  bundleSlug: BundleSlug;
   forLaunch: boolean;
   awaiters: Array<{ resolve: () => void; reject: (err: Error) => void }>;
   pauseIdleTimer: NodeJS.Timeout | null;
@@ -44,7 +44,7 @@ export const createSyncTask = (slug: ClientSlug, clientFolder: string): SyncTask
 
 export const createActiveSync = (
   task: SyncTask,
-  bundleSlug: string,
+  bundleSlug: BundleSlug,
   forLaunch: boolean,
 ): ActiveSync => ({
   task,

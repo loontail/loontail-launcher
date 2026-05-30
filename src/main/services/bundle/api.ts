@@ -5,6 +5,7 @@ import { scopedLogger } from '@main/infra/logger';
 import { API_ROUTES } from '@shared/constants';
 import { type RemoteManifest, RemoteManifestSchema } from '@shared/contracts/bundle';
 import { BundleErrorCodes } from '@shared/contracts/bundle';
+import type { BundleSlug } from '@shared/contracts/ids';
 import { BundleError, errorMessage } from './errors';
 import { resolveBundleManifestEntryUrl } from './urlPolicy';
 
@@ -37,7 +38,7 @@ const absolutizeManifestUrls = (manifest: RemoteManifest, baseUrl: string): Remo
 };
 
 export const fetchRemoteManifest = async (
-  slug: string,
+  slug: BundleSlug,
   signal?: AbortSignal,
 ): Promise<RemoteManifestFetchResult> => {
   const path = API_ROUTES.bundleRegistry.manifest(slug);

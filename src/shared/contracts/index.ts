@@ -15,14 +15,16 @@ export type {
   ConsoleSource,
 } from './console';
 export {
+  BundleSlugSchema,
   ClientIdSchema,
   ClientSlugSchema,
   UserIdSchema,
+  asBundleSlug,
   asClientId,
   asClientSlug,
   asUserId,
 } from './ids';
-export type { ClientId, ClientSlug, UserId } from './ids';
+export type { BundleSlug, ClientId, ClientSlug, UserId } from './ids';
 export { AUTH_PROVIDERS, LOGIN_ERROR_CODE, LoginPayloadSchema } from './auth';
 export type {
   AuthProvider,

@@ -8,10 +8,11 @@ import {
 } from '@main/services/bundle/manifestRepo';
 import { bundleManifestPath } from '@main/services/bundle/paths';
 import type { LocalManifest } from '@shared/contracts/bundle';
+import { asBundleSlug } from '@shared/contracts/ids';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 const sample: LocalManifest = {
-  bundleSlug: 'test-bundle',
+  bundleSlug: asBundleSlug('test-bundle'),
   manifestHash: 'abc123',
   syncedAt: '2025-01-01T00:00:00.000Z',
   files: {
