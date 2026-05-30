@@ -118,6 +118,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-09 — `clearSkin` in skin.ts swallows the Yggdrasil delete error silently, then continues cache invalidation as if deletion succeeded
 
+- **Status:** DONE — 2026-05-31 · commit 16cb5c6
 - **Category:** Error handling · **Priority:** P2 · **Risk:** Medium · _(auditor: auth-session-flow)_
 - **Area:** src/main/services/skin/skin.ts:186-196
 - **Problem:** Lines 186-196: the `try/catch` around `client.deleteSkin` and `client.deleteCape` logs a warn but does not return or rethrow. The code then falls through to `invalidateMediaCache(before.skin.url)` / `invalidateMediaCache(before.cape.url)`. If the server rejects the delete (403, 429, network error), the cache is invalidated for a texture that was never actually deleted — the skin is still live on the server but the launcher's media cache is purged. On the next render the user sees the default texture despite having a live skin.
@@ -148,6 +149,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-12 — skin.ts calls `client.getTextures` directly at line 185, bypassing the `fetchTextures` absolutisation wrapper
 
+- **Status:** DONE — 2026-05-31 · commit 16cb5c6
 - **Category:** Code · **Priority:** P2 · **Risk:** Medium · _(auditor: auth-session-flow)_
 - **Area:** src/main/services/skin/skin.ts:185
 - **Problem:** Line 185: `const before = await client.getTextures(session.profile.uuid).catch(() => null)`. All other texture lookups in the codebase use `fetchTextures` from yggdrasilClient.ts which applies `absolutizeTextureUrl`. This direct call will receive raw potentially-relative URLs from the server, causing `invalidateMediaCache(before.skin.url)` to attempt cache invalidation with a relative key — a no-op since the cache stores absolute URLs.
@@ -209,6 +211,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-18 — `uploadSkinYggdrasil` fetches textures twice (before and after upload) without using the `fetchTextures` absolutisation wrapper on the post-upload fetch
 
+- **Status:** DONE — 2026-05-31 · commit 07405d6
 - **Category:** Code · **Priority:** P1 · **Risk:** Medium · _(auditor: auth-session-flow)_
 - **Area:** src/main/services/skin/skin.ts:89,108
 - **Problem:** Lines 89 and 108 both call `fetchTextures` (the wrapper). This is correct. However the `clearSkin` path at line 185 calls `client.getTextures` (the raw client) for the pre-delete snapshot. This inconsistency means URL absolutisation is applied on the upload path but not on the clear path, as noted in a separate task. Additionally, the two `fetchTextures` calls in `uploadSkinYggdrasil` introduce a TOCTOU window: if the server is slow to propagate the new texture, `updatedTextures` at line 108 may return the old URL, causing `prewarmMediaCache` to cache the old texture under the new URL or throw 'Server accepted the upload but did not return a URL'.
@@ -395,6 +398,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-05 — LocalManifest parsing in manifestRepo.ts uses manual field checks instead of Zod — inconsistent with all other deserialization
 
+- **Status:** DONE — 2026-05-31 · commit 123bca5
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: arch-boundaries)_
 - **Area:** src/main/services/bundle/manifestRepo.ts:14-28
 - **Problem:** `loadLocalManifest` manually checks `typeof candidate.bundleSlug !== 'string'` etc. (lines 14-24) instead of using a Zod schema. The `LocalManifest` type is defined in shared/contracts/bundle.ts without a schema; the remote manifest has `RemoteManifestSchema` which is used. Every other persistence boundary (store.ts, installManifest.ts) uses `safeParse`. The manual check also does not validate `files` object structure — a corrupt value for a single file entry passes silently.
@@ -436,6 +440,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-09 — Local manifest deserialised with hand-rolled structural check instead of Zod — silent data corruption risk
 
+- **Status:** DONE — 2026-05-31 · commit 123bca5
 - **Category:** Code · **Priority:** P1 · **Risk:** Medium · _(auditor: download-install-flow)_
 - **Area:** src/main/services/bundle/manifestRepo.ts
 - **Problem:** loadLocalManifest (lines 12-26) reads the sidecar JSON and validates it via a Partial<LocalManifest> cast plus four typeof guards. This misses the shape of individual file entries (Record<string, LocalManifestFile>), doesn't validate that sha256 and size are present and correctly typed inside files, and uses `as LocalManifest` at line 26 — a type lie that bypasses strict-null safety downstream in buildPlan. A corrupted or schema-drifted sidecar silently produces a LocalManifest where file entries may have undefined sha256 values, causing the hash fast-path in plan.ts (line 102) to produce false-positive skips.
@@ -446,6 +451,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-10 — HEAL_PROGRESS_THROTTLE_MS is a magic literal duplicating the exported bundle constant
 
+- **Status:** DONE — 2026-05-31 · commit c8cc5c2
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: download-install-flow)_
 - **Area:** src/main/services/bundle/healProgress.ts
 - **Problem:** HEAL_PROGRESS_THROTTLE_MS is defined as 100 (line 6) inside healProgress.ts. BUNDLE_DOWNLOAD_PROGRESS_THROTTLE_MS is also 100 and is already exported from src/main/constants/bundle.ts. The two throttle intervals should be consistent — the heal phase emits to the same renderer IPC channel as the download phase — but they are maintained separately.
@@ -556,6 +562,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-21 — De-duplicate persistTargetInstallManifest — lives in both install.ts and repairWorkflow.ts
 
+- **Status:** DONE — 2026-05-31 · commit 323ea57
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: launch-flow)_
 - **Area:** src/main/services/minecraft/install.ts:55-65, src/main/services/minecraft/repairWorkflow.ts:66-76
 - **Problem:** Both files define an identical private async function persistTargetInstallManifest(env, slug, ctx) that calls saveCurrentTargetInstallManifest and swallows errors with a warn log. The implementations are line-for-line identical except for the log tag ('install' vs 'repair').
@@ -566,6 +573,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-22 — Cancel of UninstallOp is silently ignored — cancel() has no branch for UNINSTALL
 
+- **Status:** DONE — 2026-05-31 · commit a452fc0
 - **Category:** Error handling · **Priority:** P2 · **Risk:** Low · _(auditor: launch-flow)_
 - **Area:** src/main/services/minecraft/manager.ts:171-185, src/main/services/minecraft/ops.ts:27
 - **Problem:** MinecraftManager.cancel() (manager.ts:171-185) handles INSTALL, REPAIR, BUNDLE_SYNCING, and LAUNCH_STARTING ops, but has no branch for OpKinds.UNINSTALL. UninstallOp (ops.ts:27) carries no abort controller — uninstall is currently uninterruptible by design — but cancel() silently does nothing if called during uninstall, which is consistent with that design choice. However, cancelAll() (manager.ts:275) also silently skips UNINSTALL. There is no logging or IPC notification when cancel is called on an in-progress uninstall.
@@ -576,6 +584,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-23 — BundleSyncingOp abort not wired into BUNDLE_SYNCING cancelAll path
 
+- **Status:** DONE — 2026-05-31 · commit a452fc0
 - **Category:** Flow · **Priority:** P2 · **Risk:** Medium · _(auditor: launch-flow)_
 - **Area:** src/main/services/minecraft/manager.ts:275-288
 - **Problem:** cancelAll() (manager.ts:275-288) iterates ops and calls cancel() for INSTALL, REPAIR, and LAUNCH_STARTING. It explicitly skips LAUNCH ops (by design — game session). But it also skips BUNDLE_SYNCING ops. If the app shuts down while a bundle sync is in progress (OpKinds.BUNDLE_SYNCING), the in-flight download is not aborted and the process may hang waiting for the network call to complete.
@@ -596,6 +605,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-25 — manifestRepo.ts uses ad-hoc object casting instead of Zod schema validation for LocalManifest
 
+- **Status:** DONE — 2026-05-31 · commit 123bca5
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/bundle/manifestRepo.ts (lines 12-26)
 - **Problem:** loadLocalManifest casts parsed JSON to Partial<LocalManifest> (line 15) and then manually checks four top-level fields via typeof. This is a hand-rolled schema guard that misses nested structure (e.g. files entries being { sha256, size }). By contrast, installManifest.ts uses a Zod schema (TargetInstallManifestSchema) for the equivalent sidecar file. Inconsistent validation approach; a malformed files record would be returned as-is (passed as LocalManifest) even if individual file entries are wrong.
@@ -616,6 +626,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-27 — Extract shared throttled-progress-emitter into a single reusable primitive
 
+- **Status:** DONE — 2026-05-31 · commit c8cc5c2
 - **Category:** Code · **Priority:** P1 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/minecraft/progressAdapter.ts (L121-167), src/main/services/bundle/healProgress.ts (L1-79), src/main/services/bundle/runner.ts (L58-88)
 - **Problem:** Three separate throttled-progress implementations exist: `createThrottledProgressEmitter` in progressAdapter.ts (L121-167), the inline throttle in `createHealProgressListener` (healProgress.ts L22-49), and `maybeEmit` in runner.ts (L58-88). All three track `lastEmittedAt`, a `pendingFlush` timeout, and call `clearTimeout`/`setTimeout` with the same 100 ms interval. The HEAL_PROGRESS_THROTTLE_MS (100), PROGRESS_THROTTLE_MS (100), and BUNDLE_DOWNLOAD_PROGRESS_THROTTLE_MS (100) are the same literal defined three times in three different files.
@@ -626,6 +637,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-28 — Deduplicate `persistTargetInstallManifest` copied between install.ts and repairWorkflow.ts
 
+- **Status:** DONE — 2026-05-31 · commit 323ea57
 - **Category:** Code · **Priority:** P1 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/minecraft/install.ts (L55-65), src/main/services/minecraft/repairWorkflow.ts (L66-76)
 - **Problem:** `persistTargetInstallManifest` is copy-pasted verbatim in both files (identical body: call `saveCurrentTargetInstallManifest`, log a warn on failure). The only difference is the log prefix ('install' vs 'repair').
@@ -636,6 +648,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-29 — Add assertNever exhaustiveness to MinecraftManager.cancel() op-kind dispatch
 
+- **Status:** DONE — 2026-05-31 · commit a452fc0
 - **Category:** Code · **Priority:** P1 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/minecraft/manager.ts (L172-185)
 - **Problem:** `cancel()` checks op kinds with a chain of `else if` branches (L174-184) but has no `else assertNever(op)` fallthrough. `OpKinds.UNINSTALL` (which has no abort controller) and any future op kinds are silently ignored — cancel is a no-op for them. The guidelines require discriminated-union + assertNever exhaustiveness.
@@ -656,6 +669,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-31 — MinecraftManager.cancel() if/else chain is not type-safe — add assertNever for new OpKinds
 
+- **Status:** DONE — 2026-05-31 · commit a452fc0
 - **Category:** Architecture · **Priority:** P1 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/minecraft/manager.ts (L172-185)
 - **Problem:** The `cancel` method checks `op.kind` with four independent `else if` clauses but omits `UNINSTALL` and `LAUNCH`. When a new OpKind is added to ops.ts, the compiler does not flag a missing branch in cancel(). The existing `LAUNCH` op is silently skipped (correct, since kit owns the session), but this intent is not encoded in the type system.
@@ -666,6 +680,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-32 — localManifest validation in manifestRepo.ts uses manual duck-typing instead of Zod schema
 
+- **Status:** DONE — 2026-05-31 · commit 123bca5
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/bundle/manifestRepo.ts (L13-26)
 - **Problem:** `loadLocalManifest` manually checks `typeof candidate.bundleSlug !== 'string'`, etc. (L16-22) instead of using a Zod schema. `LocalManifest` type is defined in shared/contracts/bundle.ts but no Zod schema for it exists there — only the type is exported. The manual check misses nested field validation (`files` values are not validated at all).
@@ -706,6 +721,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-36 — assignNever exhaustiveness missing in cancel() dispatch for Op variants — mirrors MinecraftManager but in a different location
 
+- **Status:** DONE — 2026-05-31 · commit a452fc0
 - **Category:** Code · **Priority:** P1 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/minecraft/manager.ts (L276-287), same cancelAll()
 - **Problem:** `cancelAll()` (L276-287) uses a manual `if (op.kind === OpKinds.INSTALL || op.kind === OpKinds.REPAIR || op.kind === OpKinds.LAUNCH_STARTING)` check without covering `BUNDLE_SYNCING` or `UNINSTALL`. `BUNDLE_SYNCING` has an abort controller and could reasonably be cancelled on shutdown. Comments say launch ops are excluded intentionally, but the exclusion of BUNDLE_SYNCING is not commented.
@@ -716,6 +732,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-37 — Throttled-progress pattern in healProgress.ts duplicates dispose logic — `dispose` should flush pending rather than just cancel
 
+- **Status:** DONE — 2026-05-31 · commit c8cc5c2
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/bundle/healProgress.ts (L34-38, L75-78)
 - **Problem:** `dispose` in `createHealProgressListener` only calls `clearPendingFlush()` (cancel the timer without flushing). This means the last batch of VERIFY_FILE_CHECKED events before the healing phase ends may never be emitted — the pending timer is cancelled, leaving a stale progress count in the renderer until the next status event. Compare: `createThrottledProgressEmitter.dispose` in progressAdapter.ts also only cancels the timer (L166), same issue.
@@ -726,6 +743,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-38 — manifestRepo.loadLocalManifest casts parsed JSON with Partial<LocalManifest> — unsafe without runtime validation of nested files
 
+- **Status:** DONE — 2026-05-31 · commit 123bca5
 - **Category:** Error handling · **Priority:** P2 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/bundle/manifestRepo.ts (L14-26)
 - **Problem:** The manual validation at L16-22 casts to `Partial<LocalManifest>` and checks only top-level string fields. The `files` field is only checked to be an object (`typeof candidate.files !== 'object'`). If `files` contains entries without `sha256` or `size`, or with wrong types, those are silently accepted. The final cast `return candidate as LocalManifest` is a type lie.
@@ -827,6 +845,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-48 — Throttled progress emitter dispose() does not cancel a pending flush timer
 
+- **Status:** DONE — 2026-05-31 · commit c8cc5c2
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Low · _(auditor: state-async-perf)_
 - **Area:** src/main/services/minecraft/progressAdapter.ts
 - **Problem:** createThrottledProgressEmitter (line 121) returns a dispose that calls clearPendingFlush (line 147). However clearPendingFlush only clears the timer reference; the flush callback closes over env.broadcaster.progress and slug. If the adapter is disposed while a pending flush is alive (pendingFlush !== null) the timer will fire after the op map entry has been deleted and potentially after a new op has taken the slug. The dispose() function IS clearPendingFlush, so this is correct — but runWithProgressAdapter (line 227) only calls adapter.dispose() in its finally block, meaning a pending timer outstanding at the time the finally runs will still fire. The issue is that dispose aliases clearPendingFlush which IS the canceller, so this IS handled. However in createRepairProgressAdapter (line 169), dispose is emitter.dispose (line 222) — which is clearPendingFlush — but the adapter also calls emitter.emit() without ensuring a final flush before dispose. The last progress snapshot might never reach the renderer if the timer has not yet fired when dispose() is called.
@@ -1047,6 +1066,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-70 — Eliminate `persistTargetInstallManifest` duplication between install.ts and repairWorkflow.ts
 
+- **Status:** DONE — 2026-05-31 · commit 323ea57
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/minecraft/install.ts, src/main/services/minecraft/repairWorkflow.ts
 - **Problem:** `persistTargetInstallManifest` is defined identically in both `install.ts` (lines 55-65) and `repairWorkflow.ts` (lines 66-76): both call `saveCurrentTargetInstallManifest` and catch errors with a `logger.warn`. The only difference is the log prefix (`install:` vs `repair:`).
@@ -1077,6 +1097,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-73 — Harden `loadLocalManifest` in bundle/manifestRepo.ts: replace duck-typed shape check with Zod parsing
 
+- **Status:** DONE — 2026-05-31 · commit 123bca5
 - **Category:** Error handling · **Priority:** P2 · **Risk:** Low · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/bundle/manifestRepo.ts
 - **Problem:** Lines 14-28 validate the local manifest with manual `typeof` checks (`typeof candidate.bundleSlug !== 'string'`, etc.) and cast with `candidate as LocalManifest`. This is the same pattern the guideline prohibits (no `any`, validate at system boundaries). `loadTargetInstallManifest` in installManifest.ts (lines 91-108) correctly uses `TargetInstallManifestSchema.safeParse`, but the bundle manifest does not.
@@ -1219,6 +1240,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-05 — persistTargetInstallManifest is duplicated between install.ts and repairWorkflow.ts
 
+- **Status:** DONE — 2026-05-31 · commit 323ea57
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/install.ts (lines 55-65), src/main/services/minecraft/repairWorkflow.ts (lines 66-76)
 - **Problem:** Both files define an identically-shaped private function named persistTargetInstallManifest with the same signature, same try/catch, and same warn log format. The only difference is the log prefix ('install' vs 'repair'). Any future change to how the manifest is persisted must be applied in both places.
@@ -1289,6 +1311,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-12 — manager.ts: cancel() uses a chain of else-if branches instead of a discriminated switch, and LAUNCH op kind is silently ignored
 
+- **Status:** DONE — 2026-05-31 · commit a452fc0
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/manager.ts (lines 171-185)
 - **Problem:** cancel() at line 171 uses four else-if branches over op.kind. The UNINSTALL and LAUNCH op kinds fall through silently — no abort, no op.session.abort. For UNINSTALL this is intentional (fs.rm is not abortable), but LAUNCH is not documented as intentionally unabortable here; stop() handles it separately. The pattern differs from the coding guideline ('discriminated unions + assertNever exhaustiveness'): adding a new OpKind does not produce a compile-time error if cancel() is not updated.
@@ -3394,6 +3417,42 @@ or blocked work. Pick the highest-priority available task (P0 → P1 → P2 → 
 _None._ No task this cycle changed `@loontail/minecraft-kit` or `loontail-yggdrasil`.
 
 ## Session log
+
+### 2026-05-31 (session 2)
+
+- **Done (23 task IDs across 6 commits):**
+  - `AUTH-18` (P1) — `uploadSkinYggdrasil` retries the post-upload textures
+    lookup (3×, 200 ms apart) so CDN propagation lag no longer fails an
+    otherwise-successful upload · commit 07405d6
+  - `AUTH-09` + `AUTH-12` (P2) — yggdrasil `clearSkin` now rethrows as a new
+    `SkinClearFailed` code on server-delete failure and only invalidates the
+    media cache on success; the pre-delete snapshot uses the absolutising
+    `fetchTextures` wrapper · commit 16cb5c6
+  - `DLI-22` + `DLI-23` + `DLI-29` + `DLI-31` + `DLI-36` + `REP-12` (P1/P2) —
+    `MinecraftManager.cancel()`/`cancelAll()` are now exhaustive `switch`es with
+    `assertNever`; uninstall-cancel warns, bundle sync is aborted on shutdown,
+    launch stays kit-owned · commit a452fc0
+  - `DLI-10` + `DLI-27` + `DLI-37` + `DLI-48` (P1/P2) — extracted
+    `createThrottledEmitter` (`src/main/infra/throttledEmitter.ts`) that flushes
+    the pending value on dispose; `progressAdapter` + `healProgress` use it and
+    the throttle interval is the single `PROGRESS_THROTTLE_MS` constant · commit c8cc5c2
+  - `DLI-05` + `DLI-09` + `DLI-25` + `DLI-32` + `DLI-38` + `DLI-73` (P1/P2) —
+    `LocalManifest` now has a Zod schema (`LocalManifestSchema`) and
+    `loadLocalManifest` validates nested file entries via `safeParse` · commit 123bca5
+  - `DLI-21` + `DLI-28` + `DLI-70` + `REP-05` (P1/P2) — `persistTargetInstallManifest`
+    moved into `installManifest.ts` with a `logPrefix` arg; install + repair share
+    one copy · commit 323ea57
+- **Packages built / pending publish:** none.
+- **Blocked:** none.
+- **Verification:** `npm run lint`, `npm run typecheck`, `npm test` (350 tests),
+  `npm run build` all green.
+- **Notes:** the AUTH JSDoc-cleanup tasks (`AUTH-26`/`27`/`28`/`29`/`30`/`31`) were
+  inspected and found already satisfied — the auth/yggdrasil files now carry only
+  plain `//` why-comments, no `/** */` blocks — so they were left unmarked rather
+  than fabricating a no-op commit.
+- **Suggested next batch:** the remaining manifest-flatten dedup (`DLI-13`/`DLI-59`),
+  the `errorMessage`/`SIDECAR_DIR` dedup (`ERR-02`, plus the `.loontail` constant),
+  then the launch preflight parallel-I/O quick-wins (`LAU-17`/`18`/`21`/`24`/`28`).
 
 ### 2026-05-31
 
