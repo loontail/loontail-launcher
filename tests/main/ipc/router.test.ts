@@ -31,7 +31,12 @@ vi.mock('@main/infra/logger', () => ({
 }));
 
 import { createRouter } from '@main/ipc/router';
+import { BundleError } from '@main/services/bundle/errors';
+import { ManagerError } from '@main/services/minecraft/errors';
+import { SkinError } from '@main/services/skin/errors';
 import { ERROR_CODES } from '@shared/constants';
+import { BundleErrorCodes } from '@shared/contracts/bundle';
+import { MinecraftErrorCodes } from '@shared/contracts/minecraft';
 import { IPC_ERROR_SENTINEL, tryUnwrapIpcError } from '@shared/ipc';
 
 const fakeEvent = (): IpcMainInvokeEvent => ({}) as unknown as IpcMainInvokeEvent;
@@ -133,6 +138,72 @@ describe('createRouter', () => {
     const ipcError = tryUnwrapIpcError((captured as Error).message);
     expect(ipcError?.code).toBe(ERROR_CODES.IpcInvalidArgs);
     expect(ipcError?.message).toBe('bad args');
+  });
+
+  it('preserves the message of a thrown Error subclass (SkinError)', async () => {
+    appMock.isPackaged = true;
+    const router = createRouter(() => true);
+    router.handle('media.uploadSkin', () => {
+      throw new SkinError(ERROR_CODES.SkinUploadFailed, 'Skin upload rejected');
+    });
+
+    const handler = handlers.get('media.uploadSkin');
+    let captured: unknown;
+    try {
+      await handler?.(fakeEvent(), undefined);
+    } catch (error) {
+      captured = error;
+    }
+
+    const ipcError = tryUnwrapIpcError((captured as Error).message);
+    expect(ipcError).toEqual({
+      code: ERROR_CODES.SkinUploadFailed,
+      message: 'Skin upload rejected',
+    });
+  });
+
+  it('rehydrates a domain error code outside ERROR_CODES (minecraft.install OP_IN_FLIGHT)', async () => {
+    appMock.isPackaged = true;
+    const router = createRouter(() => true);
+    router.handle('minecraft.install', () => {
+      throw new ManagerError(MinecraftErrorCodes.OP_IN_FLIGHT, 'Operation already running');
+    });
+
+    const handler = handlers.get('minecraft.install');
+    let captured: unknown;
+    try {
+      await handler?.(fakeEvent(), undefined);
+    } catch (error) {
+      captured = error;
+    }
+
+    const ipcError = tryUnwrapIpcError((captured as Error).message);
+    expect(ipcError).toEqual({
+      code: MinecraftErrorCodes.OP_IN_FLIGHT,
+      message: 'Operation already running',
+    });
+  });
+
+  it('rehydrates a thrown BundleError (bundle.start NO_CLIENT_FOLDER)', async () => {
+    appMock.isPackaged = true;
+    const router = createRouter(() => true);
+    router.handle('bundle.start', () => {
+      throw new BundleError(BundleErrorCodes.NO_CLIENT_FOLDER, 'No client folder configured');
+    });
+
+    const handler = handlers.get('bundle.start');
+    let captured: unknown;
+    try {
+      await handler?.(fakeEvent(), undefined);
+    } catch (error) {
+      captured = error;
+    }
+
+    const ipcError = tryUnwrapIpcError((captured as Error).message);
+    expect(ipcError).toEqual({
+      code: BundleErrorCodes.NO_CLIENT_FOLDER,
+      message: 'No client folder configured',
+    });
   });
 
   it('dispose() removes every registered channel', () => {
