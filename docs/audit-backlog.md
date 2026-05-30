@@ -1897,6 +1897,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### ERR-04 — Expand KIT_CODE_TO_LAUNCHER_CODE to cover all classifiable kit error codes
 
+- **Status:** DONE — 2026-05-31 · commit 2ea7b40
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Medium · _(auditor: error-logging-model)_
 - **Area:** src/main/services/minecraft/errors.ts lines 14-26
 - **Problem:** KIT_CODE_TO_LAUNCHER_CODE maps only 10 out of the full MinecraftKitErrorCode set. Kit codes DISK_WRITE_FAILED, DISK_PERMISSION_DENIED, EXTRACT_FAILED, FORGE_PROCESSOR_FAILED, AUTH_MINECRAFT_FAILED, AUTH_REFRESH_FAILED, VERIFY_ABORTED, MANIFEST_PARSE_FAILED, and any future kit codes all fall through to MinecraftErrorCodes.KIT_ERROR — an opaque bucket that maps to the generic 'clients.error.kitError' i18n key in the renderer. Additionally, MANIFEST_NOT_FOUND is mapped to NETWORK_ERROR (line 18) even though a missing manifest is an integrity/corruption issue, not a transient network failure.

@@ -1,12 +1,29 @@
+import { isMinecraftKitError } from '@loontail/minecraft-kit';
 import { parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
 import { getStoredAccount } from '@main/services/auth/auth';
 import { ClientSlugSchema } from '@shared/contracts/ids';
 import { InstallRequestSchema } from '@shared/contracts/minecraft';
 import { IPC_CHANNELS } from '@shared/ipc';
+import { ManagerError, classifyError } from './errors';
 import type { MinecraftManager } from './manager';
 
 const SLUG_REQUIRED = 'slug must be a non-empty string';
+
+// buildContext (via kit.targets.resolve) can throw a raw MinecraftKitError out
+// of the install/repair/launch entry points. Left unwrapped, toIpcError would
+// collapse it to the opaque IpcHandlerFailed code; reclassify it into a coded
+// ManagerError here so the renderer receives an actionable launcher code.
+const withClassifiedKitError = async (run: () => Promise<void>): Promise<void> => {
+  try {
+    await run();
+  } catch (error) {
+    if (isMinecraftKitError(error)) {
+      throw new ManagerError(classifyError(error), error.message);
+    }
+    throw error;
+  }
+};
 
 export const registerMinecraftRoutes = (router: Router, manager: MinecraftManager): void => {
   router.handle(IPC_CHANNELS.minecraftGetStatus, async (rawArgs) => {
@@ -16,7 +33,7 @@ export const registerMinecraftRoutes = (router: Router, manager: MinecraftManage
 
   router.handle(IPC_CHANNELS.minecraftInstall, async (rawArgs) => {
     const payload = parseIpcArgs(InstallRequestSchema, rawArgs, 'Invalid install request');
-    await manager.startInstall(payload.slug, payload.loader);
+    await withClassifiedKitError(() => manager.startInstall(payload.slug, payload.loader));
   });
 
   router.handle(IPC_CHANNELS.minecraftPause, (rawArgs) => {
@@ -36,7 +53,7 @@ export const registerMinecraftRoutes = (router: Router, manager: MinecraftManage
 
   router.handle(IPC_CHANNELS.minecraftRepair, async (rawArgs) => {
     const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED);
-    await manager.startRepair(slug);
+    await withClassifiedKitError(() => manager.startRepair(slug));
   });
 
   router.handle(IPC_CHANNELS.minecraftUninstall, async (rawArgs) => {
@@ -46,7 +63,7 @@ export const registerMinecraftRoutes = (router: Router, manager: MinecraftManage
 
   router.handle(IPC_CHANNELS.minecraftLaunch, async (rawArgs) => {
     const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED);
-    await manager.startLaunch(slug, getStoredAccount());
+    await withClassifiedKitError(() => manager.startLaunch(slug, getStoredAccount()));
   });
 
   router.handle(IPC_CHANNELS.minecraftStop, (rawArgs) => {
