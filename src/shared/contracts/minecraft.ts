@@ -1,6 +1,7 @@
 import type { ProgressStage } from '@loontail/minecraft-kit';
 import { z } from 'zod';
 import { ConsoleSources } from './console';
+import { enumFromConst } from './enum';
 import { ClientSlugSchema } from './ids';
 import { LoaderChoiceSchema } from './settings';
 
@@ -21,18 +22,7 @@ export const InstallStatuses = {
 
 export type InstallStatus = (typeof InstallStatuses)[keyof typeof InstallStatuses];
 
-export const InstallStatusSchema = z.enum([
-  InstallStatuses.UNKNOWN,
-  InstallStatuses.UNVERIFIED,
-  InstallStatuses.NOT_INSTALLED,
-  InstallStatuses.INSTALLING,
-  InstallStatuses.INSTALLED,
-  InstallStatuses.LAUNCHING,
-  InstallStatuses.RUNNING,
-  InstallStatuses.REPAIRING,
-  InstallStatuses.UNINSTALLING,
-  InstallStatuses.ERROR,
-]);
+export const InstallStatusSchema = enumFromConst(InstallStatuses);
 
 export const ProgressStages = {
   PREPARE: 'prepare',
@@ -42,13 +32,7 @@ export const ProgressStages = {
   FINALIZE: 'finalize',
 } as const satisfies Record<string, ProgressStage>;
 
-export const ProgressStageSchema = z.enum([
-  ProgressStages.PREPARE,
-  ProgressStages.RUNTIME,
-  ProgressStages.MINECRAFT,
-  ProgressStages.LOADER,
-  ProgressStages.FINALIZE,
-]);
+export const ProgressStageSchema = enumFromConst(ProgressStages);
 
 export const MinecraftErrorCodes = {
   NO_ACCOUNT: 'noAccount',
@@ -68,21 +52,7 @@ export const MinecraftErrorCodes = {
 
 export type MinecraftErrorCode = (typeof MinecraftErrorCodes)[keyof typeof MinecraftErrorCodes];
 
-export const MinecraftErrorCodeSchema = z.enum([
-  MinecraftErrorCodes.NO_ACCOUNT,
-  MinecraftErrorCodes.NO_CLIENT_FOLDER,
-  MinecraftErrorCodes.LOADER_AMBIGUOUS,
-  MinecraftErrorCodes.OP_IN_FLIGHT,
-  MinecraftErrorCodes.NOT_INSTALLED,
-  MinecraftErrorCodes.ABORTED,
-  MinecraftErrorCodes.NETWORK_ERROR,
-  MinecraftErrorCodes.INTEGRITY_ERROR,
-  MinecraftErrorCodes.RUNTIME_ERROR,
-  MinecraftErrorCodes.LAUNCH_FAILED,
-  MinecraftErrorCodes.KIT_ERROR,
-  MinecraftErrorCodes.UNINSTALL_LOCKED,
-  MinecraftErrorCodes.UNKNOWN,
-]);
+export const MinecraftErrorCodeSchema = enumFromConst(MinecraftErrorCodes);
 
 export const MinecraftStatusEventSchema = z.object({
   slug: ClientSlugSchema,

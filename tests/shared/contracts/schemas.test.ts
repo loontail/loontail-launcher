@@ -1,5 +1,19 @@
 import { MojangSessionSchema, YggdrasilSessionSchema } from '@shared/contracts/auth';
+import {
+  BundleErrorCodeSchema,
+  BundleErrorCodes,
+  BundleSyncStatusSchema,
+  BundleSyncStatuses,
+} from '@shared/contracts/bundle';
 import { asClientSlug } from '@shared/contracts/ids';
+import {
+  InstallStatusSchema,
+  InstallStatuses,
+  MinecraftErrorCodeSchema,
+  MinecraftErrorCodes,
+  ProgressStageSchema,
+  ProgressStages,
+} from '@shared/contracts/minecraft';
 import { LauncherSettingsSchema, LoaderChoices } from '@shared/contracts/settings';
 import { describe, expect, it } from 'vitest';
 
@@ -74,6 +88,31 @@ describe('LauncherSettingsSchema', () => {
     });
     expect(result.success).toBe(false);
   });
+});
+
+describe('status/code enum schemas stay in sync with their const objects', () => {
+  const ENUM_PAIRS = [
+    {
+      name: 'BundleSyncStatuses',
+      values: BundleSyncStatuses,
+      options: BundleSyncStatusSchema.options,
+    },
+    { name: 'BundleErrorCodes', values: BundleErrorCodes, options: BundleErrorCodeSchema.options },
+    { name: 'InstallStatuses', values: InstallStatuses, options: InstallStatusSchema.options },
+    { name: 'ProgressStages', values: ProgressStages, options: ProgressStageSchema.options },
+    {
+      name: 'MinecraftErrorCodes',
+      values: MinecraftErrorCodes,
+      options: MinecraftErrorCodeSchema.options,
+    },
+  ];
+
+  it.each(ENUM_PAIRS)(
+    '$name schema options exactly cover the const values',
+    ({ values, options }) => {
+      expect([...options].sort()).toEqual(Object.values(values).sort());
+    },
+  );
 });
 
 describe('YggdrasilSessionSchema', () => {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { enumFromConst } from './enum';
 import { ClientSlugSchema } from './ids';
 
 // Stable string constants for the lifecycle of a bundle sync. The renderer
@@ -22,21 +23,7 @@ export const BundleSyncStatuses = {
 
 export type BundleSyncStatus = (typeof BundleSyncStatuses)[keyof typeof BundleSyncStatuses];
 
-export const BundleSyncStatusSchema = z.enum([
-  BundleSyncStatuses.UNKNOWN,
-  BundleSyncStatuses.IDLE,
-  BundleSyncStatuses.FETCHING_MANIFEST,
-  BundleSyncStatuses.PLANNING,
-  BundleSyncStatuses.DOWNLOADING,
-  BundleSyncStatuses.DELETING,
-  BundleSyncStatuses.HEALING,
-  BundleSyncStatuses.COMPLETED,
-  BundleSyncStatuses.UP_TO_DATE,
-  BundleSyncStatuses.PAUSED,
-  BundleSyncStatuses.CANCELLED,
-  BundleSyncStatuses.ERROR,
-  BundleSyncStatuses.NO_BUNDLE,
-]);
+export const BundleSyncStatusSchema = enumFromConst(BundleSyncStatuses);
 
 // Statuses where a bundle sync is actively progressing. Renderer disables
 // start/launch buttons while any of these are active.
@@ -65,20 +52,7 @@ export const BundleErrorCodes = {
 
 export type BundleErrorCode = (typeof BundleErrorCodes)[keyof typeof BundleErrorCodes];
 
-export const BundleErrorCodeSchema = z.enum([
-  BundleErrorCodes.NO_BUNDLE_SLUG,
-  BundleErrorCodes.NO_CLIENT_FOLDER,
-  BundleErrorCodes.MANIFEST_FETCH_FAILED,
-  BundleErrorCodes.MANIFEST_INVALID,
-  BundleErrorCodes.DOWNLOAD_FAILED,
-  BundleErrorCodes.DOWNLOAD_INTEGRITY_FAILED,
-  BundleErrorCodes.DELETE_FAILED,
-  BundleErrorCodes.UNSAFE_PATH,
-  BundleErrorCodes.HEAL_FAILED,
-  BundleErrorCodes.ABORTED,
-  BundleErrorCodes.OP_IN_FLIGHT,
-  BundleErrorCodes.UNKNOWN,
-]);
+export const BundleErrorCodeSchema = enumFromConst(BundleErrorCodes);
 
 // Single file in a bundle-registry build manifest. Mirrors plugin's ManifestEntry.
 export const RemoteManifestEntrySchema = z.object({
