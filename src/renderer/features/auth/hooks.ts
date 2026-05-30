@@ -121,5 +121,7 @@ export const useMojangLogin = () => {
     void cancelMojangLogin();
   }, []);
 
-  return { signIn, cancel, isPending, errorCode };
+  const clearError = useCallback(() => setErrorCode(null), []);
+
+  return { signIn, cancel, isPending, errorCode, clearError };
 };

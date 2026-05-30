@@ -23,6 +23,8 @@ export const LoginForm = () => {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    // Drop any stale Microsoft-flow error so only the active flow's error shows.
+    mojang.clearError();
     await submit({ identifier, password });
   };
 
