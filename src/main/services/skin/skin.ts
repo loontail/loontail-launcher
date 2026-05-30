@@ -72,6 +72,29 @@ const readTextureUrl = (
   kind: typeof SkinKinds.SKIN | typeof SkinKinds.CAPE,
 ): string | null => (kind === SkinKinds.SKIN ? textures.skin?.url : textures.cape?.url) ?? null;
 
+const POST_UPLOAD_TEXTURE_RETRY_ATTEMPTS = 3;
+const POST_UPLOAD_TEXTURE_RETRY_DELAY_MS = 200;
+
+const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+// A freshly uploaded texture can lag behind the server's textures endpoint
+// while the CDN propagates the new revision, so the immediate lookup may still
+// return no URL. Retry a few times before declaring the upload URL-less.
+const fetchUploadedTextureUrl = async (
+  uuid: string,
+  kind: typeof SkinKinds.SKIN | typeof SkinKinds.CAPE,
+): Promise<string | null> => {
+  for (let attempt = 0; attempt < POST_UPLOAD_TEXTURE_RETRY_ATTEMPTS; attempt += 1) {
+    const textures = await fetchTextures(uuid).catch(() => null);
+    const url = textures ? readTextureUrl(textures, kind) : null;
+    if (url) return url;
+    if (attempt < POST_UPLOAD_TEXTURE_RETRY_ATTEMPTS - 1) {
+      await delay(POST_UPLOAD_TEXTURE_RETRY_DELAY_MS);
+    }
+  }
+  return null;
+};
+
 // Yggdrasil flow: the launcher-side session already carries the access token
 // the merged Yggdrasil plugin needs to authorise the upload. The server
 // identifies the owner from the token; we only have to push the PNG and
@@ -105,8 +128,7 @@ const uploadSkinYggdrasil = async (
     return throwUploadError('Upload to Yggdrasil failed', error);
   }
 
-  const updatedTextures = await fetchTextures(session.profile.uuid).catch(() => null);
-  const updatedUrl = updatedTextures ? readTextureUrl(updatedTextures, payload.type) : null;
+  const updatedUrl = await fetchUploadedTextureUrl(session.profile.uuid, payload.type);
   if (!updatedUrl) {
     throw new SkinError(
       ERROR_CODES.SkinUploadFailed,
