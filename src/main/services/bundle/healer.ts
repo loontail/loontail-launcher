@@ -1,9 +1,10 @@
 import type { MinecraftKit, ProgressListener } from '@loontail/minecraft-kit';
+import { errorMessage } from '@main/infra/errorMessage';
 import { scopedLogger } from '@main/infra/logger';
 import { verifyAndRepairExceptBundle } from '@main/services/minecraft/bundleHealing';
 import { BundleErrorCodes } from '@shared/contracts/bundle';
 import type { ClientSlug } from '@shared/contracts/ids';
-import { BundleError, errorMessage } from './errors';
+import { BundleError } from './errors';
 
 const logger = scopedLogger('bundle.healer');
 

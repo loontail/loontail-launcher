@@ -1,4 +1,5 @@
 import { BUNDLE_PAUSED_SYNC_MAX_IDLE_MS } from '@main/constants/bundle';
+import { errorMessage } from '@main/infra/errorMessage';
 import { scopedLogger } from '@main/infra/logger';
 import {
   ClientOperationDomains,
@@ -23,7 +24,7 @@ import type { ClientSlug } from '@shared/contracts/ids';
 import { resolveClientSettings } from '@shared/domain/settings';
 import { fetchRemoteManifest } from './api';
 import type { BundleBroadcaster } from './broadcast';
-import { BundleError, classifyBundleError, errorMessage } from './errors';
+import { BundleError, classifyBundleError } from './errors';
 import { createHealProgressListener } from './healProgress';
 import type { Healer } from './healer';
 import { clearLocalManifest, loadLocalManifest, saveLocalManifest } from './manifestRepo';

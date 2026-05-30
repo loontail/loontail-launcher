@@ -1,10 +1,11 @@
 import fs from 'node:fs/promises';
 import { PauseController } from '@loontail/minecraft-kit';
+import { errorMessage } from '@main/infra/errorMessage';
 import type { ClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
 import type { Context } from './context';
 import type { ManagerEnv } from './env';
-import { classifyError, errorMessage } from './errors';
+import { classifyError } from './errors';
 import { rememberForgeProcessorActions } from './forgeProcessorHealing';
 import { persistTargetInstallManifest } from './installManifest';
 import { type InstallOp, OpKinds } from './ops';

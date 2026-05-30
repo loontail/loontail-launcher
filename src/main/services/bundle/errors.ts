@@ -15,6 +15,3 @@ export const classifyBundleError = (error: unknown, signal?: AbortSignal): Bundl
   if (error instanceof BundleError) return error.code;
   return BundleErrorCodes.UNKNOWN;
 };
-
-export const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);

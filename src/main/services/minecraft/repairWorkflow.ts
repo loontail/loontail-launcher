@@ -5,13 +5,14 @@ import {
   type RepairAllReport,
   resolveLaunchVersion,
 } from '@loontail/minecraft-kit';
+import { errorMessage } from '@main/infra/errorMessage';
 import { loadLocalManifest } from '@main/services/bundle/manifestRepo';
 import type { ClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
 import { createBundleRepairIssueFilter } from './bundleHealing';
 import type { Context } from './context';
 import type { ManagerEnv } from './env';
-import { classifyError, errorMessage } from './errors';
+import { classifyError } from './errors';
 import { repairMissingForgeProcessorOutputs } from './forgeProcessorHealing';
 import { hasCurrentTargetInstallManifest, persistTargetInstallManifest } from './installManifest';
 import { runtimePathFor } from './runtimeFs';

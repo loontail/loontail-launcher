@@ -22,6 +22,7 @@ import {
 import { dashUuid } from '@loontail/yggdrasil-core';
 import { mainConfig } from '@main/config';
 import { consoleHub } from '@main/infra/consoleHub';
+import { errorMessage } from '@main/infra/errorMessage';
 import { scopedLogger } from '@main/infra/logger';
 import { getStoredAuth } from '@main/infra/store';
 import { openConsoleWindow } from '@main/windows/consoleWindow';
@@ -32,7 +33,7 @@ import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraf
 import { app } from 'electron';
 import type { Context } from './context';
 import type { ManagerEnv } from './env';
-import { ManagerError, classifyError, errorMessage } from './errors';
+import { ManagerError, classifyError } from './errors';
 import { type LaunchStartingOp, OpKinds } from './ops';
 
 const launchLogger = scopedLogger('minecraft.launch');

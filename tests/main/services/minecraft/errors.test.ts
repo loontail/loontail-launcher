@@ -1,5 +1,5 @@
 import { MinecraftKitError, type MinecraftKitErrorCode } from '@loontail/minecraft-kit';
-import { ManagerError, classifyError, errorMessage } from '@main/services/minecraft/errors';
+import { ManagerError, classifyError } from '@main/services/minecraft/errors';
 import { type MinecraftErrorCode, MinecraftErrorCodes } from '@shared/contracts/minecraft';
 import { describe, expect, it } from 'vitest';
 
@@ -66,17 +66,5 @@ describe('classifyError', () => {
   it('ignores an inactive signal', () => {
     const error = new MinecraftKitError('NETWORK_HTTP_ERROR', 'boom');
     expect(classifyError(error, inactiveSignal)).toBe(MinecraftErrorCodes.NETWORK_ERROR);
-  });
-});
-
-describe('errorMessage', () => {
-  it('returns the message of an Error instance', () => {
-    expect(errorMessage(new Error('boom'))).toBe('boom');
-  });
-
-  it('stringifies non-error values', () => {
-    expect(errorMessage('plain')).toBe('plain');
-    expect(errorMessage(42)).toBe('42');
-    expect(errorMessage(null)).toBe('null');
   });
 });

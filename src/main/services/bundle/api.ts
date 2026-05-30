@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto';
 import { mainConfig } from '@main/config';
+import { errorMessage } from '@main/infra/errorMessage';
 import { HttpError, httpRequest } from '@main/infra/http';
 import { scopedLogger } from '@main/infra/logger';
 import { API_ROUTES } from '@shared/constants';
 import { type RemoteManifest, RemoteManifestSchema } from '@shared/contracts/bundle';
 import { BundleErrorCodes } from '@shared/contracts/bundle';
 import type { BundleSlug } from '@shared/contracts/ids';
-import { BundleError, errorMessage } from './errors';
+import { BundleError } from './errors';
 import { resolveBundleManifestEntryUrl } from './urlPolicy';
 
 const logger = scopedLogger('bundle.api');

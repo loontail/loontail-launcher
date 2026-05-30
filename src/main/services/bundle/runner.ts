@@ -6,6 +6,7 @@ import {
   BUNDLE_DOWNLOAD_PROGRESS_THROTTLE_MS,
   BUNDLE_DOWNLOAD_SPEED_WINDOW_MS,
 } from '@main/constants/bundle';
+import { errorMessage } from '@main/infra/errorMessage';
 import { scopedLogger } from '@main/infra/logger';
 import {
   BundleErrorCodes,
@@ -16,7 +17,7 @@ import {
 } from '@shared/contracts/bundle';
 import type { ClientSlug } from '@shared/contracts/ids';
 import { downloadEntry } from './download';
-import { BundleError, errorMessage } from './errors';
+import { BundleError } from './errors';
 import { isAncestor, resolveSafeEntryPath } from './paths';
 import type { SyncPlan } from './plan';
 

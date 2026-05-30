@@ -33,6 +33,3 @@ export const classifyError = (error: unknown, signal?: AbortSignal): MinecraftEr
   }
   return MinecraftErrorCodes.UNKNOWN;
 };
-
-export const errorMessage = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);

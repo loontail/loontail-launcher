@@ -1,9 +1,10 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { errorMessage } from '@main/infra/errorMessage';
 import type { ClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraft';
 import type { ManagerEnv } from './env';
-import { ManagerError, errorMessage } from './errors';
+import { ManagerError } from './errors';
 import { clearTargetInstallManifest } from './installManifest';
 import { OpKinds } from './ops';
 import { isAnythingInstalled } from './runtimeState';

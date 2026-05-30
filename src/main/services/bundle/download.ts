@@ -9,9 +9,10 @@ import {
   BUNDLE_DOWNLOAD_MAX_REDIRECTS,
   BUNDLE_DOWNLOAD_REQUEST_TIMEOUT_MS,
 } from '@main/constants/bundle';
+import { errorMessage } from '@main/infra/errorMessage';
 import { scopedLogger } from '@main/infra/logger';
 import { BundleErrorCodes, type RemoteManifestEntry } from '@shared/contracts/bundle';
-import { BundleError, errorMessage } from './errors';
+import { BundleError } from './errors';
 import { resolveBundleRedirectUrl, validateBundleAssetDownloadUrl } from './urlPolicy';
 
 const logger = scopedLogger('bundle.download');
