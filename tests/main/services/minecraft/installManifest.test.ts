@@ -17,6 +17,7 @@ import {
   createTargetInstallManifest,
   hasCurrentTargetInstallManifest,
   loadTargetInstallManifest,
+  persistTargetInstallManifest,
   saveCurrentTargetInstallManifest,
   targetInstallManifestMatches,
   targetInstallManifestPath,
@@ -202,6 +203,20 @@ describe('target install manifest', () => {
     });
     await expect(hasCurrentTargetInstallManifest(directory, currentTarget)).resolves.toBe(true);
     await expect(fs.access(targetInstallManifestPath(directory))).resolves.toBeUndefined();
+  });
+
+  it('persistTargetInstallManifest writes the sidecar and swallows write failures', async () => {
+    const currentTarget = target(directory);
+    await persistTargetInstallManifest(SLUG, directory, currentTarget, 'install');
+    await expect(hasCurrentTargetInstallManifest(directory, currentTarget)).resolves.toBe(true);
+
+    // A clientFolder occupied by a regular file makes the sidecar write fail;
+    // the helper must warn and resolve rather than re-throw.
+    const blocked = path.join(directory, 'blocked');
+    await fs.writeFile(blocked, 'x');
+    await expect(
+      persistTargetInstallManifest(SLUG, blocked, currentTarget, 'install'),
+    ).resolves.toBeUndefined();
   });
 
   it('does not match stale target identity fields', () => {

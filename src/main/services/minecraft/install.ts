@@ -6,7 +6,7 @@ import type { Context } from './context';
 import type { ManagerEnv } from './env';
 import { classifyError, errorMessage } from './errors';
 import { rememberForgeProcessorActions } from './forgeProcessorHealing';
-import { saveCurrentTargetInstallManifest } from './installManifest';
+import { persistTargetInstallManifest } from './installManifest';
 import { type InstallOp, OpKinds } from './ops';
 import { createPlannedProgressAdapter, runWithProgressAdapter } from './progressAdapter';
 import { runtimePathFor } from './runtimeFs';
@@ -50,18 +50,6 @@ const emitPostInstallStatus = async (
     status: installed ? InstallStatuses.INSTALLED : InstallStatuses.NOT_INSTALLED,
     paused: false,
   });
-};
-
-const persistTargetInstallManifest = async (
-  env: ManagerEnv,
-  slug: ClientSlug,
-  ctx: Context,
-): Promise<void> => {
-  try {
-    await saveCurrentTargetInstallManifest(ctx.clientFolder, ctx.target);
-  } catch (error) {
-    env.logger.warn(`[${slug}] install: failed to persist target install manifest`, error);
-  }
 };
 
 const handleInstallFailure = async (
@@ -124,7 +112,7 @@ export const runInstall = async (
       component: ctx.target.runtime.component,
       path: runtimePathFor(ctx.target.runtime.component),
     });
-    await persistTargetInstallManifest(env, slug, ctx);
+    await persistTargetInstallManifest(slug, ctx.clientFolder, ctx.target, 'install');
     env.logger.info(`[${slug}] install: done`);
   } catch (error) {
     await handleInstallFailure(env, slug, ctx, op, error);

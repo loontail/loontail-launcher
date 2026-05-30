@@ -13,10 +13,7 @@ import type { Context } from './context';
 import type { ManagerEnv } from './env';
 import { classifyError, errorMessage } from './errors';
 import { repairMissingForgeProcessorOutputs } from './forgeProcessorHealing';
-import {
-  hasCurrentTargetInstallManifest,
-  saveCurrentTargetInstallManifest,
-} from './installManifest';
+import { hasCurrentTargetInstallManifest, persistTargetInstallManifest } from './installManifest';
 import { runtimePathFor } from './runtimeFs';
 import { isAnythingInstalled } from './runtimeState';
 
@@ -61,18 +58,6 @@ const emitReadinessStatus = async (
   ]);
   const status = hasCurrentManifest && installed ? InstallStatuses.INSTALLED : notReadyStatus;
   env.emitStatus({ slug, status, paused: false });
-};
-
-const persistTargetInstallManifest = async (
-  env: ManagerEnv,
-  slug: ClientSlug,
-  ctx: Context,
-): Promise<void> => {
-  try {
-    await saveCurrentTargetInstallManifest(ctx.clientFolder, ctx.target);
-  } catch (error) {
-    env.logger.warn(`[${slug}] repair: failed to persist target install manifest`, error);
-  }
 };
 
 export const verifyAndRepairBase = async (
@@ -162,7 +147,7 @@ export const finalizeRepairSuccess = async (
     component: ctx.target.runtime.component,
     path: runtimePathFor(ctx.target.runtime.component),
   });
-  await persistTargetInstallManifest(env, slug, ctx);
+  await persistTargetInstallManifest(slug, ctx.clientFolder, ctx.target, 'repair');
   env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
 };
 
