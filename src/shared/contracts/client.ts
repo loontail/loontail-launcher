@@ -1,7 +1,6 @@
 import { z } from 'zod';
 import type { ClientId, ClientSlug } from './ids';
-import { ServerSchema, StrapiEntitySchema, type StrapiMedia, StrapiMediaSchema } from './strapi';
-import type { Server } from './strapi';
+import { ServerSchema, StrapiEntitySchema, StrapiMediaSchema } from './strapi';
 
 export const KeywordSchema = StrapiEntitySchema.extend({
   title: z.string(),
@@ -47,35 +46,26 @@ export const ClientResponseSchema = StrapiEntitySchema.extend({
 
 export type ClientResponse = z.infer<typeof ClientResponseSchema>;
 
-// Renderer-facing shape: versions normalized to strings, media URLs absolutized.
-// `slug` is the launcher's canonical client id (settings key + folder name).
-// Optional fields include `| undefined` for exactOptionalPropertyTypes
-// compatibility with the Zod-inferred ClientResponse spread.
-export type Client = {
+// Renderer-facing view of ClientResponse: versions normalized to strings, media
+// URLs absolutized, id/slug branded. Only the transformed fields are spelled out;
+// every other field tracks ClientResponse so a wire-schema change can't drift.
+export type Client = Omit<
+  ClientResponse,
+  | 'id'
+  | 'slug'
+  | 'description'
+  | 'shortDescription'
+  | 'minecraftVersion'
+  | 'forgeVersion'
+  | 'fabricVersion'
+  | 'runtimeVersion'
+> & {
   id: ClientId;
-  documentId: string;
-  createdAt: string;
-  updatedAt: string;
-  publishedAt?: string | undefined;
-
   slug: ClientSlug;
-  title: string;
   description: string;
   shortDescription: string;
-  available: boolean;
-
   minecraftVersion: string;
   forgeVersion?: string | null | undefined;
   fabricVersion?: string | null | undefined;
   runtimeVersion?: string | null | undefined;
-
-  bundleSlug?: string | null | undefined;
-
-  servers?: Server[] | undefined;
-
-  screenshots: StrapiMedia[];
-  background: StrapiMedia;
-  poster: StrapiMedia;
-  titleImage?: StrapiMedia | undefined;
-  keywords: Keyword[];
 };
