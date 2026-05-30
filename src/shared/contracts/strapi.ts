@@ -53,17 +53,7 @@ export const StrapiListSchema = <T extends z.ZodTypeAny>(itemSchema: T) =>
     }),
   });
 
-export type StrapiList<T> = {
-  data: T[];
-  meta: {
-    pagination: {
-      page: number;
-      pageSize: number;
-      pageCount: number;
-      total: number;
-    };
-  };
-};
+export type StrapiList<T> = z.infer<ReturnType<typeof StrapiListSchema<z.ZodType<T>>>>;
 
 export const ServerSchema = StrapiEntitySchema.extend({
   name: z.string().optional(),
