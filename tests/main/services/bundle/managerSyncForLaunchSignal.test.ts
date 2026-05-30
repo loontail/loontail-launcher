@@ -8,6 +8,7 @@ vi.hoisted(() => {
 import type { BundleBroadcaster } from '@main/services/bundle/broadcast';
 import type { Healer } from '@main/services/bundle/healer';
 import { BundleManager } from '@main/services/bundle/manager';
+import { createClientOperationLocks } from '@main/services/clientOperationLocks';
 import { BundleErrorCodes } from '@shared/contracts/bundle';
 import type { ClientSlug } from '@shared/contracts/ids';
 
@@ -31,7 +32,7 @@ const makeHealer = (): Healer =>
 describe('BundleManager.syncForLaunch external signal', () => {
   it('throws ABORTED before touching client lookup when signal is already aborted', async () => {
     const broadcaster = makeBroadcaster();
-    const manager = new BundleManager(broadcaster, makeHealer());
+    const manager = new BundleManager(broadcaster, makeHealer(), createClientOperationLocks());
     const controller = new AbortController();
     controller.abort();
 
@@ -44,7 +45,7 @@ describe('BundleManager.syncForLaunch external signal', () => {
 
   it('attaches an abort listener that calls cancelSync mid-flight', async () => {
     const broadcaster = makeBroadcaster();
-    const manager = new BundleManager(broadcaster, makeHealer());
+    const manager = new BundleManager(broadcaster, makeHealer(), createClientOperationLocks());
     const cancelSpy = vi.spyOn(manager, 'cancelSync');
     const controller = new AbortController();
 

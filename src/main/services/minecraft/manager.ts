@@ -6,7 +6,6 @@ import {
   type ClientOperationLocks,
   type ClientOperationResource,
   ClientOperationResources,
-  createClientOperationLocks,
 } from '@main/services/clientOperationLocks';
 import {
   getSettings,
@@ -59,7 +58,7 @@ export class MinecraftManager {
   constructor(
     broadcaster: Broadcaster,
     kit: MinecraftKit,
-    private readonly operationLocks: ClientOperationLocks = createClientOperationLocks(),
+    private readonly operationLocks: ClientOperationLocks,
   ) {
     this.kit = kit;
     this.env = {

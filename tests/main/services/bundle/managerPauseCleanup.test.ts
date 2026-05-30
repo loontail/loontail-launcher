@@ -234,7 +234,7 @@ describe('BundleManager pause cleanup', () => {
 
   it('cancel after pause rejects awaiters and frees the slot', async () => {
     const broadcaster = makeBroadcaster();
-    const manager = new BundleManager(broadcaster, makeHealer());
+    const manager = new BundleManager(broadcaster, makeHealer(), createClientOperationLocks());
     const rejected: Error[] = [];
     const awaiter: Awaiter = {
       resolve: () => {
@@ -283,7 +283,7 @@ describe('BundleManager pause cleanup', () => {
   it('cancelAll aborts every active sync and frees all slots', async () => {
     vi.useRealTimers();
     const broadcaster = makeBroadcaster();
-    const manager = new BundleManager(broadcaster, makeHealer());
+    const manager = new BundleManager(broadcaster, makeHealer(), createClientOperationLocks());
     const rejected: Error[] = [];
     seedPausedActive(manager, {
       resolve: () => {
@@ -304,7 +304,7 @@ describe('BundleManager pause cleanup', () => {
 
   it('idle timeout drops paused entry and rejects awaiters', async () => {
     const broadcaster = makeBroadcaster();
-    const manager = new BundleManager(broadcaster, makeHealer());
+    const manager = new BundleManager(broadcaster, makeHealer(), createClientOperationLocks());
     const rejected: Error[] = [];
     const awaiter: Awaiter = {
       resolve: () => {
@@ -333,7 +333,11 @@ describe('BundleManager pause cleanup', () => {
     managerMocks.getClient.mockResolvedValue({ bundleSlug: BUNDLE_SLUG });
 
     const freshBroadcaster = makeBroadcaster();
-    const freshManager = new BundleManager(freshBroadcaster, makeHealer());
+    const freshManager = new BundleManager(
+      freshBroadcaster,
+      makeHealer(),
+      createClientOperationLocks(),
+    );
 
     await freshManager.startSync({ slug: SLUG });
 
@@ -345,7 +349,11 @@ describe('BundleManager pause cleanup', () => {
     ]);
 
     const resumeBroadcaster = makeBroadcaster();
-    const resumeManager = new BundleManager(resumeBroadcaster, makeHealer());
+    const resumeManager = new BundleManager(
+      resumeBroadcaster,
+      makeHealer(),
+      createClientOperationLocks(),
+    );
     const resolved: string[] = [];
     const { activeSyncs } = seedPausedActive(resumeManager, {
       resolve: () => resolved.push('resolved'),
@@ -381,7 +389,7 @@ describe('BundleManager pause cleanup', () => {
 
     const broadcaster = makeBroadcaster();
     const healer = makeHealer();
-    const manager = new BundleManager(broadcaster, healer);
+    const manager = new BundleManager(broadcaster, healer, createClientOperationLocks());
 
     await manager.startSync({ slug: SLUG });
 
@@ -420,7 +428,7 @@ describe('BundleManager pause cleanup', () => {
       }),
     };
     const broadcaster = makeBroadcaster();
-    const manager = new BundleManager(broadcaster, healer);
+    const manager = new BundleManager(broadcaster, healer, createClientOperationLocks());
 
     await manager.startSync({ slug: SLUG });
 
@@ -444,7 +452,7 @@ describe('BundleManager pause cleanup', () => {
     mockPausedLaunchPhase();
 
     const broadcaster = makeBroadcaster();
-    const manager = new BundleManager(broadcaster, makeHealer());
+    const manager = new BundleManager(broadcaster, makeHealer(), createClientOperationLocks());
     let settled = false;
     const launchResult = manager.syncForLaunch(SLUG).then(
       () => {
@@ -489,7 +497,7 @@ describe('BundleManager pause cleanup', () => {
     mockPausedLaunchPhase();
 
     const broadcaster = makeBroadcaster();
-    const manager = new BundleManager(broadcaster, makeHealer());
+    const manager = new BundleManager(broadcaster, makeHealer(), createClientOperationLocks());
     const launchResult = manager.syncForLaunch(SLUG).then(
       () => ({ kind: 'resolved' as const }),
       (error: unknown) => ({ kind: 'rejected' as const, error }),

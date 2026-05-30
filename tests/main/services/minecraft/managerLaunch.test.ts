@@ -113,7 +113,7 @@ const makeBroadcaster = (): Broadcaster =>
 
 const makeManager = (
   broadcaster = makeBroadcaster(),
-  operationLocks?: ClientOperationLocks,
+  operationLocks: ClientOperationLocks = createClientOperationLocks(),
 ): MinecraftManager =>
   new MinecraftManager(
     broadcaster,

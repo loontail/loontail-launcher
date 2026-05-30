@@ -54,6 +54,7 @@ vi.mock('@main/services/minecraft/launch', async (importOriginal) => {
   return { ...actual, runLaunch: readinessMocks.runLaunch };
 });
 
+import { createClientOperationLocks } from '@main/services/clientOperationLocks';
 import { MinecraftManager } from '@main/services/minecraft/manager';
 
 const SLUG = asClientSlug('vanilla-client');
@@ -200,7 +201,9 @@ describe('MinecraftManager readiness integration', () => {
     const resolvedTarget = target();
     resetMocks(resolvedTarget);
 
-    await expect(new MinecraftManager(broadcaster(), kit()).getStatus(SLUG)).resolves.toEqual({
+    await expect(
+      new MinecraftManager(broadcaster(), kit(), createClientOperationLocks()).getStatus(SLUG),
+    ).resolves.toEqual({
       status: InstallStatuses.NOT_INSTALLED,
       paused: false,
     });
@@ -226,7 +229,9 @@ describe('MinecraftManager readiness integration', () => {
       targets: throwOnUse('targets'),
     } as unknown as MinecraftKit;
 
-    await expect(new MinecraftManager(broadcaster(), guardedKit).getStatus(SLUG)).resolves.toEqual({
+    await expect(
+      new MinecraftManager(broadcaster(), guardedKit, createClientOperationLocks()).getStatus(SLUG),
+    ).resolves.toEqual({
       status: InstallStatuses.NOT_INSTALLED,
       paused: false,
     });
@@ -236,7 +241,10 @@ describe('MinecraftManager readiness integration', () => {
     const resolvedTarget = target();
     resetMocks(resolvedTarget);
 
-    await new MinecraftManager(broadcaster(), kit()).startLaunch(SLUG, account());
+    await new MinecraftManager(broadcaster(), kit(), createClientOperationLocks()).startLaunch(
+      SLUG,
+      account(),
+    );
 
     expect(readinessMocks.runInstall).not.toHaveBeenCalled();
     expect(readinessMocks.runLaunch).toHaveBeenCalledWith(

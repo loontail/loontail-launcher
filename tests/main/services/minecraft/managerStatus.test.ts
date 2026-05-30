@@ -39,6 +39,7 @@ vi.mock('@main/services/settings/settings', () => ({
   setClientOverride: statusMocks.setClientOverride,
 }));
 
+import { createClientOperationLocks } from '@main/services/clientOperationLocks';
 import type { Broadcaster } from '@main/services/minecraft/broadcast';
 import { MinecraftManager } from '@main/services/minecraft/manager';
 import { type InstallOp, OpKinds } from '@main/services/minecraft/ops';
@@ -64,9 +65,13 @@ const makeBroadcaster = (): Broadcaster =>
   }) as unknown as Broadcaster;
 
 const makeManager = (): MinecraftManager =>
-  new MinecraftManager(makeBroadcaster(), {
-    targets: { resolve: vi.fn() },
-  } as unknown as MinecraftKit);
+  new MinecraftManager(
+    makeBroadcaster(),
+    {
+      targets: { resolve: vi.fn() },
+    } as unknown as MinecraftKit,
+    createClientOperationLocks(),
+  );
 
 const resetStatusMocks = (): void => {
   statusMocks.buildContext.mockReset();

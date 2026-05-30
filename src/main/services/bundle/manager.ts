@@ -5,7 +5,6 @@ import {
   type ClientOperationLease,
   type ClientOperationLocks,
   ClientOperationResources,
-  createClientOperationLocks,
 } from '@main/services/clientOperationLocks';
 import { getClient } from '@main/services/clients';
 import { getSettings } from '@main/services/settings/settings';
@@ -83,7 +82,7 @@ export class BundleManager {
   constructor(
     private readonly broadcaster: BundleBroadcaster,
     private readonly healer: Healer,
-    private readonly operationLocks: ClientOperationLocks = createClientOperationLocks(),
+    private readonly operationLocks: ClientOperationLocks,
   ) {}
 
   async startSync(req: BundleStartRequest): Promise<void> {
