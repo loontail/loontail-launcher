@@ -284,6 +284,9 @@ const migrateLegacyAuthSession = (session: AuthSession): AuthSession | null => {
   }
 };
 
+// Reading also migrates: a legacy session stored without the secret/metadata
+// split is detected here and rewritten via `migrateLegacyAuthSession`, so the
+// first `getStoredAuth()` after an upgrade upgrades the stored shape in place.
 export const getStoredAuth = (): AuthSession | null => {
   const raw = store.get(STORE_KEY_AUTH) as unknown;
   if (raw === null || raw === undefined) return null;
@@ -313,7 +316,10 @@ export const getStoredAuth = (): AuthSession | null => {
   }
 };
 
-export const migrateStoredAuthSecrets = (): void => {
+// Triggers the legacy-session migration baked into `getStoredAuth` (see its
+// note) at a deterministic point during auth-service init, rather than relying
+// on whichever consumer happens to read the session first.
+export const runAuthStoreMigrationIfNeeded = (): void => {
   getStoredAuth();
 };
 
