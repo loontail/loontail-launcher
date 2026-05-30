@@ -172,7 +172,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-004"></a>
 #### LL-004 · Shared operation-lock registry is defaulted to a fresh instance in four places — silent loss of cross-domain mutual exclusion
 
-- **Status:** TODO
+- **Status:** DONE — 2026-05-30 · commit c22e65e
 - **Category:** architecture · **Priority:** P0 · **Effort:** quick · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/main/services/minecraft/index.ts:24 and bundle/index.ts:24 (factory param `operationLocks: ClientOperationLocks = createClientOperationLocks()`); minecraft/manager.ts:62 and bundle/manager.ts:86 (constructor param same default); index.ts:95,104-105 (single shared instance threaded in); manager.ts:9 / bundle/manager.ts:8 still import createClientOperationLocks
 - **Problem:** The whole point of clientOperationLocks is to make bundle-sync and minecraft-install/repair mutually exclusive on the same client folder. That invariant requires ONE registry shared across both services. But the shared instance is passed as an optional parameter that defaults to `createClientOperationLocks()` in FOUR independent spots (both service factories and both manager constructors), and both managers also still `import { createClientOperationLocks }` (manager.ts:9 / bundle/manager.ts:8) though index.ts always injects. If any caller (a future refactor, a test, a new entry point) constructs a manager/service without threading the exact same instance, each gets its own empty registry and the cross-domain lock silently becomes a no-op — bundle and minecraft can then mutate the same folder concurrently with no compile error and no runtime warning.
@@ -320,7 +320,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-015"></a>
 #### LL-015 · normalizeError leaks non-ERROR_CODES error shapes (incl. MinecraftKitError) across the bridge
 
-- **Status:** TODO
+- **Status:** DONE — 2026-05-30 · commit e7808f5
 - **Category:** error-handling · **Priority:** P1 · **Effort:** medium · **Change risk:** low · **Flow:** Error / recovery flow
 - **Area:** src/main/ipc/router.ts:49-57 (normalizeError); wrapForTransport:63-64; reachable via src/main/services/minecraft/context.ts:64 (unguarded kit.targets.resolve)
 - **Problem:** normalizeError returns `error as IpcError` for ANY object with `code` and `message` (router.ts:50-52). MinecraftKitError extends Error with a `code` (e.g. 'MANIFEST_NOT_FOUND'), `message`, a frozen `context`, and a `toJSON()` (verified at node_modules/@loontail/minecraft-kit/dist/index.mjs:80-98). buildContext calls `kit.targets.resolve(...)` unguarded (context.ts:64); a kit failure there propagates synchronously through startInstall/startRepair/startLaunch (manager.ts:119/196/229) into the router handler. normalizeError passes it through verbatim, and wrapForTransport's JSON.stringify invokes toJSON() — shipping kit `code`/`context`/`name`. On the preload side isIpcError (errors.ts:9-17) rejects it (kit code not in ERROR_CODES), so tryUnwrapIpcError returns null and the renderer receives a raw Error, not a structured IpcError.
@@ -1305,7 +1305,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-090"></a>
 #### LL-090 · IpcError JSON.stringify drops `message` for every thrown Error subclass (SkinError/ManagerError/BundleError)
 
-- **Status:** TODO
+- **Status:** DONE — 2026-05-30 · commit e7808f5
 - **Category:** error-handling · **Priority:** P0 · **Effort:** quick · **Change risk:** low · **Flow:** IPC flow
 - **Area:** src/main/ipc/router.ts:49-64 (normalizeError + wrapForTransport); src/main/services/skin/errors.ts:3-11; src/main/services/minecraft/errors.ts:4-12; src/main/services/bundle/errors.ts:3-11
 - **Problem:** normalizeError() treats any value with `code`+`message` in scope as an IpcError and returns it unchanged: `return error as IpcError`. SkinError, ManagerError and BundleError all extend Error and satisfy that `in` check (message is inherited via the prototype). wrapForTransport then does `JSON.stringify(ipcError)`. But `Error.prototype.message` is a NON-enumerable own property in V8, so JSON.stringify of an Error subclass serializes only the enumerable own props (`code`, `name`) and OMITS `message`. The preload's tryUnwrapIpcError then parses `{code, name}`, isIpcError() fails because `typeof candidate.message !== 'string'`, returns null, and the raw `Error("...[object Object]...")` surfaces in the renderer instead of a structured error. The router unit test at tests/main/ipc/router.test.ts:120 only throws a PLAIN object (`{code, message}`) which DOES stringify fully, so it never catches this — the Error-subclass path is untested.
@@ -1318,7 +1318,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-091"></a>
 #### LL-091 · Domain error codes (MinecraftErrorCodes/BundleErrorCodes) thrown to IPC are rejected by isIpcError — disjoint code namespaces
 
-- **Status:** TODO
+- **Status:** DONE — 2026-05-30 · commit e7808f5
 - **Category:** error-handling · **Priority:** P0 · **Effort:** medium · **Change risk:** medium · **Flow:** IPC flow
 - **Area:** src/shared/ipc/errors.ts:9-17 (isIpcError); src/shared/constants/errorCodes.ts:1-22; src/main/services/minecraft/manager.ts:291-314 (requireIdle/acquireWriteLock throw ManagerError); src/main/services/bundle/manager.ts:206-231 (runSync throws BundleError)
 - **Problem:** isIpcError() validates `code` against `Object.values(ERROR_CODES)`. ERROR_CODES contains only UNKNOWN/IPC_*/AUTH_*/SETTINGS_*/SKIN_*. But ManagerError carries MinecraftErrorCodes values ('opInFlight','noAccount',...) and BundleError carries BundleErrorCodes values ('opInFlight','noClientFolder',...). These are thrown synchronously from minecraft.install/launch/repair/uninstall and bundle.start IPC routes. Even after the message-serialization bug above is fixed, isIpcError still returns false because the domain code is not in the IpcError registry, so the preload refuses to rehydrate it. The renderer mutation rejects with a raw opaque Error and the carefully-built renderer code tables (errorCopy.ts, REPAIRABLE_ERROR_CODES) never run for the throw-path (they only run for the EVENT path).
@@ -1331,7 +1331,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-092"></a>
 #### LL-092 · No unified toIpcError(): five parallel error models and ad-hoc per-call translation
 
-- **Status:** TODO
+- **Status:** DONE — 2026-05-30 · commit e7808f5
 - **Category:** architecture · **Priority:** P1 · **Effort:** medium · **Change risk:** medium · **Flow:** IPC flow
 - **Area:** src/main/ipc/router.ts:49-57; src/main/services/minecraft/errors.ts:14-35 (KIT_CODE_TO_LAUNCHER_CODE); src/main/services/bundle/errors.ts:13-17; src/main/services/skin/errors.ts; src/main/services/auth/yggdrasilAuth.ts:28-33 + routes.ts:22-27 (two more bespoke mappers)
 - **Problem:** Error translation is scattered: minecraft/errors.ts maps MinecraftKitError→MinecraftErrorCode; bundle/errors.ts classifies BundleError; yggdrasilAuth.ts maps YggdrasilClientError→LoginErrorCode; auth/routes.ts maps kit/TypeError→LoginErrorCode; router.ts has its own normalizeError. Each is a separate hand-written table with overlapping concerns (ABORTED, NETWORK appear in 3 of them). There is no single boundary function that takes an arbitrary thrown value and produces the IpcError that crosses the wire. This is the root cause of the two P0 bugs above and makes adding a code an N-place edit.
@@ -1357,7 +1357,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-094"></a>
 #### LL-094 · IPC router logs EVERY handler failure at logger.error, including expected/recoverable ones
 
-- **Status:** TODO
+- **Status:** DONE — 2026-05-30 · commit 434d361
 - **Category:** error-handling · **Priority:** P1 · **Effort:** quick · **Change risk:** low · **Flow:** IPC flow
 - **Area:** src/main/ipc/router.ts:80-84
 - **Problem:** The router catch does `logger.error(`Channel ${channel} failed`, ipcError)` unconditionally for all thrown values, including IPC_UNTRUSTED_SENDER (a security probe, not a user-initiated failure), IPC_INVALID_ARGS (a validation reject), and OP_IN_FLIGHT (a benign double-click race that the UI immediately recovers from by re-reading status). Per code-guideline §9, logger.error is reserved for 'an operation the user initiated failed and was NOT recovered'; recovered/expected conditions are warn.
@@ -1408,7 +1408,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-098"></a>
 #### LL-098 · isIpcError gates on a closed ERROR_CODES registry, so any new IpcError code from main is silently dropped at the preload
 
-- **Status:** TODO
+- **Status:** DONE — 2026-05-30 · commit 2e91fd9
 - **Category:** IPC · **Priority:** P1 · **Effort:** quick · **Change risk:** low · **Flow:** IPC flow
 - **Area:** src/shared/ipc/errors.ts:9-37 (isIpcError used by tryUnwrapIpcError); src/preload/index.ts:23-28
 - **Problem:** tryUnwrapIpcError only rehydrates the payload if isIpcError passes, and isIpcError requires `Object.values(ERROR_CODES).includes(code)`. The envelope is already authenticated by the IPC_ERROR_SENTINEL (it came from our own main router). Gating additionally on a hard-coded enum means: the moment main throws a code not yet added to the renderer's ERROR_CODES copy (e.g. a freshly added code, or a domain code per the P0 finding), the structured error is discarded and a raw '[object Object]' Error reaches the renderer. The registry check is doing double duty as both validation and an allowlist, and failing closed in the wrong direction.
@@ -1517,7 +1517,7 @@ Each task carries: **Category** (architecture / code / flow / performance / test
 <a id="ll-106"></a>
 #### LL-106 · Bundle download promise never settles when signal is already aborted
 
-- **Status:** TODO
+- **Status:** DONE — 2026-05-30 · commit 67afd66
 - **Category:** flow · **Priority:** P0 · **Effort:** quick · **Change risk:** low · **Flow:** Download / install flow
 - **Area:** src/main/services/bundle/download.ts:54-83 (requestOnce)
 - **Problem:** In requestOnce, req is added to currentRequests at line 54, then onAbort is defined (55-57), then the early-abort branch (58-64) calls onAbort() (which does req.destroy(error)) and `return`s at line 61. The req.on('error') / req.on('timeout') / req.on('close') handlers that reject() and delete from currentRequests are only registered at lines 65-81, AFTER the early return. On the pre-aborted path none of them are attached, so the destroy error is unobserved, the response callback (line 50) never fires, and the Promise<IncomingMessage> can never settle. The 60s request timeout is also never wired (its handler is below the return too), so there is no safety net. A worker can reach this state via a real race: runDownloadWorker passes its `while (!task.cancelled && !task.paused)` check (runner.ts:94), shift()s an entry, and then cancelSync/pauseSync calls task.abort.abort() before the worker enters requestOnce — at which point options.signal.aborted is true on entry.
@@ -2610,7 +2610,23 @@ One entry per working session, newest at the bottom. Keep it terse.
 - Next suggested batch: LL-…, LL-…
 -->
 
-_No sessions yet._
+### 2026-05-30 — 8 task(s)
+- Done: LL-098 (2e91fd9), LL-090 (e7808f5), LL-091 (e7808f5), LL-015 (e7808f5),
+  LL-092 (e7808f5), LL-094 (434d361), LL-106 (67afd66), LL-004 (c22e65e)
+- Focus: the P0 IPC error boundary + lock footgun. LL-092's single `toIpcError`
+  boundary (new `src/main/ipc/toIpcError.ts`) closes the three P0/P1 error-model
+  findings at once: Error-subclass messages survive (LL-090), domain codes carry
+  through (LL-091), kit errors no longer leak their internals (LL-015). LL-098
+  relaxed `isIpcError`/widened `IpcError.code` to `string` so those codes
+  round-trip the preload. LL-094 split router log levels (recovered → warn).
+  LL-106 stops the pre-aborted bundle download from wedging the op lock. LL-004
+  made the shared op-lock registry a required arg (compile-checked wiring).
+- Packages built + vendored into launcher node_modules (await npm publish): none
+- Blocked: none
+- Next suggested batch: P1 IPC/boundary continuation — LL-016 (per-channel
+  trusted-sender scoping), LL-017 (enforce Zod parse in the router contract),
+  LL-097 (unify domain codes into the shared registry), plus the auth-FSM test
+  gaps LL-121/LL-122/LL-123 and pure-domain LL-142.
 
 ## Pending package release (publish at the very end, then bump pins)
 
