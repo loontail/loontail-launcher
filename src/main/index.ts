@@ -12,6 +12,7 @@ import { sweepOrphanClientOverrides } from '@main/bootstrap/sweepOrphans';
 import { initLogger, scopedLogger } from '@main/infra/logger';
 import { attachNotifier, notify } from '@main/infra/notifier';
 import { configureSessionSecurity } from '@main/infra/session';
+import { initStore } from '@main/infra/store';
 import { createRouter } from '@main/ipc/router';
 import { createTrustedSenderCheck } from '@main/ipc/trustedSender';
 import { createAppService } from '@main/services/app';
@@ -84,6 +85,10 @@ app.on('second-instance', () => {
 
 const start = async (): Promise<void> => {
   await app.whenReady();
+
+  // Run schema migrations and purge legacy auth before any service reads the
+  // store; importing the store module no longer triggers this as a side effect.
+  initStore();
 
   configureSessionSecurity();
 

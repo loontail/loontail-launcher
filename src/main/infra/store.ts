@@ -149,8 +149,6 @@ const runMigrations = (): void => {
   store.set(STORE_KEY_SCHEMA_VERSION, CURRENT_SCHEMA_VERSION);
 };
 
-runMigrations();
-
 const secureStorageFailure = (error: unknown): { message: string } => ({
   message: error instanceof Error ? error.message : 'Unknown secure storage error',
 });
@@ -263,7 +261,13 @@ const purgeLegacyAuth = (): void => {
   clearAuthSecret();
 };
 
-purgeLegacyAuth();
+// Explicit store bootstrap. Runs the settings schema migration and drops legacy
+// auth sessions. Called once from main bootstrap before any service is created,
+// so importing this module (e.g. from a unit test) triggers no store I/O.
+export const initStore = (): void => {
+  runMigrations();
+  purgeLegacyAuth();
+};
 
 const migrateLegacyAuthSession = (session: AuthSession): AuthSession | null => {
   try {

@@ -94,7 +94,11 @@ const writeAuthSecret = (payload: Record<string, unknown>): void => {
 
 const loadStoreModule = async (): Promise<typeof import('@main/infra/store')> => {
   vi.resetModules();
-  return import('@main/infra/store');
+  const storeModule = await import('@main/infra/store');
+  // Store bootstrap is now explicit (initStore) instead of an import-time side
+  // effect; run it so migration/purge behaviour matches the shipped flow.
+  storeModule.initStore();
+  return storeModule;
 };
 
 beforeEach(() => {
@@ -385,6 +389,49 @@ describe('applySettingsMigrations', () => {
     expect(() =>
       applySettingsMigrations(settingsFixture(), 0, CURRENT_SCHEMA_VERSION),
     ).not.toThrow();
+  });
+});
+
+describe('initStore', () => {
+  it('performs no store migration until called', async () => {
+    writeStore({
+      [STORE_KEY_LAUNCHER_SETTINGS]: {
+        memory: { allocatedRamMb: 4096 },
+        storage: { clientsFolder: '/tmp/clients' },
+        launch: { console: true, fullscreen: false },
+        clients: {},
+      },
+      [STORE_KEY_SCHEMA_VERSION]: 0,
+    });
+
+    vi.resetModules();
+    const storeModule = await import('@main/infra/store');
+    expect(JSON.parse(fs.readFileSync(storeFile, 'utf8'))[STORE_KEY_SCHEMA_VERSION]).toBe(0);
+
+    storeModule.initStore();
+    expect(JSON.parse(fs.readFileSync(storeFile, 'utf8'))[STORE_KEY_SCHEMA_VERSION]).toBe(
+      CURRENT_SCHEMA_VERSION,
+    );
+  });
+
+  it('drops a legacy strapi-tagged session only once called', async () => {
+    writeStore({
+      [STORE_KEY_AUTH]: {
+        provider: 'strapi',
+        jwt: 'a.b.c',
+        user: { id: 1, username: 'someone', email: 'someone@example.com', blocked: false },
+      },
+      [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
+    });
+
+    vi.resetModules();
+    const storeModule = await import('@main/infra/store');
+    expect(JSON.parse(fs.readFileSync(storeFile, 'utf8'))[STORE_KEY_AUTH]).toMatchObject({
+      provider: 'strapi',
+    });
+
+    storeModule.initStore();
+    expect(JSON.parse(fs.readFileSync(storeFile, 'utf8'))[STORE_KEY_AUTH]).toBeNull();
   });
 });
 
