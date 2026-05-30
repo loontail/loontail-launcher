@@ -1919,6 +1919,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### ERR-06 — Fix LauncherSection handleClearCache: cache invalidation runs even when clearMediaCache fails, but QueryClient.removeQueries runs unconditionally before the IPC call succeeds
 
+- **Status:** DONE — 2026-05-31 · commit d9ef873
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Medium · _(auditor: renderer-ui)_
 - **Area:** src/renderer/features/settings/components/sections/LauncherSection.tsx:48-61
 - **Problem:** handleClearCache (lines 48-61) calls queryClient.removeQueries() first (line 49-53) then awaits clearMediaCache() inside a try/catch that swallows the error. The in-memory queries are invalidated regardless of whether the disk cache was cleared. The success toast fires unconditionally after both. But more critically: if clearMediaCache rejects, the user sees no feedback — the toast.success at line 60 still fires because it is after the try/catch block.
