@@ -1,10 +1,7 @@
 import type { BundleRuntimeState } from '@renderer/features/bundle';
+import { isBundleBusy } from '@renderer/features/bundle/store';
 import type { ClientRuntimeState } from '@renderer/features/minecraft';
-import {
-  BUSY_BUNDLE_STATUSES,
-  type BundleSyncStatus,
-  BundleSyncStatuses,
-} from '@shared/contracts/bundle';
+import { type BundleSyncStatus, BundleSyncStatuses } from '@shared/contracts/bundle';
 import { InstallStatuses, type ProgressStage, ProgressStages } from '@shared/contracts/minecraft';
 
 export const InstallStepKeys = {
@@ -81,9 +78,6 @@ const BUNDLE_INDETERMINATE: ReadonlySet<BundleSyncStatus> = new Set([
   BundleSyncStatuses.DELETING,
   BundleSyncStatuses.HEALING,
 ]);
-
-const isBundleBusy = (status: BundleSyncStatus): boolean =>
-  BUSY_BUNDLE_STATUSES.has(status) || status === BundleSyncStatuses.PAUSED;
 
 // The progress card is reserved for an *actual transfer*. A bundle sync only
 // downloads bytes in DOWNLOADING (and a PAUSED download that can resume); the
