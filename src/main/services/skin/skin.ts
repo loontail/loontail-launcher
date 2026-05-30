@@ -4,6 +4,7 @@ import {
   detectSkinVariant,
   isMinecraftKitError,
 } from '@loontail/minecraft-kit';
+import type { SkinAssetKind } from '@loontail/yggdrasil-core';
 import { validatePngBuffer } from '@loontail/yggdrasil-core';
 import { scopedLogger } from '@main/infra/logger';
 import type { AuthSessionPort } from '@main/services/auth/session';
@@ -11,10 +12,24 @@ import type { FetchTextures, YggdrasilGateway } from '@main/services/auth/yggdra
 import { invalidateMediaCache, prewarmMediaCache } from '@main/services/media/mediaCache';
 import { ERROR_CODES } from '@shared/constants';
 import type { AuthSession, MojangSession, YggdrasilSession } from '@shared/contracts/auth';
-import { SkinKinds, type UploadSkinPayload, type UploadSkinResult } from '@shared/contracts/skin';
+import {
+  type SkinKind,
+  SkinKinds,
+  type UploadSkinPayload,
+  type UploadSkinResult,
+} from '@shared/contracts/skin';
 import { SkinError } from './errors';
 
 const logger = scopedLogger('skin');
+
+// Compile-time guard: `validatePngBuffer` takes yggdrasil-core's `SkinAssetKind`.
+// Our `SkinKind` shares the same 'skin'|'cape' literals but is declared
+// independently; this assertion fails tsc if the two unions ever diverge.
+type SkinKindMatchesAsset = SkinKind extends SkinAssetKind
+  ? true
+  : ['SkinKind diverged from yggdrasil-core SkinAssetKind'];
+const _skinKindAssetCheck: SkinKindMatchesAsset = true;
+void _skinKindAssetCheck;
 
 const requireSession = (authSession: AuthSessionPort): AuthSession => {
   const session = authSession.current();
