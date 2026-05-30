@@ -91,14 +91,32 @@ describe('verifySession', () => {
     expect(storeMocks.setStoredAuth).not.toHaveBeenCalled();
   });
 
-  it('keeps the cached yggdrasil account and enriches it when offline', async () => {
+  it('keeps the cached yggdrasil account without a network fetch when offline', async () => {
     storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
+
+    const account = await verifySession(yggAuth({ kind: 'offline' }), mojangAuth());
+
+    expect(account).toEqual({
+      provider: 'yggdrasil',
+      username: 'someone',
+      email: null,
+      skin: null,
+      cape: null,
+    });
+    expect(fetchTexturesMock).not.toHaveBeenCalled();
+    expect(storeMocks.setStoredAuth).not.toHaveBeenCalled();
+    expect(storeMocks.clearStoredAuth).not.toHaveBeenCalled();
+  });
+
+  it('enriches the rotated yggdrasil account with textures on success', async () => {
+    storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
+    const rotated = yggdrasilSession('rotated-access');
     fetchTexturesMock.mockResolvedValue({
       skin: { url: 'https://skins/s' },
       cape: { url: 'https://capes/c' },
     });
 
-    const account = await verifySession(yggAuth({ kind: 'offline' }), mojangAuth());
+    const account = await verifySession(yggAuth({ kind: 'ok', session: rotated }), mojangAuth());
 
     expect(account).toEqual({
       provider: 'yggdrasil',
@@ -108,8 +126,6 @@ describe('verifySession', () => {
       cape: 'https://capes/c',
     });
     expect(fetchTexturesMock).toHaveBeenCalledWith('0123456789abcdef0123456789abcdef');
-    expect(storeMocks.setStoredAuth).not.toHaveBeenCalled();
-    expect(storeMocks.clearStoredAuth).not.toHaveBeenCalled();
   });
 
   it('persists the rotated yggdrasil session on success', async () => {
@@ -128,11 +144,12 @@ describe('verifySession', () => {
     });
   });
 
-  it('falls back to the bare profile when texture enrichment fails', async () => {
+  it('falls back to the bare profile when success-path texture enrichment fails', async () => {
     storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
+    const rotated = yggdrasilSession('rotated-access');
     fetchTexturesMock.mockRejectedValue(new Error('textures down'));
 
-    const account = await verifySession(yggAuth({ kind: 'offline' }), mojangAuth());
+    const account = await verifySession(yggAuth({ kind: 'ok', session: rotated }), mojangAuth());
 
     expect(account).toMatchObject({ skin: null, cape: null });
     expect(loggerMocks.warn).toHaveBeenCalled();

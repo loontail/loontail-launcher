@@ -49,7 +49,9 @@ export const verifySession = async (
       return null;
     }
     if (result.kind === 'offline') {
-      return enrichYggdrasilAccount(session, accountFromSession(session));
+      // Offline fallback must be instant: enrichment hits the same unreachable
+      // server, so reuse the skin/cape persisted from the last successful verify.
+      return accountFromSession(session);
     }
     setStoredAuth(result.session);
     return enrichYggdrasilAccount(result.session, accountFromSession(result.session));
