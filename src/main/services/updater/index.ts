@@ -1,4 +1,5 @@
 import { scopedLogger } from '@main/infra/logger';
+import { assertNoIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
 import { UpdaterStates, type UpdaterStatusEvent } from '@shared/contracts/updater';
 import { IPC_CHANNELS, IPC_EVENTS } from '@shared/ipc';
@@ -80,12 +81,14 @@ export const createUpdaterService = (router: Router, mainWindow: BrowserWindow):
         logger.info('autoUpdater disabled (not a packaged Windows build)');
       }
 
-      router.handle(IPC_CHANNELS.updaterInstall, () => {
+      router.handle(IPC_CHANNELS.updaterInstall, (rawArgs) => {
+        assertNoIpcArgs(rawArgs, 'updater.install takes no arguments');
         if (!isSquirrelEnabled()) return;
         autoUpdater.quitAndInstall();
       });
 
-      router.handle(IPC_CHANNELS.updaterCheck, async () => {
+      router.handle(IPC_CHANNELS.updaterCheck, async (rawArgs) => {
+        assertNoIpcArgs(rawArgs, 'updater.check takes no arguments');
         if (!isSquirrelEnabled()) {
           broadcast({ state: UpdaterStates.NOT_AVAILABLE });
           return;

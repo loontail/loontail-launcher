@@ -19,3 +19,13 @@ export const parseIpcArgs = <Schema extends ZodTypeAny>(
   }
   return parsed.data;
 };
+
+export const assertNoIpcArgs = (rawArgs: unknown, message: string): void => {
+  if (rawArgs === undefined) return;
+  const error: IpcError = {
+    code: ERROR_CODES.IpcInvalidArgs,
+    message,
+    ...(app.isPackaged ? {} : { details: { received: rawArgs } }),
+  };
+  throw error;
+};

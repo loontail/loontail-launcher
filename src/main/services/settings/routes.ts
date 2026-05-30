@@ -1,5 +1,5 @@
 import { directoryHasEntries, pickFolderWithSuffix } from '@main/infra/system';
-import { parseIpcArgs } from '@main/ipc/parseArgs';
+import { assertNoIpcArgs, parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
 import {
   clearClientOverride,
@@ -18,7 +18,10 @@ import type { BrowserWindow } from 'electron';
 const SLUG_REQUIRED = 'slug must be a non-empty string';
 
 export const registerSettingsRoutes = (router: Router, mainWindow: BrowserWindow): void => {
-  router.handle(IPC_CHANNELS.settingsGet, () => getSettings());
+  router.handle(IPC_CHANNELS.settingsGet, (rawArgs) => {
+    assertNoIpcArgs(rawArgs, 'settings.get takes no arguments');
+    return getSettings();
+  });
 
   router.handle(IPC_CHANNELS.settingsSetLauncher, (rawArgs) => {
     const patch = parseIpcArgs(PatchLauncherSettingsSchema, rawArgs, 'Invalid launcher patch');

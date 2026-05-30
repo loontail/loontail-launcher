@@ -1,6 +1,6 @@
 import { isErrorCode } from '@loontail/minecraft-kit';
 import { setStoredAuth } from '@main/infra/store';
-import { parseIpcArgs } from '@main/ipc/parseArgs';
+import { assertNoIpcArgs, parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
 import { accountFromSession } from '@shared/contracts/account';
 import {
@@ -36,11 +36,18 @@ export const registerAuthRoutes = (
     return login(yggdrasilAuth, payload);
   });
 
-  router.handle(IPC_CHANNELS.authMe, () => fetchCurrentUser(yggdrasilAuth, mojangAuth));
+  router.handle(IPC_CHANNELS.authMe, (rawArgs) => {
+    assertNoIpcArgs(rawArgs, 'auth.me takes no arguments');
+    return fetchCurrentUser(yggdrasilAuth, mojangAuth);
+  });
 
-  router.handle(IPC_CHANNELS.authLogout, () => logout(yggdrasilAuth));
+  router.handle(IPC_CHANNELS.authLogout, (rawArgs) => {
+    assertNoIpcArgs(rawArgs, 'auth.logout takes no arguments');
+    return logout(yggdrasilAuth);
+  });
 
-  router.handle(IPC_CHANNELS.authMojangSignIn, async (): Promise<LoginResult> => {
+  router.handle(IPC_CHANNELS.authMojangSignIn, async (rawArgs): Promise<LoginResult> => {
+    assertNoIpcArgs(rawArgs, 'auth.mojang.signIn takes no arguments');
     try {
       const session = await mojangAuth.signInWithMojang();
       setStoredAuth(session);
@@ -50,7 +57,8 @@ export const registerAuthRoutes = (
     }
   });
 
-  router.handle(IPC_CHANNELS.authMojangCancel, () => {
+  router.handle(IPC_CHANNELS.authMojangCancel, (rawArgs) => {
+    assertNoIpcArgs(rawArgs, 'auth.mojang.cancel takes no arguments');
     mojangAuth.cancelMojangLogin();
   });
 };

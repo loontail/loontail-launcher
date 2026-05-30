@@ -6,7 +6,7 @@ import {
   openPath,
   pickFolderWithSuffix,
 } from '@main/infra/system';
-import { parseIpcArgs } from '@main/ipc/parseArgs';
+import { assertNoIpcArgs, parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
 import { getSettings } from '@main/services/settings/settings';
 import { IPC_CHANNELS } from '@shared/ipc';
@@ -29,7 +29,10 @@ const getOpenPathAllowedRoots = (): string[] => {
 };
 
 export const registerSystemRoutes = (router: Router, mainWindow: BrowserWindow): void => {
-  router.handle(IPC_CHANNELS.systemGetRamRange, () => getRamRange());
+  router.handle(IPC_CHANNELS.systemGetRamRange, (rawArgs) => {
+    assertNoIpcArgs(rawArgs, 'system.getRamRange takes no arguments');
+    return getRamRange();
+  });
 
   router.handle(IPC_CHANNELS.systemGetDiskSpace, (rawArgs) => {
     const path = parseIpcArgs(PathArgSchema, rawArgs, PATH_ERROR_MESSAGE);
@@ -41,13 +44,17 @@ export const registerSystemRoutes = (router: Router, mainWindow: BrowserWindow):
     return getFolderSize(path);
   });
 
-  router.handle(IPC_CHANNELS.systemPickInstallFolder, async () => {
+  router.handle(IPC_CHANNELS.systemPickInstallFolder, async (rawArgs) => {
+    assertNoIpcArgs(rawArgs, 'system.pickInstallFolder takes no arguments');
     const picked = await pickFolderWithSuffix(mainWindow, null);
     if (picked) await ensureDirectory(picked.path);
     return picked;
   });
 
-  router.handle(IPC_CHANNELS.systemGetDefaultInstallFolder, () => app.getPath('userData'));
+  router.handle(IPC_CHANNELS.systemGetDefaultInstallFolder, (rawArgs) => {
+    assertNoIpcArgs(rawArgs, 'system.getDefaultInstallFolder takes no arguments');
+    return app.getPath('userData');
+  });
 
   router.handle(IPC_CHANNELS.systemOpenPath, async (rawArgs) => {
     const path = parseIpcArgs(PathArgSchema, rawArgs, PATH_ERROR_MESSAGE);
