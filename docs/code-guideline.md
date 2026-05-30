@@ -441,10 +441,25 @@ constant, not an inline literal.
 
 ## 10. Comments
 
-- Default — no comments. A well-named function explains itself.
+- **The test (apply to every comment, existing or new):** if deleting it loses
+  information a careful reader could **not** recover from the code in ~10
+  seconds, keep it; otherwise delete it. This rule is the whole section — the
+  lists below are just the common cases.
+- Default — no comments. A well-named function explains itself. A file with
+  zero comments is the expected norm, not a gap to fill.
 - Write a comment only when the **why** is non-obvious: a hidden invariant, a
   workaround for a specific bug, behavior that would surprise a reader.
 - Do not describe **what** the code does — that is visible from the code.
+- **No JSDoc / `/** … */` blocks on functions, types, or props** unless the
+  block carries a real **why** that the test above would keep. A docstring that
+  restates the name, the parameters, or the return type (`@param slug the
+  slug`, `Fetches the textures for the given profile.` above
+  `fetchTextures(profile)`) is noise — delete it. We do not publish an API
+  reference from these doc-comments, so they buy nothing. If a one-line **why**
+  is warranted, write a plain `//` line above the symbol instead of a `/** */`
+  block. **Why:** multi-line JSDoc is the most common surviving form of
+  what-restating comment in this repo and reads as documentation while adding
+  nothing.
 - Do not reference the current task / ticket / author ("added for #123", "used
   by X flow") — it rots and clutters.
 - Multi-line docstrings are unnecessary. If explanation is required, one short

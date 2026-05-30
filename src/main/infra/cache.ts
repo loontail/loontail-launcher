@@ -102,12 +102,7 @@ export const getNamespaceSize = async (namespace: string): Promise<number> => {
   }
 };
 
-/**
- * Prune the oldest files in `namespace` (by mtime) until the total on-disk
- * footprint is `<= maxBytes`. No-op when already under the bound or when the
- * directory does not exist yet. Errors are swallowed: cache eviction is a
- * best-effort housekeeping job, not a critical path.
- */
+// Eviction is best-effort housekeeping, not a critical path — errors are swallowed.
 export const enforceSizeBound = async (namespace: string, maxBytes: number): Promise<void> => {
   if (maxBytes < 0) return;
   try {
@@ -143,13 +138,6 @@ export type CachedFetchOptions<T> = {
   isOfflineError?: (error: unknown) => boolean;
 };
 
-/**
- * Network-first JSON cache with on-disk fallback.
- *
- * Online: call `fetcher`, persist its JSON to disk, return the live value.
- * Offline (network/5xx by default): return the last persisted JSON from disk.
- * If the API returned 4xx, or disk has no snapshot, the original error is rethrown.
- */
 export const cachedFetch = async <T>(options: CachedFetchOptions<T>): Promise<T> => {
   const isOffline = options.isOfflineError ?? defaultIsOfflineError;
   try {

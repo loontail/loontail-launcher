@@ -40,9 +40,7 @@ const requireClientId = () => {
   return asAzureClientId(mainConfig.mojangClientId);
 };
 
-// Project the kit's nested session into the launcher's flat storage shape.
-// The kit returns the active profile inline, so no second `/minecraft/profile`
-// call is needed.
+// The kit returns the active profile inline, so no second `/minecraft/profile` call is needed.
 const fromKitSession = (kitSession: KitMojangSession): MojangSession => ({
   provider: 'mojang',
   accessToken: kitSession.minecraft.accessToken,
@@ -68,11 +66,8 @@ export type MojangAuth = {
   verifyMojangSession: (session: MojangSession) => Promise<VerifyMojangResult>;
 };
 
-/**
- * Apply a fresh kit-provided profile snapshot to the stored session.
- * Mojang `profile.*` mutations already return the updated profile, so the
- * caller passes it in instead of triggering another GET.
- */
+// Mojang profile.* mutations already return the updated profile, so the caller
+// passes it in instead of triggering another GET.
 export const withRefreshedProfile = (
   session: MojangSession,
   profile: MinecraftProfile,
@@ -136,13 +131,6 @@ export const createMojangAuth = (
   let activeController: AbortController | null = null;
   const openExternal = options.openExternal ?? ((url: string) => shell.openExternal(url));
 
-  /**
-   * Run the OAuth Authorization Code + PKCE flow end-to-end via the kit. The kit
-   * binds a temporary loopback HTTP server, we validate the generated Microsoft
-   * authorize URL before opening the browser, and the call blocks until the user
-   * finishes signing in or cancels. One concurrent flow at a time — a fresh call
-   * aborts the prior one.
-   */
   const signInWithMojang = async (): Promise<MojangSession> => {
     const clientId = requireClientId();
     activeController?.abort();
@@ -173,18 +161,11 @@ export const createMojangAuth = (
     }
   };
 
-  /** Aborts the in-flight `signInWithMojang` flow, if any. Idempotent. */
   const cancelMojangLogin = (): void => {
     activeController?.abort();
     activeController = null;
   };
 
-  /**
-   * Validate a stored Mojang session. Refreshes the access token if it's near
-   * expiry; otherwise asks the kit to read the profile, which exercises the
-   * same Minecraft Services bearer the launcher would use to play. `expired`
-   * clears the session, `offline` keeps the cached copy.
-   */
   const verifyMojangSession = async (session: MojangSession): Promise<VerifyMojangResult> => {
     const safetyWindowMs = 60_000;
     const needsRefresh = Date.now() > session.expiresAt - safetyWindowMs;

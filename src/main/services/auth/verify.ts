@@ -8,15 +8,9 @@ import { fetchTextures } from './yggdrasilClient';
 
 const logger = scopedLogger('auth.verify');
 
-/**
- * Best-effort enrichment of a Yggdrasil-backed `Account` with skin and
- * cape URLs. After the skins-registry → yggdrasil-plugin merge, both
- * URLs are exposed by `GET /api/yggdrasil/textures/:uuid`, so the
- * launcher no longer needs the static Strapi API token to populate
- * them. `email` is not part of the Yggdrasil protocol and stays
- * `null` for these accounts — the launcher's UI surfaces `username`
- * instead.
- */
+// After the skins-registry → yggdrasil-plugin merge both URLs come from
+// GET /api/yggdrasil/textures/:uuid, so no static Strapi token is needed.
+// `email` is not part of the Yggdrasil protocol and stays null for these accounts.
 export const enrichYggdrasilAccount = async (
   session: YggdrasilSession,
   fallback: Account,

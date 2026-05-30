@@ -26,11 +26,8 @@ export const initLogger = (): Logger => {
 
 export const scopedLogger = (scope: string): Logger => log.scope(scope);
 
-/**
- * Adapt an electron-log scope to the kit's pluggable `Logger` interface so
- * `new MinecraftKit({ logger })` writes through the same sinks as the rest
- * of the launcher (file + console).
- */
+// Adapt electron-log to the kit's Logger interface so the kit writes through
+// the launcher's sinks (file + console).
 export const kitLogger = (scope: string): KitLogger => {
   const scoped = log.scope(scope);
   return {

@@ -42,12 +42,6 @@ export const useClearSkin = () => {
   return { mutate: mutation.mutateAsync, isPending: mutation.isPending };
 };
 
-/**
- * Owns the skin/cape file pickers, the unsaved-preview state, and the
- * upload/reset mutations. Returns ready-to-bind input props plus an action
- * surface so the AccountSection can lay out the viewer and the controls
- * independently.
- */
 export const useSkinEditor = () => {
   const { user } = useCurrentUser();
   const provider = user?.provider ?? null;
