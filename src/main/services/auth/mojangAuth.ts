@@ -5,6 +5,7 @@ import type {
   MinecraftProfile,
 } from '@loontail/minecraft-kit';
 import { mainConfig } from '@main/config';
+import { HTTP_UNAUTHORIZED } from '@main/constants/http';
 import { scopedLogger } from '@main/infra/logger';
 import type { MojangSession } from '@shared/contracts/auth';
 import { shell } from 'electron';
@@ -15,6 +16,9 @@ const logger = scopedLogger('auth.mojang');
 const MICROSOFT_AUTHORIZE_HOST = 'login.microsoftonline.com';
 const MICROSOFT_AUTHORIZE_PATH = '/consumers/oauth2/v2.0/authorize';
 export const MOJANG_BROWSER_OPEN_ERROR_CODE = 'MOJANG_BROWSER_OPEN_FAILED';
+// Refresh the access token this far ahead of its stated expiry to absorb clock
+// skew and the round-trip cost of the MSAL refresh + profile read.
+const MOJANG_TOKEN_REFRESH_SAFETY_WINDOW_MS = 60_000;
 
 type BrowserOpener = (url: string) => Promise<void>;
 
@@ -167,8 +171,7 @@ export const createMojangAuth = (
   };
 
   const verifyMojangSession = async (session: MojangSession): Promise<VerifyMojangResult> => {
-    const safetyWindowMs = 60_000;
-    const needsRefresh = Date.now() > session.expiresAt - safetyWindowMs;
+    const needsRefresh = Date.now() > session.expiresAt - MOJANG_TOKEN_REFRESH_SAFETY_WINDOW_MS;
 
     try {
       if (needsRefresh) {
@@ -183,7 +186,7 @@ export const createMojangAuth = (
       if (isErrorCode(error, 'AUTH_REFRESH_FAILED')) return { kind: 'expired' };
       if (isErrorCode(error, 'AUTH_MINECRAFT_FAILED')) {
         const httpStatus = (error as { context?: { httpStatus?: number } }).context?.httpStatus;
-        if (httpStatus === 401) return { kind: 'expired' };
+        if (httpStatus === HTTP_UNAUTHORIZED) return { kind: 'expired' };
       }
       logger.warn('Mojang verify failed — assuming offline', error);
       return { kind: 'offline' };

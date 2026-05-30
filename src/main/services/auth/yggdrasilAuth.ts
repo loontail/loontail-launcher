@@ -4,6 +4,7 @@ import {
   YggdrasilClientErrorCodes,
 } from '@loontail/yggdrasil-client';
 import { undashUuid } from '@loontail/yggdrasil-core';
+import { HTTP_FORBIDDEN, HTTP_TOO_MANY_REQUESTS } from '@main/constants/http';
 import { scopedLogger } from '@main/infra/logger';
 import {
   LOGIN_ERROR_CODE,
@@ -11,9 +12,6 @@ import {
   type LoginPayload,
   type YggdrasilSession,
 } from '@shared/contracts/auth';
-
-const HTTP_FORBIDDEN = 403;
-const HTTP_TOO_MANY_REQUESTS = 429;
 
 const logger = scopedLogger('auth.yggdrasil');
 
