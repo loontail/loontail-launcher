@@ -44,6 +44,7 @@ const fakeEvent = (): IpcMainInvokeEvent => ({}) as unknown as IpcMainInvokeEven
 beforeEach(() => {
   handlers.clear();
   loggerMocks.error.mockClear();
+  loggerMocks.warn.mockClear();
   appMock.isPackaged = false;
 });
 
@@ -204,6 +205,37 @@ describe('createRouter', () => {
       code: BundleErrorCodes.NO_CLIENT_FOLDER,
       message: 'No client folder configured',
     });
+  });
+
+  it('logs a rejected untrusted sender at warn, not error', async () => {
+    const router = createRouter(() => false);
+    router.handle('app.getVersion', () => 'ok');
+    const handler = handlers.get('app.getVersion');
+    await expect(handler?.(fakeEvent(), undefined)).rejects.toBeDefined();
+    expect(loggerMocks.warn).toHaveBeenCalledTimes(1);
+    expect(loggerMocks.error).not.toHaveBeenCalled();
+  });
+
+  it('logs a recoverable domain failure (OP_IN_FLIGHT) at warn, not error', async () => {
+    const router = createRouter(() => true);
+    router.handle('minecraft.install', () => {
+      throw new ManagerError(MinecraftErrorCodes.OP_IN_FLIGHT, 'Operation already running');
+    });
+    const handler = handlers.get('minecraft.install');
+    await expect(handler?.(fakeEvent(), undefined)).rejects.toBeDefined();
+    expect(loggerMocks.warn).toHaveBeenCalledTimes(1);
+    expect(loggerMocks.error).not.toHaveBeenCalled();
+  });
+
+  it('logs an unrecovered handler crash at error', async () => {
+    const router = createRouter(() => true);
+    router.handle('app.getVersion', () => {
+      throw new Error('boom');
+    });
+    const handler = handlers.get('app.getVersion');
+    await expect(handler?.(fakeEvent(), undefined)).rejects.toBeDefined();
+    expect(loggerMocks.error).toHaveBeenCalledTimes(1);
+    expect(loggerMocks.warn).not.toHaveBeenCalled();
   });
 
   it('dispose() removes every registered channel', () => {
