@@ -45,7 +45,6 @@ export const useCopyText = () => {
 };
 
 export type CopyButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & {
-  // The exact text written to the clipboard on click.
   text: string;
   // Visual variant. `icon` is the compact 28px square (default); `inline`
   // matches text-row affordances; `custom` renders only the children with no

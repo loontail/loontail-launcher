@@ -32,16 +32,13 @@ export type SyncTask = {
   // Cooperative pause/cancel flags. Workers check between file boundaries.
   paused: boolean;
   cancelled: boolean;
-  // Throughput accounting for the renderer's KB/s readout.
   bytesDownloaded: number;
   speedWindowStart: number;
   speedWindowBytes: number;
-  // Per-file progress counters.
   processedFiles: number;
   totalFiles: number;
   lastEmittedAt: number;
   currentFile?: string;
-  // Pending work queues — runner shifts from these as workers pull tasks.
   pendingDownloads: RemoteManifestEntry[];
   pendingDeletes: string[];
 };

@@ -86,8 +86,6 @@ export class BundleManager {
     private readonly operationLocks: ClientOperationLocks = createClientOperationLocks(),
   ) {}
 
-  // Public API ---------------------------------------------------------------
-
   async startSync(req: BundleStartRequest): Promise<void> {
     await this.runSync(req, { forLaunch: false });
   }
@@ -200,8 +198,6 @@ export class BundleManager {
     }
     return { installed: true, signatureMatches, progress: null };
   }
-
-  // Internal -----------------------------------------------------------------
 
   private async runSync(req: BundleStartRequest, options: { forLaunch: boolean }): Promise<void> {
     const { slug } = req;

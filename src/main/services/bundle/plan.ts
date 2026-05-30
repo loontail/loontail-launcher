@@ -18,7 +18,7 @@ export type SyncPlan = {
   // Bundle-owned paths in the *current remote* manifest. Healer uses this to
   // know which kit verify issues to ignore (bundle deliberately overrides them).
   bundleOwnedRelativePaths: Set<string>;
-  // Sum of toDownload + toUpdate sizes (for the progress bar denominator).
+  // Progress-bar denominator.
   bytesTotal: number;
 };
 

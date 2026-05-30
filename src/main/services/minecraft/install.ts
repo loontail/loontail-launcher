@@ -90,7 +90,6 @@ const handleInstallFailure = async (
   await emitPostInstallStatus(env, slug, ctx.clientFolder);
 };
 
-// Plan + tracker + run.
 const tryInstall = async (
   env: ManagerEnv,
   slug: ClientSlug,

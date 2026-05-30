@@ -113,9 +113,7 @@ const walkDirectorySize = async (root: string): Promise<number> => {
           try {
             const info = await limit(() => stat(full));
             total += info.size;
-          } catch {
-            // skip unreadable file
-          }
+          } catch {}
         }
       }),
     );

@@ -104,8 +104,7 @@ const makeStep = (key: InstallStepKey): InstallStep => ({
   percent: 0,
 });
 
-// Apply per-stage progress fields to a step, skipping undefined to respect
-// exactOptionalPropertyTypes.
+// Skip undefined to respect exactOptionalPropertyTypes.
 const applyProgress = (
   step: InstallStep,
   data: {
@@ -127,7 +126,6 @@ const applyProgress = (
   if (data.subStage !== undefined) step.subStage = data.subStage;
 };
 
-// Mark every step strictly before `current` (in render order) as DONE.
 const markPrecedingDone = (steps: InstallStep[], current: InstallStepKey): void => {
   for (const step of steps) {
     if (step.key === current) break;
@@ -157,7 +155,6 @@ const installStageBytes = (
   return { done, total: stageTotal };
 };
 
-// Build the step-flow view from Minecraft install state + Bundle sync state.
 // Returns null when nothing is in progress — the card collapses immediately.
 export const selectInstallProgress = (
   client: ClientRuntimeState,
