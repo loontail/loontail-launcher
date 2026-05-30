@@ -1,6 +1,10 @@
 import { i18n } from '@renderer/i18n';
 import { toast } from '@renderer/shared/ui/Toast';
-import type { ToastOptions } from '@renderer/shared/ui/Toast/toast';
+import {
+  type ToastAction,
+  type ToastVariant,
+  ToastVariants,
+} from '@renderer/shared/ui/Toast/toast';
 import { QUERY_KEYS } from '@shared/constants';
 import type { ClientSlug } from '@shared/contracts/ids';
 import {
@@ -16,28 +20,44 @@ import { localizeMinecraftError } from './errorCopy';
 import { type ClientRuntimeState, useMinecraftStore } from './store';
 
 // Errors a repair can actually fix (missing/corrupt files, missing runtime).
-// For these the launch-failure toast offers an inline "Repair" action; other
-// errors (no account, network, …) just inform.
+// For these we show a calm "heads up" prompt offering a Repair, not a red error —
+// the game is still installed, something is just out of date. Other errors
+// (no account, network, …) stay as informational error toasts.
 export const REPAIRABLE_ERROR_CODES: ReadonlySet<MinecraftErrorCode> = new Set([
   MinecraftErrorCodes.NOT_INSTALLED,
   MinecraftErrorCodes.INTEGRITY_ERROR,
   MinecraftErrorCodes.RUNTIME_ERROR,
 ]);
 
-// Repairable errors get a toast with an inline "Repair" action that routes to
-// the explicit repair flow; every other error is informational only.
+export type MinecraftErrorToast = {
+  readonly variant: ToastVariant;
+  readonly message: string;
+  readonly action?: ToastAction;
+};
+
+// A repairable code becomes a warn toast with a friendly "run a repair?" prompt
+// and an inline Repair action (no raw error text); everything else stays a plain
+// error toast carrying the localized error message.
 export const buildMinecraftErrorToast = (
   code: MinecraftErrorCode,
   slug: ClientSlug,
-): ToastOptions | undefined => {
-  if (!REPAIRABLE_ERROR_CODES.has(code)) return undefined;
-  return {
-    action: {
-      label: i18n.t('clients.repair'),
-      onClick: () => {
-        void api.repair(slug).catch(() => {});
+  message: string,
+): MinecraftErrorToast => {
+  if (REPAIRABLE_ERROR_CODES.has(code)) {
+    return {
+      variant: ToastVariants.WARN,
+      message: i18n.t('clients.repairOffer'),
+      action: {
+        label: i18n.t('clients.repair'),
+        onClick: () => {
+          void api.repair(slug).catch(() => {});
+        },
       },
-    },
+    };
+  }
+  return {
+    variant: ToastVariants.ERROR,
+    message: localizeMinecraftError(code, message, i18n.t),
   };
 };
 
@@ -70,10 +90,8 @@ export const MinecraftEventsListener = (): null => {
     );
     const offError = window.api.on(IPC_EVENTS.minecraftError, ({ slug, code, message }) => {
       patch(slug, { error: { code, message } });
-      toast.error(
-        localizeMinecraftError(code, message, i18n.t),
-        buildMinecraftErrorToast(code, slug),
-      );
+      const built = buildMinecraftErrorToast(code, slug, message);
+      toast[built.variant](built.message, built.action ? { action: built.action } : undefined);
     });
     const offLog = window.api.on(IPC_EVENTS.minecraftLog, () => {});
     return () => {

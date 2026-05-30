@@ -26,20 +26,30 @@ describe('buildMinecraftErrorToast', () => {
     apiMocks.repair.mockClear();
   });
 
-  it('attaches a repair action that routes to repair for every repairable code', () => {
+  it('builds a friendly warn prompt with a repair action for every repairable code', () => {
     for (const code of REPAIRABLE_ERROR_CODES) {
-      const options = buildMinecraftErrorToast(code, SLUG);
-      expect(options?.action?.label).toBe('clients.repair');
-      options?.action?.onClick();
+      const built = buildMinecraftErrorToast(code, SLUG, 'raw error detail');
+      // A calm "heads up", never a red error, and never the raw error text.
+      expect(built.variant).toBe('warn');
+      expect(built.message).toBe('clients.repairOffer');
+      expect(built.action?.label).toBe('clients.repair');
+      built.action?.onClick();
     }
 
     expect(apiMocks.repair).toHaveBeenCalledTimes(REPAIRABLE_ERROR_CODES.size);
     expect(apiMocks.repair).toHaveBeenCalledWith(SLUG);
   });
 
-  it('returns no action for non-repairable error codes', () => {
-    expect(buildMinecraftErrorToast(MinecraftErrorCodes.NO_ACCOUNT, SLUG)).toBeUndefined();
-    expect(buildMinecraftErrorToast(MinecraftErrorCodes.NETWORK_ERROR, SLUG)).toBeUndefined();
+  it('builds a plain error toast with the localized message for non-repairable codes', () => {
+    const noAccount = buildMinecraftErrorToast(MinecraftErrorCodes.NO_ACCOUNT, SLUG, 'x');
+    expect(noAccount.variant).toBe('error');
+    expect(noAccount.message).toBe('clients.error.noAccount');
+    expect(noAccount.action).toBeUndefined();
+
+    const network = buildMinecraftErrorToast(MinecraftErrorCodes.NETWORK_ERROR, SLUG, 'x');
+    expect(network.variant).toBe('error');
+    expect(network.action).toBeUndefined();
+
     expect(apiMocks.repair).not.toHaveBeenCalled();
   });
 });
