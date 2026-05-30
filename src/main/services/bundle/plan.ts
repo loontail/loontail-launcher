@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import fs from 'node:fs/promises';
 import type { LocalManifest, RemoteManifest, RemoteManifestEntry } from '@shared/contracts/bundle';
+import { flattenRemoteEntries } from './manifestUtils';
 import { normalizePathForSet, resolveSafeEntryPath } from './paths';
 
 export type PlanFlags = {
@@ -20,17 +21,6 @@ export type SyncPlan = {
   bundleOwnedRelativePaths: Set<string>;
   // Progress-bar denominator.
   bytesTotal: number;
-};
-
-const flattenEntries = (manifest: RemoteManifest): RemoteManifestEntry[] => {
-  const out: RemoteManifestEntry[] = [];
-  for (const list of Object.values(manifest)) {
-    for (const entry of list) {
-      if (entry.isDir) continue;
-      out.push(entry);
-    }
-  }
-  return out;
 };
 
 const hashFile = (absPath: string): Promise<string> =>
@@ -61,7 +51,7 @@ export const buildPlan = async (
   flags: PlanFlags = {},
 ): Promise<SyncPlan> => {
   const force = flags.force === true;
-  const remoteEntries = flattenEntries(remote);
+  const remoteEntries = flattenRemoteEntries(remote);
   const bundleOwnedRelativePaths = new Set<string>(
     remoteEntries.map((e) => normalizePathForSet(e.path)),
   );
