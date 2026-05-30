@@ -51,6 +51,7 @@ const fakeProfile = (): MinecraftProfile =>
 type FakeKitOverrides = {
   read?: (args: { accessToken: string }) => Promise<MinecraftProfile>;
   run?: (options: AuthorizationCodeRunOptions) => Promise<KitMojangSession>;
+  refresh?: (refreshToken: string, options: { clientId: string }) => Promise<KitMojangSession>;
 };
 const fakeKit = (overrides: FakeKitOverrides = {}): MinecraftKit =>
   ({
@@ -61,9 +62,35 @@ const fakeKit = (overrides: FakeKitOverrides = {}): MinecraftKit =>
       profile: {
         read: overrides.read ?? vi.fn().mockResolvedValue(fakeProfile()),
       },
-      refresh: vi.fn(),
+      refresh: overrides.refresh ?? vi.fn(),
     },
   }) as unknown as MinecraftKit;
+
+// expiresAt in the past forces verifyMojangSession down the refresh branch
+// (needsRefresh = now > expiresAt - 60s).
+const expiringSession = (): MojangSession =>
+  ({
+    provider: 'mojang',
+    accessToken: 'access',
+    expiresAt: Date.UTC(2001, 0, 1),
+    refreshToken: 'refresh',
+    clientId: 'client',
+    xuid: 'xuid',
+    profile: { uuid: 'uuid', username: 'name', skins: [] },
+  }) as unknown as MojangSession;
+
+const refreshedKitSession = (): KitMojangSession =>
+  ({
+    minecraft: {
+      accessToken: 'fresh-access',
+      expiresAt: FAR_FUTURE,
+      uuid: 'uuid',
+      username: 'name',
+      xuid: 'xuid',
+      skins: [],
+    },
+    microsoft: { refreshToken: 'fresh-refresh', clientId: 'client' },
+  }) as unknown as KitMojangSession;
 
 describe('createMojangAuth.signInWithMojang', () => {
   it('aborts the sign-in flow when the browser opener rejects', async () => {
@@ -128,5 +155,32 @@ describe('createMojangAuth.verifyMojangSession', () => {
     );
     const result = await mojangAuth.verifyMojangSession(baseSession());
     expect(result.kind).toBe('offline');
+  });
+
+  it('refreshes a near-expiry session instead of reading the profile', async () => {
+    const refresh = vi.fn().mockResolvedValue(refreshedKitSession());
+    const read = vi.fn();
+    const mojangAuth = createMojangAuth(fakeKit({ refresh, read }));
+
+    const result = await mojangAuth.verifyMojangSession(expiringSession());
+
+    expect(refresh).toHaveBeenCalledWith('refresh', { clientId: 'client' });
+    expect(read).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      kind: 'ok',
+      session: expect.objectContaining({
+        accessToken: 'fresh-access',
+        refreshToken: 'fresh-refresh',
+      }),
+    });
+  });
+
+  it('reports expired when refresh fails with AUTH_REFRESH_FAILED', async () => {
+    const refresh = vi.fn().mockRejectedValue(new MinecraftKitError('AUTH_REFRESH_FAILED', 'gone'));
+    const mojangAuth = createMojangAuth(fakeKit({ refresh }));
+
+    const result = await mojangAuth.verifyMojangSession(expiringSession());
+
+    expect(result.kind).toBe('expired');
   });
 });
