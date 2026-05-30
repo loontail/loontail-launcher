@@ -1,4 +1,4 @@
-import { asAzureClientId, isErrorCode } from '@loontail/minecraft-kit';
+import { asAzureClientId, isErrorCode, isMinecraftKitError } from '@loontail/minecraft-kit';
 import type { MojangSession as KitMojangSession, MinecraftKit } from '@loontail/minecraft-kit';
 import { mainConfig } from '@main/config';
 import { HTTP_UNAUTHORIZED } from '@main/constants/http';
@@ -167,9 +167,12 @@ export const createMojangAuth = (
       return { kind: 'ok', session: withRefreshedProfile(session, profile) };
     } catch (error) {
       if (isErrorCode(error, 'AUTH_REFRESH_FAILED')) return { kind: 'expired' };
-      if (isErrorCode(error, 'AUTH_MINECRAFT_FAILED')) {
-        const httpStatus = (error as { context?: { httpStatus?: number } }).context?.httpStatus;
-        if (httpStatus === HTTP_UNAUTHORIZED) return { kind: 'expired' };
+      if (
+        isMinecraftKitError(error) &&
+        error.code === 'AUTH_MINECRAFT_FAILED' &&
+        error.context.httpStatus === HTTP_UNAUTHORIZED
+      ) {
+        return { kind: 'expired' };
       }
       logger.warn('Mojang verify failed — assuming offline', error);
       return { kind: 'offline' };
