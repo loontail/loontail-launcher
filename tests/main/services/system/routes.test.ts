@@ -95,10 +95,14 @@ const makeSettings = (
   },
 });
 
+// .native matches the source's `fs/promises` realpath (libuv): on Windows it
+// expands 8.3 short names (e.g. RUNNER~1 -> runneradmin) while the JS
+// fs.realpathSync does not, so the two diverge on CI runners with long
+// usernames and the logged canonicalTarget would not match.
 const makeDir = (root: string, name: string): string => {
   const dir = path.join(root, name);
   fs.mkdirSync(dir, { recursive: true });
-  return fs.realpathSync(dir);
+  return fs.realpathSync.native(dir);
 };
 
 let tempRoot = '';
@@ -154,7 +158,10 @@ describe('registerSystemRoutes', () => {
 
     expect(electronMocks.openPath).toHaveBeenCalledTimes(allowedTargets.length);
     for (const [index, target] of allowedTargets.entries()) {
-      expect(electronMocks.openPath).toHaveBeenNthCalledWith(index + 1, fs.realpathSync(target));
+      expect(electronMocks.openPath).toHaveBeenNthCalledWith(
+        index + 1,
+        fs.realpathSync.native(target),
+      );
     }
   });
 
@@ -169,7 +176,7 @@ describe('registerSystemRoutes', () => {
     expect(loggerMocks.warn).toHaveBeenCalledWith(
       'Refused to open path outside launcher-owned roots',
       expect.objectContaining({
-        canonicalTarget: fs.realpathSync(outsidePath),
+        canonicalTarget: fs.realpathSync.native(outsidePath),
         targetPath: outsidePath,
       }),
     );

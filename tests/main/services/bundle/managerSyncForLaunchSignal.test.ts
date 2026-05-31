@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-vi.hoisted(() => {
+const mocks = vi.hoisted(() => {
   process.env.API_URL ??= 'http://test.invalid';
   process.env.API_TOKEN ??= 'test-token';
+  return { getClient: vi.fn() };
 });
 
 import type { BundleBroadcaster } from '@main/services/bundle/broadcast';
@@ -14,6 +15,13 @@ import type { ClientSlug } from '@shared/contracts/ids';
 
 vi.mock('@main/infra/logger', () => ({
   scopedLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+}));
+
+// Mock the client lookup so syncForLaunch never makes a real network call. The
+// previous version relied on getClient hitting http://test.invalid and failing
+// fast; that DNS failure is not fast on CI runners, so the abort test timed out.
+vi.mock('@main/services/clients', () => ({
+  getClient: mocks.getClient,
 }));
 
 const SLUG = 'test-client' as ClientSlug;
@@ -49,8 +57,11 @@ describe('BundleManager.syncForLaunch external signal', () => {
     const cancelSpy = vi.spyOn(manager, 'cancelSync');
     const controller = new AbortController();
 
-    // runSync needs a real client lookup; we don't care about the outcome here —
-    // we only need the listener to be attached, then verify firing it cancels.
+    // getClient resolves null on the next microtask, keeping syncForLaunch
+    // suspended at the lookup await long enough for the synchronous abort()
+    // below to fire the listener; we don't care about the outcome, only that
+    // firing the signal calls cancelSync.
+    mocks.getClient.mockResolvedValue(null);
     const pending = manager.syncForLaunch(SLUG, controller.signal).catch(() => {});
     controller.abort();
     await pending;
