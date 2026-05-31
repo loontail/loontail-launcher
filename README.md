@@ -35,6 +35,7 @@ npm run dev
 | `npm run format`  | Format the codebase with Biome.               |
 | `npm test`        | Run Vitest once.                              |
 | `npm run test:watch` | Run Vitest in watch mode.                  |
+| `npm run verify`  | Full release gate: lint + typecheck + test + build. |
 
 ## Project layout
 
