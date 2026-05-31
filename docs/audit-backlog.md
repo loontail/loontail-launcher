@@ -3463,6 +3463,46 @@ _None._ No task this cycle changed `@loontail/minecraft-kit` or `loontail-yggdra
 
 ## Session log
 
+### 2026-05-31 (session 7)
+
+- **Done (3 task IDs across 2 commits):**
+  - `LAU-11` (P1) — removed the dead `minecraft.log` IPC pipeline end to end: the
+    `broadcaster.log` method, the `minecraftLog` channel + contract entry, the
+    `MinecraftLogEventSchema`/`MinecraftLogEvent` (and its now-unused
+    `ConsoleSources` import), and the renderer's no-op `offLog` subscriber. The
+    only consumer of game log lines is `consoleHub.recordMinecraft`, which already
+    runs unconditionally; the renderer subscriber was an empty `() => {}`. Also
+    dropped the now-unread `consoleEnabled` field from `LaunchOp` (the local still
+    gates `openConsoleWindow`) and the dead per-line `consoleEnabled` branch in
+    the launch `onEvent` hot path · commit 3da45ac
+  - `LAU-09` (P1) + `LAU-19` (P1) — `endLaunch` now threads the kit's `LaunchExit`
+    through `session.exited.then`: a crash lifts the OS exit code from the
+    `LAUNCH_PROCESS_FAILED` error context onto the console `CRASHED` state (the
+    crash banner already renders `exitCode`, it was hardcoded `null`), and a clean
+    exit carries `exit.code`. LAU-19 falls out of the same change: the kit
+    *resolves* `session.exited` on a user stop with `aborted:true` (it does not
+    reject), so an aborted launch flows through the no-error resolve path —
+    `classifyError` is never reached and no false "launch failed" toast fires; the
+    abort is logged as "stopped". Added three `endLaunch` unit tests (crash exit
+    code, clean exit, aborted exit) · commit 922bb27
+- **Packages built / pending publish:** none.
+- **Blocked:** none.
+- **Verification:** `npm run lint`, `npm run typecheck`, `npm test` (390 tests, up
+  from 387) all green.
+- **Notes:** LAU-19's audit text assumed aborted launches reach `classifyError`
+  and get mis-classified, but the kit resolves (not rejects) `exited` on abort, so
+  that path is already error-free; the fix is making it explicit via exit
+  threading rather than a string-match guard (which would guard an impossible
+  scenario per guideline §13). LAU-09's optional `signal` contract field was not
+  added: a signal kill resolves through the EXITED path, which has no banner to
+  render it, so adding the field would leave it unread (dead) — the exit code,
+  which the banner does render on CRASHED, is the actionable triage signal.
+- **Suggested next batch:** the remaining launch-flow architecture P1s — `LAU-01`
+  (move `getStoredAccount` out of the route into the manager), `LAU-02`/`LAU-03`
+  (consoleHub module singleton → DI), `LAU-10` (flush log4j buffers on exit); then
+  the bundle double-release / lock-leak P1 cluster (`DLI-39`/`DLI-63`/`DLI-81`,
+  `DLI-69`/`DLI-62`).
+
 ### 2026-05-31 (session 6)
 
 - **Done (8 task IDs across 5 commits):**
