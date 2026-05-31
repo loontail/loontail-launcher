@@ -1602,6 +1602,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-09 — Capture and surface process exit code from LaunchExit in crash banner
 
+- **Status:** DONE — 2026-05-31 · commit fd94177
 - **Category:** Flow · **Priority:** P1 · **Risk:** Low · _(auditor: launch-flow)_
 - **Area:** src/main/services/minecraft/launch.ts, src/shared/contracts/console.ts
 - **Problem:** endLaunch (launch.ts:164) calls consoleHub.emitState with exitCode: null hardcoded on the success path. The kit's session.exited promise resolves to LaunchExit {code, signal, aborted}. The .then()/.catch() chain at launch.ts:339 does not receive the resolved value — both callbacks ignore it. On the crash path (.catch), the error is forwarded but its exit code is never extracted either. The crash banner (ConsoleCrashBanner.tsx:14) already renders exitCode when non-null, so the UI is ready but always shows nothing.
@@ -1622,6 +1623,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-11 — Remove dead minecraft.log IPC channel — broadcaster.log is never consumed
 
+- **Status:** DONE — 2026-05-31 · commit 601557f
 - **Category:** Architecture · **Priority:** P1 · **Risk:** Low · _(auditor: launch-flow)_
 - **Area:** src/main/services/minecraft/launch.ts:313-315, src/main/services/minecraft/broadcast.ts:19-22, src/renderer/features/minecraft/events.ts:96, src/shared/contracts/minecraft.ts:78-83, src/shared/ipc/channels.ts
 - **Problem:** launch.ts:313-315 conditionally calls env.broadcaster.log() to send the minecraft.log IPC event. events.ts:96 subscribes to IPC_EVENTS.minecraftLog with a no-op callback () => {}. The MinecraftLogEvent type and MinecraftLogEventSchema are defined in the contracts. consoleHub already receives all lines unconditionally via recordMinecraft(). The consoleEnabled guard (launch.ts:278,314) adds a per-event branch but the renderer ignores the event completely.
@@ -1704,6 +1706,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-19 — classifyError(error) called without signal in launch.ts endLaunch — aborted launches mis-classified
 
+- **Status:** DONE — 2026-05-31 · commit fd94177 (resolved by LAU-09's exit-threading: the kit resolves `session.exited` on abort with `aborted:true`, so an aborted launch never reaches `classifyError` and no error toast fires)
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Medium · _(auditor: error-logging-model)_
 - **Area:** src/main/services/minecraft/launch.ts line 153
 - **Problem:** endLaunch (launch.ts line 153) calls classifyError(error) without passing a signal argument. classifyError's first check (errors.ts line 29) is signal?.aborted — if the game process is aborted by session.abort('user-stop'), the resulting error may carry AbortSignal's abort reason but classifyError will not detect it as ABORTED because no signal is passed. endLaunch has access to the session but not to an AbortSignal; however, the abort reason string is 'user-stop', which could be detected.
@@ -3474,7 +3477,7 @@ _None._ No task this cycle changed `@loontail/minecraft-kit` or `loontail-yggdra
     runs unconditionally; the renderer subscriber was an empty `() => {}`. Also
     dropped the now-unread `consoleEnabled` field from `LaunchOp` (the local still
     gates `openConsoleWindow`) and the dead per-line `consoleEnabled` branch in
-    the launch `onEvent` hot path · commit 3da45ac
+    the launch `onEvent` hot path · commit 601557f
   - `LAU-09` (P1) + `LAU-19` (P1) — `endLaunch` now threads the kit's `LaunchExit`
     through `session.exited.then`: a crash lifts the OS exit code from the
     `LAUNCH_PROCESS_FAILED` error context onto the console `CRASHED` state (the
@@ -3484,7 +3487,7 @@ _None._ No task this cycle changed `@loontail/minecraft-kit` or `loontail-yggdra
     reject), so an aborted launch flows through the no-error resolve path —
     `classifyError` is never reached and no false "launch failed" toast fires; the
     abort is logged as "stopped". Added three `endLaunch` unit tests (crash exit
-    code, clean exit, aborted exit) · commit 922bb27
+    code, clean exit, aborted exit) · commit fd94177
 - **Packages built / pending publish:** none.
 - **Blocked:** none.
 - **Verification:** `npm run lint`, `npm run typecheck`, `npm test` (390 tests, up
