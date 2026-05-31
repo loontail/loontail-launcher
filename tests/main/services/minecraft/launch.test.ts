@@ -318,7 +318,6 @@ describe('runLaunch', () => {
     expect(ops.get(SLUG)).toEqual({
       kind: OpKinds.LAUNCH,
       session: activeSession,
-      consoleEnabled: false,
     });
   });
 

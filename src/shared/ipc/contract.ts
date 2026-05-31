@@ -18,7 +18,6 @@ import type {
   InstallRequest,
   InstallStatus,
   MinecraftErrorEvent,
-  MinecraftLogEvent,
   MinecraftProgressEvent,
   MinecraftStatusEvent,
 } from '@shared/contracts/minecraft';
@@ -95,7 +94,6 @@ export type IpcResult<TChannel extends keyof IpcContract> = IpcContract[TChannel
 export type IpcEventPayloads = {
   'minecraft.status': MinecraftStatusEvent;
   'minecraft.progress': MinecraftProgressEvent;
-  'minecraft.log': MinecraftLogEvent;
   'minecraft.error': MinecraftErrorEvent;
   'bundle.status': BundleStatusEvent;
   'bundle.progress': BundleProgressEvent;

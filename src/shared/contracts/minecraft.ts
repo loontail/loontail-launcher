@@ -1,6 +1,5 @@
 import type { ProgressStage } from '@loontail/minecraft-kit';
 import { z } from 'zod';
-import { ConsoleSources } from './console';
 import { enumFromConst } from './enum';
 import { ClientSlugSchema } from './ids';
 import { LoaderChoiceSchema } from './settings';
@@ -76,14 +75,6 @@ export const MinecraftProgressEventSchema = z.object({
 });
 
 export type MinecraftProgressEvent = z.infer<typeof MinecraftProgressEventSchema>;
-
-export const MinecraftLogEventSchema = z.object({
-  slug: ClientSlugSchema,
-  stream: z.enum([ConsoleSources.STDOUT, ConsoleSources.STDERR]),
-  line: z.string(),
-});
-
-export type MinecraftLogEvent = z.infer<typeof MinecraftLogEventSchema>;
 
 export const MinecraftErrorEventSchema = z.object({
   slug: ClientSlugSchema,

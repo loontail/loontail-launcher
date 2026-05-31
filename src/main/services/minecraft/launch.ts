@@ -324,10 +324,6 @@ export const runLaunch = async (
                 ? ConsoleSources.STDOUT
                 : ConsoleSources.STDERR;
             consoleHub.recordMinecraft(slug, stream, event.line);
-            // Keep the legacy `minecraft.log` IPC event for external subscribers.
-            if (consoleEnabled) {
-              env.broadcaster.log({ slug, stream, line: event.line });
-            }
             return;
           }
           default:
@@ -340,7 +336,7 @@ export const runLaunch = async (
       restoreInstalled();
       return;
     }
-    env.ops.set(slug, { kind: OpKinds.LAUNCH, session, consoleEnabled });
+    env.ops.set(slug, { kind: OpKinds.LAUNCH, session });
     env.emitStatus({ slug, status: InstallStatuses.RUNNING, paused: false });
     consoleHub.emitState({ slug, status: ConsoleStatuses.RUNNING, clientTitle });
     consoleHub.recordSystem('Process started', {

@@ -1,6 +1,5 @@
 import type {
   MinecraftErrorEvent,
-  MinecraftLogEvent,
   MinecraftProgressEvent,
   MinecraftStatusEvent,
 } from '@shared/contracts/minecraft';
@@ -15,10 +14,6 @@ export const createBroadcaster = (window: BrowserWindow) => ({
   progress: (payload: MinecraftProgressEvent): void => {
     if (window.isDestroyed()) return;
     window.webContents.send(IPC_EVENTS.minecraftProgress, payload);
-  },
-  log: (payload: MinecraftLogEvent): void => {
-    if (window.isDestroyed()) return;
-    window.webContents.send(IPC_EVENTS.minecraftLog, payload);
   },
   error: (payload: MinecraftErrorEvent): void => {
     if (window.isDestroyed()) return;

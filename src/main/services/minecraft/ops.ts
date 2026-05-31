@@ -39,7 +39,6 @@ export type LaunchStartingOp = {
 export type LaunchOp = {
   kind: typeof OpKinds.LAUNCH;
   session: LaunchSession;
-  consoleEnabled: boolean;
 };
 
 export type Op = InstallOp | RepairOp | UninstallOp | BundleSyncingOp | LaunchStartingOp | LaunchOp;

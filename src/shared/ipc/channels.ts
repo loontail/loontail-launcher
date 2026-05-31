@@ -69,7 +69,6 @@ void _ipcChannelsCoverageCheck;
 export const IPC_EVENTS = {
   minecraftStatus: 'minecraft.status',
   minecraftProgress: 'minecraft.progress',
-  minecraftLog: 'minecraft.log',
   minecraftError: 'minecraft.error',
   bundleStatus: 'bundle.status',
   bundleProgress: 'bundle.progress',

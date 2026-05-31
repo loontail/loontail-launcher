@@ -93,12 +93,10 @@ export const MinecraftEventsListener = (): null => {
       const built = buildMinecraftErrorToast(code, slug, message);
       toast[built.variant](built.message, built.action ? { action: built.action } : undefined);
     });
-    const offLog = window.api.on(IPC_EVENTS.minecraftLog, () => {});
     return () => {
       offStatus();
       offProgress();
       offError();
-      offLog();
     };
   }, [queryClient]);
   return null;
