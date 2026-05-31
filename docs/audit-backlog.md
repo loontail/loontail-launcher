@@ -765,6 +765,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-39 — Fix double lock.release() in startInstall success path
 
+- **Status:** DONE — 2026-05-31 · already resolved (startInstall now releases the lease exactly once in a single `finally` inside the install IIFE; pinned by `managerInstall.test.ts` "releases the install lock once …" on both success and failure paths). Duplicate of DLI-63/DLI-81.
 - **Category:** Code · **Priority:** P1 · **Risk:** Low · _(auditor: error-logging-model)_
 - **Area:** src/main/services/minecraft/manager.ts lines 129 and 149
 - **Problem:** In startInstall, lock.release() is called eagerly inside .then() at line 129 and again unconditionally inside .finally() at line 149. On the success path the lock is released twice. The underlying ClientOperationLease guards against double-release with a boolean flag (released = true), so it is not a data-integrity bug, but it exposes that the design intent is ambiguous: was .finally() added as a catch-all, or was .then() added to release early before the bundle hook?
@@ -1008,6 +1009,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-63 — MinecraftManager.startInstall calls lock.release() twice on success — double-release of operation lease
 
+- **Status:** DONE — 2026-05-31 · already resolved (single `finally` release in the install IIFE; pinned by `managerInstall.test.ts`). Duplicate of DLI-39/DLI-81.
 - **Category:** Error handling · **Priority:** P1 · **Risk:** High · _(auditor: testability)_
 - **Area:** src/main/services/minecraft/manager.ts:127-151
 - **Problem:** In startInstall (lines 127-151), on the success path runInstall resolves: the .then() callback calls lock.release() at line 129, then the .finally() callback calls lock.release() at line 149 again. This means every successful install double-releases the ClientOperationLease.
@@ -1068,6 +1070,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-69 — Add `try/finally` to `persistLocalManifest` in BundleManager to ensure `dropActiveSync` is not skipped on error
 
+- **Status:** DONE — 2026-05-31 · commit d71f51d
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Medium · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/bundle/manager.ts
 - **Problem:** `completePreparedSync` (lines 325-329) calls `persistLocalManifest` which internally catches and warns on error (lines 339-341), so the outer call does not throw. However, `emitStatus` (line 327) and `resolveAwaiters` (line 328) are only reached if `persistLocalManifest` resolves. If `saveLocalManifest` throws an uncaught error that is not wrapped (a future regression), `resolveAwaiters` would never fire, leaking the `forLaunch` promise awaiter and hanging the launch flow indefinitely.
@@ -1190,6 +1193,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-81 — MinecraftManager.startInstall double-releases lock when `runInstall` chain has both `.then(lock.release)` and `.finally(lock.release)`
 
+- **Status:** DONE — 2026-05-31 · already resolved (the `.then`/`.finally` double-release pattern was replaced by a single-`finally` async IIFE that releases once before the bundle phase; pinned by `managerInstall.test.ts`). Duplicate of DLI-39/DLI-63.
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Medium · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/minecraft/manager.ts
 - **Problem:** Lines 127-151 in `startInstall`: the `void runInstall(...).then(async () => { lock.release(); ... }).catch(() => {}).finally(() => { lock.release(); })` chain releases the lock in both `then` and `finally`. On success path: `then` runs (lock.release), then `finally` runs (lock.release again). The `ClientOperationLease.release()` is guarded with `if (released) return;` (clientOperationLocks.ts line 139) so it is idempotent. However the double-release call is still a latent bug if the guard is ever removed, and it is confusing to maintain. On cancellation path via `handleInstallFailure` the lock is released inside the error branch too (it is not — lock is released only in `then`/`finally`, not in `handleInstallFailure`). Actually tracing the flow: success → then(release) + finally(release); error → catch() + finally(release). So on error the lock IS released by `finally`. The `then(lock.release)` before the inner `if (this.launchHook)` block means: on success, release → run hook → on hook failure the lock is already gone. This is correct behavior. But the `finally` also releases the already-released lock. The issue is code clarity and the double-release pattern.
@@ -1200,6 +1204,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-82 — BundleManager `activeLocks` map entry may leak if `acquireWriteLock` throws after `createActiveSync` adds to `activeSyncs`
 
+- **Status:** DONE — 2026-05-31 · commit d71f51d
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Medium · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/bundle/manager.ts
 - **Problem:** In `runSync` (line 201-244): line 226 calls `acquireWriteLock(slug)` — if this throws (OP_IN_FLIGHT), the function throws before `activeSyncs.set(slug, active)` is called (line 231). However if `acquireWriteLock` succeeds and then `createActiveSync` throws (line 228), the lock has been acquired but `activeLocks` is not yet populated, so `dropActiveSync` (which releases the lock) cannot be called from the catch path. The current code does not have a `try/finally` around lines 226-244 in `runSync`. On `executePreparedSync` error (caught at line 305), `dropActiveSync` is called in the `finally` — which correctly releases the lock. The gap is specifically the window between `acquireWriteLock` (line 226) and `activeSyncs.set(slug, active)` (line 231) and `activeLocks.set(slug, lock)` (line 232). If anything between lines 226-232 throws, the lock is acquired but never in `activeLocks`, so `dropActiveSync` won't find it.
@@ -1522,6 +1527,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-01 — getStoredAccount() imported directly into minecraft/routes.ts — cross-service coupling at route layer
 
+- **Status:** DONE — 2026-05-31 · commit 090beeb
 - **Category:** Architecture · **Priority:** P1 · **Risk:** Low · _(auditor: arch-boundaries)_
 - **Area:** src/main/services/minecraft/routes.ts:3,49, src/main/services/auth/auth.ts:53
 - **Problem:** routes.ts line 3 imports `getStoredAccount` from `@main/services/auth/auth` and calls it at line 49 inside the minecraft.launch handler. This is a direct cross-service import at the IPC routing layer. The guideline says cross-service communication goes through direct imports, which is technically done here, but the route layer is supposed to be a thin delegation to the manager; business logic (account lookup) must not live there.
@@ -1532,6 +1538,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-02 — consoleHub singleton imported as a module-level side-effect inside minecraft/launch.ts — breaks DI model
 
+- **Status:** DONE — 2026-05-31 · commit 090beeb
 - **Category:** Architecture · **Priority:** P1 · **Risk:** Medium · _(auditor: arch-boundaries)_
 - **Area:** src/main/services/minecraft/launch.ts (imports consoleHub, openConsoleWindow at module scope), src/main/infra/consoleHub.ts:230
 - **Problem:** `launch.ts` imports `consoleHub` (a module singleton exported by `infra/consoleHub.ts`) and `openConsoleWindow` (from `windows/consoleWindow`) directly, bypassing the `ManagerEnv` dependency-injection contract used for every other side-effect (broadcaster, logger, ops, kit). `ManagerEnv` has no console-related slot. Tests that import `launch.ts` indirectly pull in the real `ConsoleHub` with its timer and window references.
@@ -1542,6 +1549,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-03 — ConsoleHub is a module-level class instance singleton — untestable and violates DI conventions used elsewhere
 
+- **Status:** DONE — 2026-05-31 · commit 090beeb
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Medium · _(auditor: arch-boundaries)_
 - **Area:** src/main/infra/consoleHub.ts:230
 - **Problem:** `export const consoleHub = new ConsoleHub()` at line 230 creates a process-global singleton. It is accessed via direct module import in `launch.ts`, `consoleWindow.ts`, `ipc/trustedSender.ts`, and `console/index.ts`. This is the only infrastructure singleton using this pattern — `kit`, `http`, `cache`, `store`, `logger` all use factory functions. The singleton cannot be reset between test cases, causing state leakage.
@@ -1613,6 +1621,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-10 — Flush log4j parser buffers on process exit, not only on next session start
 
+- **Status:** DONE — 2026-05-31 · commit 090beeb
 - **Category:** Flow · **Priority:** P1 · **Risk:** Low · _(auditor: launch-flow)_
 - **Area:** src/main/infra/consoleHub.ts, src/main/services/minecraft/launch.ts
 - **Problem:** Log4jStreamParser.flush() is only called inside ConsoleHub.setActiveSession() (consoleHub.ts:141). endLaunch (launch.ts:148-171) never calls flush. If the game process exits while the log4j stream buffer holds a partial or complete unparsed event (e.g. a final FATAL event split across the last two lines), that fragment is silently discarded until the next play session resets the parser. Particularly relevant for crash logs that end mid-event.
@@ -3465,6 +3474,53 @@ or blocked work. Pick the highest-priority available task (P0 → P1 → P2 → 
 _None._ No task this cycle changed `@loontail/minecraft-kit` or `loontail-yggdrasil`.
 
 ## Session log
+
+### 2026-05-31 (session 8)
+
+- **Done (8 task IDs across 2 commits, + 3 confirmed already-resolved):**
+  - `LAU-01` + `LAU-02` + `LAU-03` + `LAU-10` (P1/P1/P2/P1) — the launch-flow
+    DI cluster. The `ConsoleHub` module singleton is replaced by a
+    `createConsoleHub()` factory created once in `main/index.ts` and threaded
+    into the launch flow (a `ConsolePort` slot + `openConsole` callback on
+    `ManagerEnv`), the console service, and the trusted-sender check — so
+    `launch.ts` no longer imports the singleton and a launch is unit-testable
+    with a spy console (no live timer/window). `ConsoleHub.endSession()` flushes
+    the log4j stream parsers on game exit so a final crash event split across
+    the last lines is ingested before the EXITED/CRASHED state instead of
+    discarded at next launch (LAU-10). `MinecraftManager` takes an injected
+    account provider and `startLaunch()` reads it internally, leaving the launch
+    route a thin arg parser (LAU-01) · commit 090beeb
+  - `DLI-69` + `DLI-82` (P1) — bundle sync lifecycle hardening. `completePreparedSync`
+    moves its terminal status broadcast + awaiter resolution into a `finally`,
+    so a trailing local-manifest write failure cannot demote a finished sync to
+    a hung state (DLI-69). `runSync` registers the lease in `activeLocks` before
+    building the task and wraps setup + execution in a try/catch that drops the
+    active sync on failure, so a throw during task construction releases the
+    lock instead of wedging the client (DLI-82) · commit d71f51d
+  - `DLI-39` + `DLI-63` + `DLI-81` (P1) — confirmed already-resolved: the
+    `startInstall` `.then`/`.finally` double-release is gone (a single-`finally`
+    async IIFE releases the lease once before the bundle phase) and is pinned by
+    `managerInstall.test.ts`. Marked DONE with notes; no code change.
+- **Packages built / pending publish:** none.
+- **Blocked:** none.
+- **Verification:** `npm run lint`, `npm run typecheck`, `npm test` (396 tests,
+  up from 390), `npm run build` all green.
+- **Notes:** `DLI-62` (paused-mid-heal forLaunch awaiter never settled) was left
+  TODO, not done: its literal "reject unsettled forLaunch awaiters in `finally`"
+  fix would regress the tested "paused forLaunch sync stays pending and resolves
+  after resume" behaviour (`managerPauseCleanup.test.ts`), and the pause idle
+  timer (`armPauseIdleTimer` → `expirePausedSync`) already bounds the hang and
+  rejects the awaiter. It needs a design decision on heal-pause-vs-resume
+  semantics before changing. The `managerStubs.ts` test helper centralises the
+  new `ConsolePort`/`openConsole`/account-provider stubs across the five manager
+  test files.
+- **Suggested next batch:** the remaining launch-flow P2s — `LAU-05` (guard
+  `ConsoleWindowSink.send` against a destroyed window on quit-during-launch),
+  `LAU-08` (document/compose the syncForLaunch external-abort ordering),
+  `LAU-12` (stop re-throwing from the generic launch-failure catch → double
+  toast); then the bundle error-classification cluster `DLI-40`/`DLI-41`
+  (differentiate manifest-fetch failure from UNKNOWN, log non-aborted bundle
+  errors), and `DLI-62` once its resume semantics are decided.
 
 ### 2026-05-31 (session 7)
 
