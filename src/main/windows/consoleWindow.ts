@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { consoleHub } from '@main/infra/consoleHub';
+import type { ConsoleHub } from '@main/infra/consoleHub';
 import { scopedLogger } from '@main/infra/logger';
 import { BrowserWindow } from 'electron';
 import { RENDERER_ENTRY_FILES, createRendererLocation } from './rendererLocations';
@@ -52,7 +52,7 @@ const buildOptions = (): Electron.BrowserWindowConstructorOptions => {
   };
 };
 
-export const openConsoleWindow = (): BrowserWindow => {
+export const openConsoleWindow = (consoleHub: ConsoleHub): BrowserWindow => {
   const existing = consoleHub.getWindow();
   if (existing) {
     if (existing.isMinimized()) existing.restore();

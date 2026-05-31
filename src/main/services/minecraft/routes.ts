@@ -1,7 +1,6 @@
 import { isMinecraftKitError } from '@loontail/minecraft-kit';
 import { parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
-import { getStoredAccount } from '@main/services/auth/auth';
 import { ClientSlugSchema } from '@shared/contracts/ids';
 import { InstallRequestSchema } from '@shared/contracts/minecraft';
 import { IPC_CHANNELS } from '@shared/ipc';
@@ -63,7 +62,7 @@ export const registerMinecraftRoutes = (router: Router, manager: MinecraftManage
 
   router.handle(IPC_CHANNELS.minecraftLaunch, async (rawArgs) => {
     const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED);
-    await withClassifiedKitError(() => manager.startLaunch(slug, getStoredAccount()));
+    await withClassifiedKitError(() => manager.startLaunch(slug));
   });
 
   router.handle(IPC_CHANNELS.minecraftStop, (rawArgs) => {

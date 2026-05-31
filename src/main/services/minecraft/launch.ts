@@ -22,11 +22,9 @@ import {
 } from '@loontail/yggdrasil-client';
 import { dashUuid } from '@loontail/yggdrasil-core';
 import { mainConfig } from '@main/config';
-import { consoleHub } from '@main/infra/consoleHub';
 import { errorMessage } from '@main/infra/errorMessage';
 import { scopedLogger } from '@main/infra/logger';
 import { getStoredAuth } from '@main/infra/store';
-import { openConsoleWindow } from '@main/windows/consoleWindow';
 import type { Account } from '@shared/contracts/account';
 import { ConsoleSources, ConsoleStatuses } from '@shared/contracts/console';
 import type { ClientSlug } from '@shared/contracts/ids';
@@ -177,29 +175,32 @@ export const endLaunch = (
   exit?: LaunchExit,
 ): void => {
   env.ops.delete(slug);
+  // Flush the log4j parser before emitting the terminal state so a crash event
+  // split across the final lines is ingested instead of dropped at next launch.
+  env.console.endSession(slug);
   if (error) {
     const message = errorMessage(error);
     env.logger.error(`[${slug}] launch: game process failed — ${message}`, error);
     env.emitError(slug, classifyError(error), message);
-    consoleHub.emitState({
+    env.console.emitState({
       slug,
       status: ConsoleStatuses.CRASHED,
       message,
       exitCode: launchExitCode(error),
     });
-    consoleHub.recordSystem(`Process crashed: ${message}`, {
+    env.console.recordSystem(`Process crashed: ${message}`, {
       code: 'console.system.processCrashedWithMessage',
       args: { detail: message },
       slug,
     });
     // Surface crash details even if auto-open is off — user needs the backlog.
-    if (!consoleHub.hasWindow()) openConsoleWindow();
+    if (!env.console.hasWindow()) env.openConsole();
   } else {
     // The kit resolves `exited` for both a clean exit and a user stop; only the
     // latter sets `aborted`, so distinguish the two in the log.
     env.logger.info(`[${slug}] launch: game ${exit?.aborted ? 'stopped' : 'exited'}`);
-    consoleHub.emitState({ slug, status: ConsoleStatuses.EXITED, exitCode: exit?.code ?? null });
-    consoleHub.recordSystem('Process exited', {
+    env.console.emitState({ slug, status: ConsoleStatuses.EXITED, exitCode: exit?.code ?? null });
+    env.console.recordSystem('Process exited', {
       code: 'console.system.processExited',
       slug,
     });
@@ -314,14 +315,14 @@ export const runLaunch = async (
     }
     const consoleEnabled = ctx.resolved.launch.console;
     const clientTitle = ctx.client.title || slug;
-    consoleHub.setActiveSession({
+    env.console.setActiveSession({
       slug,
       clientTitle,
       state: { slug, status: ConsoleStatuses.LAUNCHING, clientTitle },
     });
-    consoleHub.emitState({ slug, status: ConsoleStatuses.LAUNCHING, clientTitle });
-    consoleHub.recordSystem('Launching…', { code: 'console.system.launching', slug });
-    if (consoleEnabled) openConsoleWindow();
+    env.console.emitState({ slug, status: ConsoleStatuses.LAUNCHING, clientTitle });
+    env.console.recordSystem('Launching…', { code: 'console.system.launching', slug });
+    if (consoleEnabled) env.openConsole();
     const session = env.kit.launch.run(composition, {
       signal: startupSignal,
       onEvent: (event) => {
@@ -346,7 +347,7 @@ export const runLaunch = async (
               event.type === EventTypes.LAUNCH_STDOUT
                 ? ConsoleSources.STDOUT
                 : ConsoleSources.STDERR;
-            consoleHub.recordMinecraft(slug, stream, event.line);
+            env.console.recordMinecraft(slug, stream, event.line);
             return;
           }
           default:
@@ -361,8 +362,8 @@ export const runLaunch = async (
     }
     env.ops.set(slug, { kind: OpKinds.LAUNCH, session });
     env.emitStatus({ slug, status: InstallStatuses.RUNNING, paused: false });
-    consoleHub.emitState({ slug, status: ConsoleStatuses.RUNNING, clientTitle });
-    consoleHub.recordSystem('Process started', {
+    env.console.emitState({ slug, status: ConsoleStatuses.RUNNING, clientTitle });
+    env.console.recordSystem('Process started', {
       code: 'console.system.processStarted',
       slug,
     });
@@ -390,8 +391,8 @@ export const runLaunch = async (
       // Surface the failed check in the console and keep the client INSTALLED so
       // the affordance stays "Play". The renderer turns the error event into a
       // toast offering a repair — we do not silently reinstall here.
-      consoleHub.recordSystem(`Launch check failed: ${message}`, { slug });
-      if (!consoleHub.hasWindow()) openConsoleWindow();
+      env.console.recordSystem(`Launch check failed: ${message}`, { slug });
+      if (!env.console.hasWindow()) env.openConsole();
       env.emitError(slug, error.code, message);
       env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
       return;
@@ -400,9 +401,9 @@ export const runLaunch = async (
     env.emitError(slug, classifyError(error, startupSignal), errorMessage(error));
     env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
     const message = errorMessage(error);
-    consoleHub.emitState({ slug, status: ConsoleStatuses.ERROR, message });
-    consoleHub.recordSystem(`Process error: ${message}`, { slug });
-    if (!consoleHub.hasWindow()) openConsoleWindow();
+    env.console.emitState({ slug, status: ConsoleStatuses.ERROR, message });
+    env.console.recordSystem(`Process error: ${message}`, { slug });
+    if (!env.console.hasWindow()) env.openConsole();
     throw error;
   } finally {
     if (env.ops.get(slug) === startupOp) env.ops.delete(slug);

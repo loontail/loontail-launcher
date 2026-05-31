@@ -46,6 +46,7 @@ import { type InstallOp, OpKinds } from '@main/services/minecraft/ops';
 import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
 import type { LauncherSettings } from '@shared/contracts/settings';
+import { stubAccountProvider, stubConsolePort, stubOpenConsole } from './managerStubs';
 
 const SLUG = asClientSlug('test-client');
 
@@ -71,6 +72,9 @@ const makeManager = (): MinecraftManager =>
       targets: { resolve: vi.fn() },
     } as unknown as MinecraftKit,
     createClientOperationLocks(),
+    stubConsolePort(),
+    stubOpenConsole(),
+    stubAccountProvider(),
   );
 
 const resetStatusMocks = (): void => {

@@ -41,6 +41,7 @@ import {
 } from '@main/services/minecraft/repairWorkflow';
 import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraft';
+import { stubConsolePort, stubOpenConsole } from './managerStubs';
 
 const SLUG = asClientSlug('test-client');
 const CLIENT_FOLDER = 'Z:/client';
@@ -80,6 +81,8 @@ const env = (): ManagerEnv => {
     broadcaster,
     ops: new Map<ClientSlug, never>(),
     forgeProcessorCache: createForgeProcessorCache(),
+    console: stubConsolePort(),
+    openConsole: stubOpenConsole(),
     logger: logger(),
     emitStatus: broadcaster.status,
     emitError: vi.fn(),

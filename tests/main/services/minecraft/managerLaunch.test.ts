@@ -70,6 +70,7 @@ vi.mock('@main/services/minecraft/repair', () => ({
 }));
 
 import { MinecraftManager } from '@main/services/minecraft/manager';
+import { stubConsolePort, stubOpenConsole } from './managerStubs';
 
 const SLUG = asClientSlug('test-client');
 const CLIENT_FOLDER = 'Z:/clients/test-client';
@@ -114,6 +115,7 @@ const makeBroadcaster = (): Broadcaster =>
 const makeManager = (
   broadcaster = makeBroadcaster(),
   operationLocks: ClientOperationLocks = createClientOperationLocks(),
+  accountProvider: () => Account | null = () => account(),
 ): MinecraftManager =>
   new MinecraftManager(
     broadcaster,
@@ -121,6 +123,9 @@ const makeManager = (
       targets: { resolve: vi.fn() },
     } as unknown as MinecraftKit,
     operationLocks,
+    stubConsolePort(),
+    stubOpenConsole(),
+    accountProvider,
   );
 
 const resetMocks = (): void => {
@@ -149,7 +154,7 @@ describe('MinecraftManager.startLaunch', () => {
     orchestrationMocks.buildContext.mockResolvedValue(ctx);
     const currentAccount = account();
 
-    await makeManager().startLaunch(SLUG, currentAccount);
+    await makeManager(undefined, undefined, () => currentAccount).startLaunch(SLUG);
 
     // The lenient preflight inside runLaunch is the only launch-time gate now —
     // startLaunch neither verifies hashes nor reinstalls implicitly.
@@ -162,13 +167,23 @@ describe('MinecraftManager.startLaunch', () => {
     );
   });
 
+  it('throws NO_ACCOUNT when the injected account provider returns null', async () => {
+    resetMocks();
+
+    await expect(
+      makeManager(undefined, undefined, () => null).startLaunch(SLUG),
+    ).rejects.toMatchObject({ code: MinecraftErrorCodes.NO_ACCOUNT });
+
+    expect(orchestrationMocks.runLaunch).not.toHaveBeenCalled();
+  });
+
   it('does not start the game when the launch hook fails', async () => {
     resetMocks();
     const manager = makeManager();
     const hookError = new Error('bundle sync failed');
     manager.attachLaunchHook(vi.fn().mockRejectedValue(hookError));
 
-    await expect(manager.startLaunch(SLUG, account())).rejects.toBe(hookError);
+    await expect(manager.startLaunch(SLUG)).rejects.toBe(hookError);
 
     expect(orchestrationMocks.runLaunch).not.toHaveBeenCalled();
   });
@@ -180,7 +195,7 @@ describe('MinecraftManager.startLaunch', () => {
     const hookError = new Error('bundle manifest fetch failed');
     manager.attachLaunchHook(vi.fn().mockRejectedValue(hookError));
 
-    await expect(manager.startLaunch(SLUG, account())).rejects.toBe(hookError);
+    await expect(manager.startLaunch(SLUG)).rejects.toBe(hookError);
 
     // The base game is still installed: status must not stay stuck on LAUNCHING.
     expect(orchestrationMocks.runLaunch).not.toHaveBeenCalled();
@@ -213,7 +228,7 @@ describe('MinecraftManager.startLaunch', () => {
       ),
     );
 
-    const launchPromise = manager.startLaunch(SLUG, account());
+    const launchPromise = manager.startLaunch(SLUG);
     await hookStarted;
     manager.cancel(SLUG);
 

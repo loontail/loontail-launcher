@@ -23,7 +23,7 @@ import type { LoaderChoice } from '@shared/contracts/settings';
 import { resolveClientSettings } from '@shared/domain/settings';
 import type { Broadcaster } from './broadcast';
 import { buildContext } from './context';
-import type { ManagerEnv } from './env';
+import type { ConsolePort, ManagerEnv } from './env';
 import { ManagerError } from './errors';
 import { createForgeProcessorCache } from './forgeProcessorHealing';
 import { beginInstall, runInstall } from './install';
@@ -49,6 +49,11 @@ const MINECRAFT_DELETE_RESOURCES = [
 // before the game process is spawned. Untouched when no bundle is wired.
 export type LaunchHook = (slug: ClientSlug, signal?: AbortSignal) => Promise<void>;
 
+// Synchronous "what's the active account" probe, injected at construction so
+// the manager owns account resolution and the launch route stays a thin arg
+// parser. Returns null when signed out — startLaunch turns that into NO_ACCOUNT.
+export type AccountProvider = () => Account | null;
+
 export class MinecraftManager {
   private readonly ops = new Map<ClientSlug, Op>();
   private readonly env: ManagerEnv;
@@ -59,6 +64,9 @@ export class MinecraftManager {
     broadcaster: Broadcaster,
     kit: MinecraftKit,
     private readonly operationLocks: ClientOperationLocks,
+    console: ConsolePort,
+    openConsole: () => void,
+    private readonly accountProvider: AccountProvider,
   ) {
     this.kit = kit;
     this.env = {
@@ -66,6 +74,8 @@ export class MinecraftManager {
       broadcaster,
       ops: this.ops,
       forgeProcessorCache: createForgeProcessorCache(),
+      console,
+      openConsole,
       logger,
       emitStatus: (payload: MinecraftStatusEvent) => broadcaster.status(payload),
       emitError: (slug, code, message) => broadcaster.error({ slug, code, message }),
@@ -238,10 +248,10 @@ export class MinecraftManager {
     }
   }
 
-  async startLaunch(slug: ClientSlug, account: Account | null): Promise<void> {
+  async startLaunch(slug: ClientSlug): Promise<void> {
     this.requireIdle(slug);
     const ctx = await buildContext(this.kit, slug);
-    const checkedAccount = requireAccount(account);
+    const checkedAccount = requireAccount(this.accountProvider());
 
     // No pre-launch hash verification and no implicit reinstall here. The
     // lenient launch preflight inside runLaunch decides launchability from the

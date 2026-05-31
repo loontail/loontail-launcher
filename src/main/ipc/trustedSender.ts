@@ -1,4 +1,4 @@
-import { consoleHub } from '@main/infra/consoleHub';
+import type { ConsoleHub } from '@main/infra/consoleHub';
 import {
   RENDERER_ENTRY_FILES,
   type RendererLocation,
@@ -26,6 +26,7 @@ const isTrustedWindowFrame = (
 // current webContents id.
 export const createTrustedSenderCheck = (
   mainWindow: BrowserWindow,
+  consoleHub: ConsoleHub,
   options: TrustedSenderOptions = {},
 ) => {
   const sharedOptions = {

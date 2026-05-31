@@ -1,4 +1,4 @@
-import { consoleHub } from '@main/infra/consoleHub';
+import type { ConsoleHub } from '@main/infra/consoleHub';
 import { assertNoIpcArgs, parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
 import { IPC_CHANNELS } from '@shared/ipc';
@@ -12,7 +12,7 @@ export type ConsoleService = {
   dispose: () => Promise<void>;
 };
 
-export const createConsoleService = (router: Router): ConsoleService => ({
+export const createConsoleService = (router: Router, consoleHub: ConsoleHub): ConsoleService => ({
   init: async () => {
     router.handle(IPC_CHANNELS.consoleGetInitial, (rawArgs) => {
       assertNoIpcArgs(rawArgs, 'console.getInitial takes no arguments');

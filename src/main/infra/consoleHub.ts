@@ -45,7 +45,7 @@ export type SessionInfo = {
   state: ConsoleProcessState;
 };
 
-class ConsoleHub {
+export class ConsoleHub {
   private readonly buffer = new ConsoleBuffer({ limit: BUFFER_LIMIT });
   private readonly sink = new ConsoleWindowSink(() => {
     this.clearFlushTimer();
@@ -136,20 +136,32 @@ class ConsoleHub {
   setActiveSession(session: SessionInfo | null): void {
     // Drain partial XML left from the previous session before the parser is
     // reset; a trailing fragment would otherwise leak into the new session.
-    if (this.activeSession) {
-      for (const stream of [ConsoleSources.STDOUT, ConsoleSources.STDERR] as const) {
-        for (const chunk of this.log4j.flush(stream)) {
-          if (chunk.kind === 'text' && chunk.text.length > 0) {
-            this.ingest({ source: stream, raw: chunk.text, slug: this.activeSession.slug });
-          } else if (chunk.kind === 'event') {
-            this.ingestLog4jEvent(stream, this.activeSession.slug, chunk.event);
-          }
-        }
-      }
-    }
+    if (this.activeSession) this.drainLog4j(this.activeSession.slug);
     this.clearFlushTimer();
     this.log4j.reset();
     this.activeSession = session;
+  }
+
+  // Flush the log4j stream parsers when the game process exits. A FATAL crash
+  // event is often split across the final lines and would otherwise be held in
+  // the parser buffer until the next session reset — i.e. discarded. Called by
+  // the launch flow before emitting the EXITED/CRASHED state so the last event
+  // (the most useful for triage) reaches the console.
+  endSession(slug: ClientSlug): void {
+    this.drainLog4j(slug);
+    this.log4j.reset();
+  }
+
+  private drainLog4j(slug: ClientSlug): void {
+    for (const stream of [ConsoleSources.STDOUT, ConsoleSources.STDERR] as const) {
+      for (const chunk of this.log4j.flush(stream)) {
+        if (chunk.kind === 'text' && chunk.text.length > 0) {
+          this.ingest({ source: stream, raw: chunk.text, slug });
+        } else if (chunk.kind === 'event') {
+          this.ingestLog4jEvent(stream, slug, chunk.event);
+        }
+      }
+    }
   }
 
   emitState(state: ConsoleProcessState): void {
@@ -227,4 +239,4 @@ class ConsoleHub {
   }
 }
 
-export const consoleHub = new ConsoleHub();
+export const createConsoleHub = (): ConsoleHub => new ConsoleHub();

@@ -42,6 +42,7 @@ const launchMocks = vi.hoisted(() => {
       recordMinecraft: vi.fn(),
       recordSystem: vi.fn(),
       setActiveSession: vi.fn(),
+      endSession: vi.fn(),
     },
   };
 });
@@ -55,10 +56,6 @@ vi.mock('electron', () => ({
 
 vi.mock('@main/config', () => ({
   mainConfig: { yggdrasilApiRoot: 'https://auth.test.invalid' },
-}));
-
-vi.mock('@main/infra/consoleHub', () => ({
-  consoleHub: launchMocks.consoleHub,
 }));
 
 vi.mock('@main/infra/logger', () => ({
@@ -75,10 +72,6 @@ vi.mock('@main/infra/logger', () => ({
 
 vi.mock('@main/infra/store', () => ({
   getStoredAuth: launchMocks.getStoredAuth,
-}));
-
-vi.mock('@main/windows/consoleWindow', () => ({
-  openConsoleWindow: launchMocks.openConsoleWindow,
 }));
 
 const SLUG = asClientSlug('test-client');
@@ -232,6 +225,8 @@ const env = (kit: MinecraftKit, ops: Map<ClientSlug, Op>): ManagerEnv => {
     broadcaster,
     ops,
     forgeProcessorCache: createForgeProcessorCache(),
+    console: launchMocks.consoleHub,
+    openConsole: launchMocks.openConsoleWindow,
     logger: logger(),
     emitStatus: broadcaster.status,
     emitError: vi.fn(),
@@ -320,6 +315,13 @@ describe('runLaunch', () => {
       kind: OpKinds.LAUNCH,
       session: activeSession,
     });
+    // The launch flow drives the injected console port (not a module singleton)
+    // and never opens a window when the console setting is off.
+    expect(launchMocks.consoleHub.setActiveSession).toHaveBeenCalled();
+    expect(launchMocks.consoleHub.emitState).toHaveBeenCalledWith(
+      expect.objectContaining({ slug: SLUG, status: ConsoleStatuses.LAUNCHING }),
+    );
+    expect(launchMocks.openConsoleWindow).not.toHaveBeenCalled();
   });
 
   it('surfaces a missing Java executable as a repairable launch error, staying installed', async () => {

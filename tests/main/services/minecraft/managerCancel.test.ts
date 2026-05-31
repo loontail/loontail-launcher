@@ -22,6 +22,7 @@ import { MinecraftManager } from '@main/services/minecraft/manager';
 import { type Op, OpKinds } from '@main/services/minecraft/ops';
 import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
+import { stubAccountProvider, stubConsolePort, stubOpenConsole } from './managerStubs';
 
 const SLUG = asClientSlug('test-client');
 
@@ -30,6 +31,9 @@ const makeManager = (): MinecraftManager =>
     { status: vi.fn(), progress: vi.fn(), log: vi.fn(), error: vi.fn() } as unknown as Broadcaster,
     { targets: { resolve: vi.fn() } } as unknown as MinecraftKit,
     createClientOperationLocks(),
+    stubConsolePort(),
+    stubOpenConsole(),
+    stubAccountProvider(),
   );
 
 const setOp = (manager: MinecraftManager, op: Op): void => {

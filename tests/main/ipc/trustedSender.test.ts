@@ -1,21 +1,17 @@
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-const consoleWindowState = vi.hoisted(() => ({
-  current: null as BrowserWindow | null,
-}));
-
-vi.mock('@main/infra/consoleHub', () => ({
-  consoleHub: {
-    getWindow: () => consoleWindowState.current,
-  },
-}));
-
+import type { ConsoleHub } from '@main/infra/consoleHub';
 import { createTrustedSenderCheck } from '@main/ipc/trustedSender';
 import { RENDERER_ENTRY_FILES } from '@main/windows/rendererLocations';
 import { IPC_CHANNELS } from '@shared/ipc';
+import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
+import { beforeEach, describe, expect, it } from 'vitest';
+
+const consoleWindowState = {
+  current: null as BrowserWindow | null,
+};
+
+const consoleHub = { getWindow: () => consoleWindowState.current } as unknown as ConsoleHub;
 
 const rendererRoot = join(process.cwd(), 'out', 'renderer');
 const mainFileUrl = pathToFileURL(join(rendererRoot, RENDERER_ENTRY_FILES.Main)).href;
@@ -44,7 +40,7 @@ beforeEach(() => {
 describe('createTrustedSenderCheck', () => {
   it('trusts the main window only at the main renderer entry', () => {
     const mainWindow = fakeWindow(1);
-    const isTrusted = createTrustedSenderCheck(mainWindow, {
+    const isTrusted = createTrustedSenderCheck(mainWindow, consoleHub, {
       rendererRoot,
       devServerUrl: null,
     });
@@ -57,7 +53,7 @@ describe('createTrustedSenderCheck', () => {
   it('trusts the console window only at the console renderer entry', () => {
     const mainWindow = fakeWindow(1);
     consoleWindowState.current = fakeWindow(2);
-    const isTrusted = createTrustedSenderCheck(mainWindow, {
+    const isTrusted = createTrustedSenderCheck(mainWindow, consoleHub, {
       rendererRoot,
       devServerUrl: null,
     });
@@ -70,7 +66,7 @@ describe('createTrustedSenderCheck', () => {
   it('denies the console window any channel outside the console group', () => {
     const mainWindow = fakeWindow(1);
     consoleWindowState.current = fakeWindow(2);
-    const isTrusted = createTrustedSenderCheck(mainWindow, {
+    const isTrusted = createTrustedSenderCheck(mainWindow, consoleHub, {
       rendererRoot,
       devServerUrl: null,
     });
@@ -83,7 +79,7 @@ describe('createTrustedSenderCheck', () => {
 
   it('rejects child frames even when their URL matches an allowed entry', () => {
     const mainWindow = fakeWindow(1);
-    const isTrusted = createTrustedSenderCheck(mainWindow, {
+    const isTrusted = createTrustedSenderCheck(mainWindow, consoleHub, {
       rendererRoot,
       devServerUrl: null,
     });
@@ -93,7 +89,7 @@ describe('createTrustedSenderCheck', () => {
 
   it('uses the currently attached console window after reopening', () => {
     const mainWindow = fakeWindow(1);
-    const isTrusted = createTrustedSenderCheck(mainWindow, {
+    const isTrusted = createTrustedSenderCheck(mainWindow, consoleHub, {
       rendererRoot,
       devServerUrl: null,
     });

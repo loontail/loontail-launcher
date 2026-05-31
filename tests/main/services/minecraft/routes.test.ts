@@ -8,10 +8,6 @@ import { IPC_CHANNELS, type IpcArgs, type IpcContract, type IpcResult } from '@s
 import type { IpcMainInvokeEvent } from 'electron';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@main/services/auth/auth', () => ({
-  getStoredAccount: vi.fn(() => null),
-}));
-
 type StoredHandler = (rawArgs: unknown) => Promise<unknown> | unknown;
 
 const fakeEvent = (): IpcMainInvokeEvent => ({}) as unknown as IpcMainInvokeEvent;

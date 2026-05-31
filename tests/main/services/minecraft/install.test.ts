@@ -38,6 +38,7 @@ import { runRepair } from '@main/services/minecraft/repair';
 import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes, ProgressStages } from '@shared/contracts/minecraft';
 import { LoaderChoices } from '@shared/contracts/settings';
+import { stubConsolePort, stubOpenConsole } from './managerStubs';
 
 const SLUG = asClientSlug('test-client');
 const CLIENT_FOLDER = 'Z:/missing-client-folder';
@@ -118,6 +119,8 @@ const makeEnv = (kit: MinecraftKit, ops: Map<ClientSlug, Op>): ManagerEnv => {
     broadcaster,
     ops,
     forgeProcessorCache: createForgeProcessorCache(),
+    console: stubConsolePort(),
+    openConsole: stubOpenConsole(),
     logger: makeLogger(),
     emitStatus: broadcaster.status,
     emitError: vi.fn(),

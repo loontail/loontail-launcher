@@ -66,6 +66,7 @@ vi.mock('@main/services/minecraft/repair', () => ({
 }));
 
 import { MinecraftManager } from '@main/services/minecraft/manager';
+import { stubAccountProvider, stubConsolePort, stubOpenConsole } from './managerStubs';
 
 const SLUG = asClientSlug('test-client');
 const CLIENT_FOLDER = 'Z:/clients/test-client';
@@ -107,6 +108,9 @@ const makeManager = (
     broadcaster,
     { targets: { resolve: vi.fn() } } as unknown as MinecraftKit,
     operationLocks,
+    stubConsolePort(),
+    stubOpenConsole(),
+    stubAccountProvider(),
   );
 
 // Wraps the shared lock registry so each MINECRAFT-domain lease's release() is

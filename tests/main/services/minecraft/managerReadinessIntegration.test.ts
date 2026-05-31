@@ -56,6 +56,7 @@ vi.mock('@main/services/minecraft/launch', async (importOriginal) => {
 
 import { createClientOperationLocks } from '@main/services/clientOperationLocks';
 import { MinecraftManager } from '@main/services/minecraft/manager';
+import { stubConsolePort, stubOpenConsole } from './managerStubs';
 
 const SLUG = asClientSlug('vanilla-client');
 const CLIENT_FOLDER = 'Z:/clients/vanilla-client';
@@ -202,7 +203,14 @@ describe('MinecraftManager readiness integration', () => {
     resetMocks(resolvedTarget);
 
     await expect(
-      new MinecraftManager(broadcaster(), kit(), createClientOperationLocks()).getStatus(SLUG),
+      new MinecraftManager(
+        broadcaster(),
+        kit(),
+        createClientOperationLocks(),
+        stubConsolePort(),
+        stubOpenConsole(),
+        () => account(),
+      ).getStatus(SLUG),
     ).resolves.toEqual({
       status: InstallStatuses.NOT_INSTALLED,
       paused: false,
@@ -230,7 +238,14 @@ describe('MinecraftManager readiness integration', () => {
     } as unknown as MinecraftKit;
 
     await expect(
-      new MinecraftManager(broadcaster(), guardedKit, createClientOperationLocks()).getStatus(SLUG),
+      new MinecraftManager(
+        broadcaster(),
+        guardedKit,
+        createClientOperationLocks(),
+        stubConsolePort(),
+        stubOpenConsole(),
+        () => account(),
+      ).getStatus(SLUG),
     ).resolves.toEqual({
       status: InstallStatuses.NOT_INSTALLED,
       paused: false,
@@ -241,10 +256,15 @@ describe('MinecraftManager readiness integration', () => {
     const resolvedTarget = target();
     resetMocks(resolvedTarget);
 
-    await new MinecraftManager(broadcaster(), kit(), createClientOperationLocks()).startLaunch(
-      SLUG,
-      account(),
-    );
+    const currentAccount = account();
+    await new MinecraftManager(
+      broadcaster(),
+      kit(),
+      createClientOperationLocks(),
+      stubConsolePort(),
+      stubOpenConsole(),
+      () => currentAccount,
+    ).startLaunch(SLUG);
 
     expect(readinessMocks.runInstall).not.toHaveBeenCalled();
     expect(readinessMocks.runLaunch).toHaveBeenCalledWith(

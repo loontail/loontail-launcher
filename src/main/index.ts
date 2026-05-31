@@ -9,6 +9,7 @@ if (squirrelStartup) process.exit(0);
 
 import { seedLauncherSettings } from '@main/bootstrap/seed';
 import { sweepOrphanClientOverrides } from '@main/bootstrap/sweepOrphans';
+import { createConsoleHub } from '@main/infra/consoleHub';
 import { initLogger, scopedLogger } from '@main/infra/logger';
 import { attachNotifier, notify } from '@main/infra/notifier';
 import { configureSessionSecurity } from '@main/infra/session';
@@ -17,6 +18,7 @@ import { createRouter } from '@main/ipc/router';
 import { createTrustedSenderCheck } from '@main/ipc/trustedSender';
 import { createAppService } from '@main/services/app';
 import { createAuthService } from '@main/services/auth';
+import { getStoredAccount } from '@main/services/auth/auth';
 import { createYggdrasilClient } from '@main/services/auth/yggdrasilClient';
 import { createBundleService } from '@main/services/bundle';
 import { createClientOperationLocks } from '@main/services/clientOperationLocks';
@@ -30,6 +32,7 @@ import { createSettingsService } from '@main/services/settings';
 import { createSkinService } from '@main/services/skin';
 import { createSystemService } from '@main/services/system';
 import { createUpdaterService } from '@main/services/updater';
+import { openConsoleWindow } from '@main/windows/consoleWindow';
 import { createMainWindow } from '@main/windows/mainWindow';
 import { BrowserWindow, app, dialog, protocol } from 'electron';
 
@@ -95,7 +98,14 @@ const start = async (): Promise<void> => {
 
   const mainWindow = createMainWindow();
   attachNotifier(mainWindow);
-  const router = createRouter(createTrustedSenderCheck(mainWindow));
+  // One console hub for the process, created here and threaded into every
+  // consumer (launch flow, console service, trusted-sender check) instead of a
+  // module singleton, so its buffer/timer state is owned by the bootstrap.
+  const consoleHub = createConsoleHub();
+  const openConsole = (): void => {
+    openConsoleWindow(consoleHub);
+  };
+  const router = createRouter(createTrustedSenderCheck(mainWindow, consoleHub));
 
   const kit = createKit();
   const yggdrasilGateway = createYggdrasilClient();
@@ -108,14 +118,22 @@ const start = async (): Promise<void> => {
   const clientsService = createClientsService(router);
   const serversService = createServersService(router);
   const mediaService = createMediaService(router);
-  const minecraftService = createMinecraftService(router, mainWindow, kit, clientOperationLocks);
+  const minecraftService = createMinecraftService(
+    router,
+    mainWindow,
+    kit,
+    clientOperationLocks,
+    consoleHub,
+    openConsole,
+    getStoredAccount,
+  );
   const bundleService = createBundleService(router, mainWindow, kit, clientOperationLocks);
   // Wire bundle sync into the launch flow — runs after install, before launch.
   // No-op for clients without a bundleSlug (handled inside syncForLaunch).
   minecraftService.manager.attachLaunchHook((slug, signal) =>
     bundleService.manager.syncForLaunch(slug, signal),
   );
-  const consoleService = createConsoleService(router);
+  const consoleService = createConsoleService(router, consoleHub);
   const updaterService = createUpdaterService(router, mainWindow);
 
   await appService.init();

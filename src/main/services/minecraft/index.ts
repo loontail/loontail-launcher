@@ -3,7 +3,8 @@ import type { Router } from '@main/ipc/router';
 import type { ClientOperationLocks } from '@main/services/clientOperationLocks';
 import type { BrowserWindow } from 'electron';
 import { createBroadcaster } from './broadcast';
-import { MinecraftManager } from './manager';
+import type { ConsolePort } from './env';
+import { type AccountProvider, MinecraftManager } from './manager';
 import { registerMinecraftRoutes } from './routes';
 
 export type MinecraftService = {
@@ -19,9 +20,19 @@ export const createMinecraftService = (
   mainWindow: BrowserWindow,
   kit: MinecraftKit,
   operationLocks: ClientOperationLocks,
+  consoleHub: ConsolePort,
+  openConsole: () => void,
+  accountProvider: AccountProvider,
 ): MinecraftService => {
   const broadcaster = createBroadcaster(mainWindow);
-  const manager = new MinecraftManager(broadcaster, kit, operationLocks);
+  const manager = new MinecraftManager(
+    broadcaster,
+    kit,
+    operationLocks,
+    consoleHub,
+    openConsole,
+    accountProvider,
+  );
   return {
     init: async () => {
       registerMinecraftRoutes(router, manager);

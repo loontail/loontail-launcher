@@ -30,6 +30,7 @@ import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
 import { LoaderChoices } from '@shared/contracts/settings';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { stubConsolePort, stubOpenConsole } from './managerStubs';
 
 vi.hoisted(() => {
   process.env.API_URL ??= 'http://test.invalid';
@@ -154,6 +155,8 @@ const env = (kit: MinecraftKit, ops: Map<ClientSlug, Op>): ManagerEnv => {
     broadcaster,
     ops,
     forgeProcessorCache: createForgeProcessorCache(),
+    console: stubConsolePort(),
+    openConsole: stubOpenConsole(),
     logger: logger(),
     emitStatus: broadcaster.status,
     emitError: vi.fn(),
