@@ -116,6 +116,7 @@ const repairAllReport = (): RepairAllReport => ({
       },
     ],
   ]),
+  blockedAspects: new Map(),
   bytesDownloaded: 0,
   durationMs: 0,
 });
