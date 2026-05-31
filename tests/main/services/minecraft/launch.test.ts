@@ -19,10 +19,11 @@ import {
 import type { Context } from '@main/services/minecraft/context';
 import type { ManagerEnv } from '@main/services/minecraft/env';
 import { createForgeProcessorCache } from '@main/services/minecraft/forgeProcessorHealing';
-import { runLaunch } from '@main/services/minecraft/launch';
+import { endLaunch, runLaunch } from '@main/services/minecraft/launch';
 import { type Op, OpKinds } from '@main/services/minecraft/ops';
 import type { Account } from '@shared/contracts/account';
 import type { AuthSession, YggdrasilSession } from '@shared/contracts/auth';
+import { ConsoleStatuses } from '@shared/contracts/console';
 import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraft';
 import { LoaderChoices } from '@shared/contracts/settings';
@@ -519,5 +520,58 @@ describe('runLaunch', () => {
         accessToken: 'access-token',
       }),
     );
+  });
+});
+
+describe('endLaunch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('surfaces the OS exit code from a crash on the console state', () => {
+    const ops = new Map<ClientSlug, Op>();
+    const managerEnv = env({} as unknown as MinecraftKit, ops);
+    const crash = new MinecraftKitError(
+      MinecraftKitErrorCodes.LAUNCH_PROCESS_FAILED,
+      'Minecraft process exited with code 1',
+      { context: { exitCode: 1 } },
+    );
+
+    endLaunch(managerEnv, SLUG, crash);
+
+    expect(launchMocks.consoleHub.emitState).toHaveBeenCalledWith({
+      slug: SLUG,
+      status: ConsoleStatuses.CRASHED,
+      message: 'Minecraft process exited with code 1',
+      exitCode: 1,
+    });
+  });
+
+  it('reports a clean exit with the resolved exit code', () => {
+    const ops = new Map<ClientSlug, Op>();
+    const managerEnv = env({} as unknown as MinecraftKit, ops);
+
+    endLaunch(managerEnv, SLUG, undefined, { code: 0, signal: null, aborted: false });
+
+    expect(launchMocks.consoleHub.emitState).toHaveBeenCalledWith({
+      slug: SLUG,
+      status: ConsoleStatuses.EXITED,
+      exitCode: 0,
+    });
+    expect(managerEnv.emitError).not.toHaveBeenCalled();
+  });
+
+  it('reports a user stop (aborted exit) with a null exit code and no error', () => {
+    const ops = new Map<ClientSlug, Op>();
+    const managerEnv = env({} as unknown as MinecraftKit, ops);
+
+    endLaunch(managerEnv, SLUG, undefined, { code: null, signal: 'SIGTERM', aborted: true });
+
+    expect(launchMocks.consoleHub.emitState).toHaveBeenCalledWith({
+      slug: SLUG,
+      status: ConsoleStatuses.EXITED,
+      exitCode: null,
+    });
+    expect(managerEnv.emitError).not.toHaveBeenCalled();
   });
 });

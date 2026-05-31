@@ -5,6 +5,7 @@ import {
   EventTypes,
   type LaunchAuth,
   type LaunchComposition,
+  type LaunchExit,
   type MinecraftKitErrorCode,
   MinecraftKitErrorCodes,
   asAzureClientId,
@@ -159,13 +160,33 @@ const verifyLaunchPreflight = async (
   );
 };
 
-export const endLaunch = (env: ManagerEnv, slug: ClientSlug, error?: unknown): void => {
+// The kit wraps a non-zero exit in a LAUNCH_PROCESS_FAILED error whose context
+// carries the OS exit code (e.g. -1073741819 = access violation, 1 = Java OOM).
+// It is the first triage signal for a crash, so lift it onto the console state.
+const launchExitCode = (error: unknown): number | null => {
+  if (isMinecraftKitError(error) && typeof error.context.exitCode === 'number') {
+    return error.context.exitCode;
+  }
+  return null;
+};
+
+export const endLaunch = (
+  env: ManagerEnv,
+  slug: ClientSlug,
+  error?: unknown,
+  exit?: LaunchExit,
+): void => {
   env.ops.delete(slug);
   if (error) {
     const message = errorMessage(error);
     env.logger.error(`[${slug}] launch: game process failed — ${message}`, error);
     env.emitError(slug, classifyError(error), message);
-    consoleHub.emitState({ slug, status: ConsoleStatuses.CRASHED, message });
+    consoleHub.emitState({
+      slug,
+      status: ConsoleStatuses.CRASHED,
+      message,
+      exitCode: launchExitCode(error),
+    });
     consoleHub.recordSystem(`Process crashed: ${message}`, {
       code: 'console.system.processCrashedWithMessage',
       args: { detail: message },
@@ -174,8 +195,10 @@ export const endLaunch = (env: ManagerEnv, slug: ClientSlug, error?: unknown): v
     // Surface crash details even if auto-open is off — user needs the backlog.
     if (!consoleHub.hasWindow()) openConsoleWindow();
   } else {
-    env.logger.info(`[${slug}] launch: game exited`);
-    consoleHub.emitState({ slug, status: ConsoleStatuses.EXITED, exitCode: null });
+    // The kit resolves `exited` for both a clean exit and a user stop; only the
+    // latter sets `aborted`, so distinguish the two in the log.
+    env.logger.info(`[${slug}] launch: game ${exit?.aborted ? 'stopped' : 'exited'}`);
+    consoleHub.emitState({ slug, status: ConsoleStatuses.EXITED, exitCode: exit?.code ?? null });
     consoleHub.recordSystem('Process exited', {
       code: 'console.system.processExited',
       slug,
@@ -347,8 +370,8 @@ export const runLaunch = async (
     // Kit rejects session.exited on non-zero exit; trailing .catch guards
     // against endLaunch itself throwing.
     void session.exited
-      .then(() => {
-        endLaunch(env, slug);
+      .then((exit) => {
+        endLaunch(env, slug, undefined, exit);
       })
       .catch((error: unknown) => {
         endLaunch(env, slug, error);
