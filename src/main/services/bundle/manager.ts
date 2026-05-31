@@ -225,24 +225,35 @@ export class BundleManager {
       );
     }
     const lock = this.acquireWriteLock(slug);
-    const task = createSyncTask(slug, clientFolder);
-    const active = createActiveSync(task, bundleSlug, options.forLaunch);
-    const launchWait = active.forLaunch ? this.createAwaiter(active) : null;
-    this.activeSyncs.set(slug, active);
+    // Track the lease before building the task so a throw during setup (task /
+    // active-sync construction) still releases it via dropActiveSync, which is
+    // idempotent on the executePreparedSync paths that drop it themselves.
     this.activeLocks.set(slug, lock);
-    lock.setCancel(() => this.cancelSync(slug));
+    try {
+      const task = createSyncTask(slug, clientFolder);
+      const active = createActiveSync(task, bundleSlug, options.forLaunch);
+      const launchWait = active.forLaunch ? this.createAwaiter(active) : null;
+      this.activeSyncs.set(slug, active);
+      lock.setCancel(() => this.cancelSync(slug));
 
-    await this.executePreparedSync(active, task, {
-      force: req.force === true,
-      loadRemoteManifest: async () => {
-        this.emitStatus(slug, BundleSyncStatuses.FETCHING_MANIFEST);
-        const { manifest, manifestHash } = await fetchRemoteManifest(bundleSlug, task.abort.signal);
-        active.remoteManifest = manifest;
-        active.remoteManifestHash = manifestHash;
-        return manifest;
-      },
-    });
-    await launchWait;
+      await this.executePreparedSync(active, task, {
+        force: req.force === true,
+        loadRemoteManifest: async () => {
+          this.emitStatus(slug, BundleSyncStatuses.FETCHING_MANIFEST);
+          const { manifest, manifestHash } = await fetchRemoteManifest(
+            bundleSlug,
+            task.abort.signal,
+          );
+          active.remoteManifest = manifest;
+          active.remoteManifestHash = manifestHash;
+          return manifest;
+        },
+      });
+      await launchWait;
+    } catch (err) {
+      this.dropActiveSync(slug);
+      throw err;
+    }
   }
 
   private async continuePausedSync(active: ActiveSync): Promise<void> {
@@ -333,9 +344,15 @@ export class BundleManager {
   }
 
   private async completePreparedSync(active: ActiveSync, status: BundleSyncStatus): Promise<void> {
-    await this.persistLocalManifest(active, active.task.clientFolder);
-    this.emitStatus(active.task.slug, status);
-    this.resolveAwaiters(active);
+    // A trailing manifest-write failure must never demote a finished sync to a
+    // hung state: settle the status and any forLaunch awaiter in finally so the
+    // launch flow can proceed even if persistLocalManifest regresses to throw.
+    try {
+      await this.persistLocalManifest(active, active.task.clientFolder);
+    } finally {
+      this.emitStatus(active.task.slug, status);
+      this.resolveAwaiters(active);
+    }
   }
 
   private async persistLocalManifest(active: ActiveSync, clientFolder: string): Promise<void> {
