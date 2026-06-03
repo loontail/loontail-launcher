@@ -22,4 +22,7 @@ export const mainConfig = {
   apiToken: requireEnv('API_TOKEN', process.env.API_TOKEN),
   mojangClientId: optionalEnv(process.env.MOJANG_CLIENT_ID),
   yggdrasilApiRoot,
+  // Base URL of the Loontail in-game network service the embedded agent connects to.
+  // Optional: when unset the agent uses its built-in default (no network features).
+  networkServiceUrl: optionalEnv(process.env.NETWORK_API_URL),
 } as const;

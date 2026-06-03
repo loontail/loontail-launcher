@@ -94,6 +94,49 @@ const resolveAuthlibInjectorJar = (): string => {
   return resolveAuthlibInjectorJarPath();
 };
 
+// --- Loontail in-game network agent --------------------------------------
+
+// The bundled agent jar. Packaged: shipped to `process.resourcesPath/loontail-agent/`
+// (electron-builder extraResources). Dev: read from the repo's `resources/agent/`.
+const LOONTAIL_AGENT_JAR = 'loontail-network-agent.jar';
+
+// The agent jar is built `--release 21`, so attaching it via `-javaagent` to an
+// older Minecraft that launches on Java 8/17 would abort JVM startup. Only attach
+// on Java 21+ — which is every Minecraft version the agent supports (1.21.4+).
+const NETWORK_AGENT_MIN_JAVA = 21;
+
+const resolveNetworkAgentJar = (): string =>
+  app.isPackaged
+    ? path.join(process.resourcesPath, 'loontail-agent', LOONTAIL_AGENT_JAR)
+    : path.join(app.getAppPath(), 'resources', 'agent', LOONTAIL_AGENT_JAR);
+
+// JVM args that attach the in-game network agent, or [] when it must not be
+// attached (older/unknown Java, or the bundled jar is missing). A wrong Java or a
+// missing jar must never block the launch — the overlay is strictly best-effort.
+const buildNetworkAgentJvmArgs = async (
+  slug: ClientSlug,
+  javaMajor: number | undefined,
+): Promise<readonly string[]> => {
+  if (javaMajor === undefined || javaMajor < NETWORK_AGENT_MIN_JAVA) {
+    launchLogger.info(
+      `[${slug}] launch: network agent not attached (Java ${javaMajor ?? '?'} < ${NETWORK_AGENT_MIN_JAVA})`,
+    );
+    return [];
+  }
+  try {
+    const jarPath = resolveNetworkAgentJar();
+    await fs.access(jarPath);
+    const args = [`-javaagent:${jarPath}`];
+    if (mainConfig.networkServiceUrl) {
+      args.push(`-Dloontail.network.serviceUrl=${mainConfig.networkServiceUrl}`);
+    }
+    return args;
+  } catch (error) {
+    launchLogger.warn(`[${slug}] launch: network agent not attached (${errorMessage(error)})`);
+    return [];
+  }
+};
+
 const requireLaunchFile = async (
   filePath: string,
   label: string,
@@ -285,11 +328,16 @@ export const runLaunch = async (
     if (resolved.extraJvmArgs.length > 0) {
       launchLogger.info(`[${slug}] launch: injecting authlib-injector (yggdrasil session)`);
     }
+    const networkAgentArgs = await buildNetworkAgentJvmArgs(slug, ctx.target.runtime.majorVersion);
+    if (networkAgentArgs.length > 0) {
+      launchLogger.info(`[${slug}] launch: attaching Loontail network agent (in-game overlay)`);
+    }
+    const extraJvmArgs = [...resolved.extraJvmArgs, ...networkAgentArgs];
     let composition: LaunchComposition;
     try {
       composition = await env.kit.launch.compose(ctx.target, {
         auth: resolved.auth,
-        ...(resolved.extraJvmArgs.length > 0 ? { extraJvmArgs: resolved.extraJvmArgs } : {}),
+        ...(extraJvmArgs.length > 0 ? { extraJvmArgs } : {}),
         ...(ctx.resolved.memory.allocatedRamMb > 0
           ? { memory: { maxMb: ctx.resolved.memory.allocatedRamMb } }
           : {}),

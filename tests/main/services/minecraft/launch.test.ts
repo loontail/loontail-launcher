@@ -34,6 +34,7 @@ const launchMocks = vi.hoisted(() => {
   process.env.API_TOKEN ??= 'test-token';
   return {
     appGetVersion: vi.fn(() => '0.0.0-test'),
+    appGetAppPath: vi.fn(() => ''),
     getStoredAuth: vi.fn<() => AuthSession | null>(() => null),
     openConsoleWindow: vi.fn(),
     consoleHub: {
@@ -50,6 +51,7 @@ const launchMocks = vi.hoisted(() => {
 vi.mock('electron', () => ({
   app: {
     getVersion: launchMocks.appGetVersion,
+    getAppPath: launchMocks.appGetAppPath,
     isPackaged: false,
   },
 }));
@@ -521,6 +523,49 @@ describe('runLaunch', () => {
         username: 'tester',
         accessToken: 'access-token',
       }),
+    );
+  });
+
+  it('attaches the in-game network agent on Java 21+ when the bundled jar is present', async () => {
+    const fixture = await createLaunchFixture();
+    const appPath = fixture.ctx.target.directory;
+    launchMocks.appGetAppPath.mockReturnValue(appPath);
+    const agentJar = path.join(appPath, 'resources', 'agent', 'loontail-network-agent.jar');
+    await fs.mkdir(path.dirname(agentJar), { recursive: true });
+    await fs.writeFile(agentJar, 'agent');
+    const ctx = {
+      ...fixture.ctx,
+      target: {
+        ...fixture.ctx.target,
+        runtime: { ...fixture.ctx.target.runtime, majorVersion: 21 },
+      },
+    } as Context;
+    const compose = vi.fn(async (_target: Target, _options: unknown) => fixture.composition);
+    const run = vi.fn(() => session());
+    const kit = { launch: { compose, run } } as unknown as MinecraftKit;
+
+    await runLaunch(env(kit, new Map<ClientSlug, Op>()), SLUG, ctx, account());
+
+    const options = compose.mock.calls[0]?.[1] as
+      | { readonly extraJvmArgs?: readonly string[] }
+      | undefined;
+    expect(options?.extraJvmArgs).toEqual(expect.arrayContaining([`-javaagent:${agentJar}`]));
+  });
+
+  it('does not attach the network agent on older Java (would abort JVM startup)', async () => {
+    // The fixture's runtime carries no majorVersion (< 21), so the agent must be skipped.
+    const fixture = await createLaunchFixture();
+    const compose = vi.fn(async (_target: Target, _options: unknown) => fixture.composition);
+    const run = vi.fn(() => session());
+    const kit = { launch: { compose, run } } as unknown as MinecraftKit;
+
+    await runLaunch(env(kit, new Map<ClientSlug, Op>()), SLUG, fixture.ctx, account());
+
+    const options = compose.mock.calls[0]?.[1] as
+      | { readonly extraJvmArgs?: readonly string[] }
+      | undefined;
+    expect(options?.extraJvmArgs ?? []).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('loontail-network-agent.jar')]),
     );
   });
 });

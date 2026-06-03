@@ -24,6 +24,14 @@ extraResources:
     to: authlib-injector
     filter:
       - "*.jar"
+  # Ship the Loontail in-game network agent jar so the launch path can resolve it
+  # at `process.resourcesPath/loontail-agent/` and attach it via `-javaagent`. The
+  # jar is built from `loontail-minecraft-network-agent` and copied into
+  # `resources/agent/` (refresh it there when the agent changes).
+  - from: resources/agent
+    to: loontail-agent
+    filter:
+      - "*.jar"
 electronFuses:
   runAsNode: false
   enableCookieEncryption: true
