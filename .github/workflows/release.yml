@@ -22,6 +22,9 @@ permissions:
 #                        the "Sign in with Microsoft" button. Without it, the
 #                        Strapi-account login still works but MS sign-in fails
 #                        with a generic error.
+#   NETWORK_API_URL    — base URL of the Loontail in-game network service baked
+#                        into the build for the embedded network agent. Without
+#                        it the overlay ships but stays offline (no network).
 #
 # Loop guard: the bump commit (`chore(release): vX.Y.Z`) triggers this workflow
 # again; the guard job short-circuits when the commit message begins with
@@ -118,6 +121,7 @@ jobs:
           API_URL: ${{ secrets.API_URL }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
           MOJANG_CLIENT_ID: ${{ secrets.MOJANG_CLIENT_ID }}
+          NETWORK_API_URL: ${{ secrets.NETWORK_API_URL }}
         run: npm run verify
 
       - name: Build & publish installer
@@ -126,4 +130,5 @@ jobs:
           API_URL: ${{ secrets.API_URL }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
           MOJANG_CLIENT_ID: ${{ secrets.MOJANG_CLIENT_ID }}
+          NETWORK_API_URL: ${{ secrets.NETWORK_API_URL }}
         run: npx electron-builder --win --publish always

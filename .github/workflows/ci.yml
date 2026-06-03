@@ -24,4 +24,5 @@ jobs:
           API_URL: ${{ secrets.API_URL }}
           API_TOKEN: ${{ secrets.API_TOKEN }}
           MOJANG_CLIENT_ID: ${{ secrets.MOJANG_CLIENT_ID }}
+          NETWORK_API_URL: ${{ secrets.NETWORK_API_URL }}
         run: npm run verify
