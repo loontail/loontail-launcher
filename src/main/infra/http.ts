@@ -5,22 +5,12 @@ import type { ZodTypeAny, z } from 'zod';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
-/**
- * Authorization mode for an HTTP call.
- *
- * - `apiToken` — sends the static `API_TOKEN` from env. Use for catalogue
- *   endpoints, manifests, skin reads/writes, anything that doesn't require
- *   a per-user identity. The token must have the required permission on the
- *   target content-type / plugin route.
- * - `none` — no `Authorization` header. Use for login-equivalent endpoints
- *   and the Yggdrasil API root (`@loontail/yggdrasil-client` calls go
- *   directly via `fetch` without this helper).
- *
- * The launcher's session token (Yggdrasil access token) is **not** a valid
- * bearer for the Strapi content API — Yggdrasil endpoints are reached
- * directly through {@link YggdrasilClient}, not this helper.
- */
-export type AuthMode = 'apiToken' | 'none';
+export type AuthMode =
+  // Static `API_TOKEN` from env; for catalogue/manifest/skin routes that need no per-user identity.
+  | 'apiToken'
+  // No Authorization header. The Yggdrasil access token is NOT a valid bearer for the Strapi
+  // content API, so user-scoped calls go directly through YggdrasilClient, not this helper.
+  | 'none';
 
 type RequestOptions = {
   method?: HttpMethod;

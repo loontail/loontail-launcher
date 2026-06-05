@@ -16,7 +16,6 @@ export const isLoaderAvailable = (client: ClientLoaderFields, choice: LoaderChoi
   return true;
 };
 
-/** Honours the user's override when valid; otherwise derives the loader from set version fields. */
 export const resolveLoader = (
   client: ClientLoaderFields,
   override: LoaderChoice | null,

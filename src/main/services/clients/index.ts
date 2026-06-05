@@ -12,5 +12,6 @@ export const createClientsService = (router: Router): ClientsService => ({
   init: async () => {
     registerClientsRoutes(router);
   },
-  dispose: async () => {},
+  // No subscriptions or timers to release.
+  dispose: () => Promise.resolve(),
 });

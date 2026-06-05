@@ -11,5 +11,6 @@ export const createSystemService = (router: Router, mainWindow: BrowserWindow): 
   init: async () => {
     registerSystemRoutes(router, mainWindow);
   },
-  dispose: async () => {},
+  // No subscriptions or timers to release.
+  dispose: () => Promise.resolve(),
 });

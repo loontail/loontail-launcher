@@ -14,5 +14,6 @@ export const createMediaService = (router: Router): MediaService => ({
     registerMediaProtocol();
     registerMediaRoutes(router);
   },
-  dispose: async () => {},
+  // No subscriptions or timers to release.
+  dispose: () => Promise.resolve(),
 });

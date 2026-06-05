@@ -21,6 +21,7 @@ export const createSkinService = (
     init: async () => {
       registerSkinRoutes(router, handlers);
     },
-    dispose: async () => {},
+    // No subscriptions or timers to release.
+    dispose: () => Promise.resolve(),
   };
 };
