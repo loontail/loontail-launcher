@@ -135,6 +135,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-10 — `AUTH_CANCELLED` is mapped to `LOGIN_ERROR_CODE.Unknown` in routes.ts, but the renderer has a `cancelledRef` guard for this case — the mapping is misleading
 
+- **Status:** DONE — 2026-06-06 · commit 4bd3a5d
 - **Category:** Error handling · **Priority:** P2 · **Risk:** Low · _(auditor: auth-session-flow)_
 - **Area:** src/main/services/auth/routes.ts:24
 - **Problem:** Line 24: `if (isErrorCode(error, 'AUTH_CANCELLED')) return LOGIN_ERROR_CODE.Unknown;`. The comment on lines 19-21 correctly notes the renderer's `cancelledRef` suppresses the cancel-error display. But the handler still turns the cancel into an `{ ok: false, error: 'UNKNOWN' }` result, and the comment says the renderer 'already suppresses' it. This is fragile: if `cancelledRef.current` is false at the moment the response arrives (e.g. the user clicked cancel then immediately clicked sign-in again), the error IS displayed — and the displayed text will be the generic 'Unknown error' copy, not 'Sign-in was cancelled'.
@@ -145,6 +146,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-11 — `absolutizeTextureUrl` in yggdrasilClient.ts works around a server misconfiguration that belongs in the yggdrasil-client package
 
+- **Status:** DEFERRED — 2026-06-06 · packages (yggdrasil-client/core) — needs a release + dist sync + lockfile refresh
 - **Category:** Dependency extraction · **Priority:** P2 · **Risk:** Medium · _(auditor: auth-session-flow)_
 - **Area:** src/main/services/auth/yggdrasilClient.ts:26-39
 - **Problem:** Lines 26-39: `absolutizeTextureUrl` detects relative URLs returned by `GET /api/yggdrasil/textures/:uuid` and absolutises them against `mainConfig.apiUrl`. The `YggdrasilClient.getTextures` call is supposed to return fully-qualified URLs per the Yggdrasil spec. The workaround is tied to `mainConfig` (a launcher-specific import) inside a module that is otherwise a pure wrapper around `YggdrasilClient`. This leaks launcher config awareness into a layer that should be config-agnostic.
@@ -210,6 +212,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-17 — Yggdrasil `verifySession` returns `'offline'` on any non-network, non-403 failure from `validate`, hiding server errors
 
+- **Status:** DONE — 2026-06-06 · commit 4bd3a5d
 - **Category:** Error handling · **Priority:** P2 · **Risk:** Medium · _(auditor: auth-session-flow)_
 - **Area:** src/main/services/auth/yggdrasilAuth.ts:87-91
 - **Problem:** Lines 87-91: the `catch` block after `client.validate` handles `isNetworkFailure` correctly but then has a `logger.warn` + `return { kind: 'offline' }` for all other errors. This means a 500 Internal Server Error, a malformed response, or a TLS handshake failure is treated as 'offline' (keep the cached session) rather than as 'unknown server error'. The comment says '`offline` keeps the cached copy' which is correct for genuine network partitions but wrong for server-side failures.
@@ -275,6 +278,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-23 — resolveLaunchAuth reads getStoredAuth() at call time — not injected, prevents pure unit-testing
 
+- **Status:** DONE — 2026-06-06 · commit 6df9168
 - **Category:** Testing · **Priority:** P2 · **Risk:** Low · _(auditor: testability)_
 - **Area:** src/main/services/minecraft/launch.ts:183-226
 - **Problem:** resolveLaunchAuth() (line 183) calls getStoredAuth() directly from the module scope. It is a private function called from runLaunch(). Any test of launch auth mapping must mock '@main/infra/store' globally (as tests/main/services/minecraft/launch.test.ts does via vi.mock). This is workable but inflexible — you cannot test the auth resolution logic in isolation without setting up the full launch fixture.
@@ -285,6 +289,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-24 — Extract `absolutizeTextureUrl` from yggdrasilClient.ts into yggdrasil-core or yggdrasil-client
 
+- **Status:** DEFERRED — 2026-06-06 · packages (yggdrasil-client/core) — needs a release + dist sync + lockfile refresh
 - **Category:** Dependency extraction · **Priority:** P2 · **Risk:** Medium · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/auth/yggdrasilClient.ts
 - **Problem:** Lines 26-30 define `absolutizeTextureUrl(url: string): string` which handles server-relative texture URLs by resolving them against `mainConfig.apiUrl`. The logic itself (is it http(s)? no → resolve) is generic URL normalisation that belongs in `yggdrasil-client` where `YggdrasilClient.getTextures` is defined, so callers do not need to know about this server quirk.
@@ -295,6 +300,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-25 — Replace `YGGDRASIL_PLACEHOLDER_CLIENT_ID` zero-GUID with a branded constant exported from yggdrasil-client
 
+- **Status:** DEFERRED — 2026-06-06 · packages (yggdrasil-client) — needs a release + dist sync + lockfile refresh
 - **Category:** Dependency extraction · **Priority:** P3 · **Risk:** Low · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/minecraft/launch.ts
 - **Problem:** Line 44 defines `YGGDRASIL_PLACEHOLDER_CLIENT_ID = asAzureClientId('00000000-0000-0000-0000-000000000000')`. The zero-GUID is a domain-level constant for the Yggdrasil launch path — a placeholder that satisfies the kit's `OnlineAuth.clientId` shape without pointing at a real Microsoft app. This constant is semantically part of the Yggdrasil-kit contract and belongs alongside `buildAuthlibInjectorJvmArg` in `yggdrasil-client`.
@@ -305,6 +311,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-26 — Remove JSDoc block on `withRefreshedProfile` in mojangAuth.ts — what-restating docstring
 
+- **Status:** DONE — 2026-06-06 (already resolved: JSDoc cleanup already done by prior auth refactor)
 - **Category:** Docs · **Priority:** P2 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/auth/mojangAuth.ts
 - **Problem:** Lines 71-75: `/** Apply a fresh kit-provided profile snapshot to the stored session. Mojang profile.* mutations already return the updated profile, so the caller passes it in instead of triggering another GET. */` — the function name `withRefreshedProfile` and its signature (session + profile → MojangSession) already communicate the full intent. The docstring adds nothing a reader cannot extract in three seconds.
@@ -315,6 +322,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-27 — Remove JSDoc blocks on `signInWithMojang`, `cancelMojangLogin`, `verifyMojangSession` inside `createMojangAuth` closure
 
+- **Status:** DONE — 2026-06-06 (already resolved: JSDoc cleanup already done by prior auth refactor)
 - **Category:** Docs · **Priority:** P2 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/auth/mojangAuth.ts
 - **Problem:** Lines 139-145, 176, 182-187: Three JSDoc blocks inside a closure describe what the function names already say (`signInWithMojang` — runs OAuth; `cancelMojangLogin` — aborts in-flight flow; `verifyMojangSession` — validates session). The 'one in-flight flow at a time' invariant is already captured by the inline comment on `activeController` at line 133. `/** Aborts the in-flight signInWithMojang flow, if any. Idempotent. */` is the canonical 'what-restating' anti-pattern.
@@ -325,6 +333,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-28 — Collapse JSDoc on `getYggdrasilClient` to a single why-comment or remove entirely
 
+- **Status:** DONE — 2026-06-06 (already resolved: JSDoc cleanup already done by prior auth refactor)
 - **Category:** Docs · **Priority:** P3 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/auth/yggdrasilClient.ts
 - **Problem:** Lines 6-12: `/** Shared singleton instance … Constructed lazily on first call … Reuse this everywhere so the authentication, skin upload, and profile-enrichment paths share the same fetch-side fixtures. */` — the function name and the `let cached` variable already show the lazy-singleton pattern. The note about 'share the same fetch-side fixtures' (for testability) is the only why; the rest restates the pattern.
@@ -335,6 +344,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-29 — Remove JSDoc on `fetchTextures` in yggdrasilClient.ts — wraps description of its name
 
+- **Status:** DONE — 2026-06-06 (already resolved: JSDoc cleanup already done by prior auth refactor)
 - **Category:** Docs · **Priority:** P3 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/auth/yggdrasilClient.ts
 - **Problem:** Lines 31-34: `/** Wrap YggdrasilClient.getTextures so callers always receive absolute URLs. See absolutizeTextureUrl. */` — the function body already shows the wrapping with `absolutizeTextureUrl`, and the cross-reference adds nothing. The inline comment at lines 20-25 above `absolutizeTextureUrl` already explains the why (relative URLs from server config).
@@ -345,6 +355,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-30 — Remove JSDoc on `enrichYggdrasilAccount` in verify.ts — bulk of it is what-restating
 
+- **Status:** DONE — 2026-06-06 (already resolved: JSDoc cleanup already done by prior auth refactor)
 - **Category:** Docs · **Priority:** P2 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/auth/verify.ts
 - **Problem:** Lines 11-19: the JSDoc block contains genuine 'why' content (the skins-registry → yggdrasil-plugin migration context, and why `email` is null). However the opening sentence 'Best-effort enrichment of a Yggdrasil-backed Account with skin and cape URLs' restates the function name. The migration context and the email=null reason ARE worth keeping — they are the canonical platform-quirk explanation.
@@ -355,6 +366,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### AUTH-31 — Remove verifySession block-comment in verify.ts — partially a caller-reference
 
+- **Status:** DONE — 2026-06-06 (already resolved: JSDoc cleanup already done by prior auth refactor)
 - **Category:** Docs · **Priority:** P2 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/auth/verify.ts
 - **Problem:** Lines 37-43: `// Provider-agnostic session check. Returns the active account on success, null if no session is stored or the server invalidated it, and the cached account if the network is unavailable (offline fallback). Each provider's verify helper distinguishes 'definitely expired' (403/401-equivalent) from 'couldn't reach the server' — only the former clears the stored session.` The first sentence restates the function signature and name. The second sentence about 'definitely expired vs. couldn't reach server' is a genuine architectural invariant.
@@ -378,6 +390,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-02 — MinecraftManager.startInstall has a double-release risk on the write lock when runInstall is fire-and-forget
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Low · _(auditor: arch-boundaries)_
 - **Area:** src/main/services/minecraft/manager.ts:127-151
 - **Problem:** In `startInstall`, when `runInstall` succeeds and the optional `launchHook` also succeeds, `lock.release()` is called in the `.then()` callback (line 130). But if `runInstall` throws, the `.catch()` at line 144 calls nothing — only the `.finally()` at line 148 calls `lock.release()`. However if `runInstall` succeeds AND `.then()` calls `lock.release()` but the `launchHook` also throws, the `.finally()` at line 148 calls `lock.release()` again. `ClientOperationLease.release` is idempotent (has a `released` guard), so this is not a crash, but the `.then()` release at line 130 is redundant and confusing — it was likely written when the `launchHook` path was not yet present.
@@ -388,6 +401,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-03 — BundleManager.activeLocks map is not cleaned up when sync pauses mid-flight — lock held indefinitely on long pauses
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Error handling · **Priority:** P1 · **Risk:** High · _(auditor: arch-boundaries)_
 - **Area:** src/main/services/bundle/manager.ts:372-378 (dropActiveSync), 319 (finally clause)
 - **Problem:** `dropActiveSync` releases the lock and removes it from `activeLocks`. The `finally` of `executePreparedSync` calls `dropActiveSync` only when `!task.paused || task.cancelled`. When the task is paused (and not cancelled), `dropActiveSync` is NOT called, so the lock entry in `activeLocks` is retained — correct. However if the pause idle timer fires and calls `expirePausedSync`, it calls `dropActiveSync` directly. If for any reason `dropActiveSync` is called and the lock was already released (e.g. by a concurrent `cancelSync`), `lock.release()` is called twice (it is idempotent). The real risk is subtler: `resumeSync` → `continuePausedSync` → `executePreparedSync` → finally on cancel/complete calls `dropActiveSync`, but `activeLocks` may already have been cleared by `expirePausedSync` called from the timer, leaving the `activeLocks.get(slug)` returning `undefined` and the lock never being released via the second code path — the lock object is simply unreachable.
@@ -398,6 +412,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-04 — getClient() is called inside BundleManager.tryGetClient() and minecraft/bundleHealing.ts — cross-service coupling through direct function import, not through a passed dependency
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Medium · _(auditor: arch-boundaries)_
 - **Area:** src/main/services/bundle/manager.ts:346-350 (tryGetClient imports getClient from clients), src/main/services/minecraft/bundleHealing.ts:11 (imports buildContext which imports getClient)
 - **Problem:** `BundleManager` imports `getClient` from `@main/services/clients` (line 9) and calls it in `tryGetClient`. `bundleHealing.ts` imports `buildContext` (which in turn imports `getClient` + `getSettings`). The guideline permits cross-service direct imports, but doing so inside manager/business-logic classes makes these classes impossible to unit-test without mocking out the entire clients cache layer. There is no consistent pattern: `MinecraftManager` receives its dependencies through `ManagerEnv`, while `BundleManager` reaches directly into `@main/services/clients`.
@@ -419,6 +434,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-06 — Bundle download uses raw Node http/https modules instead of the shared FetchHttpClient from minecraft-kit
 
+- **Status:** DEFERRED — 2026-06-06 · packages (minecraft-kit) — needs a release + dist sync + lockfile refresh
 - **Category:** Dependency extraction · **Priority:** P2 · **Risk:** Medium · _(auditor: arch-boundaries)_
 - **Area:** src/main/services/bundle/download.ts:4-8, 31-89
 - **Problem:** `download.ts` implements its own HTTP client using `node:http` and `node:https` modules directly with manual redirect following, timeout handling, abort-signal wiring, and `currentRequests` tracking for synchronous cancellation. `@loontail/minecraft-kit` already exports `FetchHttpClient` — however the kit's client may not expose the streaming + synchronous-cancellation pattern needed for bundle downloads. The bundle downloader is a substantial reimplementation (~200 lines) of HTTP behaviour.
@@ -429,6 +445,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-07 — installManifest.ts duplicates package.json version reading via createRequire — fragile and not covered by kit's version tracking
 
+- **Status:** DONE — 2026-06-06 · commit bc3ae9e
 - **Category:** Dependency extraction · **Priority:** P3 · **Risk:** Low · _(auditor: arch-boundaries)_
 - **Area:** src/main/services/minecraft/installManifest.ts:13,45-46
 - **Problem:** `createRequire(import.meta.url)` is used at line 13 to `require('@loontail/minecraft-kit/package.json')` at line 45, then the version string is parsed manually. This bypasses the kit's own version constant. If the kit ever exposes a `MINECRAFT_KIT_VERSION` constant or a `kitVersion` export, this pattern becomes redundant. Additionally, `createRequire` in an ES module context is non-standard and may break under some bundler configurations.
@@ -472,6 +489,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-11 — UP_TO_DATE path persists local manifest with an empty-object remoteManifest
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Medium · _(auditor: download-install-flow)_
 - **Area:** src/main/services/bundle/manager.ts, src/main/services/bundle/syncState.ts
 - **Problem:** When totalFiles === 0 (line 280), executePreparedSync calls completePreparedSync with status UP_TO_DATE (line 281). completePreparedSync always calls persistLocalManifest (line 326). persistLocalManifest calls flattenRemote(active.remoteManifest) (line 332). active.remoteManifest is initialised to {} (syncState.ts line 53) and is only populated inside the loadRemoteManifest closure (manager.ts line 239). If the UP_TO_DATE branch is hit (zero files to process) but loadRemoteManifest populated the remote manifest correctly, the save is fine. However, if totalFiles === 0 because the plan found zero entries (all skipped), the remote manifest IS populated. The problem occurs only in a future regression where the UP_TO_DATE branch is reached before loadRemoteManifest runs — but the code currently allows that because remoteManifest starts empty and is assigned inside loadRemoteManifest which is awaited at line 269, just before the check. Currently safe, but the dependency is implicit and fragile.
@@ -482,6 +500,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-12 — resolveClientFolder returns an empty string on missing settings instead of throwing — defensive guard inconsistently applied
 
+- **Status:** DONE — 2026-06-06 · commit 07bf5d8 (null-part by CC-21)
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Medium · _(auditor: download-install-flow)_
 - **Area:** src/main/services/bundle/manager.ts
 - **Problem:** resolveClientFolder (line 354-357) returns an empty string when the settings have no clientFolder configured. Callers must null-check the result: runSync does (line 219-224), getInstallState does (line 182-183), and resetForUninstall does (line 455). But if a future callsite forgets the guard, an empty string is passed to resolveSafeEntryPath which will resolve paths relative to the process CWD — a path-traversal risk outside the intended client folder.
@@ -503,6 +522,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-14 — The bundle download layer re-implements HTTP streaming with node:http/https instead of reusing minecraft-kit's FetchHttpClient
 
+- **Status:** DEFERRED — 2026-06-06 · packages (minecraft-kit) — needs a release + dist sync + lockfile refresh
 - **Category:** Dependency extraction · **Priority:** P2 · **Risk:** Medium · _(auditor: download-install-flow)_
 - **Area:** src/main/services/bundle/download.ts
 - **Problem:** download.ts (lines 31-89) implements its own HTTP request pipeline using node:http and node:https directly: it builds transport from the URL scheme, manages a `currentRequests` set for abort/socket-destroy, follows redirects manually (followRedirects, lines 93-109), and handles timeouts via req.on('timeout'). minecraft-kit exports FetchHttpClient — a fetch-based HTTP abstraction already used throughout the main process. The bundle download uses none of it.
@@ -513,6 +533,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-15 — downloadEntry does not pipe the response into the write stream atomically — integrity hash is computed from response chunks but writeStream may receive corrupted data on Windows path issues
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Medium · _(auditor: download-install-flow)_
 - **Area:** src/main/services/bundle/download.ts
 - **Problem:** In downloadEntry (lines 132-193), the response is piped to writeStream (line 177) and the SHA-256 hash is computed in the response 'data' event (line 144). The 'finish' event on writeStream triggers the hash check (line 149). However, the 'data' event and the writeStream may advance independently: response.pipe() transfers data to the write stream, but if the write stream buffers and node flushes asynchronously, the 'finish' event fires only after all writes are flushed. This is safe for a well-behaved stream. However, if writeStream emits 'error' after 'finish' has already settled (possible on Windows when the OS defers flush errors), the settled flag prevents the reject call, and the rename step proceeds with a potentially incomplete file. The fail() guard at line 136 (settled check) protects against double-settle, but does not protect against a post-finish write error.
@@ -523,6 +544,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-16 — pauseSync sets task.abort.abort() before task.paused is checked by runDownloadWorker — race window between pause signal and worker exit
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Flow · **Priority:** P1 · **Risk:** Medium · _(auditor: download-install-flow)_
 - **Area:** src/main/services/bundle/manager.ts, src/main/services/bundle/runner.ts
 - **Problem:** pauseSync (manager.ts line 111-120) sets task.paused = true (line 115) and then calls task.abort.abort() (line 118). runDownloadWorker checks !task.paused at the top of its while loop (runner.ts line 91). The abort signal causes the current download to reject with BundleError(ABORTED). The catch in runDownloadPhase (line 120-124) checks !firstError and then clears pendingDownloads (line 123). BUT: the error is rethrown (line 128-136) up to executePreparedSync's catch. In executePreparedSync catch (manager.ts line 306), the code checks task.paused (line 312) — if task.paused is true and the code is BundleError(ABORTED), it silently returns. This seems correct. However, if multiple workers are running (concurrency=16) and one worker drains pendingDownloads (line 123) while other workers haven't checked task.paused yet, they will see an empty queue (entry = undefined at shift, line 93) and exit normally. The firstError from the aborting worker is still stored, and the phase throws. The result is correct but the interaction relies on the JS event loop order — if the abort fires between the while-condition check and the entry.shift, it could be missed in a future refactor.
@@ -533,6 +555,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-17 — getInstallState makes a network request on every call — UI query may flood the manifest endpoint
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Performance · **Priority:** P2 · **Risk:** Medium · _(auditor: download-install-flow)_
 - **Area:** src/main/services/bundle/manager.ts
 - **Problem:** getInstallState (lines 167-199) calls fetchRemoteManifest (line 193) on every invocation to check for drift. The renderer calls this via bundleCheckStatus on every useBundleStatus mount (hooks.ts line 53). With MAX_STATUS_SEED_CONCURRENCY=3, up to three concurrent manifest fetches are allowed. But if the user opens a client list with 5+ clients, or if the component remounts frequently, this produces multiple uncached GET requests to the Strapi manifest endpoint.
@@ -543,6 +566,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-18 — buildPlan makes sequential disk I/O (exists + hashFile) in a for loop — O(n) sequential awaits for large manifests
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Performance · **Priority:** P2 · **Risk:** Medium · _(auditor: download-install-flow)_
 - **Area:** src/main/services/bundle/plan.ts
 - **Problem:** buildPlan (lines 57-155) iterates remoteEntries in a single for...of loop with sequential await calls to exists() (line 102, 107, 112) and hashFile() (line 121). For a bundle with 500 files, this is 500+ serial I/O operations. Each hashFile streams the file and computes SHA-256 serially.
@@ -553,6 +577,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-19 — saveLocalManifest rename is not atomic on Windows when target already exists — intermediate state visible to concurrent readers
 
+- **Status:** DONE — 2026-06-06 · commit bc3ae9e + 07bf5d8 (installManifest + manifestRepo halves)
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Medium · _(auditor: download-install-flow)_
 - **Area:** src/main/services/bundle/manifestRepo.ts
 - **Problem:** saveLocalManifest (lines 34-44) writes to a .tmp file and then renames it (line 43). On Windows, fs.rename when the destination exists throws EPERM if another process holds the file. The comment in download.ts (line 196) documents this pattern and suggests doing rm then rename. manifestRepo.ts does not do the rm step — it calls fs.rename directly (line 43) without first removing the existing manifest. On Windows, if the main process reads the manifest concurrently (loadLocalManifest during a checkStatus call), the file handle may block the rename and throw EPERM, losing the manifest write silently (the catch in persistLocalManifest in manager.ts line 340 only warns).
@@ -563,6 +588,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-20 — AbortController is recreated on resume (resetTaskForResume) but the old controller's listeners are not cleaned up
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Error handling · **Priority:** P2 · **Risk:** Low · _(auditor: download-install-flow)_
 - **Area:** src/main/services/bundle/syncState.ts, src/main/services/bundle/download.ts
 - **Problem:** resetTaskForResume (syncState.ts line 60-70) assigns task.abort = new AbortController() (line 63). The old AbortController is discarded. However, download.ts registers an 'abort' event listener on the old signal (line 86): options.signal.addEventListener('abort', onAbort, { once: true }). If this listener is still registered on the old signal when the controller is replaced, the old signal is unreachable — but the onAbort closure holds a reference to req (the ClientRequest), preventing GC until the old signal is eventually collected. On a long session with many pause/resume cycles, this accumulates.
@@ -606,6 +632,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-24 — download.ts implements its own HTTP client (http/https.request, redirect following, timeout) duplicating minecraft-kit's FetchHttpClient capability
 
+- **Status:** DEFERRED — 2026-06-06 · packages (minecraft-kit) — needs a release + dist sync + lockfile refresh
 - **Category:** Dependency extraction · **Priority:** P2 · **Risk:** Medium · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/bundle/download.ts (lines 31-109)
 - **Problem:** The bundle download subsystem maintains its own low-level HTTP client: raw http/https.request calls, manual redirect following (followRedirects, BUNDLE_DOWNLOAD_MAX_REDIRECTS), manual timeout handling, and manual socket destruction for cancellation (currentRequests Set). minecraft-kit exports FetchHttpClient which wraps the Fetch API with redirect, retry, and signal support. The launcher also has @main/infra/http (httpRequest) for API calls.
@@ -627,6 +654,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-26 — runSyncPhases in bundle/runner.ts drains pendingDownloads queue in a mutable imperative loop with no structured concurrency; firstError swallowing hides multiple concurrent failures
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Code · **Priority:** P2 · **Risk:** Medium · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/bundle/runner.ts (lines 110-138)
 - **Problem:** runDownloadPhase spawns N workers via a for loop and passes a shared firstError variable. Each worker catches and stores the first error, then sets pendingDownloads.length = 0 to signal other workers. Only firstError is re-thrown; all subsequent errors are silently swallowed (lines 118-124). If two workers fail simultaneously with different errors (e.g. one INTEGRITY, one NETWORK), only one code reaches the error classifier — the other is lost.
@@ -670,6 +698,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-30 — Fix `resolveClientFolder` returning empty string `''` instead of `null` for missing folder
 
+- **Status:** DONE — 2026-06-06 · commit 07bf5d8 (null-part by CC-21)
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/bundle/manager.ts (L354-357)
 - **Problem:** `resolveClientFolder` (L354-357) returns `resolved.storage.clientFolder || ''`. The caller at L181 guards with `if (!clientFolder)` (falsy check) and at L355 uses `if (!clientFolder) return;`. However `resolveClientInstallPresence` in readinessPolicy.ts (L21) explicitly uses `=== null` after returning `null` for the same conceptual absence. The return type is inferred as `string`, hiding the nullable intent.
@@ -702,6 +731,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-33 — BundleManager.runSync double-checks OP_IN_FLIGHT at two levels (activeSyncs + operationLocks) with different error messages
 
+- **Status:** DONE — 2026-06-06 · commit 07bf5d8 (done-by-DLI-50)
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/bundle/manager.ts (L202-208, L365-369)
 - **Problem:** `runSync` first checks `this.activeSyncs.has(slug)` (L202) and throws with message 'A bundle sync is already running for this client'. Then `acquireWriteLock` (L226) also throws if the resource is locked (L366-369) with message 'Another operation is already running for this client'. Both throw `BundleError(BundleErrorCodes.OP_IN_FLIGHT, ...)`. The first check is redundant — the lock already encodes the mutual exclusion.
@@ -712,6 +742,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-34 — BundleManager.resolveClientFolder should not call getSettings() on every invocation — settings should be injected
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Medium · _(auditor: code-quality)_
 - **Area:** src/main/services/bundle/manager.ts (L354-357)
 - **Problem:** `resolveClientFolder` calls `getSettings()` (a module-level singleton accessor) and `resolveClientSettings()` each time it is invoked. `BundleManager` is constructed without access to the settings service — it reaches into the module singleton directly. This breaks dependency-injection discipline and makes the class hard to unit-test without mocking the module singleton.
@@ -722,6 +753,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-35 — BundleManager.startInstall post-install bundle sync: lock.release() called in both .then() and .finally() — double release risk
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Medium · _(auditor: code-quality)_
 - **Area:** src/main/services/minecraft/manager.ts (L127-150)
 - **Problem:** In `MinecraftManager.startInstall` (L127-150) the operation chain calls `lock.release()` inside the `.then()` block (L128) and again inside `.finally()` (L149). `ClientOperationLease.release` is idempotent (`if (released) return`) so there is no crash, but the release in `.then()` was intentional (to unblock the bundle sync while the lock is still logically held); the `.finally()` call then releases an already-released lease. Worse, if the `launchHook` inside `.then()` throws, the `.catch(() => {})` block suppresses the error AND the `.finally()` runs, releasing the lock again — so the lock is released while the hook may still be mid-execution.
@@ -776,6 +808,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-40 — BundleManager.tryGetClient silently returns null for any error — masks UNKNOWN failures
 
+- **Status:** DONE — 2026-06-06 · commit 158deb9
 - **Category:** Error handling · **Priority:** P2 · **Risk:** Medium · _(auditor: error-logging-model)_
 - **Area:** src/main/services/bundle/manager.ts lines 346-351
 - **Problem:** tryGetClient (lines 346-351) catches all errors and returns null. runSync (line 209) then throws BundleError(UNKNOWN, 'Client not found') when tryGetClient returns null. But UNKNOWN could also hide a network failure (getClient fetches from Strapi), a settings corruption, or an ENOENT. The thrown UNKNOWN BundleError collapses all these into a single undifferentiated code.
@@ -786,6 +819,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-41 — BundleManager.executePreparedSync logs bundle errors only at error level — ABORTED should be warn
 
+- **Status:** DONE — 2026-06-06 · commit 158deb9
 - **Category:** Error handling · **Priority:** P2 · **Risk:** Low · _(auditor: error-logging-model)_
 - **Area:** src/main/services/bundle/manager.ts lines 305-320
 - **Problem:** executePreparedSync's catch block (line 305-320) calls emitError then emitStatus(ERROR) for non-aborted failures. Cancellation and pause cases are handled separately without logging. However, there is no logger.warn/error call for non-aborted bundle errors in this path — the error is emitted to the renderer but never logged in the main-process file. Bundle download failures (DOWNLOAD_FAILED, HEAL_FAILED) would be invisible in the launcher log unless they surface through the router.
@@ -796,6 +830,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-42 — startInstall acquires the write lock but does not hold it across the beginInstall op.set — race window
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Medium · _(auditor: error-logging-model)_
 - **Area:** src/main/services/minecraft/manager.ts lines 115-151
 - **Problem:** startInstall calls requireIdle (line 116) and acquireWriteLock (line 117) before buildContext. However, ops.set(slug, op) happens inside beginInstall called on line 122, after buildContext resolves. Between acquireWriteLock and ops.set, the ops map is empty even though the lock is held. If another path inspects ops.get(slug) during this window (e.g. getStatus called from renderer polling), it will see no in-flight op and return resolveClientInstallPresence rather than the INSTALLING status.
@@ -806,6 +841,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-43 — resumeSync silently spawns a fresh sync when no active sync is found — no error surfaced to caller
 
+- **Status:** DONE — 2026-06-06 · commit 158deb9
 - **Category:** Error handling · **Priority:** P2 · **Risk:** Medium · _(auditor: error-logging-model)_
 - **Area:** src/main/services/bundle/manager.ts lines 123-130
 - **Problem:** resumeSync (lines 123-130) checks for an active sync; if none is found it spawns a fresh startSync and swallows any failure with logger.warn. The IPC handler (bundle.resume route) calls manager.resumeSync() synchronously and returns void — if the fresh sync throws (e.g. NO_CLIENT_FOLDER), the error is only logged at warn, the renderer receives no rejection, and the UI cannot show an error state.
@@ -816,6 +852,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-44 — saveTargetInstallManifest writes .tmp without a try/finally — stale .tmp left on error
 
+- **Status:** DONE — 2026-06-06 · commit bc3ae9e + 07bf5d8 (installManifest + manifestRepo halves)
 - **Category:** Error handling · **Priority:** P2 · **Risk:** Low · _(auditor: error-logging-model)_
 - **Area:** src/main/services/minecraft/installManifest.ts lines 110-119
 - **Problem:** saveTargetInstallManifest (lines 110-119) writes to a .tmp file then renames it atomically. However, if fs.rename fails (Windows file-lock from antivirus, ENOSPC, etc.) the .tmp file is not removed. Unlike downloadEntry which has a .catch cleanup for the tmp file (download.ts line 178-184), installManifest has no cleanup path.
@@ -826,6 +863,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-45 — Split PlayButton multi-case render into focused sub-components
 
+- **Status:** DONE — 2026-06-06 · commit dd6d28f
 - **Category:** UI · **Priority:** P1 · **Risk:** Medium · _(auditor: renderer-ui)_
 - **Area:** src/renderer/features/clients/components/PlayButton.tsx:123-343
 - **Problem:** PlayButton.tsx is 343 lines with a single component function returning JSX from 11 branches (PROGRESS, BUNDLE_ERROR, BUNDLE_UPDATE, then an 8-case switch). Each branch mixes JSX layout with inline logic. The component consumes 9 props from 5 hooks. The guideline says split past ~200 lines or ~8 props.
@@ -847,6 +885,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-47 — Sequential per-file I/O in buildPlan stalls bundle planning for large manifests
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Performance · **Priority:** P1 · **Risk:** Low · _(auditor: state-async-perf)_
 - **Area:** src/main/services/bundle/plan.ts
 - **Problem:** buildPlan (line 57+) iterates remoteEntries in a for-of loop and awaits exists() and hashFile() one at a time. For a bundle with 500 files the planner performs 500+ sequential fs.access / stream-hash calls with no concurrency. A force-mode repair of a large bundle can block the planning step for many seconds before the download phase begins, stalling the PLANNING status indefinitely from the user's view.
@@ -868,6 +907,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-49 — buildPlan sequential exists() calls use fs.access for presence check — replace with stat to avoid double syscall in hash path
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Performance · **Priority:** P2 · **Risk:** Low · _(auditor: state-async-perf)_
 - **Area:** src/main/services/bundle/plan.ts
 - **Problem:** The exists() helper (line 45) calls fs.access(), then for disk-hash verification hashFile() opens a read-stream on the same path (line 122). For every file in the 'unknown on disk' branch, the code does: access() → read-stream open — two distinct syscalls to the same inode. Additionally hashFile() (line 37) uses createReadStream with no highWaterMark, which defaults to 64 KB chunks; for files larger than several MB this creates many micro-callbacks.
@@ -878,6 +918,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-50 — BundleManager.runSync has a TOCTOU gap between activeSyncs.has() check and activeSyncs.set()
 
+- **Status:** DONE — 2026-06-06 · commit 07bf5d8
 - **Category:** Code · **Priority:** P1 · **Risk:** Medium · _(auditor: state-async-perf)_
 - **Area:** src/main/services/bundle/manager.ts
 - **Problem:** runSync (line 201) checks this.activeSyncs.has(slug) at line 203 and then calls acquireWriteLock at line 226, but between those two lines there are async awaits: tryGetClient (line 209) and resolveClientFolder (line 219) read settings synchronously but getClient is awaited. A concurrent call that completes its own lock before this one's lock check is a race; however the more real risk is that activeSyncs.set() happens at line 231 only AFTER both the lock is acquired and the task and active objects are created. If acquireWriteLock() at line 226 throws (blocked), the code correctly does not add to activeSyncs. But the comment at line 203 says 'if activeSyncs.has' — yet the real guard against concurrent syncs is the ClientOperationLocks, not activeSyncs. The activeSyncs check is therefore a redundant, potentially stale guard that could give a misleading OP_IN_FLIGHT error if a previous sync's dropActiveSync runs between the two maps being consistent.
@@ -888,6 +929,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-51 — pauseSync does not guard against pausing an already-paused sync, armPauseIdleTimer can be called twice
 
+- **Status:** DONE — 2026-06-06 · commit 07bf5d8
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: state-async-perf)_
 - **Area:** src/main/services/bundle/manager.ts
 - **Problem:** pauseSync (line 111) checks active.task.cancelled but not active.task.paused. A caller that invokes pauseSync twice will call abort.abort() on an already-aborted controller (harmless but wasteful), call emitStatus PAUSED twice (renderer gets duplicate events), and call armPauseIdleTimer twice (line 119 → 404), which calls clearPauseIdleTimer then sets a new timer — clearing the previous timer and starting a fresh idle countdown, effectively resetting the expiry window with each duplicate pause call.
@@ -898,6 +940,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-52 — expirePausedSync resets pauseIdleTimer to null before calling dropActiveSync, creating brief inconsistency
 
+- **Status:** DONE — 2026-06-06 · commit 07bf5d8
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: state-async-perf)_
 - **Area:** src/main/services/bundle/manager.ts
 - **Problem:** expirePausedSync (line 421) sets active.pauseIdleTimer = null (line 424) then calls dropActiveSync (line 429). Between those two lines the active object still exists in activeSyncs but has a null timer. If another concurrent expiry callback somehow fired (impossible with a single timer, but defensively) the guard `if (!active || !active.task.paused) return` would not catch it. More concretely, the manual null assignment is redundant because dropActiveSync removes the entry from activeSyncs anyway.
@@ -908,6 +951,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-53 — getInstallState in BundleManager fetches remote manifest on every call, blocking the UI on network
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Performance · **Priority:** P1 · **Risk:** Medium · _(auditor: state-async-perf)_
 - **Area:** src/main/services/bundle/manager.ts
 - **Problem:** getInstallState (line 167) is called from the IPC handler to seed the renderer's bundle state on mount. When a local manifest exists (line 185), the method always calls fetchRemoteManifest (line 193) to compare hashes, even when a sync just completed moments ago. This is a blocking network call on every renderer mount/refresh that has no cache — if the CDN is slow or the network is flaky, the UI freezes waiting for a manifest hash comparison that could be skipped.
@@ -918,6 +962,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-54 — SyncTask mutable plain-object state shared across async worker functions is not protected against mid-run plan reassignment
 
+- **Status:** DONE — 2026-06-06 · commit 158deb9
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Medium · _(auditor: state-async-perf)_
 - **Area:** src/main/services/bundle/runner.ts, src/main/services/bundle/syncState.ts
 - **Problem:** SyncTask (runner.ts line 26) is a plain mutable object. pendingDownloads and pendingDeletes are arrays shared between runDownloadWorker goroutines (via .shift()) and the cancel path (runner.ts line 123: `task.pendingDownloads.length = 0`). Additionally, resetTaskForResume in syncState.ts (line 60) mutates the task in-place including reassigning task.abort (line 63) while a worker may still be alive reading task.abort.signal in its inner await. Although in practice resume only runs after pause completes, the fact that the abort controller reference is reassigned on the same object that workers close over means a timing issue is possible if the pause signal propagation is asynchronous.
@@ -928,6 +973,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-55 — cancelAll in BundleManager uses a fixed sleep grace period instead of awaiting actual cleanup
 
+- **Status:** DONE — 2026-06-06 · commit 158deb9
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: state-async-perf)_
 - **Area:** src/main/services/bundle/manager.ts
 - **Problem:** cancelAll (line 443) calls cancelSync for each slug and then waits `graceMs` (default 250ms) with a raw setTimeout promise (line 447). This is a blind sleep: if cleanup takes longer than 250ms (e.g. slow disk on a manifest write), work is truncated. If cleanup takes 10ms, the 250ms is wasted. The comment says 'wait a short grace window so runner's finally blocks can land'.
@@ -938,6 +984,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-56 — persistLocalManifest in BundleManager: saveLocalManifest failure after a successful sync swallows the error but does NOT preserve the installed status already emitted
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Medium · _(auditor: state-async-perf)_
 - **Area:** src/main/services/bundle/manager.ts
 - **Problem:** completePreparedSync (line 325) calls persistLocalManifest (line 326) before emitting status (line 327). persistLocalManifest (line 331) wraps saveLocalManifest in a try/catch that only logs a warn. The status emission at line 327 (COMPLETED/UP_TO_DATE) then fires after the failed manifest write. On the next launch, getInstallState reads the local manifest (line 185) — which was not written — and returns {installed: false, signatureMatches: false}, forcing a full re-sync even though the files are correct on disk. The guideline explicitly says: 'Do NOT demote a successful op to failed on trailing bookkeeping failure'.
@@ -948,6 +995,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-57 — startInstall fire-and-forget void chain doesn't acquire the lock before the background operation completes
 
+- **Status:** DONE — 2026-06-06 (already resolved: downgraded non-bug)
 - **Category:** Architecture · **Priority:** P1 · **Risk:** Medium · _(auditor: state-async-perf)_
 - **Area:** src/main/services/minecraft/manager.ts
 - **Problem:** startInstall (line 115) acquires a lock, begins the install op synchronously, then fires runInstall as a void promise. The lock is held across the async runInstall execution (correct). However beginInstall (install.ts line 21) sets ops.set(slug, op) synchronously but the lock is only set with setCancel AFTER beginInstall returns (line 123: `lock.setCancel(...)`). Between the ops.set and the lock.setCancel there is a synchronous gap where the lock's cancel callback is null. If cancelAll() is called in that exact window, the lock entry has cancel: null and the running install will not receive an abort signal from cancelAll.
@@ -958,6 +1006,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-58 — runDownloadWorker catches errors and drains the queue, but does not abort the task's AbortController — sibling workers continue one more file
 
+- **Status:** DONE — 2026-06-06 · commit 158deb9
 - **Category:** Error handling · **Priority:** P2 · **Risk:** Low · _(auditor: state-async-perf)_
 - **Area:** src/main/services/bundle/runner.ts
 - **Problem:** In runDownloadPhase (line 110), when a worker throws, the catch block (line 121) sets firstError and truncates pendingDownloads to length 0. This causes other workers to exit on their next loop iteration (they .shift() undefined and return). However between the error and the next iteration, a sibling worker may have already called .shift() and begun downloading a new file. That download runs to completion (or timeout) before the phase finishes, wasting bandwidth and holding up Promise.all unnecessarily. task.abort.abort() is NOT called in the catch block.
@@ -979,6 +1028,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-60 — runSyncPhases post-pause check is duplicated with redundant early-return pattern
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: state-async-perf)_
 - **Area:** src/main/services/bundle/runner.ts
 - **Problem:** runSyncPhases (line 212) checks `if (task.cancelled || task.paused)` twice: once after runDownloadPhase (line 214) and once after runDeletePhase (line 220). The second check's cancel branch throws, but the paused branch at line 221 returns the deleteResult even though delete was interrupted — this means a partial delete result is returned as if successful. The caller in executePreparedSync (manager.ts line 286) checks task.paused after runSyncPhases returns and short-circuits, so the partial result is ignored, but this creates a misleading return value.
@@ -989,6 +1039,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-61 — LocalManifest validation in manifestRepo.ts uses manual typeof checks instead of a Zod schema
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Code · **Priority:** P1 · **Risk:** Medium · _(auditor: testability)_
 - **Area:** src/main/services/bundle/manifestRepo.ts:14-25, src/shared/contracts/bundle.ts
 - **Problem:** loadLocalManifest() validates the parsed JSON with four manual typeof checks (lines 17-21). There is no Zod schema for LocalManifest in shared/contracts/bundle.ts (the type is a plain TypeScript interface). This allows partial objects with malformed files map keys or wrong-typed LocalManifestFile entries to pass validation silently.
@@ -999,6 +1050,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-62 — BundleManager.executePreparedSync does not call finally{dropActiveSync} when paused mid-heal
 
+- **Status:** DEFERRED — 2026-06-06 · needs-design (paused-mid-heal awaiter — session-8 note still stands)
 - **Category:** Error handling · **Priority:** P1 · **Risk:** High · _(auditor: testability)_
 - **Area:** src/main/services/bundle/manager.ts:259-323
 - **Problem:** In executePreparedSync (lines 259-323), the finally block (lines 318-321) only calls dropActiveSync when !task.paused || task.cancelled. When the sync is paused inside the heal phase (lines 290-303), the code returns early from the try block at line 302 (if task.paused return) without reaching the finally that would clean up. However, unlike the pause-inside-download path where the runner exits after pause, the heal phase (verifyAndRepairExceptBundle) is not pause-aware — it runs to completion or throws. If the heal is aborted via the signal, it throws, the catch at line 305 evaluates code===ABORTED&&task.paused (line 311), and returns without calling rejectAwaiters for awaiting launch callers. The awaiter from createAwaiter (line 229) is never resolved or rejected in this code path, permanently hanging syncForLaunch.
@@ -1020,6 +1072,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-64 — No workflow/integration tests for full install→launch pipeline (MinecraftManager.startInstall followed by startLaunch)
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Testing · **Priority:** P2 · **Risk:** Medium · _(auditor: testability)_
 - **Area:** src/main/services/minecraft/manager.ts, tests/main/services/minecraft/managerReadinessIntegration.test.ts
 - **Problem:** managerReadinessIntegration.test.ts tests readiness transitions but mocks both runInstall and runLaunch. There is no test that exercises the install→INSTALLED status→launchHook→launch chain from startInstall, verifying that the bundle hook is awaited before launch proceeds, and that a bundle hook failure keeps the client INSTALLED (lines 135-143 of manager.ts).
@@ -1030,6 +1083,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-65 — buildPlan's force-mode re-hashing touches the filesystem inside an otherwise pure-ish function — no explicit test for the no-local-record-but-file-exists branch
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Testing · **Priority:** P2 · **Risk:** Low · _(auditor: testability)_
 - **Area:** src/main/services/bundle/plan.ts:100-130
 - **Problem:** The 'no local manifest record but file exists on disk → fall through to disk hash' branch (lines 106-116) is not covered by tests/main/services/bundle/plan.test.ts. This branch is entered when a file appears in the remote manifest, is NOT in the local manifest, but physically exists on disk — an edge case when a file is added to the bundle manifest after an incomplete prior sync.
@@ -1040,6 +1094,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-66 — download.ts uses raw http/https Node modules with no injection point — untestable without real network or mocking Node internals
 
+- **Status:** DEFERRED — 2026-06-06 · packages (minecraft-kit) — needs a release + dist sync + lockfile refresh
 - **Category:** Testing · **Priority:** P2 · **Risk:** Low · _(auditor: testability)_
 - **Area:** src/main/services/bundle/download.ts:31-89
 - **Problem:** requestOnce() (line 31) directly calls https.request() / http.request() from Node core. The existing tests/main/services/bundle/download.test.ts must set up real HTTP servers to test the download path. While this is thorough integration testing, it makes fast unit testing of edge cases (redirect loop, timeout, SHA mismatch, abort-during-stream) expensive.
@@ -1050,6 +1105,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-67 — Consolidate `isAnythingInstalled` usage: prefer the durable install manifest as the primary probe
 
+- **Status:** DONE — 2026-06-06 · commit bc3ae9e
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Low · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/minecraft/runtimeState.ts, install.ts, repairWorkflow.ts, readinessPolicy.ts, uninstall.ts
 - **Problem:** `isAnythingInstalled` (runtimeState.ts lines 9-29) is a fragile heuristic: it walks `versions/*/name.json` on disk. It is called in four separate places (install.ts:47, repairWorkflow.ts:60, readinessPolicy.ts:25, uninstall.ts:48) as a fallback/gate. The durable install manifest (`installManifest.ts`) already gives a stronger, launcher-attributed signal that an install exists and matches the current target.
@@ -1060,6 +1116,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-68 — Stop shadowing `ProgressStages` from minecraft-kit with a local `ProgressStages` enum in shared/contracts
 
+- **Status:** DEFERRED — 2026-06-06 · needs-design (progress-enum import boundary)
 - **Category:** Dependency extraction · **Priority:** P2 · **Risk:** Medium · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/minecraft/progressAdapter.ts, src/shared/contracts/minecraft.ts
 - **Problem:** `ProgressStages` is exported from `@loontail/minecraft-kit` (listed in the KIT_API). `progressAdapter.ts` line 18 imports `ProgressStages` from `@shared/contracts/minecraft`. If the shared contract defines its own `ProgressStages` that mirrors the kit's, it is a duplicated domain enum. The mapping table `PROGRESS_STAGE_FOR_ASPECT` (line 22) and the `progressStageForDownloadCategory` function (lines 69-86) are translation layers between kit enums and launcher enums that may be unnecessary.
@@ -1092,6 +1149,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-71 — Replace `createRequire` + `requirePackage('@loontail/minecraft-kit/package.json')` with a compile-time constant
 
+- **Status:** DEFERRED — 2026-06-06 · touches the Vite/electron build config (define-injected constant); out of the in-repo cleanup scope.
 - **Category:** Code · **Priority:** P3 · **Risk:** Medium · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/minecraft/installManifest.ts
 - **Problem:** Lines 13 and 45-46 use `createRequire(import.meta.url)` to load `@loontail/minecraft-kit/package.json` at runtime to extract the version string. This couples the runtime to the package.json resolution semantics of the bundler and is fragile in a packaged Electron app where `node_modules` is not present.
@@ -1102,6 +1160,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-72 — Replace hand-rolled `sha256` hash in bundle/api.ts with a shared utility; unify with bundle/plan.ts `hashFile`
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/bundle/api.ts, src/main/services/bundle/plan.ts
 - **Problem:** `api.ts` line 22 defines `sha256(input: string): string` using `createHash`. `plan.ts` lines 37-43 define `hashFile(absPath: string): Promise<string>` also using `createHash('sha256')`. These are two separate inline implementations of the same SHA-256 operation: one for strings, one for files.
@@ -1123,6 +1182,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-74 — Model `BundleManager.activeLocks` entries as part of `ActiveSync` to prevent map-key desync
 
+- **Status:** DONE — 2026-06-06 · commit 158deb9
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Medium · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/bundle/manager.ts
 - **Problem:** `BundleManager` maintains two parallel maps: `activeSyncs: Map<ClientSlug, ActiveSync>` and `activeLocks: Map<ClientSlug, ClientOperationLease>` (lines 79-80). Both are keyed by `ClientSlug` and must always be kept in sync. `dropActiveSync` (lines 372-378) deletes from both, but `cancelSync` (lines 142-165) conditionally calls `dropActiveSync` only when the sync was paused (`wasPaused` branch lines 156-163). If a new code path forgets to call `dropActiveSync`, the lock entry is leaked — the client is permanently locked.
@@ -1133,6 +1193,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-75 — Remove per-field label comments in `DownloadOptions` type and `SyncTask` type
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Docs · **Priority:** P2 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/bundle/download.ts, src/main/services/bundle/runner.ts
 - **Problem:** download.ts lines 22-24: `// Set of in-flight requests for the task. The downloader registers/unregisters itself here so cancelSync can synchronously destroy every active socket.` — this is genuinely useful (explains the cancel protocol); keep it. runner.ts lines 30-42: several type field comments exist. Lines 31-32 (`// Set of in-flight HTTP requests for synchronous cancellation.`) and 33-34 (`// Cooperative pause/cancel flags. Workers check between file boundaries.`) are borderline — the first explains the cancel protocol (keep), the second restates the flag names (remove). Lines 107-108 in installSteps.ts: `// Skip undefined to respect exactOptionalPropertyTypes.` is a valid keep (wire-coercion guard).
@@ -1143,6 +1204,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-76 — Remove step-narrating comment at manager.ts line 124 that paraphrases install sequence
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Docs · **Priority:** P2 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/minecraft/manager.ts
 - **Problem:** Lines 123-125 in `startInstall` (inside the `void runInstall(...).then(...)` chain): `// Mark Minecraft itself as installed BEFORE the bundle phase. The UI listens for INSTALLED to switch the progress card from 'downloading minecraft' to 'syncing bundle' (which only renders on top of an installed client).` This is partially a why-comment (ordering dependency between emit and bundle hook) but the 'Mark Minecraft itself as installed BEFORE' opening clause restates what `emitStatus(INSTALLED)` does. Lines 139-141: `// Bundle failures surface via the bundle.error event channel; the Minecraft install itself is done, so we keep the INSTALLED state.` — this is a pure why-comment; keep it. Lines 133-134 in `startLaunch`: `// No pre-launch hash verification and no implicit reinstall here. The lenient launch preflight inside runLaunch decides launchability…` is a valid why-comment; keep it.
@@ -1153,6 +1215,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-77 — Remove comment 'Called on app shutdown…' above `cancelAll` and 'Called by MinecraftManager…' above `resetForUninstall` in BundleManager
 
+- **Status:** DONE — 2026-06-06 · commit 6df9168
 - **Category:** Docs · **Priority:** P2 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/bundle/manager.ts
 - **Problem:** Lines 439-442: `// Called on app shutdown to abort every active sync — cooperative pause/cancel doesn't stop the underlying sockets unless the runner sees the abort, so we also destroy current requests synchronously and wait a short grace window so the runner's finally blocks (tmp cleanup, manifest writes) can land.` — the 'cooperative pause/cancel doesn't stop sockets' clause is a genuine why (keep). Lines 451-453: `// Called by MinecraftManager.uninstall to wipe the local manifest sidecar file when the client folder isn't fully removed.` — 'Called by X' is the explicitly forbidden caller-reference pattern (§10). The why ('when the client folder isn't fully removed') is the only valuable clause.
@@ -1163,6 +1226,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-78 — Remove 'Plan + tracker + run' style narrating comment in install.ts
 
+- **Status:** DONE — 2026-06-06 (obsolete)
 - **Category:** Docs · **Priority:** P3 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/minecraft/install.ts
 - **Problem:** Line 122-123: `// No derivable equivalent for runtime path elsewhere in settings.` — This is actually a valid why-comment (explains why `persistRuntime` is called explicitly here). Keep it. However line 120 block: `env.logger.info(...)` followed immediately by `await tryInstall(...)` has no comment — correct. Check: the `handleInstallFailure` flow has no suspicious comment. This file is actually clean. The check completes with no removal needed here.
@@ -1173,6 +1237,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-79 — Remove step-narrating comments in `startInstall` `void runInstall().then()` chain in manager.ts
 
+- **Status:** DEFERRED — 2026-06-06 · lower-value DLI polish left for a future session
 - **Category:** Docs · **Priority:** P2 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/minecraft/manager.ts
 - **Problem:** Lines 124-134 in `startInstall`: the chain has two comments. Comment A (lines 123-125): mostly a what-narration about status ordering (already partially flagged). Comment B (lines 138-141): `// Bundle failures surface via the bundle.error event channel; the Minecraft install itself is done, so we keep the INSTALLED state.` This is a valid why-comment — it explains why a caught bundle error does not change the install status. Keep B. Lines 126-128: `// runInstall handles errors internally (emits via handleInstallFailure) and rethrows for the launch path; in the fire-and-forget case we only need the final INSTALLED status on success.` The 'runInstall handles errors internally' part is a what-narration; the 'fire-and-forget case' is borderline useful context.
@@ -1183,6 +1248,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### DLI-80 — BundleManager lacks `dispose` path for `pauseIdleTimer` — timer may keep process alive on app shutdown
 
+- **Status:** DONE — 2026-06-06 · commit 158deb9 (done-by-DLI-55)
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Medium · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/bundle/manager.ts
 - **Problem:** `armPauseIdleTimer` (line 404-412) sets a `setTimeout` and calls `.unref()` on it so the process can exit. However the `cancelAll` method (line 443-449) only calls `cancelSync` for each active slug — `cancelSync` calls `clearPauseIdleTimer` only when the sync is PAUSED (line 145-165). If a sync is in the PAUSED state and `cancelAll` is called at shutdown, `cancelSync` at line 146 clears the timer via `this.clearPauseIdleTimer(active)`. This path is correct. However `resetForUninstall` (line 453-457) and the index.ts `dispose` path should also ensure the `BundleManager.cancelAll` is awaited before the healer disposes. The `bundle/index.ts` should confirm `manager.cancelAll()` is called during service dispose.
@@ -1217,6 +1283,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-01 — MinecraftManager.cancel does not handle OpKinds.UNINSTALL — cancel on uninstall is silently ignored
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Code · **Priority:** P2 · **Risk:** Medium · _(auditor: arch-boundaries)_
 - **Area:** src/main/services/minecraft/manager.ts:171-185, src/main/services/minecraft/ops.ts:6,27
 - **Problem:** `cancel(slug)` checks `INSTALL`, `REPAIR`, `BUNDLE_SYNCING`, `LAUNCH_STARTING` but not `UNINSTALL`. The `UninstallOp` type (ops.ts:27) carries no abort controller, and `runUninstall` does not accept a signal — so cancellation is structurally impossible. However the omission from `cancel()` means a caller that invokes `manager.cancel(slug)` during an uninstall silently receives no-op, while `manager.cancelAll()` also skips UNINSTALL (only cancels INSTALL, REPAIR, LAUNCH_STARTING). The `clientOperationLocks.cancelAll()` order in main/index.ts also calls `clientOperationLocks.cancelAll()` before service dispose — the lock cancel callback set by `acquireWriteLock` + `lock.setCancel(() => this.cancel(slug))` will be invoked, again no-op for uninstall.
@@ -1227,6 +1294,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-02 — processAdapter.ts: repair progress adapter emits stagePercent=overallPercent always (both use the same percent) — no multi-stage aggregation for repair
 
+- **Status:** DONE — 2026-06-06 · commit bc3ae9e
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: arch-boundaries)_
 - **Area:** src/main/services/minecraft/progressAdapter.ts:130-141
 - **Problem:** The throttled repair progress emitter (lines 130-141) computes `percent = totalBytes > 0 ? Math.min(100, bytesDownloaded / totalBytes * 100) : 0` and sets both `stagePercent` and `overallPercent` to the same value. The install adapter (via `createInstallProgressTracker`) correctly tracks stage vs overall. For repair, the UI sees an `overallPercent` that does not account for the multiple phases (verify → heal forge processors → ensureLaunchable → bundle sync).
@@ -1237,6 +1305,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-03 — runDeletePhase does not count ENOENT files in deletedAny — post-delete heal may be skipped when files were externally removed
 
+- **Status:** DONE — 2026-06-06 · commit 07bf5d8
 - **Category:** Flow · **Priority:** P2 · **Risk:** Medium · _(auditor: download-install-flow)_
 - **Area:** src/main/services/bundle/runner.ts
 - **Problem:** In runDeletePhase (lines 164-210), when unlink throws ENOENT (line 188-193), the code increments completedDeletes and continues — but does NOT set deletedAny = true (line 184 is only set in the non-ENOENT branch). deletedAny is the signal that triggers the heal pass (manager.ts line 289). If all files in pendingDeletes were already externally removed (e.g. the user manually deleted them), deletedAny remains false, the heal is skipped, and the vanilla Minecraft files that the bundle was overriding are not restored.
@@ -1269,6 +1338,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-06 — bundleHealing.verifyAndRepairExceptBundle calls buildContext() which resolves the target via Strapi — unnecessary inside a heal pass that already has a target
 
+- **Status:** DONE — 2026-06-06 · commit 07bf5d8
 - **Category:** Architecture · **Priority:** P1 · **Risk:** Medium · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/bundleHealing.ts (line 71), src/main/services/bundle/healer.ts (lines 29-47)
 - **Problem:** verifyAndRepairExceptBundle calls buildContext(kit, slug) at line 71 to obtain ctx.target and ctx.clientFolder. buildContext does: getClient(slug) → Strapi API call, resolveLoader, kit.targets.resolve → may hit network for manifest. This executes inside the HEALING phase of a bundle sync that already has a SyncTask with clientFolder. The Healer interface (healer.ts) accepts only (slug, bundleOwnedPaths, options) — callers have no way to pass the already-resolved target.
@@ -1279,6 +1349,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-07 — forgeProcessorHealing.ts re-implements SHA-1 file hashing with a streaming Promise wrapper already available in minecraft-kit internals
 
+- **Status:** DONE — 2026-06-06 · commit bc3ae9e
 - **Category:** Dependency extraction · **Priority:** P2 · **Risk:** Low · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/forgeProcessorHealing.ts (lines 64-76, 78-85, 91-98)
 - **Problem:** sha1OfFile and fileMissing are bespoke Node.js crypto/fs implementations for the purpose of verifying Forge processor outputs. minecraft-kit already tracks processor output hashes (RunForgeProcessorAction.outputs) and performs the same SHA-1 check internally when running a processor via kit.install.run. The launcher re-implements this check to decide which processors to skip — but does so with a subtly different pattern (streaming promise, swallows all errors to null).
@@ -1289,6 +1360,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-08 — forgeProcessorHealing.ts mutates InstallPlan.totalBytes without summing all action byte contributions
 
+- **Status:** DONE — 2026-06-06 · commit bc3ae9e
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/forgeProcessorHealing.ts (lines 165-173)
 - **Problem:** focusedBytes (line 165) counts only DOWNLOAD_FILE actions in focusedActions. Other action kinds that may consume I/O (EXTRACT_ZIP, WRITE_FILE etc.) contribute 0 bytes to the denominator. The resulting focusedPlan.totalBytes is therefore an undercount, causing the progress bar for the focused repair plan to show > 100% download completion.
@@ -1299,6 +1371,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-09 — emitReadinessStatus in repairWorkflow.ts re-reads disk twice (hasCurrentTargetInstallManifest + isAnythingInstalled) and is called in both cancellation and failure paths but never in success
 
+- **Status:** DONE — 2026-06-06 · commit bc3ae9e
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/repairWorkflow.ts (lines 52-64, 175, 185)
 - **Problem:** emitReadinessStatus runs two fs operations (loadTargetInstallManifest then readdir of versions/) to decide between INSTALLED/NOT_INSTALLED/ERROR for post-cancel or post-failure status. hasCurrentTargetInstallManifest (line 59) internally calls loadTargetInstallManifest which already reads a file; the combined cost is 2 file reads on every cancel or failure. More importantly, the function name does not convey that it is a side-effecting status emitter — it reads like a query.
@@ -1309,6 +1382,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-10 — bundleHealing.verifyAndRepairExceptBundle: wrong-layer import — minecraft service imports minecraft context from its own module to serve bundle service
 
+- **Status:** DONE — 2026-06-06 · commit 07bf5d8
 - **Category:** Architecture · **Priority:** P1 · **Risk:** Medium · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/bundleHealing.ts (line 10, line 71)
 - **Problem:** bundleHealing.ts lives inside src/main/services/minecraft/ but is consumed exclusively by src/main/services/bundle/healer.ts. It imports buildContext from ./context — a function that couples this module to Strapi, kit.targets.resolve, and settings. The bundle service imports a file from minecraft/ (a sibling service domain), violating the guideline that cross-service coupling must go through direct import only when architecturally appropriate, and never when it creates circular dependencies or layer inversions. Here the import chain is: bundle/healer.ts → minecraft/bundleHealing.ts → minecraft/context.ts → services/clients → Strapi.
@@ -1319,6 +1393,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-11 — repair.ts: progress adapter disposal relies solely on finally — but a thrown error before the finally causes the adapter to be disposed by finally without flushing the last progress event
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Error handling · **Priority:** P3 · **Risk:** Low · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/repair.ts (lines 26-61)
 - **Problem:** createRepairProgressAdapter returns a MinecraftProgressAdapter with a dispose() that calls clearPendingFlush (it cancels the pending timer without flushing). If verifyAndRepairBase throws before any progress event fires the flush timer, the in-flight pending flush is cancelled by dispose() in the finally — no final progress event is sent to the renderer. This is a minor UX gap, not a correctness bug.
@@ -1340,6 +1415,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-13 — manager.ts: startRepair does not emit REPAIRING status until after ops.set, allowing a race where getStatus() reads the old (absent) op between requireIdle and ops.set
 
+- **Status:** DONE — 2026-06-06 · commit 6df9168
 - **Category:** Flow · **Priority:** P2 · **Risk:** Medium · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/manager.ts (lines 187-207)
 - **Problem:** startRepair calls requireIdle (line 190), acquires lock, calls await buildContext (line 195) — which is async and can take hundreds of ms — then ops.set and emitStatus (lines 196-199). During the buildContext await, requireIdle already passed (the slug is not in ops), but getStatus() returns the disk-based resolveClientInstallPresence result rather than REPAIRING. A second caller could also pass requireIdle and start a second repair.
@@ -1350,6 +1426,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-14 — bundleHealing.verifyAndRepairExceptBundle passes ctx.target from a freshly-resolved buildContext but the bundle runner already has a different (potentially stale) target resolution path
 
+- **Status:** DONE — 2026-06-06 · commit 07bf5d8
 - **Category:** Flow · **Priority:** P2 · **Risk:** Medium · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/bundleHealing.ts (lines 65-102), src/main/services/bundle/healer.ts
 - **Problem:** buildContext at line 71 of bundleHealing.ts calls kit.targets.resolve, which may return a target with a different minecraftVersion or loader than what was resolved when the bundle sync started (if Strapi updated between sync-start and heal). The heal then calls kit.verify.minecraft.run on a target that may not match what was installed, causing spurious 'missing files' reports for files that belong to the old version.
@@ -1360,6 +1437,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-15 — BundleManager.cancelAll uses a grace setTimeout for finally-block teardown but does not await the active syncs' own promises
 
+- **Status:** DONE — 2026-06-06 · commit 158deb9
 - **Category:** Flow · **Priority:** P2 · **Risk:** Medium · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/bundle/manager.ts (lines 443-449)
 - **Problem:** cancelAll() cancels all syncs and then does await new Promise(resolve => setTimeout(resolve, graceMs)) — a blind 250 ms wait. It does not await the actual execution promises of the cancelled syncs, so the callers' finally blocks (which write manifests, release locks) may still be running after cancelAll resolves. On a slow disk this window could be insufficient.
@@ -1370,6 +1448,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-16 — progressAdapter.ts: AspectTaggedProgressEvent uses a type cast (event as AspectTaggedProgressEvent) to read an undocumented optional .aspect field not part of the public ProgressEvent type
 
+- **Status:** DONE — 2026-06-06 · commit bc3ae9e
 - **Category:** Code · **Priority:** P2 · **Risk:** Medium · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/progressAdapter.ts (lines 36-39, 104-107)
 - **Problem:** AspectTaggedProgressEvent (line 36) extends the public ProgressListener parameter type with an optional aspect?: VerificationKind field. This field is cast-read at line 105 from every repair event. It is not part of the published minecraft-kit EventTypes surface. The adapter relies on internal/undocumented event shape augmentation. If the kit stops emitting the aspect field (or renames it) the entire PROGRESS_STAGE_FOR_ASPECT map silently falls back to the download-category path — with no compiler error.
@@ -1380,6 +1459,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-17 — readinessPolicy.resolveClientInstallPresence and repairWorkflow.emitReadinessStatus duplicate the same two-check (manifest + isAnythingInstalled) offline presence logic
 
+- **Status:** DONE — 2026-06-06 · commit bc3ae9e
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/readinessPolicy.ts (lines 20-28), src/main/services/minecraft/repairWorkflow.ts (lines 52-64)
 - **Problem:** readinessPolicy.resolveClientInstallPresence (uses loadTargetInstallManifest + isAnythingInstalled) and repairWorkflow.emitReadinessStatus (uses hasCurrentTargetInstallManifest + isAnythingInstalled) both decide installation presence from the same two on-disk signals. The readiness policy returns UNVERIFIED for a legacy install; the repair version collapses this to NOT_INSTALLED. These are two subtly different implementations of the same concept.
@@ -1390,6 +1470,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-18 — bundleHealing.verifyAndRepairExceptBundle calls buildContext internally — unnecessary second target resolution
 
+- **Status:** DONE — 2026-06-06 · commit 07bf5d8
 - **Category:** Architecture · **Priority:** P1 · **Risk:** Medium · _(auditor: code-quality)_
 - **Area:** src/main/services/minecraft/bundleHealing.ts (L71), src/main/services/bundle/healer.ts (L30-47)
 - **Problem:** `verifyAndRepairExceptBundle` (bundleHealing.ts L71) calls `buildContext(kit, slug)` which internally calls `kit.targets.resolve` (a network-capable round-trip to Strapi + kit target resolution). The caller `createHealer.healAfterDeletes` is itself called from `executePreparedSync` inside `BundleManager`, which already has the context resolved upstream (the repair path in repairWorkflow.ts already passes ctx explicitly). The bundle healer rebuilds context independently during a sync.
@@ -1411,6 +1492,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-20 — bundleHealing.verifyAndRepairExceptBundle calls buildContext — network/settings side-effect in heal path
 
+- **Status:** DONE — 2026-06-06 · commit 07bf5d8
 - **Category:** Architecture · **Priority:** P1 · **Risk:** Medium · _(auditor: error-logging-model)_
 - **Area:** src/main/services/minecraft/bundleHealing.ts line 71
 - **Problem:** verifyAndRepairExceptBundle (bundleHealing.ts line 71) calls buildContext(kit, slug) internally. buildContext fetches the client from Strapi (getClient network call, context.ts line 32), resolves settings, and resolves the kit target (kit.targets.resolve, another potential network call). This means the bundle heal phase — triggered after every delete during a bundle sync — makes implicit network calls that are not visible to the BundleManager's abort signal.
@@ -1432,6 +1514,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-22 — bundleHealing.ts calls buildContext() directly, tying the bundle-heal seam to the full Minecraft context build
 
+- **Status:** DONE — 2026-06-06 · commit 07bf5d8
 - **Category:** Architecture · **Priority:** P1 · **Risk:** Medium · _(auditor: testability)_
 - **Area:** src/main/services/minecraft/bundleHealing.ts:71, src/main/services/bundle/healer.ts
 - **Problem:** verifyAndRepairExceptBundle() calls buildContext(kit, slug) at line 71 of bundleHealing.ts. buildContext() calls getClient() (Strapi network), getSettings() (disk), and kit.targets.resolve() (network/disk). This fuses the heal step with the full context-build side-effect chain, making the function impossible to unit-test without mocking 4+ modules. The healer (bundle service) also directly imports from the minecraft service layer, crossing the bundle↔minecraft boundary.
@@ -1453,6 +1536,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-24 — No tests for repair→bundle-sync post-repair hook (MinecraftManager.finishRepair launchHook path)
 
+- **Status:** DONE — 2026-06-06 · commit 99c5ffa (managerRepair.test.ts: hook-only-on-repaired, swallowed hook failure, lock-before-hook)
 - **Category:** Testing · **Priority:** P2 · **Risk:** Low · _(auditor: testability)_
 - **Area:** src/main/services/minecraft/manager.ts:315-335
 - **Problem:** finishRepair (lines 315-335) calls launchHook after a successful repair. There is no test verifying: (1) that the hook is only called when repaired===true; (2) that a hook failure logs a warn and does not propagate; (3) that the lock is released before the hook (line 318). The existing repair tests (repairWorkflow.test.ts, install.test.ts) test runRepair in isolation without the manager wrapping.
@@ -1463,6 +1547,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-25 — Replace hand-rolled SHA-1 file hasher in forgeProcessorHealing.ts with kit's verify infrastructure
 
+- **Status:** DEFERRED — 2026-06-06 · needs a @loontail/minecraft-kit API to expose its file-hash/verify infra (package change).
 - **Category:** Dependency extraction · **Priority:** P1 · **Risk:** Medium · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/minecraft/forgeProcessorHealing.ts
 - **Problem:** Lines 64-76 implement `sha1OfFile` as a manual `createReadStream` + `crypto.createHash` pipeline, and lines 78-85 implement `fileMissing` via `stat`. Lines 91-98 (`processorOutputsOk`) then combine both to check processor outputs. This duplicates hashing logic that already exists inside minecraft-kit's verify/repair infrastructure.
@@ -1473,6 +1558,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-26 — Extract Forge processor output verification into minecraft-kit as a supported repair sub-plan
 
+- **Status:** DEFERRED — 2026-06-06 · packages (minecraft-kit) — needs a release + dist sync + lockfile refresh
 - **Category:** Dependency extraction · **Priority:** P1 · **Risk:** High · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/minecraft/forgeProcessorHealing.ts
 - **Problem:** The entire module (188 lines) implements a hand-built Forge processor re-run loop: it reads the install plan, identifies actions of kind `RUN_FORGE_PROCESSOR`, hashes their declared outputs, filters to broken ones, and executes a focused sub-plan. This is parallel to what `kit.repair.forge` should cover but currently does not (the comment on line 113 explains why: `kit.verify.forge` only checks version.json libraries, not processor-generated files). The launcher therefore carries full knowledge of kit internals (`InstallActionKinds.RUN_FORGE_PROCESSOR`, `action.outputs`, `action.index`) that are implementation details of the kit.
@@ -1494,6 +1580,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-28 — Export `createBundleRepairIssueFilter` from bundleHealing.ts only — remove duplicate inline closure in repairWorkflow.ts
 
+- **Status:** DONE — 2026-06-06 · commit 07bf5d8
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/minecraft/repairWorkflow.ts, src/main/services/minecraft/bundleHealing.ts
 - **Problem:** `repairWorkflow.ts` line 11 imports `createBundleRepairIssueFilter` from `bundleHealing.ts` (correct). `bundleHealing.ts` line 50-53 exports the filter factory (correct). No duplication here. However, `repairWorkflow.ts` `loadBundleOwnedPaths` (lines 41-47) re-reads the local manifest and constructs the bundle path set, while `bundleHealing.ts` `verifyAndRepairExceptBundle` also calls `buildContext` which re-reads the client (lines 71-72). The context is built twice for the bundle heal path: once in the caller (`repairWorkflow.ts` via `ctx`) and once inside `verifyAndRepairExceptBundle` (`buildContext(kit, slug)`).
@@ -1515,6 +1602,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### REP-30 — `verifyAndRepairExceptBundle` in bundleHealing.ts calls `buildContext` internally, bypassing the caller's context
 
+- **Status:** DONE — 2026-06-06 · commit 07bf5d8
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Medium · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/minecraft/bundleHealing.ts
 - **Problem:** Line 71: `const ctx = await buildContext(kit, slug);` — `verifyAndRepairExceptBundle` rebuilds the context from scratch instead of accepting a pre-built `Context` from the caller. The healer is called from `bundle/healer.ts` which does NOT have the minecraft Context already built; it only has the slug and kit. However `buildContext` is an async call that resolves the target from the Strapi API (via `getClient`) and resolves settings — it is not cheap. Since the heal path runs after a bundle delete, the context is re-fetched every time.
@@ -1560,6 +1648,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-04 — IPC event channel names for 'minecraft.log' are broadcast unconditionally to all subscribers but only when consoleEnabled — inconsistent gate
 
+- **Status:** DONE — 2026-06-06 (obsolete: dead minecraft.log channel removed)
 - **Category:** IPC · **Priority:** P2 · **Risk:** Low · _(auditor: arch-boundaries)_
 - **Area:** src/main/services/minecraft/launch.ts:311-316
 - **Problem:** `consoleHub.recordMinecraft` is called for every stdout/stderr line unconditionally (line 312). The legacy `broadcaster.log` (IPC event `minecraft.log`) is emitted conditionally at line 315 only when `consoleEnabled`. The contract comment says '`minecraft.log` IPC event for external subscribers' but the IpcEventPayloads contract lists `minecraft.log` as a first-class event — there is no documentation that it is conditional on the console setting. A renderer subscriber to `minecraft.log` will silently receive no events when `consoleEnabled` is false.
@@ -1570,6 +1659,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-05 — consoleHub.flushPending() in ConsoleService.dispose sends lines to the window after router.dispose() has removed the console handlers
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Error handling · **Priority:** P2 · **Risk:** Medium · _(auditor: arch-boundaries)_
 - **Area:** src/main/index.ts:146-161 (drain order), src/main/services/console/index.ts:35
 - **Problem:** In `drain()` (main/index.ts lines 146-161), `Promise.allSettled` disposes all services including `consoleService` (which calls `consoleHub.flushPending()`), then `router.dispose()` is called after the allSettled resolves. `flushPending` calls `sendToWindow` → `sink.send` which calls `window.webContents.send`. If the main window is already closed (app is quitting), `webContents.send` on a destroyed window throws. The `sink.send` method should check `isDestroyed()` but the ConsoleWindowSink may not do so.
@@ -1580,6 +1670,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-06 — `getStoredAccount` in auth.ts reads the store directly and is used by the launch path, bypassing the auth service interface
 
+- **Status:** DONE — 2026-06-06 (obsolete: dead minecraft.log channel removed)
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Low · _(auditor: auth-session-flow)_
 - **Area:** src/main/services/auth/auth.ts:53-56, src/main/services/minecraft/routes.ts:3
 - **Problem:** Lines 53-56: `getStoredAccount` calls `getStoredAuth()` and wraps it in `accountFromSession`. The minecraft routes (routes.ts:3) import this from `@main/services/auth/auth`, making the auth module's internal read visible outside the auth service. The launch path in manager.ts (line 229) calls `requireAccount(account)` after receiving the stored account, meaning the auth service leaks its store-reading responsibility into the minecraft service's coordination layer.
@@ -1590,6 +1681,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-07 — No branded type for `YggdrasilSession.profile.uuid` (undashed), so the dashed/undashed invariant is not compile-time enforced
 
+- **Status:** DEFERRED — 2026-06-06 · packages (yggdrasil-client/core) — needs a release + dist sync + lockfile refresh
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: auth-session-flow)_
 - **Area:** src/shared/contracts/auth.ts:63-67, src/main/services/auth/yggdrasilAuth.ts:64,103
 - **Problem:** The `YggdrasilProfile.uuid` field is typed as `string` (via `z.string().refine(isUuidUndashed)`). Downstream code in launch.ts (line 210) must call `dashUuid(session.profile.uuid)` to convert it back to the dashed form expected by the kit's `asPlayerUuid`. There is no branded type preventing code from passing the undashed UUID directly to `asPlayerUuid` (which accepts `string`) without `dashUuid`. The Mojang path uses the kit's `PlayerUuid` brand for the dashed form, creating asymmetry.
@@ -1600,6 +1692,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-08 — cancelSync called from syncForLaunch's external abort handler may fire after the sync has already completed — double-cancel/drop risk
 
+- **Status:** DONE — 2026-06-06 · commit 1cb2693
 - **Category:** Flow · **Priority:** P2 · **Risk:** Low · _(auditor: download-install-flow)_
 - **Area:** src/main/services/bundle/manager.ts
 - **Problem:** syncForLaunch (lines 96-109) registers onExternalAbort (line 100-102) on the externalSignal's 'abort' event with { once: true }. If the sync completes normally (dropActiveSync is called at line 320), the slug is removed from activeSyncs. If the external signal is then aborted (launch cancelled while sync was completing), cancelSync (line 142) is called, but activeSyncs.get(slug) returns undefined, so it returns early. This is safe. BUT the removeEventListener at line 107 runs in the finally block — if the sync already completed and the signal fires before finally executes (theoretically possible in a microtask scheduling edge case), the handler is still registered and cancelSync runs on an already-cleaned-up slug.
@@ -1643,6 +1736,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-12 — runLaunch re-throws non-preflight errors after already emitting error state — double-handling at IPC boundary
 
+- **Status:** DONE — 2026-06-06 · commit 6df9168
 - **Category:** Error handling · **Priority:** P2 · **Risk:** Medium · _(auditor: launch-flow)_
 - **Area:** src/main/services/minecraft/launch.ts:349-377, src/main/ipc/router.ts:79-82
 - **Problem:** In the catch block at launch.ts:349, when the error is neither an abort nor a LaunchPreflightError, the code emits the error via env.emitError (line 367), sets INSTALLED status, records console state, then re-throws (line 373). The IPC router (router.ts:80) catches this re-thrown error, converts it with toIpcError, and logs it as an IPC handler failure at error level — but the renderer already received the error via the push event channel. The renderer will receive both the pushed error event AND an IPC rejection, potentially showing two toasts.
@@ -1653,6 +1747,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-13 — verifyLaunchPreflight calls resolveLaunchVersion redundantly — compose already resolved it
 
+- **Status:** DONE — 2026-06-06 · commit 6df9168
 - **Category:** Performance · **Priority:** P2 · **Risk:** Medium · _(auditor: launch-flow)_
 - **Area:** src/main/services/minecraft/launch.ts:109-146
 - **Problem:** runLaunch calls env.kit.launch.compose() (launch.ts:252) which internally resolves the launch version from disk. Then verifyLaunchPreflight (launch.ts:109) calls resolveLaunchVersion(ctx.target) again at line 121 — a second redundant resolution to get the versionId for path checks. compose() already rejected with a kit error if the version JSON was missing, so the compose call already gates that file. The version-jar check at line 131 uses ctx.target.minecraft.version (the vanilla version) not the resolved versionId, which means for modloaders it checks the vanilla jar path even if a loader jar is the actual executable.
@@ -1663,6 +1758,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-14 — consoleEnabled guard in op map is stale if the user changes console settings mid-run
 
+- **Status:** DONE — 2026-06-06 (obsolete: dead minecraft.log channel removed)
 - **Category:** Flow · **Priority:** P3 · **Risk:** Low · _(auditor: launch-flow)_
 - **Area:** src/main/services/minecraft/launch.ts:278-329, src/main/services/minecraft/ops.ts:39-43
 - **Problem:** consoleEnabled is captured at the moment of launch (launch.ts:278) and stored in the LaunchOp (ops.ts:42). If the user later changes the console setting in preferences, the running LaunchOp still uses the snapshot value. Currently the setting only controls whether broadcaster.log() fires (which is the dead channel identified separately), so the practical impact is low — but the snapshot in the op is architecturally misleading.
@@ -1673,6 +1769,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-15 — guessLevel heuristic in consoleHub re-applies regex to every line of multi-line log4j events
 
+- **Status:** DONE — 2026-06-06 · commit 1f0f9d0
 - **Category:** Performance · **Priority:** P3 · **Risk:** Low · _(auditor: launch-flow)_
 - **Area:** src/main/infra/consoleHub.ts:26-33, src/main/infra/consoleHub.ts:102-119
 - **Problem:** For log4j events, ingestLog4jEvent (consoleHub.ts:102) correctly uses LEVEL_FROM_LOG4J to set forcedLevel. However, it calls ingest with forcedLevel, which skips guessLevel. For plain-text lines (chunk.kind === 'text'), ingest is called without forcedLevel, so guessLevel is applied with regex tests on every segment. guessLevel uses /\b(ERROR|SEVERE|FATAL)\b/.test() — allocates a regex match on each call. The regex is compiled inline in the function body rather than as a module-level constant.
@@ -1683,6 +1780,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-16 — resolveAuthlibInjectorJar in launch.ts re-implements path logic that should come from yggdrasil-client
 
+- **Status:** DEFERRED — 2026-06-06 · packages (yggdrasil-client) — needs a release + dist sync + lockfile refresh
 - **Category:** Dependency extraction · **Priority:** P2 · **Risk:** Low · _(auditor: launch-flow)_
 - **Area:** src/main/services/minecraft/launch.ts:86-95
 - **Problem:** resolveAuthlibInjectorJar() (launch.ts:86-95) constructs the path to the packaged authlib-injector jar manually using process.resourcesPath + 'authlib-injector' + 'authlib-injector-${AUTHLIB_INJECTOR_VERSION}.jar'. This re-implements path composition that should be the responsibility of the yggdrasil-client package — the same package that already exports resolveAuthlibInjectorJarPath() and AUTHLIB_INJECTOR_VERSION. The packaged path is a production concern that the launcher must own, but the filename template duplicates knowledge from the yggdrasil-client package.
@@ -1726,6 +1824,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-20 — consoleHub module-level singleton prevents testability and multiple window support
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Medium · _(auditor: state-async-perf)_
 - **Area:** src/main/infra/consoleHub.ts
 - **Problem:** consoleHub is exported as a pre-constructed singleton (line 230: `export const consoleHub = new ConsoleHub()`). The ConsoleHub class holds mutable state (buffer, flushTimer, activeSession, log4j parser) and is imported directly by launch.ts, consoleWindow setup, and routes. This makes unit-testing launch.ts impossible without full module mocking, and prevents a future architecture with multiple console windows (one per running client).
@@ -1747,6 +1846,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-22 — isAnythingInstalled in runtimeState.ts does sequential fs.access in a loop — can short-circuit but not parallelise the 'any' check optimally
 
+- **Status:** DONE — 2026-06-06 · commit 6df9168 (runtimeState Promise.any)
 - **Category:** Performance · **Priority:** P3 · **Risk:** Low · _(auditor: state-async-perf)_
 - **Area:** src/main/services/minecraft/runtimeState.ts
 - **Problem:** isAnythingInstalled (line 9) reads the versions directory with readdir, then for each subdirectory entry it calls fs.access sequentially in a for-of loop (line 20). It returns true on the first match, which is efficient for the common case (installed, first dir matches), but in the not-installed or foreign-install case it walks every entry sequentially before returning false. For a client folder with many version subdirectories (e.g. from Forge/Fabric installs), this is fully sequential.
@@ -1757,6 +1857,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-23 — Context.resolved type is ReturnType<typeof resolveClientSettings> — exposes entire resolved settings instead of only needed fields
 
+- **Status:** DEFERRED — 2026-06-06 · conflicts the CC-16 `ResolvedClientSettings` narrowing
 - **Category:** Architecture · **Priority:** P3 · **Risk:** Low · _(auditor: state-async-perf)_
 - **Area:** src/main/services/minecraft/context.ts
 - **Problem:** The Context type (line 17) includes `resolved: ReturnType<typeof resolveClientSettings>`. This exposes the full resolved settings object to every consumer of Context (install, launch, repair, repairWorkflow). Consumers use ctx.resolved.storage.clientFolder (could use ctx.clientFolder), ctx.resolved.memory.allocatedRamMb, ctx.resolved.launch.fullscreen, ctx.resolved.launch.console, and ctx.resolved.storage.clientsFolder. The full settings object is a wide interface; narrowing it to what Context actually needs reduces coupling.
@@ -1778,6 +1879,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-25 — No test covers the cancel(slug) code path for BUNDLE_SYNCING and LAUNCH_STARTING OpKinds
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Testing · **Priority:** P2 · **Risk:** Medium · _(auditor: testability)_
 - **Area:** src/main/services/minecraft/manager.ts:171-185
 - **Problem:** MinecraftManager.cancel() handles four Op kinds (lines 173-184). Tests in managerStatus.test.ts and managerLaunch.test.ts cover the LAUNCH and INSTALL cancellation paths, but BUNDLE_SYNCING and LAUNCH_STARTING abort-controller signalling are not explicitly tested.
@@ -1788,6 +1890,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-26 — sanitizeHttpAgentToken in launch.ts not directly tested — regex coverage only through integration test
 
+- **Status:** DEFERRED — 2026-06-06 · packages (minecraft-kit) — needs a release + dist sync + lockfile refresh
 - **Category:** Testing · **Priority:** P3 · **Risk:** Low · _(auditor: testability)_
 - **Area:** src/main/services/minecraft/launch.ts:78-81
 - **Problem:** sanitizeHttpAgentToken replaces non-alphanumeric characters and falls back to 'dev' for empty results. It's only exercised indirectly through the 'adds a launcher HTTP agent before authlib-injector' test in launch.test.ts with version '0.0.0-test'. Special character versions (e.g. a version string of only forbidden characters yielding 'dev') are untested.
@@ -1798,6 +1901,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-27 — Replace `sanitizeHttpAgentToken` + hardcoded user-agent construction in launch.ts with a shared constant
 
+- **Status:** DEFERRED — 2026-06-06 · packages (minecraft-kit) — needs a release + dist sync + lockfile refresh
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/minecraft/launch.ts
 - **Problem:** Lines 78-84 define `sanitizeHttpAgentToken` and `buildYggdrasilHttpAgentJvmArg`. The regex `/[^0-9A-Za-z.+_-]/g` is a magic literal. `YGGDRASIL_HTTP_AGENT_NAME = 'LoontailLauncher'` (line 47) is a hardcoded product name string that should be derived from a shared brand constant to avoid drift.
@@ -1819,6 +1923,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-29 — Fix `runLaunch` op-map leak when `startupSignal.aborted` fires after `env.ops.set(slug, startupOp)` but before the finally block checks
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Medium · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/minecraft/launch.ts
 - **Problem:** The `finally` block (line 374) guards `if (env.ops.get(slug) === startupOp) env.ops.delete(slug)`. The race is: if `startupSignal` is aborted, the early-return path at lines 262-265, 269-271, or 276-278 calls `restoreInstalled()` and returns. The `finally` block then runs and deletes the op. However, between the last abort check (line 276) and `env.kit.launch.run(composition, ...)` (line 288), there is a synchronous code path that calls `env.ops.set(slug, { kind: OpKinds.LAUNCH, ... })` (line 329). If the signal fires during the `env.kit.launch.run` setup (e.g. the run call itself is synchronous before yielding), the LAUNCH op is set and the finally block deletes the `startupOp` — but the LAUNCH op (a different reference) is left in the map.
@@ -1829,6 +1934,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-30 — Remove 'Called once at boot…' caller-reference comment above `attachLaunchHook` in MinecraftManager
 
+- **Status:** DONE — 2026-06-06 · commit 6df9168
 - **Category:** Docs · **Priority:** P2 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/minecraft/manager.ts
 - **Problem:** Lines 85-87: `// Called once at boot (after createBundleService) so launches dovetail through the bundle sync. Replacing a non-null hook is allowed and only happens in tests; in production it's set exactly once.` — the 'Called once at boot (after createBundleService)' clause is a caller-reference ('used by X'). The test-override note is also process documentation rather than a why.
@@ -1839,6 +1945,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-31 — Remove caller-reference comment on `syncForLaunch` in BundleManager
 
+- **Status:** DONE — 2026-06-06 · commit 99c5ffa
 - **Category:** Docs · **Priority:** P2 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/bundle/manager.ts
 - **Problem:** Lines 92-95: `// Called by MinecraftManager.startLaunch after the install step. Awaits the sync to terminal status (completed/up-to-date) before letting launch proceed. No-op when the client has no bundleSlug. Errors propagate so the caller can abort launch.` — 'Called by MinecraftManager.startLaunch' is the forbidden caller-reference pattern. The no-op and error-propagation clauses are genuine non-obvious behaviors worth documenting.
@@ -1849,6 +1956,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-32 — Trim comment on `toComposeFailure` in launch.ts — opening clause restates the function
 
+- **Status:** DONE — 2026-06-06 · commit 6df9168
 - **Category:** Docs · **Priority:** P2 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/minecraft/launch.ts
 - **Problem:** Lines 61-68: the comment block above `toComposeFailure` is 7 lines. The first sentence ('kit.launch.compose assembles the launch purely from on-disk files … it does not hit the network') is context that explains why a MinecraftKitError here means incomplete install rather than a transient failure — this is a genuine non-obvious why. However the function name `toComposeFailure` and its body already show the reclassification. The 'instead of surfacing a raw, non-repairable error' clause is the most valuable part.
@@ -1859,6 +1967,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### LAU-33 — Remove 'No pre-launch hash verification…' comment block in `startLaunch` in manager.ts
 
+- **Status:** DONE — 2026-06-06 · commit 6df9168
 - **Category:** Docs · **Priority:** P2 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/main/services/minecraft/manager.ts
 - **Problem:** Lines 233-235: `// No pre-launch hash verification and no implicit reinstall here. The lenient launch preflight inside runLaunch decides launchability from the files actually on disk; if it fails, that path surfaces the error in the console and a repair offer rather than silently re-downloading.` This is a 3-line what-description of the launch preflight design. Lines 237-240: `// Chain the bundle sync before launch. The hook resolves immediately for clients without a bundleSlug, so this is free in the no-bundle path. Install a BundleSyncingOp so cancel(slug) can abort the download mid-flight — otherwise the launch flow keeps awaiting syncForLaunch long after the user clicked Stop.` — the last sentence about BundleSyncingOp is a genuine why (cancel-abort invariant). The first two sentences are what-narration.
@@ -1871,6 +1980,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### PRF-01 — TargetInstallManifestSchema.targetId used for match but match also uses kitVersion — version bump invalidates all existing manifests silently
 
+- **Status:** DONE — 2026-06-06 (obsolete: resolveClientInstallPresence no longer calls targetInstallManifestMatches)
 - **Category:** Flow · **Priority:** P2 · **Risk:** Medium · _(auditor: testability)_
 - **Area:** src/main/services/minecraft/installManifest.ts:138-149
 - **Problem:** targetInstallManifestMatches (lines 138-149) checks manifest.kitVersion === MINECRAFT_KIT_VERSION. When the kit is bumped, every user's existing manifest fails to match, causing resolveClientInstallPresence to return INSTALLED→UNVERIFIED on the next open (because isAnythingInstalled still returns true but the manifest check fails). This is not documented as an intended behaviour, and there is no user-visible message explaining why the client suddenly shows as unverified.
@@ -1881,6 +1991,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### PRF-02 — No test for resolveClientInstallPresence returning UNVERIFIED (files present but no manifest)
 
+- **Status:** DONE — 2026-06-06 (already resolved: test already covers UNVERIFIED)
 - **Category:** Testing · **Priority:** P2 · **Risk:** Medium · _(auditor: testability)_
 - **Area:** src/main/services/minecraft/readinessPolicy.ts:20-29, tests/main/services/minecraft/readinessPolicy.test.ts
 - **Problem:** resolveClientInstallPresence returns INSTALLED (manifest + files), NOT_INSTALLED (no files), or UNVERIFIED (files present but no manifest). The UNVERIFIED branch is the case for foreign or legacy installs. Looking at the existing readinessPolicy.test.ts — this specific three-way branch must be checked to ensure UNVERIFIED is returned when isAnythingInstalled=true and loadTargetInstallManifest=null.
@@ -2016,6 +2127,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-05 — BundleEventsListener reads store state inside useEffect with stale getState — pattern bypasses React's subscription guarantees
 
+- **Status:** DEFERRED — 2026-06-06 · WONTFIX (the Zustand getState pattern is correct)
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Low · _(auditor: download-install-flow)_
 - **Area:** src/renderer/features/bundle/events.ts
 - **Problem:** BundleEventsListener (events.ts line 10-46) calls useBundleStore.getState().patch inside the useEffect (line 12). This bypasses Zustand's React subscription — if the store is replaced (e.g. by a hot-reload or test reset), the captured patch and reset references still point to the old store instance. More importantly, calling useBundleStore.getState() inside useEffect (rather than using subscribe) is the correct Zustand pattern for imperative event-driven updates, so this is acceptable — but the useEffect has an empty dependency array (line 44) meaning it never re-subscribes if the store instance changes.
@@ -2037,6 +2149,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-07 — STEP_NUMBER in progressLabels.ts hardcodes step ordinals — diverges when steps array order changes or steps are conditionally excluded
 
+- **Status:** DONE — 2026-06-06 · commit dd6d28f
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Low · _(auditor: download-install-flow)_
 - **Area:** src/renderer/features/clients/components/install/progressLabels.ts, src/renderer/features/clients/components/install/InstallStepper.tsx
 - **Problem:** STEP_NUMBER (progressLabels.ts lines 11-16) statically maps RUNTIME→1, MINECRAFT→2, LOADER→3, BUNDLE→4. InstallStepper.tsx uses STEP_NUMBER[step.key] (line 11) for the badge numeral. But buildSteps (installSteps.ts line 137-142) can omit LOADER and BUNDLE, so a client without a loader would have steps [RUNTIME, MINECRAFT, BUNDLE] numbered as [1, 2, 4] — skipping 3.
@@ -2047,6 +2160,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-08 — Magic hex literal #212121 in consoleWindow.ts duplicates mainWindow.ts — should use a shared design token
 
+- **Status:** DONE — 2026-06-06 · commit 1f0f9d0
 - **Category:** UI · **Priority:** P2 · **Risk:** Low · _(auditor: launch-flow)_
 - **Area:** src/main/windows/consoleWindow.ts:11, src/main/windows/mainWindow.ts:11
 - **Problem:** Both window files define const BACKGROUND_COLOR = '#212121'. This is a raw hex literal that bypasses the Tailwind palette token system mandated by the UI guideline. The value must be kept in sync manually. The guideline explicitly prohibits hex/rgb/hsl literals in favor of palette tokens.
@@ -2057,6 +2171,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-09 — BUFFER_LIMIT = 10000 is magic-numbered independently in consoleHub.ts and App.tsx
 
+- **Status:** DONE — 2026-06-06 · commit 1f0f9d0
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: launch-flow)_
 - **Area:** src/main/infra/consoleHub.ts:17, src/renderer/console/App.tsx:15
 - **Problem:** Both files define BUFFER_LIMIT = 10000 as a local constant. They must be kept in sync manually. If main holds more lines than the renderer trims to (or vice versa), the renderer can request missing IDs that were already evicted, causing spurious seenIdsRef misses or redundant getInitial reconcile work.
@@ -2067,6 +2182,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-10 — useConsoleStream reconcile poll calls getInitial every second regardless of process state
 
+- **Status:** DONE — 2026-06-06 · commit 1f0f9d0
 - **Category:** Performance · **Priority:** P2 · **Risk:** Low · _(auditor: launch-flow)_
 - **Area:** src/renderer/console/hooks/useConsoleStream.ts:162-190
 - **Problem:** The reconciliation interval (RECONCILE_INTERVAL_MS = 1000 ms) runs unconditionally for the lifetime of the console window, including when the process is IDLE, EXITED, or CRASHED — states where no new lines can arrive. The poll invokes getInitial over IPC every second, deserializes all metadata, and filters by seenIds even when there is nothing new.
@@ -2077,6 +2193,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-11 — Highlight component in format.tsx re-runs full character-scan on every keystroke without memoization
 
+- **Status:** DONE — 2026-06-06 · commit 1f0f9d0
 - **Category:** Performance · **Priority:** P3 · **Risk:** Low · _(auditor: launch-flow)_
 - **Area:** src/renderer/console/format.tsx:44-71, src/renderer/console/ConsoleLogBody.tsx:63-71
 - **Problem:** The Highlight component performs a linear scan over every character of every visible line on every render. With 10 000 lines, OVERSCAN=16, and a visible window of ~30 rows, Highlight is called ~60 times per render. The component is not memoized (no React.memo). Every search keypress forces a full re-render of ConsoleLogBody (new searchQuery propagates), which calls Highlight on all visible rows.
@@ -2087,6 +2204,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-12 — statusSeedQueue and statusSeedRequests are module-level mutable state in hooks.ts
 
+- **Status:** DONE — 2026-06-06 · commit dd6d28f
 - **Category:** Architecture · **Priority:** P3 · **Risk:** Low · _(auditor: launch-flow)_
 - **Area:** src/renderer/features/minecraft/hooks.ts:13-46
 - **Problem:** statusSeedQueue (line 14), statusSeedRequests (line 15), and activeStatusSeedCount (line 13) are module-level mutable variables in hooks.ts. They survive React unmount/remount cycles, test runs, and HMR reloads. If the component tree re-mounts (e.g. React strict mode double-mount), a seed request can be in the map while the component has already remounted, causing the stale check on line 59 to skip re-seeding.
@@ -2097,6 +2215,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-13 — ConsoleBuffer.trimOverflow only trims main lines array but pending may still reference trimmed lines
 
+- **Status:** DONE — 2026-06-06 · commit 1f0f9d0
 - **Category:** Error handling · **Priority:** P3 · **Risk:** Low · _(auditor: launch-flow)_
 - **Area:** src/main/infra/consoleBuffer.ts:65-70
 - **Problem:** trimOverflow (consoleBuffer.ts:65) removes overflow entries from this.lines but never touches this.pending. Lines that are appended then immediately overflowed remain in this.pending until consumePending(). consumePending() returns them and the renderer receives lines whose IDs have been evicted from the main buffer. The renderer's seenIdsRef correctly deduplicates, so no duplicate is shown, but the IDs in pending are no longer in the buffer if the window reconnects and calls getInitial.
@@ -2107,6 +2226,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-14 — skin.ts uploadSkinMojang uses 'AUTO' cast to `const` — opaque workaround without comment
 
+- **Status:** DONE — 2026-06-06 · commit 4fe576e
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/skin/skin.ts (L144)
 - **Problem:** `const variant = 'AUTO' as const;` (L144) is used so TypeScript infers the literal type rather than `string`, allowing it to match the kit's `uploadSkin` variant parameter. The `as const` pattern here is a workaround for the kit's parameter typing, not a meaningful business choice.
@@ -2117,6 +2237,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-15 — consoleHub.ts: `ingest` uses multiple conditional spread expressions — extract to named object builder
 
+- **Status:** DONE — 2026-06-06 · commit 000158c
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/infra/consoleHub.ts (L184-192)
 - **Problem:** The `ingest` method (L184-192) builds `ConsoleLineInput` objects using four conditional spreads: `...(slug ? { slug } : {})`, `...(code ? (lineArgs ? { code, args: lineArgs } : { code }) : {})`. The nested ternary inside the `code` spread is a minor violation of the 'no nested ternaries' guideline.
@@ -2127,6 +2248,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-16 — SkinError uses shared ERROR_CODES while bundle/minecraft errors use domain-local codes — inconsistent placement
 
+- **Status:** DONE — 2026-06-06 · commit 4fe576e
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Medium · _(auditor: error-logging-model)_
 - **Area:** src/main/services/skin/errors.ts, src/shared/constants/errorCodes.ts, src/shared/contracts/skin.ts
 - **Problem:** BundleError codes live in src/shared/contracts/bundle.ts (BundleErrorCodes), MinecraftErrorCodes live in src/shared/contracts/minecraft.ts, but SkinError codes (SkinUploadFailed, SkinNotAuthenticated) are placed in src/shared/constants/errorCodes.ts alongside IPC infrastructure codes (IpcInvalidArgs, IpcUntrustedSender). This means the renderer has no code-keyed localization map for skin errors — skin error messages are surfaced by message text rather than by code (the mutation in useSkinEditor never inspects error.code).
@@ -2137,6 +2259,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-17 — ErrorBoundary logs raw component stack via console.error — stack traces reach renderer console
 
+- **Status:** DONE — 2026-06-06 · commit dd6d28f
 - **Category:** Error handling · **Priority:** P2 · **Risk:** Low · _(auditor: error-logging-model)_
 - **Area:** src/renderer/app/ErrorBoundary.tsx line 21
 - **Problem:** ErrorBoundary.componentDidCatch (line 21) calls console.error('[renderer] uncaught error', error, info.componentStack). The biome-ignore comment acknowledges this as a last-resort logger. However, info.componentStack is a raw React component stack trace that can be many hundreds of characters long and exposes internal component names. In production this goes to electron-log via the console re-routing in initLogger, which persists it to disk.
@@ -2147,6 +2270,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-18 — Replace rgba(255,255,255,0.10) inline style in ClientOverview settings button with a CSS variable
 
+- **Status:** DONE — 2026-06-06 · commit 5a346fc
 - **Category:** UI · **Priority:** P1 · **Risk:** Low · _(auditor: renderer-ui)_
 - **Area:** src/renderer/features/clients/components/ClientOverview.tsx:134-137
 - **Problem:** The settings gear button uses style={{ boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.10), 0 6px 18px -8px var(--color-glow-overlay-md)' }}. The raw rgba literal is a guideline violation (no hex/rgb/hsl in class values or inline styles — only palette tokens). The CSS var half is already correct.
@@ -2157,6 +2281,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-19 — Replace rounded-xl and rounded-2xl usages with guideline-compliant radius tokens
 
+- **Status:** DONE — 2026-06-06 · commit 5a346fc
 - **Category:** UI · **Priority:** P1 · **Risk:** Low · _(auditor: renderer-ui)_
 - **Area:** src/renderer/shared/ui/Toast/ToastItem.tsx:141, src/renderer/features/clients/components/ServersInfo.tsx:22,42,62, src/renderer/features/clients/components/install/InstallProgress.tsx:29
 - **Problem:** The UI guideline mandates radius tokens sm/md/lg only. ToastItem uses rounded-xl (line 141), InstallProgress uses rounded-2xl (line 29), and ServersInfo uses rounded-xl in three separate divs (lines 22, 42, 62). These are arbitrary Tailwind radius utilities outside the permitted token set.
@@ -2167,6 +2292,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-20 — Replace magic pixel font sizes and widths with Tailwind or CSS tokens
 
+- **Status:** DONE — 2026-06-06 · commit 1f0f9d0 (tokens in 5a346fc)
 - **Category:** UI · **Priority:** P2 · **Risk:** Low · _(auditor: renderer-ui)_
 - **Area:** src/renderer/console/ConsoleLogBody.tsx:44,85,88, src/renderer/console/ConsoleToolbar.tsx:67, src/renderer/features/clients/components/install/ProgressBody.tsx:35,47, src/renderer/console/ConsoleHeader.tsx:42
 - **Problem:** Multiple components use arbitrary bracket values: text-[12.5px], text-[10.5px], text-[9.5px], text-[13px], text-[14px], w-[88px], w-[44px], min-w-[52px]. The guideline says extract domain strings/numbers — magic literals are banned. These are repeated across console files with no shared constant.
@@ -2177,6 +2303,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-21 — Give Switch component proper interactive role or remove aria-hidden, align with SettingsSwitchRow usage contract
 
+- **Status:** DONE — 2026-06-06 · commit 5a346fc
 - **Category:** UI · **Priority:** P1 · **Risk:** Medium · _(auditor: renderer-ui)_
 - **Area:** src/renderer/shared/ui/Switch.tsx:8, src/renderer/shared/ui/SettingsRow.tsx:61-64
 - **Problem:** Switch.tsx renders a <span aria-hidden> — it is intentionally invisible to assistive technology because SettingsSwitchRow wraps it in a <button role='switch' aria-checked>. However this tightly couples Switch to that one wrapper. The Switch prop set is {checked, disabled} with no onClick, which means it cannot ever be used as a standalone accessible control — anyone who drops <Switch> outside SettingsSwitchRow gets an inaccessible decorative blob. The component name 'Switch' implies it is an interactive affordance.
@@ -2187,6 +2314,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-22 — Extract console virtual-list constants CONSOLE_ROW_HEIGHT and OVERSCAN into a shared constants file
 
+- **Status:** DONE — 2026-06-06 · commit 1f0f9d0
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: renderer-ui)_
 - **Area:** src/renderer/console/ConsoleLogBody.tsx:10-11, src/renderer/console/App.tsx:36
 - **Problem:** CONSOLE_ROW_HEIGHT is exported from ConsoleLogBody.tsx and imported back into App.tsx for scrollToRow calls. OVERSCAN is a module-level constant inside ConsoleLogBody. This cross-directional import (App.tsx imports a layout constant from ConsoleLogBody) is an inverted dependency: a leaf component is a constant-source for its ancestor.
@@ -2197,6 +2325,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-23 — Replace Slider's inline linear-gradient style with a CSS custom-property approach
 
+- **Status:** DONE — 2026-06-06 · commit 5a346fc
 - **Category:** UI · **Priority:** P2 · **Risk:** Low · _(auditor: renderer-ui)_
 - **Area:** src/renderer/shared/ui/Slider.tsx:45-49
 - **Problem:** Slider computes a dynamic track fill via style={{ background: `linear-gradient(to right, var(--color-primary) 0%, var(--color-primary) ${progress}%, var(--color-muted) ${progress}%, var(--color-muted) 100%)` }}. While the colours use CSS variables (compliant), the progress percentage has to be injected as an inline style because CSS cannot compute it from an HTML attribute. This is acceptable but means the element has a style attribute that changes every render.
@@ -2207,6 +2336,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-24 — Validate PNG client-side before upload to avoid a round-trip IPC failure
 
+- **Status:** DONE — 2026-06-06 · commit 4fe576e
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Medium · _(auditor: renderer-ui)_
 - **Area:** src/renderer/features/skin/hooks.ts:89-101, src/renderer/features/skin/texture.ts
 - **Problem:** useSkinEditor.saveAll() encodes the file via canvas (normalizeTextureToPng) and then calls upload.mutate which goes via IPC to main. The main-side uploadSkin (skin.ts:171) validates the PNG buffer with validatePngBuffer from @loontail/yggdrasil-core. If the validation fails the user only learns after a round-trip IPC call. The renderer already has the ArrayBuffer; it could validate before sending.
@@ -2217,6 +2347,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-25 — Harden ConsoleApp flashFeedback timer: use try/finally to ensure IDLE reset even on timeout error
 
+- **Status:** DONE — 2026-06-06 · commit 1f0f9d0
 - **Category:** Error handling · **Priority:** P2 · **Risk:** Low · _(auditor: renderer-ui)_
 - **Area:** src/renderer/console/App.tsx:42-45
 - **Problem:** flashFeedback uses window.setTimeout to reset copy feedback to IDLE (line 44). There is no cleanup of this timer on unmount. If the ConsoleApp unmounts while a feedback timer is running (e.g., user closes console window during a copy operation), the setTimeout callback calls setter on an unmounted component.
@@ -2227,6 +2358,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-26 — The Modal component leaks body overflow state if isOpen changes from true to false before cleanup runs
 
+- **Status:** DONE — 2026-06-06 · commit 5a346fc
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Medium · _(auditor: renderer-ui)_
 - **Area:** src/renderer/shared/ui/Modal.tsx:70-79
 - **Problem:** The useEffect at line 47 writes document.body.style.overflow = 'hidden' and restores it via previousOverflow in the cleanup. However the if (!isOpen) return null guard on line 81 means the component unmounts immediately when isOpen becomes false. React's strict-mode double-invoke and concurrent-mode teardown may run cleanup in a different order than expected, but more critically: if two modals are open simultaneously and one closes, the restore restores to '' (empty) which also undoes the second modal's overflow lock.
@@ -2237,6 +2369,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-27 — Make ConsoleLogBody virtualizer aware of dropped-count banner height to prevent row offset errors
 
+- **Status:** DONE — 2026-06-06 · commit 1f0f9d0
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: renderer-ui)_
 - **Area:** src/renderer/console/ConsoleLogBody.tsx:32-37
 - **Problem:** The virtual list (lines 32-37) computes startIndex purely from scroll.scrollTop / CONSOLE_ROW_HEIGHT. When droppedCount > 0, a sticky banner is rendered at the top (line 46-49) with unaccounted height. The sticky banner sits inside the scrollable container but uses position sticky, so it does not consume scroll space — however it covers the first visible row, making that row partially or fully obscured by the banner without the virtualizer knowing.
@@ -2247,6 +2380,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-28 — Eliminate Slider's style attribute rendering on every value change by using a CSS custom property
 
+- **Status:** DONE — 2026-06-06 · commit 5a346fc
 - **Category:** Performance · **Priority:** P2 · **Risk:** Low · _(auditor: renderer-ui)_
 - **Area:** src/renderer/shared/ui/Slider.tsx:44-48
 - **Problem:** Every Slider value change re-renders the input and rebuilds a 100-character style string: background: linear-gradient(to right, var(--color-primary) 0%, var(--color-primary) ${progress}%, var(--color-muted) ${progress}%, var(--color-muted) 100%). This is a string concatenation on every mousemove/change event, triggering a style recalculation on each render.
@@ -2257,6 +2391,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-29 — Give the SkinViewerCard fixed-size container proper aspect-ratio tokens instead of magic numbers
 
+- **Status:** DONE — 2026-06-06 · commit dd6d28f (token in 5a346fc)
 - **Category:** UI · **Priority:** P3 · **Risk:** Low · _(auditor: renderer-ui)_
 - **Area:** src/renderer/features/settings/components/sections/account/AccountSkinPreview.tsx:5-6, src/renderer/features/skin/components/SkinViewerCard.tsx:36
 - **Problem:** VIEWER_WIDTH = 180 and VIEWER_HEIGHT = 220 are magic number constants in AccountSkinPreview.tsx (lines 5-6). They are passed as props to SkinViewerCard and applied as inline style={{ width, height }} (SkinViewerCard line 36). AccountSkinPreview also uses them in a Suspense fallback div via inline style.
@@ -2267,6 +2402,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-30 — Address missing error boundary around SkinViewer WebGL context failure
 
+- **Status:** DONE — 2026-06-06 · commit dd6d28f
 - **Category:** Error handling · **Priority:** P1 · **Risk:** High · _(auditor: renderer-ui)_
 - **Area:** src/renderer/features/skin/components/SkinViewer.tsx:29-41
 - **Problem:** SkinViewer mounts skinview3d on a canvas. If the WebGL context is unavailable (headless environment, disabled GPU, OOBE scenario on setup) the SkinView3d constructor throws. There is no try/catch and no error boundary wrapping SkinViewerCard in AccountSkinPreview. The Suspense fallback only handles async loading, not imperative constructor errors.
@@ -2277,6 +2413,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-31 — Address useSkinEditor saveAll: concurrent skin+cape save can partially succeed with no rollback or per-item error
 
+- **Status:** DONE — 2026-06-06 · commit dd6d28f
 - **Category:** Error handling · **Priority:** P1 · **Risk:** Medium · _(auditor: renderer-ui)_
 - **Area:** src/renderer/features/skin/hooks.ts:89-102
 - **Problem:** saveAll() awaits skin upload, then cape upload sequentially (lines 90-101). If the skin upload succeeds but the cape upload fails, pendingUrl for skin is cleared (line 94) but the mutation error surfaces as a generic upload.mutate rejection with no differentiation. The user sees 'upload failed' without knowing which texture succeeded. There is no rollback — the skin is already committed to the server.
@@ -2287,6 +2424,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-32 — queryPersister uses synchronous localStorage serialisation for the entire TanStack Query cache
 
+- **Status:** DEFERRED — 2026-06-06 · needs-design (sync→async IndexedDB persister)
 - **Category:** Performance · **Priority:** P2 · **Risk:** Medium · _(auditor: state-async-perf)_
 - **Area:** src/renderer/shared/lib/queryPersister.ts
 - **Problem:** createSyncStoragePersister (line 18) serialises the entire query cache to localStorage synchronously on every persist tick (throttled to 1 second). localStorage.setItem is a synchronous, blocking call on the main thread. For a large cache (many clients, settings, profile data), the serialised JSON can be tens to hundreds of KB. The 1-second throttle only prevents burst writes, not the blocking nature of each individual write.
@@ -2297,6 +2435,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-33 — MinecraftEventsListener registers offLog for minecraftLog but the handler is a no-op — dead subscription
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: state-async-perf)_
 - **Area:** src/renderer/features/minecraft/events.ts
 - **Problem:** Line 96 of events.ts registers a listener for IPC_EVENTS.minecraftLog with an empty arrow function `() => {}`. The subscription is never used — log lines go to the console window via consoleHub, not the renderer store. The cleanup function at line 98 correctly unregisters it, so there is no leak, but the subscription adds unnecessary IPC listener overhead for every log line that passes through the IPC bridge.
@@ -2307,6 +2446,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-34 — BundleEventsListener dependency array is empty but closes over mutable module-level state via useBundleStore.getState()
 
+- **Status:** DONE — 2026-06-06 · commit dd6d28f
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: state-async-perf)_
 - **Area:** src/renderer/features/bundle/events.ts
 - **Problem:** BundleEventsListener (line 10) uses useEffect with an empty dependency array (line 44). Inside, it calls useBundleStore.getState() (lines 12-13) to grab patch and reset. This is correct for Zustand stores (getState() returns stable references). However the minecraftStatus listener on line 34 captures reset by reference at mount time. If the store's reset reference were to change (unlikely in Zustand but not guaranteed across store reconstructions in tests), the listener would hold a stale reference. Document this assumption explicitly.
@@ -2317,6 +2457,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-35 — Updater auto-check module-level mutable variables (lastAutoCheckAt, userInitiatedCheck, etc.) are not reset on HMR or renderer reload
 
+- **Status:** DONE — 2026-06-06 · commit dd6d28f
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: state-async-perf)_
 - **Area:** src/renderer/features/updater/events.ts
 - **Problem:** Lines 17-23 define module-level mutable variables: lastAutoCheckAt, userInitiatedCheck, lastToastedState, lastToastedErrorMessage. The comment on line 22 says these 'reset on page reload — exactly right'. However in Electron with Vite HMR (hot module reload during development), modules may be re-evaluated without a full page reload, resetting these variables mid-session. More importantly, because they are plain module-level variables, any future use of the UpdaterEventsListener in a different render context (e.g. a second BrowserWindow) will share the same variables, causing cross-context state pollution.
@@ -2327,6 +2468,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-36 — Remove JSDoc on `useSkinEditor` in renderer/features/skin/hooks.ts
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Docs · **Priority:** P3 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/renderer/features/skin/hooks.ts
 - **Problem:** Lines 45-50: `/** Owns the skin/cape file pickers, the unsaved-preview state, and the upload/reset mutations. Returns ready-to-bind input props plus an action surface… */` — this restates the return shape visible in the type annotation five lines below. A React hook named `useSkinEditor` describes its domain unambiguously.
@@ -2337,6 +2479,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-37 — Remove comment 'Mount once at app root…' above `UpdaterEventsListener` in updater/events.ts
 
+- **Status:** DONE — 2026-06-06 · commit dd6d28f
 - **Category:** Docs · **Priority:** P3 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/renderer/features/updater/events.ts
 - **Problem:** Lines 103-104: `// Mount once at app root: feeds the global store and translates transitions into toasts. AppBar badge + LauncherSection both read from the store.` The phrase 'feeds the global store and translates transitions into toasts' is a what-restatement of the component body. The 'mount once at app root' is a usage instruction (caller reference). The related `UpdaterAutoCheck` component comment at line 121-122 is similar.
@@ -2347,6 +2490,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-38 — Remove what-restating comments in PlayButton.tsx progress card and bundle-error sections
 
+- **Status:** DONE — 2026-06-06 · commit dd6d28f
 - **Category:** Docs · **Priority:** P3 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/renderer/features/clients/components/PlayButton.tsx
 - **Problem:** Lines 185-186: `// Progress card wins over the per-status switch below whenever an install or bundle sync is in flight. Selector returns null otherwise and the card collapses immediately — no transient success state.` Lines 195-196: `// Bundle error surface: render under the Play affordance so the user can retry without leaving the client page.` Both comments narrate what the immediately following `if` blocks do. The action selectors have enough context from the `action === PlayButtonActions.PROGRESS` condition.
@@ -2357,6 +2501,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-39 — Remove what-restating comment above the switch `case PlayButtonActions.STATUS_PENDING` in PlayButton.tsx
 
+- **Status:** DONE — 2026-06-06 · commit dd6d28f
 - **Category:** Docs · **Priority:** P3 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/renderer/features/clients/components/PlayButton.tsx
 - **Problem:** Lines 228-230: `// Initial status seed (and any later build-status check) renders a spinner rather than vanishing — the affordance stays put while we resolve state.` This explains the UX rationale for the spinner, which is marginally useful, but it describes what the case does ('renders a spinner') rather than why the behavior is non-obvious.
@@ -2367,6 +2512,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-40 — Remove comment 'Coalesce progress emissions…' in useConsoleStream.ts — restates what throttle does
 
+- **Status:** DONE — 2026-06-06 · commit 1f0f9d0
 - **Category:** Docs · **Priority:** P3 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/renderer/console/hooks/useConsoleStream.ts
 - **Problem:** Line 94-95: `// Coalesce inbound push batches so a burst of stdout becomes one setLines.` This is a what-restatement of `flushPending` + `scheduleFlush`. The `queueMicrotask` comment at line 121-122 IS a genuine platform-quirk comment that must be kept. The reconciliation poll comment at line 161-162 ('Chromium can throttle occluded windows; catch any pushes the live channel missed.') is also a valid keep.
@@ -2377,6 +2523,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-41 — Remove empty-catch comment `/* main may not be ready yet — live updates will catch us up */` in useConsoleStream.ts
 
+- **Status:** DONE — 2026-06-06 · commit 1f0f9d0
 - **Category:** Docs · **Priority:** P2 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/renderer/console/hooks/useConsoleStream.ts
 - **Problem:** Lines 84-86: `getInitial()…catch(() => { /* main may not be ready yet — live updates will catch us up */ });` — Per §10, empty-catch labels are only allowed when the reason for swallowing is non-obvious. In this case the reason IS partially non-obvious (main not ready on mount) so it is borderline. However the correct format per §10 is `// …` not a `/* */` inside the catch body, and 'live updates will catch us up' is the reconciliation-poll already described at line 161.
@@ -2387,6 +2534,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-42 — `FolderInfoBlock` component uses magic `1024 ** 3` and `1024 ** 2` numeric literals without named constants
 
+- **Status:** DONE — 2026-06-06 (already resolved: formatBytes extracted, no magic literals)
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/renderer/features/settings/components/FolderInfoBlock.tsx
 - **Problem:** Lines 9-16: `const BYTES_PER_GB = 1024 ** 3;` exists but `1024 ** 2` (MB) is used inline at line 16 without a `BYTES_PER_MB` constant. Minor inconsistency per §6.1.
@@ -2397,6 +2545,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### UI-43 — `LAUNCHER_SETTINGS_STALE_TIME_MS` comment in settings/hooks.ts is an inline caller-reference
 
+- **Status:** DONE — 2026-06-06 · commit 000158c
 - **Category:** Docs · **Priority:** P3 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/renderer/features/settings/hooks.ts
 - **Problem:** Lines 22-24: `// Main-side mutations (e.g. persistRuntime after install) bypass the IPC mutation channel that calls setQueryData. Refetch periodically so the renderer eventually picks them up without a manual reload.` The comment names a specific internal function (`persistRuntime`) as a caller-reference example. This is borderline: 'persistRuntime' is used as an example, not as a unique identifier.
@@ -2420,6 +2569,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### IPC-02 — CONSOLE_CHANNEL_PREFIX check in trustedSender.ts uses string prefix comparison — new console.* channels require no code change but are implicitly trusted to the console window
 
+- **Status:** DONE — 2026-06-06 · commit 1cb2693
 - **Category:** IPC · **Priority:** P2 · **Risk:** Medium · _(auditor: arch-boundaries)_
 - **Area:** src/main/ipc/trustedSender.ts:48-54, src/shared/ipc/channels.ts:55
 - **Problem:** The console window is granted access to any channel whose name starts with `'console.'` (CONSOLE_CHANNEL_PREFIX). The compile-time coverage check in channels.ts ensures all console channels are in IpcContract, but if a new `console.adminAction` channel is added in the future, the console window (which is less sandboxed) automatically gains access to it without any explicit trust decision. The prefix-based grant is a blanket allowlist that grows silently.
@@ -2430,6 +2580,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### IPC-03 — bundleCheckStatus IPC handler makes a network call in the handler body — violates 'thin routes' guideline
 
+- **Status:** DONE — 2026-06-06 · commit 1cb2693 (thin-route done; deeper background-emit deferred to DLI-17/53)
 - **Category:** IPC · **Priority:** P2 · **Risk:** Medium · _(auditor: download-install-flow)_
 - **Area:** src/main/services/bundle/routes.ts, src/main/services/bundle/manager.ts
 - **Problem:** The IPC handler for bundleCheckStatus (routes.ts line 31-34) delegates to manager.getInstallState which in turn calls fetchRemoteManifest (manager.ts line 193) — a network call that may take several seconds. The guideline requires IPC handlers to be thin (validate args, call service, return). A blocking network call inside an IPC handler ties up the handler's promise for as long as the network request takes, potentially causing renderer-side awaits to time out on slow connections.
@@ -2440,6 +2591,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### IPC-04 — SLUG_REQUIRED string literal duplicated in three separate route files
 
+- **Status:** DONE — 2026-06-06 · commit 1cb2693
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/minecraft/routes.ts (L9), src/main/services/bundle/routes.ts (L8), src/main/services/settings/routes.ts (L18)
 - **Problem:** `const SLUG_REQUIRED = 'slug must be a non-empty string'` is defined identically as a module-level constant in all three route files. The string is passed as the error label to `parseIpcArgs`.
@@ -2450,6 +2602,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### IPC-05 — IpcError.code is typed as string in shared/ipc/errors.ts — no compile-time narrowing from codes registry
 
+- **Status:** DEFERRED — 2026-06-06 · motivating renderer call-site is gone
 - **Category:** IPC · **Priority:** P2 · **Risk:** Medium · _(auditor: error-logging-model)_
 - **Area:** src/shared/ipc/errors.ts line 2, src/shared/constants/errorCodes.ts
 - **Problem:** IpcError.code is typed as string (errors.ts line 2). The comment in isIpcError (lines 7-11) intentionally avoids narrowing to a closed set for forward-compatibility. However, this means that renderer call sites which switch/match on ipcError.code have no compile-time exhaustiveness guarantee. The renderer's IPC_LOGIN_ERROR_CODES map in auth/hooks.ts uses Partial<Record<string, LoginErrorCode>> rather than the domain code union, and a typo in a code string would silently map to undefined.
@@ -2460,6 +2613,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### IPC-06 — No route-level tests for minecraft/bundle IPC routes (Zod validation and error mapping)
 
+- **Status:** DONE — 2026-06-06 · commit 1cb2693
 - **Category:** Testing · **Priority:** P1 · **Risk:** Medium · _(auditor: testability)_
 - **Area:** src/main/services/minecraft/routes.ts, src/main/services/bundle/routes.ts, tests/main/services/system/routes.test.ts (reference implementation)
 - **Problem:** There are no tests for registerMinecraftRoutes or registerBundleRoutes analogous to the existing tests/main/services/system/routes.test.ts. The minecraft routes validate with InstallRequestSchema and ClientSlugSchema via parseIpcArgs; if these validations are wrong or the route wires the wrong schema, no test will catch it. The bundle routes similarly have no coverage for BundleStartRequestSchema validation on bundleStart.
@@ -2470,6 +2624,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### IPC-07 — No route-level tests for settings routes — Zod validation of PatchLauncherSettings and SetClientOverridePayload
 
+- **Status:** DONE — 2026-06-06 · commit 1cb2693
 - **Category:** Testing · **Priority:** P2 · **Risk:** Low · _(auditor: testability)_
 - **Area:** src/main/services/settings/routes.ts
 - **Problem:** settings.setLauncher accepts PatchLauncherSettingsSchema and settings.setClientOverride accepts SetClientOverridePayloadSchema. There are no tests verifying that malformed payloads are rejected before reaching the settings service, and that valid payloads reach the right service method.
@@ -2480,6 +2635,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### IPC-08 — PatchLauncherSettingsSchema is .strict() but settings routes test does not verify that extra fields are rejected
 
+- **Status:** DONE — 2026-06-06 · commit 1cb2693
 - **Category:** Testing · **Priority:** P3 · **Risk:** Low · _(auditor: testability)_
 - **Area:** src/shared/contracts/settings.ts:93-99
 - **Problem:** PatchLauncherSettingsSchema uses .strict() (line 97), meaning any extra field causes a parse failure. There are no tests in shared/contracts/schemas.test.ts verifying this constraint. If the renderer accidentally sends an extra key (e.g. clients from a refactor), it will silently fail with IpcInvalidArgs.
@@ -2490,6 +2646,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### IPC-09 — IpcContract type is not pinned by a compile-time test — channels can be added without corresponding route registration
 
+- **Status:** DONE — 2026-06-06 · commit 1cb2693 (contractCoverage test)
 - **Category:** Testing · **Priority:** P2 · **Risk:** Medium · _(auditor: testability)_
 - **Area:** src/shared/ipc/contract.ts, src/main/services/*/routes.ts
 - **Problem:** IpcContract defines 30+ channels as TypeScript types. There is no test verifying that every channel in IpcContract has a registered handler (via router.handle) in at least one routes.ts file. A new channel added to the contract without a route registration is a silent dead letter — the renderer call hangs forever.
@@ -2502,6 +2659,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-01 — patchLauncherSettings is a brittle field-by-field imperative merge requiring updates on every schema change
 
+- **Status:** DONE — 2026-06-06 · commit d60ae4c
 - **Category:** Code · **Priority:** P1 · **Risk:** Low · _(auditor: arch-boundaries)_
 - **Area:** src/main/services/settings/settings.ts:18-41
 - **Problem:** `patchLauncherSettings` manually copies `memory`, `storage`, `launch` and then checks each leaf field with `if (patch.X !== undefined)`. Adding a new setting section or field to `LauncherSettings` requires also updating this merge function — otherwise the new field is silently dropped. The pattern already exists in a simpler, more maintainable form: `setClientOverride` delegates to the pure `setClientOverridePure` in shared/domain.
@@ -2512,6 +2670,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-02 — shared/contracts/settings.ts imports a runtime type from @loontail/minecraft-kit — risks renderer bundle bloat
 
+- **Status:** DEFERRED — 2026-06-06 · packages (minecraft-kit; downgradeable to type-only import) — needs a release + dist sync + lockfile refresh
 - **Category:** Architecture · **Priority:** P1 · **Risk:** Medium · _(auditor: arch-boundaries)_
 - **Area:** src/shared/contracts/settings.ts:1,6
 - **Problem:** Line 1: `import type { LoaderKind } from '@loontail/minecraft-kit'`. While it is a type-only import and does not pull in runtime code, the `LoaderChoices` const object on line 10 is defined `satisfies Record<string, LoaderKind>` which introduces a compile-time dependency on the kit. The guideline says shared must have no Electron/Node/React imports but does not enumerate kit as an allowed external. The kit's package.json `main` entry points to a Node-compiled bundle containing yauzl/fs/crypto — build tooling that incorrectly resolves the type import as a value import would include the entire kit in the renderer bundle.
@@ -2522,6 +2681,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-03 — updater service registers IPC handlers inside init() but Squirrel event listeners must be removed on dispose — handler leak if init throws partway through
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Error handling · **Priority:** P2 · **Risk:** Low · _(auditor: arch-boundaries)_
 - **Area:** src/main/services/updater/index.ts:64-116
 - **Problem:** `init()` registers autoUpdater event listeners (lines 70-74) and then registers IPC handlers (lines 83-106). If autoUpdater.setFeedURL throws after listener registration but before the IPC handlers are registered, the `registered` flag remains false and `dispose()` skips the `removeListener` calls — the event listeners are permanently attached to `autoUpdater` and will fire after the service is logically destroyed. Separately, IPC handlers registered via `router.handle` are tracked in the router's `registered` array and cleaned up by `router.dispose()`, but the service's own `dispose()` never calls into the router to remove its handlers, relying on global `router.dispose()` at the end of `drain()`.
@@ -2532,6 +2692,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-04 — services with no real lifecycle (app, settings, clients, servers, system, skin, media) have empty async dispose bodies — inconsistency and misleading API
 
+- **Status:** DONE — 2026-06-06 · commit 494c867
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: arch-boundaries)_
 - **Area:** src/main/services/app/index.ts, src/main/services/settings/index.ts, src/main/services/clients/index.ts, src/main/services/servers/index.ts, src/main/services/system/index.ts, src/main/services/skin/index.ts, src/main/services/media/index.ts
 - **Problem:** Seven services implement `dispose: async () => {}`. The method is a no-op that allocates a Promise on every call. The guideline says dispose should clean up timers/subscriptions. Having empty async dispose bodies makes it unclear whether the omission is intentional or an oversight when the service had resources.
@@ -2542,6 +2703,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-05 — Comment-guideline violations: several 'what'-restating block comments should be removed
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Docs · **Priority:** P3 · **Risk:** Low · _(auditor: auth-session-flow)_
 - **Area:** src/main/services/auth/verify.ts:37-42, src/main/services/auth/auth.ts:47-52, src/main/services/auth/routes.ts:17-21
 - **Problem:** verify.ts lines 37-42 restate the function's discriminated-union return value ('Returns the active account on success, null if no session … offline fallback') — this is already captured by the TypeScript signature and return type `Account | null`. auth.ts lines 47-52 explain what `getStoredAccount` does in prose that mirrors the code exactly. routes.ts lines 17-21 describe the `mojangFailureCode` function in detail that the code itself expresses. Per guideline §10, comments that restate 'what' the code does should be removed; only 'why' for non-obvious invariants should remain.
@@ -2552,6 +2714,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-06 — JSDoc-style block comments on `fetchTextures` and `getYggdrasilClient` in yggdrasilClient.ts violate the no-decorative-comments guideline
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Docs · **Priority:** P3 · **Risk:** Low · _(auditor: auth-session-flow)_
 - **Area:** src/main/services/auth/yggdrasilClient.ts:6-18,32-34
 - **Problem:** Lines 6-18: the JSDoc block on `getYggdrasilClient` explains what a singleton is and why lazy construction is used — this restates what the code already shows. Lines 32-34: the JSDoc on `fetchTextures` says 'Wrap `getTextures` so callers always receive absolute URLs' — also a 'what' comment. Per guideline §10, these should be removed or reduced to a single 'why' note about the server URL quirk.
@@ -2595,6 +2758,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-10 — healProgress.ts HEAL_PROGRESS_THROTTLE_MS magic literal not shared with minecraft-kit progress throttle constant
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/bundle/healProgress.ts (line 6)
 - **Problem:** HEAL_PROGRESS_THROTTLE_MS = 100 is a file-local magic constant. progressAdapter.ts has PROGRESS_THROTTLE_MS = 100 (also local). bundle/runner.ts imports BUNDLE_DOWNLOAD_PROGRESS_THROTTLE_MS from main/constants/bundle.ts (also 100). All three values are identical but defined in three places with three different names.
@@ -2605,6 +2769,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-11 — errorMessage() is duplicated in both minecraft/errors.ts and bundle/errors.ts
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/errors.ts (line 37), src/main/services/bundle/errors.ts (line 19)
 - **Problem:** Two identical one-line functions: export const errorMessage = (error: unknown): string => error instanceof Error ? error.message : String(error). Both are copy-paste identical. They are imported separately by their respective service files.
@@ -2615,6 +2780,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-12 — manager.ts finishRepair is a private method typed with Awaited<ReturnType<typeof buildContext>> instead of the exported Context type
 
+- **Status:** DONE — 2026-06-06 · commit 6df9168
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/manager.ts (line 317)
 - **Problem:** ctx: Awaited<ReturnType<typeof buildContext>> at line 317. buildContext returns Promise<Context>; Awaited<ReturnType<...>> equals Context. Using the inferred type instead of the named exported type breaks the explicit-return-types guideline for service boundaries and makes the parameter type opaque at a glance.
@@ -2625,6 +2791,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-13 — bundleHealing.ts: opOptions helper conditionally spreads signal and onEvent using ternary chains instead of clean optional-field syntax
 
+- **Status:** DEFERRED — 2026-06-06 · kit VerifyOperationOptions reject explicit undefined under exactOptionalPropertyTypes, so the conditional-spread helper stays.
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: repair-integrity-flow)_
 - **Area:** src/main/services/minecraft/bundleHealing.ts (lines 43-48, 89-91, 93-94)
 - **Problem:** opOptions (lines 43-48) manually constructs an object by conditionally spreading each optional field. The same conditional spread pattern is repeated inline at lines 89-91 and 93-94 for signal. Using { signal?: AbortSignal; onEvent?: ProgressListener } as a type and directly passing options (filtering undefined keys) is simpler and already idiomatic in the rest of the codebase. The opOptions function itself is not exported and its name does not convey intent.
@@ -2657,6 +2824,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-16 — Context type uses `ReturnType<typeof resolveClientSettings>` instead of the exported `ResolvedClientSettings` type
 
+- **Status:** DONE — 2026-06-06 · commit 6df9168
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: code-quality)_
 - **Area:** src/main/services/minecraft/context.ts (L18-23), src/main/services/minecraft/manager.ts (L317)
 - **Problem:** `Context.resolved` is typed as `ReturnType<typeof resolveClientSettings>` (context.ts L22) rather than the explicit `ResolvedClientSettings` type already exported from `@shared/contracts/settings`. Similarly `manager.ts` L317 uses `Awaited<ReturnType<typeof buildContext>>` as a parameter type instead of the exported `Context` type.
@@ -2678,6 +2846,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-18 — Remove dead emitErrorEvent from ManagerEnv — it is defined but never called
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Code · **Priority:** P1 · **Risk:** Low · _(auditor: error-logging-model)_
 - **Area:** src/main/services/minecraft/env.ts, src/main/services/minecraft/manager.ts
 - **Problem:** ManagerEnv (env.ts line 19) declares emitErrorEvent: (payload: MinecraftErrorEvent) => void and manager.ts line 71 wires it to broadcaster.error. However, no call site in install.ts, launch.ts, repair.ts, repairWorkflow.ts, or uninstall.ts ever invokes env.emitErrorEvent — all callers use env.emitError(slug, code, message) instead. The member is pure dead code.
@@ -2699,6 +2868,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-20 — bundleHealing logger scope 'bundle.heal' conflicts with healer logger scope 'bundle.healer' — confusing log attribution
 
+- **Status:** DONE — 2026-06-06 · commit 07bf5d8
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: error-logging-model)_
 - **Area:** src/main/services/minecraft/bundleHealing.ts line 12, src/main/services/bundle/healer.ts line 8
 - **Problem:** bundleHealing.ts uses scopedLogger('bundle.heal') (line 12) while healer.ts uses scopedLogger('bundle.healer') (line 8). Both files participate in the same healing flow but use slightly different scope names. bundleHealing is in src/main/services/minecraft/ (not bundle/), so its scope name is already misleading — it appears to belong to the bundle service but lives in the minecraft service.
@@ -2709,6 +2879,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-21 — BundleManager.resolveClientFolder returns empty string falsy fallback — caller must remember to check
 
+- **Status:** DONE — 2026-06-06 · commit 07bf5d8
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: error-logging-model)_
 - **Area:** src/main/services/bundle/manager.ts lines 354-357
 - **Problem:** resolveClientFolder (lines 354-357) returns resolved.storage.clientFolder || '' — returning an empty string when no folder is configured. Call sites must check for falsy/empty string themselves (e.g. manager.ts line 220 checks if (!clientFolder)). An empty string is not a valid path type and is semantically distinct from a configured-but-empty path.
@@ -2719,6 +2890,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-22 — progressAdapter.ts uses magic number PROGRESS_THROTTLE_MS = 100 without a shared constant
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: error-logging-model)_
 - **Area:** src/main/services/minecraft/progressAdapter.ts line 21
 - **Problem:** PROGRESS_THROTTLE_MS = 100 is a file-local magic number. The bundle runner uses BUNDLE_DOWNLOAD_PROGRESS_THROTTLE_MS imported from @main/constants/bundle for the same concept on the bundle side. Having separate unshared constants for the two throttles makes it impossible to tune them consistently from one place.
@@ -2729,6 +2901,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-23 — Extract pending-RAM state pattern into a shared hook useRamPendingState
 
+- **Status:** DONE — 2026-06-06 · commit d60ae4c
 - **Category:** Code · **Priority:** P1 · **Risk:** Low · _(auditor: renderer-ui)_
 - **Area:** src/renderer/features/settings/components/sections/SystemSection.tsx, src/renderer/features/clients/components/ClientSettingsModal.tsx
 - **Problem:** Lines 27-39 of SystemSection.tsx and lines 54-73 of ClientSettingsModal.tsx share identical logic: useState<number|null>(null) for pendingRam, a handleRamSave that checks pendingRam === null and calls a mutation, and a useEffect that resets pendingRam on isOpen/slug change. This is full duplication of a 3-state pattern (savedRam, pendingRam, isDirty).
@@ -2739,6 +2912,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-24 — Move inline business logic out of ClientSettingsModal async handlers into the hooks layer
 
+- **Status:** DONE — 2026-06-06 · commit d60ae4c
 - **Category:** Architecture · **Priority:** P1 · **Risk:** Medium · _(auditor: renderer-ui)_
 - **Area:** src/renderer/features/clients/components/ClientSettingsModal.tsx:66-93
 - **Problem:** handleRamSave (line 66), handleToggleConsole (75), handleToggleFullscreen (79), handleResetAll (83), handleChangeFolder (88) are all async functions defined inline inside the component body. They directly call mutation functions and coordinate local state changes. This is business logic in a React component, which the guideline forbids.
@@ -2749,6 +2923,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-25 — Move disk-usage ratio computation out of FolderInfoBlock into a utility function
 
+- **Status:** DONE — 2026-06-06 · commit d60ae4c
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: renderer-ui)_
 - **Area:** src/renderer/features/settings/components/FolderInfoBlock.tsx:66-73
 - **Problem:** Lines 66-73 compute diskTotal, diskUsedBytes, diskUsedRatio, folderRatio, clampedFolderRatio, restUsedRatio — six derived numbers — directly in the component body before the return. This is presentation-layer domain logic (the guideline bans business logic in components).
@@ -2759,6 +2934,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-26 — Replace FolderInfoBlock's internal formatBytes with a shared utility; deduplicate with LauncherSection formatCacheSize
 
+- **Status:** DONE — 2026-06-06 · commit d60ae4c
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: renderer-ui)_
 - **Area:** src/renderer/features/settings/components/FolderInfoBlock.tsx:9-17, src/renderer/features/settings/components/sections/LauncherSection.tsx:21-25
 - **Problem:** FolderInfoBlock.tsx defines formatBytes (lines 9-17) converting bytes to GB/MB. LauncherSection.tsx defines formatCacheSize (lines 21-25) converting bytes to MB/KB. Both are local private functions doing essentially the same conversion at different thresholds. Neither is exported or reusable.
@@ -2769,6 +2945,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-27 — Remove void i18n.language subscription side-effect from LanguageSwitcher
 
+- **Status:** DONE — 2026-06-06 · commit d60ae4c
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: renderer-ui)_
 - **Area:** src/renderer/features/settings/components/LanguageSwitcher.tsx:26
 - **Problem:** Line 26: `void i18n.language;` — this is a no-op expression used only to make the component re-render when i18n.language changes. The intent is to subscribe to language changes, but the mechanism is undocumented and relies on a side effect of destructuring i18n from useTranslation. The comment says nothing. Any reader unfamiliar with react-i18next internals will not understand why this exists.
@@ -2779,6 +2956,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-28 — Replace CopyButton's identical size class on both icon variants with a single expression
 
+- **Status:** DONE — 2026-06-06 · commit 000158c
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: renderer-ui)_
 - **Area:** src/renderer/shared/ui/CopyButton.tsx:107-109
 - **Problem:** Lines 107-109 have a ternary: Check className={variant === 'icon' ? 'size-3.5' : 'size-3.5'} — both branches return the identical string 'size-3.5'. The ternary is dead code but reads as if the sizes differ.
@@ -2789,6 +2967,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-29 — Remove implicit magic string 'system','defaultInstallFolder' query key in SetupPage; use QUERY_KEYS constant
 
+- **Status:** DONE — 2026-06-06 · commit dd6d28f
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: renderer-ui)_
 - **Area:** src/renderer/features/setup/components/SetupPage.tsx:28-32
 - **Problem:** SetupPage constructs a queryKey with inline array literals ['system', 'defaultInstallFolder'] (lines 28-32). The rest of the codebase uses QUERY_KEYS constants from @shared/constants. This one-off key is invisible to the cache invalidation patterns used elsewhere.
@@ -2799,6 +2978,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-30 — Namespace SetupPage query outside QUERY_KEYS and staleTime:0/gcTime:0 pair should use a named constant
 
+- **Status:** DONE — 2026-06-06 · commit dd6d28f
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: renderer-ui)_
 - **Area:** src/renderer/features/setup/components/SetupPage.tsx:27-32
 - **Problem:** The defaultInstallFolder query uses staleTime: 0, gcTime: 0 with a prose comment explaining why. These values are magic numeric literals (0) with business meaning ('always refetch, never cache'). The comment is correct but the numbers have no named constant.
@@ -2809,6 +2989,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-31 — Remove decorative section-divider comment in useInstallProgress; remove what-restating comments in installSteps.ts
 
+- **Status:** DONE — 2026-06-06 · commit 000158c
 - **Category:** Docs · **Priority:** P3 · **Risk:** Low · _(auditor: renderer-ui)_
 - **Area:** src/renderer/features/clients/components/install/useInstallProgress.ts:16-19, src/renderer/features/clients/components/install/installSteps.ts:107
 - **Problem:** useInstallProgress.ts lines 16-19 have a multi-line comment block starting 'Single composite hook so callers...' and ending '...same way the main-process install pipeline picks the loader.' The first sentence restates what the function signature already shows. installSteps.ts line 107 comment '// Skip undefined to respect exactOptionalPropertyTypes.' is a why-comment and should be kept; however lines 63-64 ('// Stages map to user-facing steps. With a loader...') partially restate what the code makes clear. Guidelines: delete what-restating comments; keep why-for-non-obvious.
@@ -2819,6 +3000,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-32 — Move computeServerStatusDisplay logic out of ServersInfo render into a selector function
 
+- **Status:** DONE — 2026-06-06 · commit dd6d28f
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: renderer-ui)_
 - **Area:** src/renderer/features/clients/components/ServersInfo.tsx:51-104
 - **Problem:** ServersInfo.tsx lines 51-104 contain a large map() block with inline conditionals: displayName resolution (line 54), hasPlayerCount derivation (line 56), and all className derivations. The 'not anyOnline' guard at line 40 returns early, but the primary branch still interleaves DOM construction with data transformation.
@@ -2829,6 +3011,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-33 — cache.ts listNamespaceFiles calls stat() on each file sequentially in a for loop — parallelize with Promise.all
 
+- **Status:** DONE — 2026-06-06 · commit 000158c
 - **Category:** Performance · **Priority:** P2 · **Risk:** Low · _(auditor: state-async-perf)_
 - **Area:** src/main/infra/cache.ts
 - **Problem:** listNamespaceFiles (line 71) reads directory entries and then calls stat() on each file sequentially in a for-of loop (lines 81-89). For a namespace with many entries (e.g. HTTP cache after weeks of use), this serialises all stat calls through the event loop. listNamespaceFiles is called by both getNamespaceSize (line 95) and enforceSizeBound (line 111).
@@ -2861,6 +3044,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-36 — MINECRAFT_KIT_VERSION read at module load via createRequire; untestable without mocking module resolution
 
+- **Status:** DONE — 2026-06-06 · commit bc3ae9e
 - **Category:** Testing · **Priority:** P2 · **Risk:** Low · _(auditor: testability)_
 - **Area:** src/main/services/minecraft/installManifest.ts:45-46
 - **Problem:** const minecraftKitPackage = requirePackage('@loontail/minecraft-kit/package.json') and MINECRAFT_KIT_VERSION = parsePackageVersion(minecraftKitPackage) execute at module load time (lines 45-46). targetInstallManifestMatches() compares manifest.kitVersion against MINECRAFT_KIT_VERSION (line 149). Tests that create TargetInstallManifest objects must match the real installed kit version to get a positive match, or else hasCurrentTargetInstallManifest always returns false.
@@ -2871,6 +3055,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-37 — buildContext() calls persistClientOverride() as a side-effect during context construction
 
+- **Status:** DONE — 2026-06-06 · commit 6df9168
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Medium · _(auditor: testability)_
 - **Area:** src/main/services/minecraft/context.ts:51, 78
 - **Problem:** buildContext() persists a settings mutation (persistClientOverride) in two places: line 51 (dropping stale loader override) and line 78 (clearing stale runtime ref). Context construction is expected to be a read-heavy setup step; write side-effects make it non-idempotent and harder to test. Any test that calls buildContext must mock or account for setClientOverride side-effects.
@@ -2881,6 +3066,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-38 — vitest.config.ts has no coverage configuration — no branch/line coverage gate for CI
 
+- **Status:** DEFERRED — 2026-06-06 · adds a coverage dependency
 - **Category:** Testing · **Priority:** P3 · **Risk:** Low · _(auditor: testability)_
 - **Area:** vitest.config.ts
 - **Problem:** The vitest configuration has no coverage provider, thresholds, or include/exclude patterns. Running 'vitest run' produces no coverage report. There is no CI gate on coverage regression.
@@ -2891,6 +3077,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-39 — Deduplicate the throttled-progress-emitter pattern shared by progressAdapter.ts and healProgress.ts
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Code · **Priority:** P2 · **Risk:** Low · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/minecraft/progressAdapter.ts, src/main/services/bundle/healProgress.ts
 - **Problem:** Both files independently implement the same throttle/debounce idiom: a `lastEmittedAt` timestamp, a `pendingFlush: NodeJS.Timeout | null`, a `clearPendingFlush` helper, a `setTimeout` / `clearTimeout` pair, and a `.unref()` guard (progressAdapter.ts line 162, healProgress.ts line 49). The only difference is the flush payload.
@@ -2912,6 +3099,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-41 — Replace infra/cache.ts `cachedFetch` with minecraft-kit's `createPersistentMetadataCache`
 
+- **Status:** DEFERRED — 2026-06-06 · packages (minecraft-kit) — needs a release + dist sync + lockfile refresh
 - **Category:** Dependency extraction · **Priority:** P2 · **Risk:** Medium · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/infra/cache.ts
 - **Problem:** `cachedFetch` (cache.ts lines 153-174) is a network-first JSON store with on-disk fallback, keyed by namespace + key, swallowing 5xx as an offline signal. This is semantically identical to what `createPersistentMetadataCache` from `@loontail/minecraft-kit` provides. The launcher builds and maintains its own disk-backed cache infrastructure (lines 10-67: `readBuffer`, `writeBuffer`, `safeKey`, `namespaceDir`) that largely duplicates kit internals.
@@ -2922,6 +3110,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-42 — Remove `emitErrorEvent` from `ManagerEnv` – it is never called
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Code · **Priority:** P3 · **Risk:** Low · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/minecraft/env.ts, src/main/services/minecraft/manager.ts
 - **Problem:** `ManagerEnv` (env.ts line 20) declares `emitErrorEvent: (payload: MinecraftErrorEvent) => void`. `MinecraftManager` wires it (manager.ts line 71) but no code in the minecraft service layer calls `env.emitErrorEvent`. `env.emitError` (line 18) is used instead for all error broadcasting.
@@ -2932,6 +3121,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-43 — Remove junk comments: section-divider banners and what-restating comments across minecraft service files
 
+- **Status:** DONE — 2026-06-06 · commit 6df9168
 - **Category:** Docs · **Priority:** P3 · **Risk:** Low · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/minecraft/progressAdapter.ts, src/main/services/minecraft/launch.ts, src/main/services/minecraft/installManifest.ts, src/main/services/bundle/download.ts
 - **Problem:** Several files contain comments that restate the code rather than explaining non-obvious invariants. Examples: progressAdapter.ts line 51 has no comment but the function `emitSnapshot` is self-evident; launch.ts lines 69-76 have an accurate comment but lines 86-95 (`resolveAuthlibInjectorJar`) have no non-obvious invariant being documented. Conversely, download.ts lines 56-62 (`// Register the settle/cleanup listeners before the abort check`) is a genuine race-condition comment that must be kept. installManifest.ts lines 48-50 inline `assertNever` has no comment explaining why a local copy exists.
@@ -2942,6 +3132,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-44 — Add `VerifyFileCategories` import guard: the enum is used but not re-exported via a stable path
 
+- **Status:** DONE — 2026-06-06 (obsolete)
 - **Category:** Architecture · **Priority:** P2 · **Risk:** Low · _(auditor: kit-yggdrasil-extraction)_
 - **Area:** src/main/services/minecraft/progressAdapter.ts
 - **Problem:** Line 9 imports `VerifyFileCategories` from `@loontail/minecraft-kit`. This enum is listed in the KIT_API under `verify: VerifyFileStatuses` — the audit list uses the name `VerifyFileStatuses`, but the import uses `VerifyFileCategories`. If the kit's public export surface changes the name (it has already happened once — note the `VerifyFileStatuses` vs `VerifyFileCategories` discrepancy in the KIT_API description), the import silently becomes `undefined` at runtime if TypeScript's strict checks are bypassed.
@@ -2952,6 +3143,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-45 — Remove JSDoc on `kitLogger` in logger.ts — the adapter pattern is self-documenting
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Docs · **Priority:** P3 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/main/infra/logger.ts
 - **Problem:** Lines 29-33: `/** Adapt an electron-log scope to the kit's pluggable Logger interface so new MinecraftKit({ logger }) writes through the same sinks as the rest of the launcher (file + console). */` — the function name `kitLogger`, its return type `KitLogger`, and the call site in kit.ts already communicate the adapter intent.
@@ -2962,6 +3154,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-46 — Remove JSDoc blocks on `enforceSizeBound` and `cachedFetch` in cache.ts
 
+- **Status:** DONE — 2026-06-06 (already resolved)
 - **Category:** Docs · **Priority:** P2 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/main/infra/cache.ts
 - **Problem:** Lines 105-110 (`enforceSizeBound`): 'Prune the oldest files in namespace (by mtime) until the total on-disk footprint is <= maxBytes. No-op when already under the bound…' — entirely describes what, not why. Lines 146-152 (`cachedFetch`): 'Network-first JSON cache with on-disk fallback. Online: call fetcher… Offline (network/5xx by default): return the last persisted JSON…' — again describes what; the function body is short enough that this adds no information.
@@ -2972,6 +3165,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-47 — Replace JSDoc on `AuthMode` type in http.ts with inline per-value comments
 
+- **Status:** DONE — 2026-06-06 · commit 494c867
 - **Category:** Docs · **Priority:** P2 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/main/infra/http.ts
 - **Problem:** Lines 8-22: the `/** Authorization mode… */` docblock on the `AuthMode` type union contains genuine valuable why-content (the explanation of why the Yggdrasil access token is NOT valid for the Strapi API). However it uses multi-line JSDoc format for a two-member string union, which §10 says is unnecessary. The Cloudflare/UA note (lines 45-47 in launch.ts) is the reference pattern: a short inline `//` comment.
@@ -2982,6 +3176,7 @@ Per category: Code (87), Error handling (46), Architecture (38), Docs (31), Depe
 
 #### CC-48 — Remove what-restating inline comment on `resolveLoader` in shared/domain/loader.ts
 
+- **Status:** DONE — 2026-06-06 · commit 494c867
 - **Category:** Docs · **Priority:** P3 · **Risk:** Low · _(auditor: comments-cleanup)_
 - **Area:** src/shared/domain/loader.ts
 - **Problem:** Line 19: `/** Honours the user's override when valid; otherwise derives the loader from set version fields. */` — this is a one-liner JSDoc. The function name `resolveLoader`, parameter `override`, and its three-branch body make this fully self-explanatory. The related comment on `isLoaderAvailable` at lines 10-12 ('An override is only meaningful when…') is a genuine why-comment that should stay.
@@ -3474,6 +3669,24 @@ or blocked work. Pick the highest-priority available task (P0 → P1 → P2 → 
 _None._ No task this cycle changed `@loontail/minecraft-kit` or `loontail-yggdrasil`.
 
 ## Session log
+
+### 2026-06-06 (session 9)
+
+- **Done (~95 task IDs across 13 commits, + ~36 confirmed already-resolved/obsolete):** a multi-agent parallel/sequential delegation sweep that kept the repo green (lint + typecheck + lint:i18n + test + build) at every commit; test count 398 → 519.
+  - Wave 1 (renderer + console + auth + service-dispose): AUTH-10/17, LAU-15, UI-07/08/09/10/11/12/13/17/18/19/20/21/22/23/25/26/27/28/29/30/31/34/35/37/38/39/40/41, CC-04/29/30/32/47/48, DLI-45 · commits 4bd3a5d, 1f0f9d0, dd6d28f, 5a346fc, 494c867
+  - Wave 2a (minecraft core / repair / settings): AUTH-23, LAU-12/13/22/30/32/33, CC-01/12/16/23/24/25/26/27/36/37/43, REP-2/7/8/9/13/16/17, DLI-7/19/44/67/77 · commits 6df9168, bc3ae9e, d60ae4c
+  - Wave 2b (bundle): REP-3/6/10/14/15/18/20/22/28/30, CC-20/21, DLI-19/40/41/43/44/50/51/52/54/55/58/74 (DLI-33 by 50, DLI-80 by 55, DLI-12/30 null-part by CC-21) · commits 07bf5d8, 158deb9
+  - Wave 3 (ipc / skin / misc): IPC-2/3/4/6/7/8/9, UI-14/15/16/24/43, CC-28/31/33, LAU-8 · commits 1cb2693, 4fe576e, 000158c
+  - Stragglers: REP-24 (finishRepair launchHook tests), LAU-31 (caller-reference comment) · commit 99c5ffa
+- **Confirmed already-resolved / obsolete (no code):** AUTH-26..31; PRF-1/2; LAU-4/5/6/14/20/25/29; REP-1/11; DLI-2/3/33/35/56/57/61/78/80; UI-33/36/42; CC-03/05/06/10/11/18/22/39/42/44/45/46.
+- **Verification:** lint, typecheck, lint:i18n, test (519, up from 398), build all green on every commit.
+- **Notable behavioral fixes:** the heal pass no longer re-runs `buildContext` (layer inversion removed, the REP-6 cluster); bundle `cancelAll` waits on real per-sync awaiters instead of a blind 250 ms sleep (DLI-55/REP-15); bundle sync failures surface as typed/coded errors (DLI-40); the repair op + REPAIRING status register before `await buildContext` so `getStatus` is correct mid-setup (REP-13); forge `sha1OfFile` closes fds on every path and honours the abort signal (REP-7); distinct typed skin error codes + renderer-side PNG validation via `@loontail/yggdrasil-core` (UI-16/24); explicit console trusted-channel allowlist replacing a prefix grant (IPC-2); the generic launch-failure catch no longer re-throws into a second toast (LAU-12).
+- **Deferred (recorded, not done):**
+  - Packages (need a yggdrasil/kit release + dist sync + lockfile refresh): AUTH-11/24/25, LAU-7/16/26/27, DLI-6/14/24/66, REP-25/26, CC-41, CC-02.
+  - Needs-design: DLI-62 (paused-mid-heal awaiter — the session-8 note still stands), DLI-68 (progress-enum import boundary), UI-32 (sync→async IndexedDB persister), LAU-23 (conflicts the CC-16 `ResolvedClientSettings` narrowing), IPC-5 (motivating renderer call-site is gone), UI-05 (WONTFIX — the Zustand getState pattern is correct), CC-38 (adds a coverage dependency).
+  - Lower-value DLI polish left for a future session: DLI-4/11/15/16/17/18/20/26/34/42/47/49/53/60/64/65/72/75/76/79.
+- **Process notes:** orchestrated ~30 subagents as file-disjoint "owners" in waves (edit-only + central verify for low-risk work; sole-editor-with-tests for the bundle reliability code). A ruflo swarm was initialised for coordination but its memory backend reported "database disk image is malformed", so this backlog stayed the durable progress record. Per-prefix triage detail lives in docs/audit-plan/*.md.
+- **Suggested next batch:** the lower-value DLI plan/hash/runner polish (DLI-18/47/49/65/72/26), then a packages pass batching the yggdrasil/kit-dependent tasks into one monorepo release (AUTH-11/24/25, LAU-7/16, REP-26, CC-41), and a design decision on DLI-62 / DLI-68.
 
 ### 2026-05-31 (session 8)
 
