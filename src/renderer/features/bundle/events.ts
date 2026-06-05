@@ -10,7 +10,6 @@ import { useBundleStore } from './store';
 export const BundleEventsListener = (): null => {
   useEffect(() => {
     const patch = useBundleStore.getState().patch;
-    const reset = useBundleStore.getState().reset;
 
     const offStatus = window.api.on(IPC_EVENTS.bundleStatus, ({ slug, status }) => {
       patch(slug, {
@@ -32,7 +31,7 @@ export const BundleEventsListener = (): null => {
     // wipes it transparently. Mirror that here so the UI doesn't stay stuck on
     // a "Repair bundle" state after the user deletes the client.
     const offMinecraftStatus = window.api.on(IPC_EVENTS.minecraftStatus, ({ slug, status }) => {
-      if (status === InstallStatuses.NOT_INSTALLED) reset(slug);
+      if (status === InstallStatuses.NOT_INSTALLED) useBundleStore.getState().reset(slug);
     });
 
     return () => {

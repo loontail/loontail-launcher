@@ -3,6 +3,7 @@ import { Skeleton } from '@renderer/shared/ui/Skeleton';
 import type { Server } from '@shared/contracts/strapi';
 import { useTranslation } from 'react-i18next';
 import { useServerStatuses } from '../hooks';
+import { resolveServerDisplayEntry } from './serverDisplay';
 
 type ServersInfoProps = {
   servers: Server[];
@@ -19,7 +20,7 @@ export const ServersInfo = ({ servers }: ServersInfoProps) => {
         {servers.map((server) => (
           <div
             key={server.address}
-            className="flex items-center justify-between gap-4 rounded-xl border border-edge bg-surface px-4 py-3 backdrop-blur-sm"
+            className="flex items-center justify-between gap-4 rounded-md border border-edge bg-surface px-4 py-3 backdrop-blur-sm"
           >
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-glass/30" />
@@ -39,7 +40,7 @@ export const ServersInfo = ({ servers }: ServersInfoProps) => {
 
   if (!anyOnline) {
     return (
-      <div className="flex items-center gap-2.5 rounded-xl border border-edge bg-surface px-4 py-3 backdrop-blur-sm">
+      <div className="flex items-center gap-2.5 rounded-md border border-edge bg-surface px-4 py-3 backdrop-blur-sm">
         <span className="h-1.5 w-1.5 rounded-full bg-destructive/50" />
         <span className="text-xs text-glass/45">{t('servers.offline')}</span>
       </div>
@@ -51,30 +52,28 @@ export const ServersInfo = ({ servers }: ServersInfoProps) => {
       {statuses.map((status, index) => {
         const server = servers[index];
         if (!server) return null;
-        const displayName = server.name ?? status.motd?.clean[0] ?? server.address;
-
-        const hasPlayerCount = status.online && status.players;
+        const entry = resolveServerDisplayEntry(server, status);
 
         return (
           <div
             key={server.address}
             className={cn(
-              'flex items-center justify-between gap-4 rounded-xl border border-edge bg-surface px-4 py-3 backdrop-blur-sm',
-              !status.online && 'opacity-60',
+              'flex items-center justify-between gap-4 rounded-md border border-edge bg-surface px-4 py-3 backdrop-blur-sm',
+              !entry.online && 'opacity-60',
             )}
           >
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <span
                 className={cn(
                   'h-1.5 w-1.5 shrink-0 rounded-full',
-                  status.online
+                  entry.online
                     ? 'bg-success/85 shadow-[0_0_6px_var(--color-glow-success)]'
                     : 'bg-destructive/40',
                 )}
               />
               <div className="flex h-9 min-w-0 flex-col justify-center">
-                <span className="truncate text-[13px] font-semibold leading-5 text-glass">
-                  {displayName}
+                <span className="truncate text-progress-label font-semibold leading-5 text-glass">
+                  {entry.displayName}
                 </span>
                 <span className="truncate text-eyebrow leading-4 text-glass/45">
                   {server.address}
@@ -83,11 +82,11 @@ export const ServersInfo = ({ servers }: ServersInfoProps) => {
             </div>
 
             <div className="flex shrink-0 items-center gap-2 text-eyebrow">
-              {hasPlayerCount && status.players && (
+              {entry.players && (
                 <>
                   <span className="tabular-nums text-glass/75">
-                    {status.players.online}
-                    <span className="text-glass/40"> / {status.players.max}</span>
+                    {entry.players.online}
+                    <span className="text-glass/40"> / {entry.players.max}</span>
                   </span>
                   <span className="text-glass/30">·</span>
                 </>
@@ -95,10 +94,10 @@ export const ServersInfo = ({ servers }: ServersInfoProps) => {
               <span
                 className={cn(
                   'font-bold uppercase tracking-wider',
-                  status.online ? 'text-success/85' : 'text-destructive/75',
+                  entry.online ? 'text-success/85' : 'text-destructive/75',
                 )}
               >
-                {status.online ? t('servers.online') : t('servers.serverOffline')}
+                {entry.online ? t('servers.online') : t('servers.serverOffline')}
               </span>
             </div>
           </div>

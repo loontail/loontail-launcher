@@ -2,7 +2,7 @@ import { toast } from '@renderer/shared/ui/Toast';
 import { UpdaterStates, type UpdaterStatusEvent } from '@shared/contracts/updater';
 import { IPC_CHANNELS, IPC_EVENTS } from '@shared/ipc';
 import type { TFunction } from 'i18next';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useUpdaterStore } from './store';
 
@@ -16,12 +16,13 @@ const BACKGROUND_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 const AUTO_CHECK_DEDUPE_MS = 5_000;
 let lastAutoCheckAt = 0;
 
-// Module state survives re-renders but resets on page reload — exactly right
-// for "don't re-toast the same news on every background poll, but do toast it
-// fresh in a new launcher session."
+// Shared between markUserInitiatedCheck (called from the settings button) and
+// triggerAutoCheck; module scope is intentional so both reach the same flag.
 let userInitiatedCheck = false;
-let lastToastedState: string | null = null;
-let lastToastedErrorMessage: string | null = null;
+
+// Per-session toast-dedup so the same news isn't re-toasted on every background
+// poll, but is fresh again in a new launcher session.
+type ToastDedup = { state: string | null; errorMessage: string | null };
 
 export const markUserInitiatedCheck = (): void => {
   userInitiatedCheck = true;
@@ -57,7 +58,12 @@ const isFinalState = (state: string): boolean =>
   state === UpdaterStates.READY ||
   state === UpdaterStates.ERROR;
 
-const toastFor = (status: UpdaterStatusEvent, wasUserInitiated: boolean, t: TFunction): boolean => {
+const toastFor = (
+  status: UpdaterStatusEvent,
+  wasUserInitiated: boolean,
+  t: TFunction,
+  dedup: ToastDedup,
+): boolean => {
   switch (status.state) {
     case UpdaterStates.CHECKING:
       // Button shows a spinner — an extra toast would just be noise.
@@ -66,7 +72,7 @@ const toastFor = (status: UpdaterStatusEvent, wasUserInitiated: boolean, t: TFun
       // Squirrel.Windows doesn't surface progress; nothing useful to toast.
       return false;
     case UpdaterStates.AVAILABLE:
-      if (lastToastedState === status.state) return false;
+      if (dedup.state === status.state) return false;
       toast.info(
         status.version
           ? t('updater.toast.available', { version: status.version })
@@ -80,7 +86,7 @@ const toastFor = (status: UpdaterStatusEvent, wasUserInitiated: boolean, t: TFun
       toast.success(t('updater.toast.notAvailable'));
       return true;
     case UpdaterStates.READY:
-      if (lastToastedState === status.state) return false;
+      if (dedup.state === status.state) return false;
       toast.success(
         status.version
           ? t('updater.toast.ready', { version: status.version })
@@ -88,11 +94,10 @@ const toastFor = (status: UpdaterStatusEvent, wasUserInitiated: boolean, t: TFun
       );
       return true;
     case UpdaterStates.ERROR: {
-      const sameAsLast =
-        lastToastedState === status.state && lastToastedErrorMessage === status.message;
+      const sameAsLast = dedup.state === status.state && dedup.errorMessage === status.message;
       if (sameAsLast && !wasUserInitiated) return false;
       toast.error(t('updater.toast.error', { message: status.message }));
-      lastToastedErrorMessage = status.message;
+      dedup.errorMessage = status.message;
       return true;
     }
     default:
@@ -100,25 +105,23 @@ const toastFor = (status: UpdaterStatusEvent, wasUserInitiated: boolean, t: TFun
   }
 };
 
-// Mount once at app root: feeds the global store and translates transitions
-// into toasts. AppBar badge + LauncherSection both read from the store.
 export const UpdaterEventsListener = (): null => {
   const { t } = useTranslation();
+  const dedupRef = useRef<ToastDedup>({ state: null, errorMessage: null });
   useEffect(() => {
     const setStatus = useUpdaterStore.getState().setValue;
+    const dedup = dedupRef.current;
     return window.api.on(IPC_EVENTS.updaterStatus, (status) => {
       setStatus(status);
       const wasUserInitiated = userInitiatedCheck;
-      const didToast = toastFor(status, wasUserInitiated, t);
-      if (didToast) lastToastedState = status.state;
+      const didToast = toastFor(status, wasUserInitiated, t, dedup);
+      if (didToast) dedup.state = status.state;
       if (isFinalState(status.state)) userInitiatedCheck = false;
     });
   }, [t]);
   return null;
 };
 
-// Kick off a check on launcher startup, on every window focus, and on a slow
-// interval while the app is open. Mounted alongside UpdaterEventsListener.
 export const UpdaterAutoCheck = (): null => {
   useEffect(() => {
     triggerAutoCheck();

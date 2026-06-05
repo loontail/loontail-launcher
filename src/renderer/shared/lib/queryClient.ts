@@ -5,6 +5,10 @@ import { QUERY_PERSIST_MAX_AGE_MS } from './queryPersister';
 
 const DEFAULT_STALE_TIME_MS = 30_000;
 
+// Refetch on every mount and drop the entry immediately, so the persisted query
+// cache can't replay a stale value from a previous main-process build.
+export const NEVER_CACHE = { staleTime: 0, gcTime: 0 } as const;
+
 // Best-effort string for arbitrary error shapes — covers IpcError ({code,
 // message}), Error instances, and as a last resort anything with a string
 // `message` so plain throw-objects never collapse to "[object Object]".
@@ -35,7 +39,8 @@ export const createQueryClient = (): QueryClient =>
     // and `mutateAsync` rejections also skip it; MutationCache.onError fires for
     // every mutation regardless of how the caller awaits it.
     mutationCache: new MutationCache({
-      onError: (error) => {
+      onError: (error, _vars, _ctx, mutation) => {
+        if (mutation.meta?.skipGlobalErrorToast) return;
         toast.error(formatError(error));
       },
     }),

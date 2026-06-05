@@ -18,8 +18,11 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   override componentDidCatch(error: Error, info: ErrorInfo): void {
+    // Keep the full component stack out of production logs (it reaches
+    // electron-log via the renderer console); surface it only in dev.
+    const detail = import.meta.env.DEV ? info.componentStack : `${error.name}: ${error.message}`;
     // biome-ignore lint/suspicious/noConsole: last-resort logger — main's logger isn't reachable from the renderer
-    console.error('[renderer] uncaught error', error, info.componentStack);
+    console.error('[renderer] uncaught error', detail);
   }
 
   private reset = (): void => {

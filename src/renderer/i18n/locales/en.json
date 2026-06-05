@@ -225,7 +225,8 @@
       "resetToDefault": "Reset to default",
       "unsavedHint": "You have unsaved changes",
       "save": "Save",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "uploadFailedToast": "Failed to upload {{texture}}"
     },
     "game": {
       "launch": "Launch",

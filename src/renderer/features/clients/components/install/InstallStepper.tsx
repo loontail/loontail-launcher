@@ -3,7 +3,7 @@ import { Check, Loader2, Pause } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import type { InstallStep } from './installSteps';
 import { StepStates } from './installSteps';
-import { STEP_NUMBER, STEP_TITLE_KEY } from './progressLabels';
+import { STEP_TITLE_KEY } from './progressLabels';
 
 const renderStepIcon = (step: InstallStep, stepNumber: number) => {
   if (step.state === StepStates.DONE) return <Check size={12} strokeWidth={3} />;
@@ -75,7 +75,7 @@ export const InstallStepper = ({ steps }: InstallStepperProps) => (
       <StepBadge
         key={step.key}
         step={step}
-        stepNumber={STEP_NUMBER[step.key]}
+        stepNumber={index + 1}
         isFirst={index === 0}
         previousDone={index > 0 && steps[index - 1]?.state === StepStates.DONE}
       />

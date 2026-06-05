@@ -20,6 +20,7 @@ export const QUERY_KEYS = {
     diskSpace: (path: string) => ['system', 'diskSpace', path] as const,
     folderSizeRoot: ['system', 'folderSize'] as const,
     folderSize: (path: string) => ['system', 'folderSize', path] as const,
+    defaultInstallFolder: ['system', 'defaultInstallFolder'] as const,
   },
   media: {
     cacheSize: ['media', 'cacheSize'] as const,

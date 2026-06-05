@@ -225,7 +225,8 @@
       "resetToDefault": "Скинути до стандартного",
       "unsavedHint": "Є незбережені зміни",
       "save": "Зберегти",
-      "cancel": "Скасувати"
+      "cancel": "Скасувати",
+      "uploadFailedToast": "Не вдалося завантажити {{texture}}"
     },
     "game": {
       "launch": "Запуск",

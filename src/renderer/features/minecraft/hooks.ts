@@ -51,8 +51,7 @@ export const useClientStatus = (slug: ClientSlug | null | undefined): ClientRunt
 
   useEffect(() => {
     if (!slug) return;
-    // Only seed when the store has no entry for this slug yet. Live IPC events
-    // are the source of truth — never let a stale fetch clobber them.
+    // Live events are source of truth — only seed if the store has no entry yet.
     if (useMinecraftStore.getState().entries[slug]) return;
     void seedStatus(slug)
       .then((data) => {

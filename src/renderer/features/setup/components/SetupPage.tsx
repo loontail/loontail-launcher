@@ -7,9 +7,11 @@ import {
   useSetLauncher,
 } from '@renderer/features/settings';
 import { getDefaultInstallFolder, pickInstallFolder } from '@renderer/features/settings/systemApi';
+import { NEVER_CACHE } from '@renderer/shared/lib/queryClient';
 import { Button } from '@renderer/shared/ui/Button';
 import { SettingsGroup } from '@renderer/shared/ui/SettingsGroup';
 import { SettingsRow } from '@renderer/shared/ui/SettingsRow';
+import { QUERY_KEYS } from '@shared/constants';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -21,14 +23,10 @@ export const SetupPage = () => {
   const [localPath, setLocalPath] = useState<string>('');
   const [userTouched, setUserTouched] = useState(false);
 
-  // staleTime: 0 + gcTime: 0 — every mount refetches and the entry is dropped
-  // immediately, so the persisted query cache can't replay a stale path from
-  // a previous build of the main process.
   const { data: defaultPath } = useQuery({
-    queryKey: ['system', 'defaultInstallFolder'],
+    queryKey: QUERY_KEYS.system.defaultInstallFolder,
     queryFn: getDefaultInstallFolder,
-    staleTime: 0,
-    gcTime: 0,
+    ...NEVER_CACHE,
   });
 
   useEffect(() => {

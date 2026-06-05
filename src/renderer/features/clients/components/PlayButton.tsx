@@ -17,7 +17,7 @@ import { type InstallStatus, InstallStatuses } from '@shared/contracts/minecraft
 import type { LoaderChoice } from '@shared/contracts/settings';
 import { isLoaderAvailable } from '@shared/domain/loader';
 import { Download, Loader2, Play, RefreshCw, RotateCcw, Square, X } from 'lucide-react';
-import { useState } from 'react';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LoaderChoiceModal } from './LoaderChoiceModal';
 import { ActionButton, InstallProgress, useInstallProgress } from './install';
@@ -41,6 +41,30 @@ export const PlayButtonActions = {
 } as const;
 
 export type PlayButtonAction = (typeof PlayButtonActions)[keyof typeof PlayButtonActions];
+
+const SpinnerButton = ({ label }: { label: string }) => (
+  <ActionButton disabled>
+    <Loader2 size={16} className="animate-spin" />
+    {label}
+  </ActionButton>
+);
+
+const ErrorSurface = ({
+  message,
+  children,
+}: {
+  message: string | null;
+  children: ReactNode;
+}) => (
+  <div className="flex max-w-[480px] flex-col gap-2">
+    {message && (
+      <p role="alert" className="text-caption leading-snug text-destructive">
+        {message}
+      </p>
+    )}
+    {children}
+  </div>
+);
 
 type PlayButtonSelectionInput = {
   status: InstallStatus;
@@ -180,9 +204,6 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
     isChecking: launch.isPending,
   });
 
-  // Progress card wins over the per-status switch below whenever an install
-  // or bundle sync is in flight. Selector returns null otherwise and the
-  // card collapses immediately — no transient success state.
   if (action === PlayButtonActions.PROGRESS && progress) {
     return (
       <>
@@ -192,15 +213,9 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
     );
   }
 
-  // Bundle error surface: render under the Play affordance so the user can
-  // retry without leaving the client page.
   if (action === PlayButtonActions.BUNDLE_ERROR && bundle.error) {
-    const errorText = localizeBundleError(bundle.error.code, bundle.error.message, t);
     return (
-      <div className="flex max-w-[480px] flex-col gap-2">
-        <p role="alert" className="text-caption leading-snug text-destructive">
-          {errorText}
-        </p>
+      <ErrorSurface message={localizeBundleError(bundle.error.code, bundle.error.message, t)}>
         <ActionButton
           onClick={() => void startBundle.mutateAsync({ slug })}
           disabled={startBundle.isPending}
@@ -208,7 +223,7 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
           <RotateCcw size={16} />
           {t('clients.retry')}
         </ActionButton>
-      </div>
+      </ErrorSurface>
     );
   }
 
@@ -225,23 +240,11 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
   }
 
   switch (action) {
-    // Initial status seed (and any later build-status check) renders a spinner
-    // rather than vanishing — the affordance stays put while we resolve state.
     case PlayButtonActions.STATUS_PENDING:
-      return (
-        <ActionButton disabled>
-          <Loader2 size={16} className="animate-spin" />
-          {t('clients.checking')}
-        </ActionButton>
-      );
+      return <SpinnerButton label={t('clients.checking')} />;
 
     case PlayButtonActions.UNINSTALLING:
-      return (
-        <ActionButton disabled>
-          <Loader2 size={16} className="animate-spin" />
-          {t('clients.uninstalling')}
-        </ActionButton>
-      );
+      return <SpinnerButton label={t('clients.uninstalling')} />;
 
     case PlayButtonActions.LAUNCHING:
       return (
@@ -257,20 +260,10 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
       );
 
     case PlayButtonActions.CHECKING:
-      return (
-        <ActionButton disabled>
-          <Loader2 size={16} className="animate-spin" />
-          {t('clients.checking')}
-        </ActionButton>
-      );
+      return <SpinnerButton label={t('clients.checking')} />;
 
     case PlayButtonActions.REPAIRING:
-      return (
-        <ActionButton disabled>
-          <Loader2 size={16} className="animate-spin" />
-          {t('clients.repairing')}
-        </ActionButton>
-      );
+      return <SpinnerButton label={t('clients.repairing')} />;
 
     case PlayButtonActions.RUNNING:
       return (
@@ -308,12 +301,7 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
         ? localizeMinecraftError(state.error.code, state.error.message, t)
         : null;
       return (
-        <div className="flex max-w-[480px] flex-col gap-2">
-          {errorText && (
-            <p role="alert" className="text-caption leading-snug text-destructive">
-              {errorText}
-            </p>
-          )}
+        <ErrorSurface message={errorText}>
           <div className="flex items-start gap-3">
             <ActionButton onClick={startOrPickLoader} disabled={!folderReady || install.isPending}>
               <RotateCcw size={16} />
@@ -321,7 +309,7 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
             </ActionButton>
           </div>
           {loaderModal}
-        </div>
+        </ErrorSurface>
       );
     }
 

@@ -8,13 +8,6 @@ export const STEP_TITLE_KEY: Record<InstallStepKey, string> = {
   [InstallStepKeys.BUNDLE]: 'clients.installSteps.bundle.title',
 };
 
-export const STEP_NUMBER: Record<InstallStepKey, number> = {
-  [InstallStepKeys.RUNTIME]: 1,
-  [InstallStepKeys.MINECRAFT]: 2,
-  [InstallStepKeys.LOADER]: 3,
-  [InstallStepKeys.BUNDLE]: 4,
-};
-
 export const HEADER_KEY_BY_MODE: Record<InstallProgressMode, string> = {
   install: 'clients.installSteps.header.install',
   repair: 'clients.installSteps.header.repair',

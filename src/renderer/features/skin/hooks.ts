@@ -2,11 +2,13 @@ import defaultCape from '@renderer/assets/default-cape.png';
 import defaultSkin from '@renderer/assets/default-skin.png';
 import { useCurrentUser } from '@renderer/features/auth';
 import { toCachedMediaUrl } from '@renderer/shared/lib/mediaUrl';
+import { toast } from '@renderer/shared/ui/Toast';
 import { QUERY_KEYS } from '@shared/constants';
 import type { Account } from '@shared/contracts/account';
 import { type SkinKind, SkinKinds } from '@shared/contracts/skin';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ChangeEvent, useCallback, useMemo, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { clearSkin, uploadSkin } from './api';
 import { normalizeTextureToPng } from './texture';
 import { usePendingTexture } from './usePendingTexture';
@@ -19,6 +21,8 @@ export type UploadSkinInput = {
 export const useUploadSkin = () => {
   const queryClient = useQueryClient();
   const mutation = useMutation({
+    // saveAll surfaces a localized per-texture toast; skip the generic global one.
+    meta: { skipGlobalErrorToast: true },
     mutationFn: async ({ type, buffer }: UploadSkinInput) => {
       const result = await uploadSkin(type, buffer);
       queryClient.setQueryData<Account | null>(QUERY_KEYS.auth.me, (previous) =>
@@ -43,6 +47,7 @@ export const useClearSkin = () => {
 };
 
 export const useSkinEditor = () => {
+  const { t } = useTranslation();
   const { user } = useCurrentUser();
   const provider = user?.provider ?? null;
   const upload = useUploadSkin();
@@ -81,19 +86,28 @@ export const useSkinEditor = () => {
   const pickCape = useCallback(() => capeInputRef.current?.click(), []);
 
   const saveAll = useCallback(async () => {
-    if (skinPending.objectUrl !== null) {
-      const objectUrl = skinPending.objectUrl;
+    const jobs = [
+      { type: SkinKinds.SKIN, pending: skinPending, label: t('settings.account.skinLabel') },
+      { type: SkinKinds.CAPE, pending: capePending, label: t('settings.account.capeLabel') },
+    ].filter((job) => job.pending.objectUrl !== null);
+
+    const uploadOne = async (job: (typeof jobs)[number]): Promise<void> => {
+      const objectUrl = job.pending.objectUrl;
+      if (objectUrl === null) return;
       const buffer = await normalizeTextureToPng(objectUrl);
-      await upload.mutate({ type: SkinKinds.SKIN, buffer });
-      skinPending.clearIfCurrent(objectUrl);
-    }
-    if (capePending.objectUrl !== null) {
-      const objectUrl = capePending.objectUrl;
-      const buffer = await normalizeTextureToPng(objectUrl);
-      await upload.mutate({ type: SkinKinds.CAPE, buffer });
-      capePending.clearIfCurrent(objectUrl);
-    }
-  }, [skinPending, capePending, upload]);
+      await upload.mutate({ type: job.type, buffer });
+      job.pending.clearIfCurrent(objectUrl);
+    };
+
+    // Upload independently so one texture failing leaves the other saved and
+    // its own pending preview intact for a retry.
+    const results = await Promise.allSettled(jobs.map(uploadOne));
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        toast.error(t('settings.account.uploadFailedToast', { texture: jobs[index]?.label }));
+      }
+    });
+  }, [skinPending, capePending, upload, t]);
 
   const cancelAll = useCallback(() => {
     skinPending.clear();
