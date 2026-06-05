@@ -133,7 +133,7 @@ export const ClientOverview = ({ client }: ClientOverviewProps) => {
                 className="group relative flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full bg-gradient-to-b from-glass/15 to-glass/5 text-glass/75 ring-1 ring-edge-md backdrop-blur-md transition-all duration-150 hover:from-glass/20 hover:to-glass/10 hover:text-glass hover:ring-edge-xl active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glass/50 disabled:opacity-50"
                 style={{
                   boxShadow:
-                    'inset 0 1px 0 rgba(255,255,255,0.10), 0 6px 18px -8px var(--color-glow-overlay-md)',
+                    'inset 0 1px 0 var(--shadow-inset-highlight), 0 6px 18px -8px var(--color-glow-overlay-md)',
                 }}
               >
                 <Settings2

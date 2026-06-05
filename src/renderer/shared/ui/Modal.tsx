@@ -5,6 +5,26 @@ import { createPortal } from 'react-dom';
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+// Ref-counted so nested modals (ClientSettingsModal → UninstallConfirmModal)
+// don't unlock body scroll while an outer modal is still open.
+let openModalCount = 0;
+let previousBodyOverflow = '';
+
+const lockBodyScroll = () => {
+  if (openModalCount === 0) {
+    previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+  }
+  openModalCount += 1;
+};
+
+const unlockBodyScroll = () => {
+  openModalCount = Math.max(0, openModalCount - 1);
+  if (openModalCount === 0) {
+    document.body.style.overflow = previousBodyOverflow;
+  }
+};
+
 type ModalProps = {
   isOpen: boolean;
   onClose: () => void;
@@ -70,11 +90,10 @@ export const Modal = ({
       }
     };
     window.addEventListener('keydown', onKeyDown);
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    lockBodyScroll();
     return () => {
       window.removeEventListener('keydown', onKeyDown);
-      document.body.style.overflow = previousOverflow;
+      unlockBodyScroll();
     };
   }, [isOpen, onClose, focusableElements]);
 

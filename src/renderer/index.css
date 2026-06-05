@@ -63,6 +63,20 @@
   --text-eyebrow: 11px;
   --text-caption: 12px;
   --text-microlabel: 10px;
+  --text-console-body: 12.5px;
+  --text-console-meta: 10.5px;
+  --text-console-badge: 9.5px;
+  --text-progress-label: 13px;
+  --text-progress-value: 14px;
+
+  --console-time-width: 5.5rem;
+  --console-source-width: 2.75rem;
+  --console-counter-min: 3.25rem;
+
+  --skin-viewer-width: 11.25rem;
+  --skin-viewer-height: 13.75rem;
+
+  --shadow-inset-highlight: hsl(0 0% 100% / 0.1);
 }
 
 @utility app-region-drag {
@@ -145,6 +159,18 @@ img {
   width: 0;
   height: 0;
   display: none;
+}
+
+@layer components {
+  .slider-track {
+    background: linear-gradient(
+      to right,
+      var(--color-primary) 0%,
+      var(--color-primary) var(--slider-progress),
+      var(--color-muted) var(--slider-progress),
+      var(--color-muted) 100%
+    );
+  }
 }
 
 @keyframes toast-shrink {

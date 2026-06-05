@@ -26,7 +26,7 @@ export const InstallProgress = ({ slug, view }: InstallProgressProps) => {
     <div
       aria-live="polite"
       aria-atomic="true"
-      className="flex w-full flex-col gap-4 rounded-2xl border border-edge bg-surface p-5 backdrop-blur-md"
+      className="flex w-full flex-col gap-4 rounded-lg border border-edge bg-surface p-5 backdrop-blur-md"
     >
       <p className="text-microlabel font-bold uppercase tracking-[0.22em] text-glass/55">
         {t(HEADER_KEY_BY_MODE[mode])}

@@ -138,7 +138,7 @@ export const ToastItem = ({ entry, style, paused, onClose, onHeight }: ToastItem
         'transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform',
       )}
     >
-      <div className="relative overflow-hidden rounded-xl border border-edge bg-card/85 shadow-2xl backdrop-blur-xl">
+      <div className="relative overflow-hidden rounded-md border border-edge bg-card/85 shadow-2xl backdrop-blur-xl">
         <div className="flex items-start gap-3 py-3 pr-2 pl-3.5">
           <styles.Icon size={18} className={cn('mt-0.5 shrink-0', styles.icon)} />
 
