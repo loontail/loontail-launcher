@@ -6,6 +6,7 @@ import { SkinError } from '@main/services/skin/errors';
 import { ERROR_CODES } from '@shared/constants';
 import { BundleErrorCodes } from '@shared/contracts/bundle';
 import { MinecraftErrorCodes } from '@shared/contracts/minecraft';
+import { SkinErrorCodes } from '@shared/contracts/skin';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const appMock = vi.hoisted(() => ({ isPackaged: true }));
@@ -44,9 +45,9 @@ describe('toIpcError', () => {
   });
 
   it('passes a SkinError code and message through unchanged', () => {
-    const error = new SkinError(ERROR_CODES.SkinUploadFailed, 'Upload failed');
+    const error = new SkinError(SkinErrorCodes.UPLOAD_FAILED, 'Upload failed');
     expect(toIpcError(error)).toEqual({
-      code: ERROR_CODES.SkinUploadFailed,
+      code: SkinErrorCodes.UPLOAD_FAILED,
       message: 'Upload failed',
     });
   });

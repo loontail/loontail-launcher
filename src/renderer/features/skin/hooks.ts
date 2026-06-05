@@ -5,13 +5,16 @@ import { toCachedMediaUrl } from '@renderer/shared/lib/mediaUrl';
 import { toast } from '@renderer/shared/ui/Toast';
 import { QUERY_KEYS } from '@shared/constants';
 import type { Account } from '@shared/contracts/account';
-import { type SkinKind, SkinKinds } from '@shared/contracts/skin';
+import { SkinErrorCodes, type SkinKind, SkinKinds } from '@shared/contracts/skin';
+import { type IpcError, isIpcError } from '@shared/ipc';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { type ChangeEvent, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { clearSkin, uploadSkin } from './api';
+import { localizeSkinError } from './errorCopy';
 import { normalizeTextureToPng } from './texture';
 import { usePendingTexture } from './usePendingTexture';
+import { validateTexture } from './validateTexture';
 
 export type UploadSkinInput = {
   type: SkinKind;
@@ -34,13 +37,21 @@ export const useUploadSkin = () => {
 };
 
 export const useClearSkin = () => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const mutation = useMutation({
+    // onError localizes by skin error code; skip the generic global toast.
+    meta: { skipGlobalErrorToast: true },
     mutationFn: clearSkin,
     onSuccess: () => {
       queryClient.setQueryData<Account | null>(QUERY_KEYS.auth.me, (previous) =>
         previous ? { ...previous, skin: null, cape: null } : previous,
       );
+    },
+    onError: (error: unknown) => {
+      if (isIpcError(error)) {
+        toast.error(localizeSkinError(error.code, error.message, t));
+      }
     },
   });
   return { mutate: mutation.mutateAsync, isPending: mutation.isPending };
@@ -95,6 +106,14 @@ export const useSkinEditor = () => {
       const objectUrl = job.pending.objectUrl;
       if (objectUrl === null) return;
       const buffer = await normalizeTextureToPng(objectUrl);
+      // Fast-fail on bad dimensions/corruption before the IPC round-trip; the
+      // rejection handler localizes via the same SkinErrorCode path as the
+      // authoritative main-side check.
+      const reason = validateTexture(buffer, job.type);
+      if (reason !== null) {
+        const error: IpcError = { code: SkinErrorCodes.INVALID_IMAGE, message: reason };
+        throw error;
+      }
       await upload.mutate({ type: job.type, buffer });
       job.pending.clearIfCurrent(objectUrl);
     };
@@ -103,9 +122,14 @@ export const useSkinEditor = () => {
     // its own pending preview intact for a retry.
     const results = await Promise.allSettled(jobs.map(uploadOne));
     results.forEach((result, index) => {
-      if (result.status === 'rejected') {
-        toast.error(t('settings.account.uploadFailedToast', { texture: jobs[index]?.label }));
+      if (result.status !== 'rejected') return;
+      const label = jobs[index]?.label;
+      const reason: unknown = result.reason;
+      if (isIpcError(reason)) {
+        toast.error(localizeSkinError(reason.code, reason.message, t));
+        return;
       }
+      toast.error(t('settings.account.uploadFailedToast', { texture: label }));
     });
   }, [skinPending, capePending, upload, t]);
 

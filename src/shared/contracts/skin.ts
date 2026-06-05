@@ -20,3 +20,17 @@ export const UploadSkinPayloadSchema = z.object({
 export type UploadSkinPayload = z.infer<typeof UploadSkinPayloadSchema>;
 
 export type UploadSkinResult = { url: string };
+
+// Domain-local skin error codes, mirroring BundleErrorCodes/MinecraftErrorCodes
+// placement. Each value names a distinct failure the renderer can localize by
+// code instead of relying on whatever English string lands in error.message.
+export const SkinErrorCodes = {
+  NOT_AUTHENTICATED: 'SKIN_NOT_AUTHENTICATED',
+  INVALID_IMAGE: 'SKIN_INVALID_IMAGE',
+  CAPE_UNSUPPORTED: 'SKIN_CAPE_UNSUPPORTED',
+  UPLOAD_FAILED: 'SKIN_UPLOAD_FAILED',
+  UPLOAD_NO_URL: 'SKIN_UPLOAD_NO_URL',
+  CLEAR_FAILED: 'SKIN_CLEAR_FAILED',
+} as const;
+
+export type SkinErrorCode = (typeof SkinErrorCodes)[keyof typeof SkinErrorCodes];

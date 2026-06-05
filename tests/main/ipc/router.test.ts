@@ -37,6 +37,7 @@ import { SkinError } from '@main/services/skin/errors';
 import { ERROR_CODES } from '@shared/constants';
 import { BundleErrorCodes } from '@shared/contracts/bundle';
 import { MinecraftErrorCodes } from '@shared/contracts/minecraft';
+import { SkinErrorCodes } from '@shared/contracts/skin';
 import { IPC_ERROR_SENTINEL, tryUnwrapIpcError } from '@shared/ipc';
 
 const fakeEvent = (): IpcMainInvokeEvent => ({}) as unknown as IpcMainInvokeEvent;
@@ -145,7 +146,7 @@ describe('createRouter', () => {
     appMock.isPackaged = true;
     const router = createRouter(() => true);
     router.handle('media.uploadSkin', () => {
-      throw new SkinError(ERROR_CODES.SkinUploadFailed, 'Skin upload rejected');
+      throw new SkinError(SkinErrorCodes.UPLOAD_FAILED, 'Skin upload rejected');
     });
 
     const handler = handlers.get('media.uploadSkin');
@@ -158,7 +159,7 @@ describe('createRouter', () => {
 
     const ipcError = tryUnwrapIpcError((captured as Error).message);
     expect(ipcError).toEqual({
-      code: ERROR_CODES.SkinUploadFailed,
+      code: SkinErrorCodes.UPLOAD_FAILED,
       message: 'Skin upload rejected',
     });
   });

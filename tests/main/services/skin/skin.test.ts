@@ -2,9 +2,8 @@ import type { MinecraftKit } from '@loontail/minecraft-kit';
 import type { AuthSessionPort } from '@main/services/auth/session';
 import type { YggdrasilGateway } from '@main/services/auth/yggdrasilClient';
 import { createSkinHandlers } from '@main/services/skin/skin';
-import { ERROR_CODES } from '@shared/constants';
 import type { YggdrasilSession } from '@shared/contracts/auth';
-import { SkinKinds } from '@shared/contracts/skin';
+import { SkinErrorCodes, SkinKinds } from '@shared/contracts/skin';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authSessionMocks = vi.hoisted(() => ({
@@ -116,7 +115,7 @@ describe('uploadSkin (yggdrasil)', () => {
     await vi.runAllTimersAsync();
     const error = await pending;
 
-    expect(error).toMatchObject({ code: ERROR_CODES.SkinUploadFailed });
+    expect(error).toMatchObject({ code: SkinErrorCodes.UPLOAD_NO_URL });
     expect(mediaCacheMocks.prewarmMediaCache).not.toHaveBeenCalled();
   });
 });
@@ -144,7 +143,7 @@ describe('clearSkin (yggdrasil)', () => {
 
     const { clearSkin } = makeSkinHandlers();
 
-    await expect(clearSkin()).rejects.toMatchObject({ code: ERROR_CODES.SkinClearFailed });
+    await expect(clearSkin()).rejects.toMatchObject({ code: SkinErrorCodes.CLEAR_FAILED });
     expect(mediaCacheMocks.invalidateMediaCache).not.toHaveBeenCalled();
   });
 });

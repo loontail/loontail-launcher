@@ -226,7 +226,16 @@
       "unsavedHint": "You have unsaved changes",
       "save": "Save",
       "cancel": "Cancel",
-      "uploadFailedToast": "Failed to upload {{texture}}"
+      "uploadFailedToast": "Failed to upload {{texture}}",
+      "skinError": {
+        "notAuthenticated": "Sign in before changing your skin or cape.",
+        "invalidImage": "That image isn't a valid skin texture: {{message}}",
+        "capeUnsupported": "Microsoft accounts can't upload custom capes.",
+        "uploadFailed": "Texture upload failed: {{message}}",
+        "uploadNoUrl": "The server accepted the upload but didn't return a texture URL. Try again.",
+        "clearFailed": "Failed to clear textures: {{message}}",
+        "unknown": "Skin operation failed: {{message}}"
+      }
     },
     "game": {
       "launch": "Launch",

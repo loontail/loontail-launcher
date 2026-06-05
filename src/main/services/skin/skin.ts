@@ -10,9 +10,9 @@ import { scopedLogger } from '@main/infra/logger';
 import type { AuthSessionPort } from '@main/services/auth/session';
 import type { FetchTextures, YggdrasilGateway } from '@main/services/auth/yggdrasilClient';
 import { invalidateMediaCache, prewarmMediaCache } from '@main/services/media/mediaCache';
-import { ERROR_CODES } from '@shared/constants';
 import type { AuthSession, MojangSession, YggdrasilSession } from '@shared/contracts/auth';
 import {
+  SkinErrorCodes,
   type SkinKind,
   SkinKinds,
   type UploadSkinPayload,
@@ -34,14 +34,14 @@ void _skinKindAssetCheck;
 const requireSession = (authSession: AuthSessionPort): AuthSession => {
   const session = authSession.current();
   if (!session) {
-    throw new SkinError(ERROR_CODES.SkinNotAuthenticated, 'No authenticated user');
+    throw new SkinError(SkinErrorCodes.NOT_AUTHENTICATED, 'No authenticated user');
   }
   return session;
 };
 
 const throwUploadError = (prefix: string, error: unknown): never => {
   const message = error instanceof Error ? error.message : 'Unknown error';
-  throw new SkinError(ERROR_CODES.SkinUploadFailed, `${prefix}: ${message}`);
+  throw new SkinError(SkinErrorCodes.UPLOAD_FAILED, `${prefix}: ${message}`);
 };
 
 // Mojang's profile-mutation errors come back as JSON like:
@@ -73,7 +73,7 @@ const extractMojangMessage = (error: unknown): string | null => {
 const throwMojangUploadError = (error: unknown): never => {
   const mojangMessage = extractMojangMessage(error);
   if (mojangMessage !== null) {
-    throw new SkinError(ERROR_CODES.SkinUploadFailed, `Mojang: ${mojangMessage}`);
+    throw new SkinError(SkinErrorCodes.UPLOAD_FAILED, `Mojang: ${mojangMessage}`);
   }
   return throwUploadError('Mojang skin upload failed', error);
 };
@@ -151,7 +151,7 @@ const uploadSkinYggdrasil = async (
   );
   if (!updatedUrl) {
     throw new SkinError(
-      ERROR_CODES.SkinUploadFailed,
+      SkinErrorCodes.UPLOAD_NO_URL,
       'Server accepted the upload but did not return an URL',
     );
   }
@@ -182,11 +182,12 @@ export const createSkinHandlers = (
   ): Promise<UploadSkinResult> => {
     if (payload.type !== SkinKinds.SKIN) {
       throw new SkinError(
-        ERROR_CODES.SkinUploadFailed,
+        SkinErrorCodes.CAPE_UNSUPPORTED,
         'Mojang accounts cannot upload custom capes',
       );
     }
     const skin = new Uint8Array(payload.buffer);
+    // why: kit requires a literal variant type; 'AUTO' = detect slim/classic from PNG dimensions
     const variant = 'AUTO' as const;
     let profile: MinecraftProfile;
     try {
@@ -204,7 +205,7 @@ export const createSkinHandlers = (
     const url = activeMojangSkinUrl(refreshed);
     if (url === null) {
       throw new SkinError(
-        ERROR_CODES.SkinUploadFailed,
+        SkinErrorCodes.UPLOAD_NO_URL,
         'Mojang accepted the upload but did not return an active skin URL',
       );
     }
@@ -215,7 +216,7 @@ export const createSkinHandlers = (
   const uploadSkin = async (payload: UploadSkinPayload): Promise<UploadSkinResult> => {
     const verdict = validatePngBuffer(payload.buffer, payload.type);
     if (!verdict.ok) {
-      throw new SkinError(ERROR_CODES.SkinUploadFailed, verdict.reason);
+      throw new SkinError(SkinErrorCodes.INVALID_IMAGE, verdict.reason);
     }
     const session = requireSession(authSession);
     if (session.provider === 'yggdrasil') return uploadSkinYggdrasil(session, payload, gateway);
@@ -236,7 +237,7 @@ export const createSkinHandlers = (
       } catch (error) {
         logger.error('Failed to clear textures on Yggdrasil server', error);
         const message = error instanceof Error ? error.message : 'Unknown error';
-        throw new SkinError(ERROR_CODES.SkinClearFailed, `Failed to clear textures: ${message}`);
+        throw new SkinError(SkinErrorCodes.CLEAR_FAILED, `Failed to clear textures: ${message}`);
       }
       if (before?.skin?.url) await invalidateMediaCache(before.skin.url);
       if (before?.cape?.url) await invalidateMediaCache(before.cape.url);

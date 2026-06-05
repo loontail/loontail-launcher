@@ -4,9 +4,6 @@ export const ERROR_CODES = {
   IpcUntrustedSender: 'IPC_UNTRUSTED_SENDER',
   IpcHandlerFailed: 'IPC_HANDLER_FAILED',
   SettingsInvalidPayload: 'SETTINGS_INVALID_PAYLOAD',
-  SkinUploadFailed: 'SKIN_UPLOAD_FAILED',
-  SkinClearFailed: 'SKIN_CLEAR_FAILED',
-  SkinNotAuthenticated: 'SKIN_NOT_AUTHENTICATED',
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];

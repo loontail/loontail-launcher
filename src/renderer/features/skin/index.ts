@@ -1,5 +1,6 @@
 import { lazy } from 'react';
 
+export { localizeSkinError } from './errorCopy';
 export { useClearSkin, useSkinEditor, useUploadSkin } from './hooks';
 
 // Lazy-loaded: pulls skinview3d (~200kB) only when the user opens

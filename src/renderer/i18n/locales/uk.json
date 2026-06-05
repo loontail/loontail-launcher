@@ -226,7 +226,16 @@
       "unsavedHint": "Є незбережені зміни",
       "save": "Зберегти",
       "cancel": "Скасувати",
-      "uploadFailedToast": "Не вдалося завантажити {{texture}}"
+      "uploadFailedToast": "Не вдалося завантажити {{texture}}",
+      "skinError": {
+        "notAuthenticated": "Увійди в акаунт, перш ніж змінювати скін чи плащ.",
+        "invalidImage": "Це зображення не є коректною текстурою скіна: {{message}}",
+        "capeUnsupported": "Акаунти Microsoft не можуть завантажувати власні плащі.",
+        "uploadFailed": "Не вдалося завантажити текстуру: {{message}}",
+        "uploadNoUrl": "Сервер прийняв завантаження, але не повернув URL текстури. Спробуй ще раз.",
+        "clearFailed": "Не вдалося очистити текстури: {{message}}",
+        "unknown": "Операція зі скіном не вдалася: {{message}}"
+      }
     },
     "game": {
       "launch": "Запуск",
