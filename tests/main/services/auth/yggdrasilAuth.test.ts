@@ -88,12 +88,15 @@ describe('createYggdrasilAuth.verifySession', () => {
     expect(await auth.verifySession(yggdrasilSession())).toEqual({ kind: 'offline' });
   });
 
-  it('reports offline when validate throws an opaque error', async () => {
+  it('reports a server error when validate throws a non-network, non-403 error', async () => {
     const auth = createYggdrasilAuth(
       yggdrasilClient({ validate: vi.fn().mockRejectedValue(opaqueError()) }),
     );
-    expect(await auth.verifySession(yggdrasilSession())).toEqual({ kind: 'offline' });
-    expect(loggerMocks.warn).toHaveBeenCalled();
+    expect(await auth.verifySession(yggdrasilSession())).toEqual({ kind: 'server-error' });
+    expect(loggerMocks.warn).toHaveBeenCalledWith(
+      expect.stringContaining('server error'),
+      expect.anything(),
+    );
   });
 
   it('refreshes into a rotated session when validate reports the token invalid', async () => {

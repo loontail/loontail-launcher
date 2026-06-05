@@ -110,6 +110,22 @@ describe('verifySession', () => {
     expect(storeMocks.clearStoredAuth).not.toHaveBeenCalled();
   });
 
+  it('keeps the cached yggdrasil account and warns on a server error', async () => {
+    storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
+
+    const account = await verifySession(
+      yggAuth({ kind: 'server-error' }),
+      mojangAuth(),
+      fetchTexturesMock,
+    );
+
+    expect(account).toMatchObject({ provider: 'yggdrasil', username: 'someone' });
+    expect(fetchTexturesMock).not.toHaveBeenCalled();
+    expect(storeMocks.setStoredAuth).not.toHaveBeenCalled();
+    expect(storeMocks.clearStoredAuth).not.toHaveBeenCalled();
+    expect(loggerMocks.warn).toHaveBeenCalledWith(expect.stringContaining('server error'));
+  });
+
   it('enriches the rotated yggdrasil account with textures on success', async () => {
     storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
     const rotated = yggdrasilSession('rotated-access');

@@ -128,6 +128,9 @@ export const LOGIN_ERROR_CODE = {
   InvalidCredentials: 'INVALID_CREDENTIALS',
   RateLimited: 'RATE_LIMITED',
   BrowserOpenFailed: 'BROWSER_OPEN_FAILED',
+  // The user aborted the browser sign-in flow. The renderer suppresses this
+  // instead of rendering a failure banner.
+  Cancelled: 'CANCELLED',
   Unknown: 'UNKNOWN',
 } as const;
 

@@ -55,6 +55,13 @@ export const verifySession = async (
       // server, so reuse the skin/cape persisted from the last successful verify.
       return accountFromSession(session);
     }
+    if (result.kind === 'server-error') {
+      // The server answered but faulted, so validity is undetermined. Keep the
+      // cached session rather than clearing it on a transient 5xx, but log
+      // distinctly from the offline path so the failure stays actionable.
+      logger.warn('Yggdrasil verify hit a server error — reusing cached session');
+      return accountFromSession(session);
+    }
     setStoredAuth(result.session);
     return enrichYggdrasilAccount(
       result.session,

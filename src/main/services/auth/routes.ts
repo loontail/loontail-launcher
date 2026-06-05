@@ -15,13 +15,13 @@ import type { YggdrasilAuth } from './yggdrasilAuth';
 import type { FetchTextures } from './yggdrasilClient';
 
 // Map a kit-side sign-in failure to the renderer's `LoginErrorCode`. The
-// renderer's own `cancelledRef` already suppresses the user-cancel case, so we
-// fall through to `Unknown` for the underlying `AUTH_CANCELLED`. Network errors
-// surface as `TypeError: fetch failed` from undici — those deserve a distinct
-// code so the UI prompts the user to check connectivity.
+// user-cancel case gets its own `Cancelled` code so the renderer can suppress
+// it without relying on a ref captured at request time. Network errors surface
+// as `TypeError: fetch failed` from undici — those deserve a distinct code so
+// the UI prompts the user to check connectivity.
 const mojangFailureCode = (error: unknown): LoginErrorCode => {
   if (error instanceof MojangBrowserOpenError) return LOGIN_ERROR_CODE.BrowserOpenFailed;
-  if (isErrorCode(error, 'AUTH_CANCELLED')) return LOGIN_ERROR_CODE.Unknown;
+  if (isErrorCode(error, 'AUTH_CANCELLED')) return LOGIN_ERROR_CODE.Cancelled;
   if (error instanceof TypeError) return LOGIN_ERROR_CODE.NetworkError;
   return LOGIN_ERROR_CODE.Unknown;
 };

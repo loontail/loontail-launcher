@@ -22,3 +22,13 @@ describe('loginErrorCodeFromRejection', () => {
     );
   });
 });
+
+describe('LOGIN_ERROR_CODE.Cancelled', () => {
+  // useMojangLogin suppresses a `Cancelled` result instead of relying on a ref
+  // captured at request time. The code must stay distinct from Unknown so the
+  // suppression predicate (`result.error !== LOGIN_ERROR_CODE.Cancelled`) cannot
+  // accidentally swallow a genuine unknown failure.
+  it('is distinct from the Unknown code', () => {
+    expect(LOGIN_ERROR_CODE.Cancelled).not.toBe(LOGIN_ERROR_CODE.Unknown);
+  });
+});

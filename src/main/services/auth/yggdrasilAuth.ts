@@ -37,7 +37,11 @@ export type YggdrasilLoginResult = YggdrasilLoginOk | YggdrasilLoginFail;
 export type VerifyYggdrasilResult =
   | { kind: 'ok'; session: YggdrasilSession }
   | { kind: 'expired' }
-  | { kind: 'offline' };
+  | { kind: 'offline' }
+  // The server was reachable but failed unexpectedly (5xx, malformed response,
+  // TLS error). Distinct from `offline` so a server fault is not misreported as
+  // a network partition.
+  | { kind: 'server-error' };
 
 export type YggdrasilAuth = {
   signIn: (payload: LoginPayload) => Promise<YggdrasilLoginResult>;
@@ -84,8 +88,8 @@ export const createYggdrasilAuth = (client: YggdrasilClient): YggdrasilAuth => {
       if (ok) return { kind: 'ok', session };
     } catch (error) {
       if (isNetworkFailure(error)) return { kind: 'offline' };
-      logger.warn('Yggdrasil validate failed unexpectedly', error);
-      return { kind: 'offline' };
+      logger.warn('Yggdrasil validate failed with a server error', error);
+      return { kind: 'server-error' };
     }
 
     try {

@@ -27,6 +27,7 @@ export const createAuthService = (
       runAuthStoreMigrationIfNeeded();
       registerAuthRoutes(router, yggdrasilAuth, mojangAuth, gateway.fetchTextures);
     },
-    dispose: async () => {},
+    // No subscriptions or timers to release.
+    dispose: () => Promise.resolve(),
   };
 };
