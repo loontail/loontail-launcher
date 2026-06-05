@@ -15,15 +15,16 @@ export const isAnythingInstalled = async (clientFolder: string): Promise<boolean
   } catch {
     return false;
   }
-  for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
-    const jsonPath = path.join(versionsRoot, entry.name, `${entry.name}.json`);
-    try {
-      await fs.access(jsonPath);
-      return true;
-    } catch {
-      /* keep looking */
-    }
+  const probes = entries
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => fs.access(path.join(versionsRoot, entry.name, `${entry.name}.json`)));
+  if (probes.length === 0) return false;
+  // Promise.any short-circuits on the first present version JSON; it rejects
+  // (AggregateError) only when every probe failed, i.e. nothing is installed.
+  try {
+    await Promise.any(probes);
+    return true;
+  } catch {
+    return false;
   }
-  return false;
 };

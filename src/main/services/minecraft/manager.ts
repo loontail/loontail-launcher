@@ -22,7 +22,7 @@ import {
 import type { LoaderChoice } from '@shared/contracts/settings';
 import { resolveClientSettings } from '@shared/domain/settings';
 import type { Broadcaster } from './broadcast';
-import { buildContext } from './context';
+import { type Context, buildContext } from './context';
 import type { ConsolePort, ManagerEnv } from './env';
 import { ManagerError } from './errors';
 import { createForgeProcessorCache } from './forgeProcessorHealing';
@@ -92,9 +92,7 @@ export class MinecraftManager {
     };
   }
 
-  // Called once at boot (after createBundleService) so launches dovetail
-  // through the bundle sync. Replacing a non-null hook is allowed and only
-  // happens in tests; in production it's set exactly once.
+  // Set at most once in production; multiple sets are allowed only in tests.
   attachLaunchHook(hook: LaunchHook): void {
     this.launchHook = hook;
   }
@@ -212,24 +210,29 @@ export class MinecraftManager {
   async startRepair(slug: ClientSlug): Promise<void> {
     this.requireIdle(slug);
     const lock = this.acquireWriteLock(slug);
+    // Register the op before the buildContext await so getStatus reports
+    // REPAIRING (not the stale disk-presence status) during setup, and a second
+    // concurrent startRepair trips requireIdle instead of starting in parallel.
+    const op: Op = { kind: OpKinds.REPAIR, abort: new AbortController() };
+    this.ops.set(slug, op);
+    lock.setCancel(() => this.cancel(slug));
+    this.env.emitStatus({ slug, status: InstallStatuses.REPAIRING, paused: false });
+    let ctx: Context;
     try {
       // No "is it installed enough" gate: buildContext already enforces a
       // configured install folder (NO_CLIENT_FOLDER) and resolves the target, and
       // kit.repair.all rebuilds whatever is missing on disk — including the version
       // JSON — so repair runs from any state (a broken or even empty folder).
-      const ctx = await buildContext(this.kit, slug);
-      const op: Op = { kind: OpKinds.REPAIR, abort: new AbortController() };
-      this.ops.set(slug, op);
-      lock.setCancel(() => this.cancel(slug));
-      this.env.emitStatus({ slug, status: InstallStatuses.REPAIRING, paused: false });
-
-      void this.finishRepair(slug, ctx, op, lock).catch((error) => {
-        logger.error(`[${slug}] repair: unexpected background failure`, error);
-      });
+      ctx = await buildContext(this.kit, slug);
     } catch (error) {
+      this.ops.delete(slug);
       lock.release();
       throw error;
     }
+
+    void this.finishRepair(slug, ctx, op, lock).catch((error) => {
+      logger.error(`[${slug}] repair: unexpected background failure`, error);
+    });
   }
 
   async uninstall(slug: ClientSlug): Promise<void> {
@@ -253,16 +256,7 @@ export class MinecraftManager {
     const ctx = await buildContext(this.kit, slug);
     const checkedAccount = requireAccount(this.accountProvider());
 
-    // No pre-launch hash verification and no implicit reinstall here. The
-    // lenient launch preflight inside runLaunch decides launchability from the
-    // files actually on disk; if it fails, that path surfaces the error in the
-    // console and a repair offer rather than silently re-downloading.
-
-    // Chain the bundle sync before launch. The hook resolves immediately for
-    // clients without a bundleSlug, so this is free in the no-bundle path.
-    // Install a BundleSyncingOp so `cancel(slug)` can abort the download
-    // mid-flight — otherwise the launch flow keeps awaiting `syncForLaunch`
-    // long after the user clicked Stop.
+    // BundleSyncingOp ensures cancel(slug) can abort the download mid-flight.
     if (this.launchHook) {
       const bundleOp: Op = { kind: OpKinds.BUNDLE_SYNCING, abort: new AbortController() };
       this.ops.set(slug, bundleOp);
@@ -347,7 +341,7 @@ export class MinecraftManager {
 
   private async finishRepair(
     slug: ClientSlug,
-    ctx: Awaited<ReturnType<typeof buildContext>>,
+    ctx: Context,
     op: RepairOp,
     lock: ClientOperationLease,
   ): Promise<void> {

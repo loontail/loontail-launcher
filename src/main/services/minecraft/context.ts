@@ -1,13 +1,18 @@
 import type { MinecraftKit, Target } from '@loontail/minecraft-kit';
 import { getClient } from '@main/services/clients';
 import {
-  getSettings,
-  setClientOverride as persistClientOverride,
+  getSettings as defaultGetSettings,
+  setClientOverride as defaultPersistClientOverride,
 } from '@main/services/settings/settings';
 import type { Client } from '@shared/contracts/client';
 import type { ClientSlug } from '@shared/contracts/ids';
 import { MinecraftErrorCodes } from '@shared/contracts/minecraft';
-import type { LoaderChoice } from '@shared/contracts/settings';
+import type {
+  ClientSettingsOverride,
+  LauncherSettings,
+  LoaderChoice,
+  ResolvedClientSettings,
+} from '@shared/contracts/settings';
 import { isLoaderAvailable } from '@shared/domain/loader';
 import { clearStaleClientRuntimeRef, resolveClientSettings } from '@shared/domain/settings';
 import { ManagerError } from './errors';
@@ -19,14 +24,26 @@ export type Context = {
   clientFolder: string;
   loader: LoaderChoice;
   target: Target;
-  resolved: ReturnType<typeof resolveClientSettings>;
+  resolved: ResolvedClientSettings;
+};
+
+// Injection seam: buildContext both reads settings and persists stale-override
+// fixups, so tests pass stubs here to exercise it without touching the store.
+export type BuildContextDeps = {
+  getSettings: () => LauncherSettings;
+  persistClientOverride: (slug: ClientSlug, patch: ClientSettingsOverride) => LauncherSettings;
 };
 
 export const buildContext = async (
   kit: MinecraftKit,
   slug: ClientSlug,
   loaderOverride?: LoaderChoice,
+  deps: BuildContextDeps = {
+    getSettings: defaultGetSettings,
+    persistClientOverride: defaultPersistClientOverride,
+  },
 ): Promise<Context> => {
+  const { getSettings, persistClientOverride } = deps;
   let client: Client;
   try {
     client = await getClient(slug);

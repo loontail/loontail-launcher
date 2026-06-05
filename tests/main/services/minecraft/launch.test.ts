@@ -19,10 +19,10 @@ import {
 import type { Context } from '@main/services/minecraft/context';
 import type { ManagerEnv } from '@main/services/minecraft/env';
 import { createForgeProcessorCache } from '@main/services/minecraft/forgeProcessorHealing';
-import { endLaunch, runLaunch } from '@main/services/minecraft/launch';
+import { endLaunch, resolveLaunchAuth, runLaunch } from '@main/services/minecraft/launch';
 import { type Op, OpKinds } from '@main/services/minecraft/ops';
 import type { Account } from '@shared/contracts/account';
-import type { AuthSession, YggdrasilSession } from '@shared/contracts/auth';
+import type { AuthSession, MojangSession, YggdrasilSession } from '@shared/contracts/auth';
 import { ConsoleStatuses } from '@shared/contracts/console';
 import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraft';
@@ -96,6 +96,21 @@ const yggdrasilSession = (): YggdrasilSession => ({
   clientToken: 'client-token',
   profile: { uuid: '0123456789abcdef0123456789abcdef', name: 'tester' },
 });
+
+const mojangSession = (): MojangSession =>
+  ({
+    provider: 'mojang',
+    accessToken: 'mojang-access-token',
+    expiresAt: '2099-01-01T00:00:00Z',
+    refreshToken: 'refresh-token',
+    clientId: '11111111-1111-1111-1111-111111111111',
+    xuid: 'xuid-1',
+    profile: {
+      username: 'mojang-user',
+      uuid: '0123456789abcdef0123456789abcdef',
+      skins: [],
+    },
+  }) as unknown as MojangSession;
 
 const target = (directory: string): Target =>
   ({
@@ -620,5 +635,42 @@ describe('endLaunch', () => {
       exitCode: null,
     });
     expect(managerEnv.emitError).not.toHaveBeenCalled();
+  });
+});
+
+describe('resolveLaunchAuth', () => {
+  it('maps a yggdrasil session to ONLINE auth with the authlib-injector JVM args', () => {
+    const resolved = resolveLaunchAuth(account(), yggdrasilSession());
+
+    expect(resolved.auth).toEqual(
+      expect.objectContaining({
+        mode: AuthModes.ONLINE,
+        username: 'tester',
+        accessToken: 'access-token',
+      }),
+    );
+    expect(resolved.extraJvmArgs[0]).toBe('-Dhttp.agent=LoontailLauncher/0.0.0-test');
+    expect(resolved.extraJvmArgs[1]).toContain('authlib-injector-1.2.5.jar');
+    expect(resolved.extraJvmArgs[1]).toContain('=https://auth.test.invalid');
+  });
+
+  it('maps a mojang session to ONLINE auth with no extra JVM args', () => {
+    const resolved = resolveLaunchAuth(account(), mojangSession());
+
+    expect(resolved.auth).toEqual(
+      expect.objectContaining({
+        mode: AuthModes.ONLINE,
+        username: 'mojang-user',
+        accessToken: 'mojang-access-token',
+      }),
+    );
+    expect(resolved.extraJvmArgs).toEqual([]);
+  });
+
+  it('falls back to OFFLINE auth from the account when no session is stored', () => {
+    const resolved = resolveLaunchAuth(account(), null);
+
+    expect(resolved.auth).toEqual({ mode: AuthModes.OFFLINE, username: 'tester' });
+    expect(resolved.extraJvmArgs).toEqual([]);
   });
 });

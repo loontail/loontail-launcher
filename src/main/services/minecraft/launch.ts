@@ -11,8 +11,6 @@ import {
   asAzureClientId,
   asPlayerUuid,
   isMinecraftKitError,
-  resolveLaunchVersion,
-  targetPaths,
   toOnlineAuth,
 } from '@loontail/minecraft-kit';
 import {
@@ -26,6 +24,7 @@ import { errorMessage } from '@main/infra/errorMessage';
 import { scopedLogger } from '@main/infra/logger';
 import { getStoredAuth } from '@main/infra/store';
 import type { Account } from '@shared/contracts/account';
+import type { AuthSession } from '@shared/contracts/auth';
 import { ConsoleSources, ConsoleStatuses } from '@shared/contracts/console';
 import type { ClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraft';
@@ -58,14 +57,9 @@ const RUNTIME_REPAIR_KIT_CODES: ReadonlySet<MinecraftKitErrorCode> = new Set([
   MinecraftKitErrorCodes.LAUNCH_JAVA_NOT_FOUND,
 ]);
 
-// `kit.launch.compose` assembles the launch purely from on-disk files (the
-// installed version JSON, libraries, runtime) — it does not hit the network. A
-// MinecraftKitError thrown here therefore means the install is incomplete (e.g.
-// MANIFEST_NOT_FOUND = "no installed version JSON on disk"), not a transient
-// network failure. Reclassify it as a repairable launch-preflight failure so the
-// catch path keeps the client INSTALLED and the renderer offers a Repair toast,
-// instead of surfacing a raw, non-repairable error. Non-kit errors pass through
-// to the generic launch-failure branch.
+// compose reads only from disk — a MinecraftKitError here means an incomplete
+// install, not a network failure. Reclassify so the renderer offers Repair
+// instead of a raw, non-repairable error.
 const toComposeFailure = (error: unknown): unknown => {
   if (isLaunchPreflightError(error)) return error;
   if (!isMinecraftKitError(error)) return error;
@@ -94,10 +88,8 @@ const resolveAuthlibInjectorJar = (): string => {
   return resolveAuthlibInjectorJarPath();
 };
 
-// --- Loontail in-game network agent --------------------------------------
-
-// The bundled agent jar. Packaged: shipped to `process.resourcesPath/loontail-agent/`
-// (electron-builder extraResources). Dev: read from the repo's `resources/agent/`.
+// Packaged: shipped to `process.resourcesPath/loontail-agent/` via
+// electron-builder extraResources. Dev: read from the repo's `resources/agent/`.
 const LOONTAIL_AGENT_JAR = 'loontail-network-agent.jar';
 
 // The agent jar is built `--release 21`, so attaching it via `-javaagent` to an
@@ -149,32 +141,15 @@ const requireLaunchFile = async (
   }
 };
 
-const verifyLaunchPreflight = async (
-  ctx: Context,
-  composition: LaunchComposition,
-): Promise<void> => {
+// compose already resolved the launch version from disk and rejected if the
+// version JSON was missing, so the only files left to gate here are the runtime
+// and the classpath (which holds the actual executable jar — the vanilla client
+// for vanilla, the loader-patched jar for Forge/Fabric).
+const verifyLaunchPreflight = async (composition: LaunchComposition): Promise<void> => {
   await requireLaunchFile(
     composition.javaPath,
     'Java executable',
     MinecraftErrorCodes.RUNTIME_ERROR,
-  );
-
-  let versionId = ctx.target.minecraft.version;
-  try {
-    versionId = (await resolveLaunchVersion(ctx.target)).versionId;
-  } catch (error) {
-    throw new LaunchPreflightError(MinecraftErrorCodes.NOT_INSTALLED, errorMessage(error));
-  }
-
-  await requireLaunchFile(
-    targetPaths.versionJson(ctx.target.directory, versionId),
-    'version JSON',
-    MinecraftErrorCodes.NOT_INSTALLED,
-  );
-  await requireLaunchFile(
-    targetPaths.versionJar(ctx.target.directory, ctx.target.minecraft.version),
-    'client jar',
-    MinecraftErrorCodes.NOT_INSTALLED,
   );
 
   if (composition.classpath.length === 0) {
@@ -261,8 +236,10 @@ type ResolvedLaunchAuth = {
 // `-javaagent` JVM arg pointing the JVM at authlib-injector so the game's
 // own auth/profile calls hit the launcher's Yggdrasil server. Mojang sessions
 // pass the upstream Microsoft session through unchanged. No session → offline.
-const resolveLaunchAuth = (account: Account): ResolvedLaunchAuth => {
-  const session = getStoredAuth();
+export const resolveLaunchAuth = (
+  account: Account,
+  session: AuthSession | null,
+): ResolvedLaunchAuth => {
   if (session?.provider === 'mojang') {
     return {
       auth: toOnlineAuth({
@@ -324,7 +301,7 @@ export const runLaunch = async (
   env.ops.set(slug, startupOp);
   env.emitStatus({ slug, status: InstallStatuses.LAUNCHING, paused: false });
   try {
-    const resolved = resolveLaunchAuth(account);
+    const resolved = resolveLaunchAuth(account, getStoredAuth());
     if (resolved.extraJvmArgs.length > 0) {
       launchLogger.info(`[${slug}] launch: injecting authlib-injector (yggdrasil session)`);
     }
@@ -356,7 +333,7 @@ export const runLaunch = async (
       restoreInstalled();
       return;
     }
-    await verifyLaunchPreflight(ctx, composition);
+    await verifyLaunchPreflight(composition);
     if (startupSignal.aborted) {
       restoreInstalled();
       return;
@@ -452,7 +429,9 @@ export const runLaunch = async (
     env.console.emitState({ slug, status: ConsoleStatuses.ERROR, message });
     env.console.recordSystem(`Process error: ${message}`, { slug });
     if (!env.console.hasWindow()) env.openConsole();
-    throw error;
+    // The failure is already surfaced via emitError (the renderer's repair toast)
+    // and the status is restored; re-throwing would double-surface it as an IPC
+    // rejection (a second toast) and an error-level handler log.
   } finally {
     if (env.ops.get(slug) === startupOp) env.ops.delete(slug);
   }

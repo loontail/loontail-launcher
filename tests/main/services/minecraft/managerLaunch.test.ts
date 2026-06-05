@@ -328,4 +328,32 @@ describe('MinecraftManager.startLaunch', () => {
     });
     expect(orchestrationMocks.runRepair).not.toHaveBeenCalled();
   });
+
+  it('registers the repair op before buildContext resolves so a concurrent repair trips OP_IN_FLIGHT', async () => {
+    resetMocks();
+    const broadcaster = makeBroadcaster();
+    const manager = makeManager(broadcaster);
+    let resolveContext: (ctx: Context) => void = () => undefined;
+    orchestrationMocks.buildContext.mockReturnValue(
+      new Promise<Context>((resolve) => {
+        resolveContext = resolve;
+      }),
+    );
+
+    const firstRepair = manager.startRepair(SLUG);
+
+    // While the first buildContext is still pending, status already reads
+    // REPAIRING and a second concurrent repair must reject synchronously.
+    expect(await manager.getStatus(SLUG)).toEqual({
+      status: InstallStatuses.REPAIRING,
+      paused: false,
+    });
+    await expect(manager.startRepair(SLUG)).rejects.toMatchObject({
+      code: MinecraftErrorCodes.OP_IN_FLIGHT,
+    });
+
+    resolveContext(context());
+    await firstRepair;
+    expect(orchestrationMocks.runRepair).toHaveBeenCalledTimes(1);
+  });
 });
