@@ -67,5 +67,19 @@ export class ConsoleBuffer {
     const overflow = this.lines.length - this.limit;
     this.lines.splice(0, overflow);
     this.droppedCount += overflow;
+    this.dropPendingBelow(this.lines[0]?.id ?? 0);
+  }
+
+  // Ids are monotonically increasing, so pending is sorted; drop the leading
+  // run whose ids were just evicted from lines. Keeps consumePending a subset
+  // of getLines.
+  private dropPendingBelow(minRetainedId: number): void {
+    let cut = 0;
+    while (cut < this.pending.length) {
+      const line = this.pending[cut];
+      if (!line || line.id >= minRetainedId) break;
+      cut++;
+    }
+    if (cut > 0) this.pending.splice(0, cut);
   }
 }

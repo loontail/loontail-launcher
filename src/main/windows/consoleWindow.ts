@@ -3,15 +3,17 @@ import type { ConsoleHub } from '@main/infra/consoleHub';
 import { scopedLogger } from '@main/infra/logger';
 import { BrowserWindow } from 'electron';
 import { RENDERER_ENTRY_FILES, createRendererLocation } from './rendererLocations';
+import {
+  TITLE_BAR_HEIGHT,
+  TITLE_BAR_OVERLAY_COLOR,
+  TITLE_BAR_SYMBOL_COLOR,
+  WINDOW_BACKGROUND_COLOR,
+} from './windowColors';
 
 const DEFAULT_WIDTH = 960;
 const DEFAULT_HEIGHT = 600;
 const MIN_WIDTH = 720;
 const MIN_HEIGHT = 420;
-const BACKGROUND_COLOR = '#212121';
-const TITLE_BAR_HEIGHT = 40;
-const TITLE_BAR_OVERLAY_COLOR = 'rgba(0, 0, 0, 0)';
-const TITLE_BAR_SYMBOL_COLOR = '#a3a3a3';
 
 const logger = scopedLogger('consoleWindow');
 
@@ -24,7 +26,7 @@ const buildOptions = (): Electron.BrowserWindowConstructorOptions => {
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
     title: 'Loontail Launcher Console',
-    backgroundColor: BACKGROUND_COLOR,
+    backgroundColor: WINDOW_BACKGROUND_COLOR,
     autoHideMenuBar: true,
     show: false,
     webPreferences: {

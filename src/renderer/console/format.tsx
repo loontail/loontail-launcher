@@ -4,7 +4,7 @@ import {
   type ConsoleSource,
   ConsoleStatuses,
 } from '@shared/contracts/console';
-import type { ReactNode } from 'react';
+import { type ReactNode, memo } from 'react';
 
 const TWO_DIGITS = 2;
 const THREE_DIGITS = 3;
@@ -41,7 +41,7 @@ type HighlightProps = {
   active: boolean;
 };
 
-export const Highlight = ({ message, query, active }: HighlightProps): ReactNode => {
+export const Highlight = memo(({ message, query, active }: HighlightProps): ReactNode => {
   if (!query) return message;
   const needle = query.toLowerCase();
   const haystack = message.toLowerCase();
@@ -68,7 +68,7 @@ export const Highlight = ({ message, query, active }: HighlightProps): ReactNode
     matchIndex++;
   }
   return parts;
-};
+});
 
 export const COPY_FEEDBACKS = {
   IDLE: 'idle',

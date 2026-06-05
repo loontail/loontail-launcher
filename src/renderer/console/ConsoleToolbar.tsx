@@ -64,7 +64,7 @@ export const ConsoleToolbar = ({
             <X className="size-3" />
           </button>
         )}
-        <span className="ml-1 min-w-[52px] text-center text-[10.5px] tabular-nums text-foreground/55">
+        <span className="ml-1 min-w-(--console-counter-min) text-center text-console-meta tabular-nums text-foreground/55">
           {formatSearchCounter(
             search.searchQuery,
             search.matches.length,

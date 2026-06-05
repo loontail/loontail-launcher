@@ -39,7 +39,7 @@ export const ConsoleHeader = ({ status, statusLabel, headerSubtitle }: ConsoleHe
           <span
             data-status={status}
             className={cn(
-              'inline-flex h-5 items-center rounded-sm border px-2 text-[9.5px] font-bold uppercase tracking-wider',
+              'inline-flex h-5 items-center rounded-sm border px-2 text-console-badge font-bold uppercase tracking-wider',
               statusToneClass(status),
             )}
           >

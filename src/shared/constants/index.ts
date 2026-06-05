@@ -1,4 +1,5 @@
 export { API_PATH_PREFIX, API_ROUTES } from './apiRoutes';
+export { CONSOLE_BUFFER_LIMIT } from './console';
 export { ERROR_CODES } from './errorCodes';
 export type { ErrorCode } from './errorCodes';
 export { PROGRESS_THROTTLE_MS } from './progress';

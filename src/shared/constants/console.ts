@@ -1,0 +1,1 @@
+export const CONSOLE_BUFFER_LIMIT = 10000;

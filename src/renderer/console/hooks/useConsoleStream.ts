@@ -82,7 +82,7 @@ export const useConsoleStream = (
         setLines(payload.lines);
       })
       .catch(() => {
-        /* main may not be ready yet — live updates will catch us up */
+        // main may not be ready on mount; the reconcile poll catches up.
       });
     return () => {
       cancelled = true;
@@ -91,7 +91,6 @@ export const useConsoleStream = (
 
   useEffect(() => refreshInitial(), [refreshInitial]);
 
-  // Coalesce inbound push batches so a burst of stdout becomes one setLines.
   const flushPending = useCallback(() => {
     const incoming = pendingRef.current;
     if (incoming.length === 0) return;
@@ -157,9 +156,13 @@ export const useConsoleStream = (
     if (!paused && pendingRef.current.length > 0) scheduleFlush();
   }, [paused, scheduleFlush]);
 
+  const isLive =
+    state.status === ConsoleStatuses.LAUNCHING || state.status === ConsoleStatuses.RUNNING;
+
   // Reconciliation poll: Chromium can throttle occluded windows; catch any
   // pushes the live channel missed. seenIdsRef dedupes live arrivals.
   useEffect(() => {
+    if (!isLive) return;
     const handle = window.setInterval(() => {
       getInitial()
         .then((payload: ConsoleInitialPayload) => {
@@ -187,7 +190,7 @@ export const useConsoleStream = (
         });
     }, RECONCILE_INTERVAL_MS);
     return () => window.clearInterval(handle);
-  }, [scheduleFlush, appendPending]);
+  }, [isLive, scheduleFlush, appendPending]);
 
   const togglePause = useCallback(() => setPaused((value) => !value), []);
 

@@ -3,15 +3,17 @@ import { mainConfig } from '@main/config';
 import { scopedLogger } from '@main/infra/logger';
 import { BrowserWindow, shell } from 'electron';
 import { RENDERER_ENTRY_FILES, createRendererLocation } from './rendererLocations';
+import {
+  TITLE_BAR_HEIGHT,
+  TITLE_BAR_OVERLAY_COLOR,
+  TITLE_BAR_SYMBOL_COLOR,
+  WINDOW_BACKGROUND_COLOR,
+} from './windowColors';
 
 const DEFAULT_WIDTH = 1000;
 const DEFAULT_HEIGHT = 624;
 const MIN_WIDTH = 1000;
 const MIN_HEIGHT = 624;
-const BACKGROUND_COLOR = '#212121';
-const TITLE_BAR_HEIGHT = 40;
-const TITLE_BAR_OVERLAY_COLOR = 'rgba(0, 0, 0, 0)';
-const TITLE_BAR_SYMBOL_COLOR = '#a3a3a3';
 
 const logger = scopedLogger('mainWindow');
 
@@ -53,7 +55,7 @@ const buildWindowOptions = (): Electron.BrowserWindowConstructorOptions => {
     minHeight: MIN_HEIGHT,
     show: false,
     autoHideMenuBar: true,
-    backgroundColor: BACKGROUND_COLOR,
+    backgroundColor: WINDOW_BACKGROUND_COLOR,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: true,

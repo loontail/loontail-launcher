@@ -38,13 +38,26 @@ describe('ConsoleBuffer', () => {
       },
     ]);
     expect(buffer.getDroppedCount()).toBe(1);
-    expect(buffer.consumePending().map((line) => line.message)).toEqual([
-      'one',
-      'two',
-      'three',
-      'four',
-    ]);
+    expect(buffer.consumePending().map((line) => line.message)).toEqual(['two', 'three', 'four']);
     expect(buffer.consumePending()).toEqual([]);
+  });
+
+  it('keeps consumePending a subset of getLines after overflow across batches', () => {
+    const buffer = new ConsoleBuffer({ limit: 3, now: () => 123 });
+
+    buffer.append(['a', 'b', 'c'].map(makeInput));
+    buffer.consumePending();
+    buffer.append(['d', 'e'].map(makeInput));
+
+    const retainedIds = new Set(buffer.getLines().map((line) => line.id));
+    const pending = buffer.consumePending();
+
+    expect(buffer.getLines().map((line) => line.message)).toEqual(['c', 'd', 'e']);
+    expect(buffer.getDroppedCount()).toBe(2);
+    expect(pending.map((line) => line.message)).toEqual(['d', 'e']);
+    for (const line of pending) {
+      expect(retainedIds.has(line.id)).toBe(true);
+    }
   });
 
   it('clears retained lines, pending lines, and dropped count', () => {

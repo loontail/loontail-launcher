@@ -1,3 +1,4 @@
+import { CONSOLE_BUFFER_LIMIT } from '@shared/constants';
 import {
   type ConsoleInitialPayload,
   type ConsoleLevel,
@@ -14,21 +15,24 @@ import { ConsoleBuffer, type ConsoleLineInput } from './consoleBuffer';
 import { ConsoleWindowSink } from './consoleWindowSink';
 import { type Log4jEvent, Log4jStreamParser, formatLog4jLine, mapLog4jLevel } from './log4jStream';
 
-const BUFFER_LIMIT = 10000;
 const FLUSH_INTERVAL_MS = 50;
 
 const ANSI_ESCAPE_PATTERN =
   // biome-ignore lint/suspicious/noControlCharactersInRegex: ANSI escape sequences contain ESC (0x1b)
   /\x1b\[[0-9;]*m/g;
 
+const ERROR_LEVEL_PATTERN = /\b(ERROR|SEVERE|FATAL)\b/;
+const WARN_LEVEL_PATTERN = /\bWARN(ING)?\b/;
+const DEBUG_LEVEL_PATTERN = /\b(DEBUG|TRACE|FINE|FINER|FINEST)\b/;
+
 const stripAnsi = (raw: string): string => raw.replace(ANSI_ESCAPE_PATTERN, '');
 
 const guessLevel = (source: ConsoleSource, message: string): ConsoleLevel => {
   if (source === ConsoleSources.STDERR) return ConsoleLevels.ERROR;
   if (source === ConsoleSources.SYSTEM) return ConsoleLevels.SYSTEM;
-  if (/\b(ERROR|SEVERE|FATAL)\b/.test(message)) return ConsoleLevels.ERROR;
-  if (/\bWARN(ING)?\b/.test(message)) return ConsoleLevels.WARN;
-  if (/\b(DEBUG|TRACE|FINE|FINER|FINEST)\b/.test(message)) return ConsoleLevels.DEBUG;
+  if (ERROR_LEVEL_PATTERN.test(message)) return ConsoleLevels.ERROR;
+  if (WARN_LEVEL_PATTERN.test(message)) return ConsoleLevels.WARN;
+  if (DEBUG_LEVEL_PATTERN.test(message)) return ConsoleLevels.DEBUG;
   return ConsoleLevels.INFO;
 };
 
@@ -46,7 +50,7 @@ export type SessionInfo = {
 };
 
 export class ConsoleHub {
-  private readonly buffer = new ConsoleBuffer({ limit: BUFFER_LIMIT });
+  private readonly buffer = new ConsoleBuffer({ limit: CONSOLE_BUFFER_LIMIT });
   private readonly sink = new ConsoleWindowSink(() => {
     this.clearFlushTimer();
     this.buffer.clearPending();

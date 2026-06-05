@@ -1,18 +1,19 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { CONSOLE_BUFFER_LIMIT } from '@shared/constants';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ConsoleCrashBanner } from './ConsoleCrashBanner';
 import { ConsoleDetailPanel } from './ConsoleDetailPanel';
 import { ConsoleHeader } from './ConsoleHeader';
-import { CONSOLE_ROW_HEIGHT, ConsoleLogBody } from './ConsoleLogBody';
+import { ConsoleLogBody } from './ConsoleLogBody';
 import { ConsolePausedBanner } from './ConsolePausedBanner';
 import { ConsoleToolbar } from './ConsoleToolbar';
 import { copyAll, copyText } from './api';
+import { CONSOLE_ROW_HEIGHT } from './constants';
 import { COPY_FEEDBACKS, type CopyFeedback } from './format';
 import { useConsoleScroll } from './hooks/useConsoleScroll';
 import { useConsoleSearch } from './hooks/useConsoleSearch';
 import { useConsoleStream } from './hooks/useConsoleStream';
 
-const BUFFER_LIMIT = 10000;
 const COPY_FEEDBACK_RESET_MS = 1500;
 
 export const ConsoleApp = () => {
@@ -20,9 +21,10 @@ export const ConsoleApp = () => {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [copyAllFeedback, setCopyAllFeedback] = useState<CopyFeedback>(COPY_FEEDBACKS.IDLE);
   const [copyLineFeedback, setCopyLineFeedback] = useState<CopyFeedback>(COPY_FEEDBACKS.IDLE);
+  const flashTimerRef = useRef<number | null>(null);
 
   const resetSelection = useCallback(() => setSelectedId(null), []);
-  const stream = useConsoleStream(BUFFER_LIMIT, resetSelection);
+  const stream = useConsoleStream(CONSOLE_BUFFER_LIMIT, resetSelection);
   const search = useConsoleSearch(stream.lines);
   const scroll = useConsoleScroll(stream.lines.length);
 
@@ -41,8 +43,19 @@ export const ConsoleApp = () => {
 
   const flashFeedback = useCallback((setter: (next: CopyFeedback) => void, kind: CopyFeedback) => {
     setter(kind);
-    window.setTimeout(() => setter(COPY_FEEDBACKS.IDLE), COPY_FEEDBACK_RESET_MS);
+    if (flashTimerRef.current != null) window.clearTimeout(flashTimerRef.current);
+    flashTimerRef.current = window.setTimeout(() => {
+      flashTimerRef.current = null;
+      setter(COPY_FEEDBACKS.IDLE);
+    }, COPY_FEEDBACK_RESET_MS);
   }, []);
+
+  useEffect(
+    () => () => {
+      if (flashTimerRef.current != null) window.clearTimeout(flashTimerRef.current);
+    },
+    [],
+  );
 
   const handleCopyAll = useCallback(async () => {
     try {
