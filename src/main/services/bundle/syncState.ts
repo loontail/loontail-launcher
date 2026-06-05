@@ -1,4 +1,5 @@
 import type { ClientRequest } from 'node:http';
+import type { ClientOperationLease } from '@main/services/clientOperationLocks';
 import type { BundleProgressEvent, RemoteManifest } from '@shared/contracts/bundle';
 import type { BundleSlug, ClientSlug } from '@shared/contracts/ids';
 import type { SyncPlan } from './plan';
@@ -6,6 +7,9 @@ import type { SyncTask } from './runner';
 
 export type ActiveSync = {
   task: SyncTask;
+  // Lock + sync state are one record so the slug cannot be removed from
+  // activeSyncs without releasing the lease (dropActiveSync owns both).
+  lock: ClientOperationLease;
   lastProgress: BundleProgressEvent | null;
   remoteManifestHash: string;
   remoteManifest: RemoteManifest;
@@ -13,6 +17,10 @@ export type ActiveSync = {
   forLaunch: boolean;
   awaiters: Array<{ resolve: () => void; reject: (err: Error) => void }>;
   pauseIdleTimer: NodeJS.Timeout | null;
+  // Resolves once the sync leaves activeSyncs (used by cancelAll to await real
+  // completion instead of a fixed grace timer).
+  whenDropped: Promise<void>;
+  signalDropped: () => void;
 };
 
 const createEmptySyncPlan = (): SyncPlan => ({
@@ -44,19 +52,33 @@ export const createSyncTask = (slug: ClientSlug, clientFolder: string): SyncTask
 
 export const createActiveSync = (
   task: SyncTask,
+  lock: ClientOperationLease,
   bundleSlug: BundleSlug,
   forLaunch: boolean,
-): ActiveSync => ({
-  task,
-  lastProgress: null,
-  remoteManifestHash: '',
-  remoteManifest: {},
-  bundleSlug,
-  forLaunch,
-  awaiters: [],
-  pauseIdleTimer: null,
-});
+): ActiveSync => {
+  let signalDropped: () => void = () => {};
+  const whenDropped = new Promise<void>((resolve) => {
+    signalDropped = resolve;
+  });
+  return {
+    task,
+    lock,
+    lastProgress: null,
+    remoteManifestHash: '',
+    remoteManifest: {},
+    bundleSlug,
+    forLaunch,
+    awaiters: [],
+    pauseIdleTimer: null,
+    whenDropped,
+    signalDropped,
+  };
+};
 
+// Resume only runs after pause has fully drained the download workers
+// (runSyncPhases returned), so reassigning task.abort here cannot strand a live
+// worker on the old signal — each downloadEntry captured the previous signal by
+// value for its lifetime.
 export const resetTaskForResume = (task: SyncTask): void => {
   task.paused = false;
   task.cancelled = false;

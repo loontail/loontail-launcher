@@ -18,9 +18,9 @@ export const registerBundleRoutes = (router: Router, manager: BundleManager): vo
     manager.pauseSync(slug);
   });
 
-  router.handle(IPC_CHANNELS.bundleResume, (rawArgs) => {
+  router.handle(IPC_CHANNELS.bundleResume, async (rawArgs) => {
     const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED);
-    manager.resumeSync(slug);
+    await manager.resumeSync(slug);
   });
 
   router.handle(IPC_CHANNELS.bundleCancel, (rawArgs) => {

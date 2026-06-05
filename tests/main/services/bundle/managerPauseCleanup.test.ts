@@ -76,6 +76,7 @@ type Awaiter = { resolve: () => void; reject: (err: Error) => void };
 
 type ActiveSyncShape = {
   task: SyncTask;
+  lock: { release: () => void };
   lastProgress: null;
   remoteManifestHash: string;
   remoteManifest: Record<string, never>;
@@ -83,6 +84,8 @@ type ActiveSyncShape = {
   forLaunch: boolean;
   awaiters: Awaiter[];
   pauseIdleTimer: NodeJS.Timeout | null;
+  whenDropped: Promise<void>;
+  signalDropped: () => void;
 };
 
 const SLUG = 'test-client' as ClientSlug;
@@ -164,8 +167,13 @@ const seedPausedActive = (
     pendingDownloads: [],
     pendingDeletes: [],
   };
+  let signalDropped: () => void = () => {};
+  const whenDropped = new Promise<void>((resolve) => {
+    signalDropped = resolve;
+  });
   const active: ActiveSyncShape = {
     task,
+    lock: { release: vi.fn() },
     lastProgress: null,
     remoteManifestHash: '',
     remoteManifest: {},
@@ -173,6 +181,8 @@ const seedPausedActive = (
     forLaunch: true,
     awaiters: [awaiter],
     pauseIdleTimer: null,
+    whenDropped,
+    signalDropped,
   };
   const internals = manager as unknown as {
     activeSyncs: Map<ClientSlug, ActiveSyncShape>;

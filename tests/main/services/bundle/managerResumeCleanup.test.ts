@@ -58,8 +58,7 @@ const makeBroadcaster = (): BundleBroadcaster => ({
 const makeHealer = (): Healer => ({ healAfterDeletes: vi.fn(async () => {}) }) as unknown as Healer;
 
 type ManagerInternals = {
-  activeSyncs: Map<ClientSlug, unknown>;
-  activeLocks: Map<ClientSlug, { release: () => void }>;
+  activeSyncs: Map<ClientSlug, { lock: { release: () => void } }>;
 };
 
 const seedPausedActiveWithLock = (
@@ -90,16 +89,6 @@ const seedPausedActiveWithLock = (
     pendingDownloads: [],
     pendingDeletes: [],
   };
-  const active = {
-    task,
-    lastProgress: null,
-    remoteManifestHash: '',
-    remoteManifest: {},
-    bundleSlug: BUNDLE_SLUG,
-    forLaunch: false,
-    awaiters: [],
-    pauseIdleTimer: null,
-  };
   const acquired = operationLocks.acquire({
     slug: SLUG,
     domain: ClientOperationDomains.BUNDLE,
@@ -107,9 +96,22 @@ const seedPausedActiveWithLock = (
   });
   if (acquired.kind !== 'acquired') throw new Error('Expected bundle lock');
 
+  const active = {
+    task,
+    lock: acquired.lease,
+    lastProgress: null,
+    remoteManifestHash: '',
+    remoteManifest: {},
+    bundleSlug: BUNDLE_SLUG,
+    forLaunch: false,
+    awaiters: [],
+    pauseIdleTimer: null,
+    whenDropped: Promise.resolve(),
+    signalDropped: () => {},
+  };
+
   const internals = manager as unknown as ManagerInternals;
   internals.activeSyncs.set(SLUG, active);
-  internals.activeLocks.set(SLUG, acquired.lease);
   return internals;
 };
 
@@ -128,14 +130,12 @@ describe('BundleManager resume cleanup', () => {
     const internals = seedPausedActiveWithLock(manager, operationLocks);
 
     expect(internals.activeSyncs.has(SLUG)).toBe(true);
-    expect(internals.activeLocks.has(SLUG)).toBe(true);
 
-    manager.resumeSync(SLUG);
+    void manager.resumeSync(SLUG);
 
     await vi.waitFor(() => {
       expect(internals.activeSyncs.has(SLUG)).toBe(false);
     });
-    expect(internals.activeLocks.has(SLUG)).toBe(false);
 
     // The CLIENT_FOLDER lease must be free again, or the slug is wedged.
     const reacquire = operationLocks.acquire({

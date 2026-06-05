@@ -120,15 +120,21 @@ const runDownloadPhase = async (task: SyncTask, emit: EmitProgress): Promise<voi
     workers.push(
       runDownloadWorker(task, emit).catch((err: unknown) => {
         if (!firstError) firstError = err;
-        // Drain queue so other workers exit promptly.
+        // Drain queue so other workers exit promptly, and abort to cancel any
+        // sibling download already mid-flight instead of letting it run to
+        // completion.
         task.pendingDownloads.length = 0;
+        task.abort.abort();
       }),
     );
   }
   await Promise.all(workers);
   if (firstError) {
     if (firstError instanceof BundleError) throw firstError;
-    if (task.cancelled || task.abort.signal.aborted) {
+    // Only user-initiated cancel/pause maps to ABORTED. The internal
+    // failure-abort above also flips signal.aborted, so it must not be confused
+    // with a genuine cancel — a non-BundleError failure stays DOWNLOAD_FAILED.
+    if (task.cancelled || task.paused) {
       throw new BundleError(BundleErrorCodes.ABORTED, 'Sync cancelled');
     }
     throw new BundleError(

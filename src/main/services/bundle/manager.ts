@@ -44,6 +44,11 @@ type PreparedPlanSource = {
   loadRemoteManifest: () => RemoteManifest | Promise<RemoteManifest>;
 };
 
+// getClient throws this exact message when the slug is absent from a
+// successfully fetched list; any other error means the fetch itself failed.
+const isClientNotFound = (err: unknown, slug: ClientSlug): boolean =>
+  err instanceof Error && err.message === `Client "${slug}" not found`;
+
 const makeProgressEvent = (
   task: SyncTask,
   slug: ClientSlug,
@@ -78,7 +83,6 @@ const createEmit = (
 
 export class BundleManager {
   private readonly activeSyncs = new Map<ClientSlug, ActiveSync>();
-  private readonly activeLocks = new Map<ClientSlug, ClientOperationLease>();
 
   constructor(
     private readonly broadcaster: BundleBroadcaster,
@@ -124,20 +128,22 @@ export class BundleManager {
     this.armPauseIdleTimer(slug, active);
   }
 
-  resumeSync(slug: ClientSlug): void {
+  async resumeSync(slug: ClientSlug): Promise<void> {
     const active = this.activeSyncs.get(slug);
     if (!active) {
-      // Nothing pending — caller probably wants a fresh sync. Spawn one.
-      void this.startSync({ slug }).catch((err) => {
-        logger.warn(`[${slug}] resume → fresh sync failed`, err);
-      });
+      // Nothing pending — caller probably wants a fresh sync. Await it so a
+      // failure (e.g. NO_CLIENT_FOLDER) crosses IPC as a rejection instead of
+      // being swallowed.
+      await this.startSync({ slug });
       return;
     }
     if (active.task.cancelled) return;
     if (!active.task.paused) return;
     this.clearPauseIdleTimer(active);
     // Re-plan from current disk state — if files were finished before pause,
-    // they're now hash-matched and will be skipped.
+    // they're now hash-matched and will be skipped. Fire-and-forget: the paused
+    // resume runs to its own terminal status; the route returns once re-planning
+    // has been kicked off.
     void this.continuePausedSync(active).catch((err) => {
       logger.warn(`[${slug}] resume failed`, err);
     });
@@ -206,7 +212,9 @@ export class BundleManager {
     const { slug } = req;
     // The write lock (acquireWriteLock below) is the single source of truth for
     // in-flight dedup — it throws OP_IN_FLIGHT when another sync holds the lease.
-    const client = await this.tryGetClient(slug);
+    // A fetch failure (Strapi offline) surfaces as MANIFEST_FETCH_FAILED, not
+    // the opaque UNKNOWN "client not found" path.
+    const client = await this.fetchClient(slug);
     if (!client) {
       throw new BundleError(BundleErrorCodes.UNKNOWN, `Client "${slug}" not found`);
     }
@@ -224,17 +232,22 @@ export class BundleManager {
       );
     }
     const lock = this.acquireWriteLock(slug);
-    // Track the lease before building the task so a throw during setup (task /
-    // active-sync construction) still releases it via dropActiveSync, which is
-    // idempotent on the executePreparedSync paths that drop it themselves.
-    this.activeLocks.set(slug, lock);
+    // If task/active-sync construction throws before the sync is registered,
+    // release the lease here — dropActiveSync only runs once an ActiveSync owns
+    // the lock.
+    let active: ActiveSync;
     try {
       const task = createSyncTask(slug, clientFolder);
-      const active = createActiveSync(task, bundleSlug, options.forLaunch);
-      const launchWait = active.forLaunch ? this.createAwaiter(active) : null;
+      active = createActiveSync(task, lock, bundleSlug, options.forLaunch);
       this.activeSyncs.set(slug, active);
-      lock.setCancel(() => this.cancelSync(slug));
-
+    } catch (err) {
+      lock.release();
+      throw err;
+    }
+    const task = active.task;
+    const launchWait = active.forLaunch ? this.createAwaiter(active) : null;
+    lock.setCancel(() => this.cancelSync(slug));
+    try {
       await this.executePreparedSync(active, task, {
         force: req.force === true,
         loadRemoteManifest: async () => {
@@ -332,6 +345,7 @@ export class BundleManager {
       if (code === BundleErrorCodes.ABORTED && task.paused) {
         return;
       }
+      logger.error(`[${task.slug}] bundle sync failed (${code}) — ${errorMessage(err)}`, err);
       this.emitError(task.slug, code, errorMessage(err));
       this.emitStatus(task.slug, BundleSyncStatuses.ERROR);
       this.rejectAwaiters(active, this.toBundleError(err, code));
@@ -369,11 +383,28 @@ export class BundleManager {
     }
   }
 
+  // getInstallState's best-effort probe — a fetch failure must not gate the UI,
+  // so any error collapses to null (treated as "no client record").
   private async tryGetClient(slug: ClientSlug) {
     try {
       return await getClient(slug);
     } catch {
       return null;
+    }
+  }
+
+  // Sync path: distinguish a genuine "no such client" (null) from a fetch
+  // failure (network/Strapi down) so the renderer sees MANIFEST_FETCH_FAILED
+  // rather than an undifferentiated UNKNOWN.
+  private async fetchClient(slug: ClientSlug) {
+    try {
+      return await getClient(slug);
+    } catch (err) {
+      if (isClientNotFound(err, slug)) return null;
+      throw new BundleError(
+        BundleErrorCodes.MANIFEST_FETCH_FAILED,
+        `Failed to load client "${slug}": ${errorMessage(err)}`,
+      );
     }
   }
 
@@ -396,11 +427,11 @@ export class BundleManager {
   }
 
   private dropActiveSync(slug: ClientSlug): void {
+    const active = this.activeSyncs.get(slug);
+    if (!active) return;
     this.activeSyncs.delete(slug);
-    const lock = this.activeLocks.get(slug);
-    if (lock === undefined) return;
-    lock.release();
-    this.activeLocks.delete(slug);
+    active.lock.release();
+    active.signalDropped();
   }
 
   private emitStatus(slug: ClientSlug, status: BundleSyncStatus): void {
@@ -461,16 +492,28 @@ export class BundleManager {
     return new BundleError(code, errorMessage(err));
   }
 
-  // Called on app shutdown to abort every active sync — cooperative pause/cancel
-  // doesn't stop the underlying sockets unless the runner sees the abort, so we
-  // also destroy current requests synchronously and wait a short grace window
-  // so the runner's finally blocks (tmp cleanup, manifest writes) can land.
-  async cancelAll(graceMs = 250): Promise<void> {
-    const slugs = [...this.activeSyncs.keys()];
+  // Cooperative pause/cancel doesn't stop in-flight sockets; destroy them
+  // directly, then await each sync's real completion (its finally block running
+  // tmp cleanup + manifest writes) rather than a fixed grace timer. A timeout
+  // bounds the wait so a wedged sync can't block process exit indefinitely.
+  async cancelAll(maxMs = 250): Promise<void> {
+    const actives = [...this.activeSyncs.values()];
+    const slugs = actives.map((active) => active.task.slug);
     for (const slug of slugs) this.cancelSync(slug);
-    if (graceMs > 0 && slugs.length > 0) {
-      await new Promise((resolve) => setTimeout(resolve, graceMs));
+    const pending = [...this.activeSyncs.values()].map((active) => active.whenDropped);
+    if (pending.length === 0) return;
+    const settled = Promise.allSettled(pending);
+    if (maxMs <= 0) {
+      await settled;
+      return;
     }
+    let timer: NodeJS.Timeout | undefined;
+    const timeout = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, maxMs);
+      if (typeof timer.unref === 'function') timer.unref();
+    });
+    await Promise.race([settled, timeout]);
+    if (timer) clearTimeout(timer);
   }
 
   // Called by MinecraftManager.uninstall to wipe the local manifest sidecar
