@@ -3,7 +3,7 @@ import { pathToFileURL } from 'node:url';
 import type { ConsoleHub } from '@main/infra/consoleHub';
 import { createTrustedSenderCheck } from '@main/ipc/trustedSender';
 import { RENDERER_ENTRY_FILES } from '@main/windows/rendererLocations';
-import { IPC_CHANNELS } from '@shared/ipc';
+import { CONSOLE_TRUSTED_CHANNELS, IPC_CHANNELS, type IpcContract } from '@shared/ipc';
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
 import { beforeEach, describe, expect, it } from 'vitest';
 
@@ -85,6 +85,32 @@ describe('createTrustedSenderCheck', () => {
     });
 
     expect(isTrusted(fakeEvent(1, mainFileUrl, {}), IPC_CHANNELS.authLogin)).toBe(false);
+  });
+
+  it('grants the console window exactly the explicit allowlist and nothing else', () => {
+    const mainWindow = fakeWindow(1);
+    consoleWindowState.current = fakeWindow(2);
+    const isTrusted = createTrustedSenderCheck(mainWindow, consoleHub, {
+      rendererRoot,
+      devServerUrl: null,
+    });
+
+    const allChannels = Object.values(IPC_CHANNELS) as Array<keyof IpcContract>;
+    for (const channel of allChannels) {
+      const expected = CONSOLE_TRUSTED_CHANNELS.has(channel);
+      expect(isTrusted(fakeEvent(2, consoleFileUrl), channel)).toBe(expected);
+    }
+  });
+
+  it('keeps the console allowlist scoped to the four console channels', () => {
+    expect([...CONSOLE_TRUSTED_CHANNELS].sort()).toEqual(
+      [
+        IPC_CHANNELS.consoleGetInitial,
+        IPC_CHANNELS.consoleClear,
+        IPC_CHANNELS.consoleCopyAll,
+        IPC_CHANNELS.consoleCopyText,
+      ].sort(),
+    );
   });
 
   it('uses the currently attached console window after reopening', () => {

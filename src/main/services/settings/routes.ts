@@ -1,5 +1,5 @@
 import { directoryHasEntries, pickFolderWithSuffix } from '@main/infra/system';
-import { assertNoIpcArgs, parseIpcArgs } from '@main/ipc/parseArgs';
+import { SLUG_REQUIRED_MSG, assertNoIpcArgs, parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
 import {
   clearClientOverride,
@@ -14,8 +14,6 @@ import {
 } from '@shared/contracts/settings';
 import { IPC_CHANNELS } from '@shared/ipc';
 import type { BrowserWindow } from 'electron';
-
-const SLUG_REQUIRED = 'slug must be a non-empty string';
 
 export const registerSettingsRoutes = (router: Router, mainWindow: BrowserWindow): void => {
   router.handle(IPC_CHANNELS.settingsGet, (rawArgs) => {
@@ -38,12 +36,12 @@ export const registerSettingsRoutes = (router: Router, mainWindow: BrowserWindow
   });
 
   router.handle(IPC_CHANNELS.settingsClearClientOverrides, (rawArgs) => {
-    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED);
+    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED_MSG);
     return clearClientOverride(slug);
   });
 
   router.handle(IPC_CHANNELS.settingsChooseClientFolder, async (rawArgs) => {
-    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED);
+    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED_MSG);
     const picked = await pickFolderWithSuffix(mainWindow, slug);
     if (!picked) return null;
     const next = setClientOverride(slug, { storage: { clientFolder: picked.path } });

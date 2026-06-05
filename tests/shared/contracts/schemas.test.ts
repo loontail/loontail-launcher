@@ -14,7 +14,11 @@ import {
   ProgressStageSchema,
   ProgressStages,
 } from '@shared/contracts/minecraft';
-import { LauncherSettingsSchema, LoaderChoices } from '@shared/contracts/settings';
+import {
+  LauncherSettingsSchema,
+  LoaderChoices,
+  PatchLauncherSettingsSchema,
+} from '@shared/contracts/settings';
 import { describe, expect, it } from 'vitest';
 
 describe('LauncherSettingsSchema', () => {
@@ -85,6 +89,35 @@ describe('LauncherSettingsSchema', () => {
       storage: { clientsFolder: '' },
       launch: { console: false, fullscreen: false },
       clients: {},
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('PatchLauncherSettingsSchema', () => {
+  it('accepts a valid partial patch', () => {
+    const result = PatchLauncherSettingsSchema.safeParse({
+      memory: { allocatedRamMb: 4096 },
+      launch: { console: true },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts an empty patch', () => {
+    expect(PatchLauncherSettingsSchema.safeParse({}).success).toBe(true);
+  });
+
+  it('rejects an object carrying an unknown top-level key (strict)', () => {
+    const result = PatchLauncherSettingsSchema.safeParse({
+      memory: { allocatedRamMb: 4096 },
+      bogus: true,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects a malformed nested section', () => {
+    const result = PatchLauncherSettingsSchema.safeParse({
+      memory: { allocatedRamMb: -1 },
     });
     expect(result.success).toBe(false);
   });

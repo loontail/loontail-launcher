@@ -1,13 +1,11 @@
 import { isMinecraftKitError } from '@loontail/minecraft-kit';
-import { parseIpcArgs } from '@main/ipc/parseArgs';
+import { SLUG_REQUIRED_MSG, parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
 import { ClientSlugSchema } from '@shared/contracts/ids';
 import { InstallRequestSchema } from '@shared/contracts/minecraft';
 import { IPC_CHANNELS } from '@shared/ipc';
 import { ManagerError, classifyError } from './errors';
 import type { MinecraftManager } from './manager';
-
-const SLUG_REQUIRED = 'slug must be a non-empty string';
 
 // buildContext (via kit.targets.resolve) can throw a raw MinecraftKitError out
 // of the install/repair/launch entry points. Left unwrapped, toIpcError would
@@ -26,7 +24,7 @@ const withClassifiedKitError = async (run: () => Promise<void>): Promise<void> =
 
 export const registerMinecraftRoutes = (router: Router, manager: MinecraftManager): void => {
   router.handle(IPC_CHANNELS.minecraftGetStatus, async (rawArgs) => {
-    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED);
+    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED_MSG);
     return manager.getStatus(slug);
   });
 
@@ -36,37 +34,37 @@ export const registerMinecraftRoutes = (router: Router, manager: MinecraftManage
   });
 
   router.handle(IPC_CHANNELS.minecraftPause, (rawArgs) => {
-    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED);
+    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED_MSG);
     manager.pause(slug);
   });
 
   router.handle(IPC_CHANNELS.minecraftResume, (rawArgs) => {
-    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED);
+    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED_MSG);
     manager.resume(slug);
   });
 
   router.handle(IPC_CHANNELS.minecraftCancel, (rawArgs) => {
-    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED);
+    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED_MSG);
     manager.cancel(slug);
   });
 
   router.handle(IPC_CHANNELS.minecraftRepair, async (rawArgs) => {
-    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED);
+    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED_MSG);
     await withClassifiedKitError(() => manager.startRepair(slug));
   });
 
   router.handle(IPC_CHANNELS.minecraftUninstall, async (rawArgs) => {
-    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED);
+    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED_MSG);
     await manager.uninstall(slug);
   });
 
   router.handle(IPC_CHANNELS.minecraftLaunch, async (rawArgs) => {
-    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED);
+    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED_MSG);
     await withClassifiedKitError(() => manager.startLaunch(slug));
   });
 
   router.handle(IPC_CHANNELS.minecraftStop, (rawArgs) => {
-    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED);
+    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED_MSG);
     manager.stop(slug);
   });
 };

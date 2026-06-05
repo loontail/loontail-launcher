@@ -49,10 +49,17 @@ export const IPC_CHANNELS = {
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
 
-// Channels the unsandboxed console window may invoke. Every other channel is
-// denied to it so a renderer compromise there cannot reach the full IPC surface
-// (auth.login, minecraft.launch, settings.setLauncher, system.openPath, …).
-export const CONSOLE_CHANNEL_PREFIX = 'console.';
+// Explicit allowlist of channels the unsandboxed console window may invoke.
+// Every other channel is denied to it so a renderer compromise there cannot
+// reach the full IPC surface (auth.login, minecraft.launch, settings.setLauncher,
+// system.openPath, …). A new console.* channel is NOT trusted until it is added
+// here, forcing a deliberate trust decision rather than an implicit prefix grant.
+export const CONSOLE_TRUSTED_CHANNELS: ReadonlySet<IpcChannel> = new Set([
+  IPC_CHANNELS.consoleGetInitial,
+  IPC_CHANNELS.consoleClear,
+  IPC_CHANNELS.consoleCopyAll,
+  IPC_CHANNELS.consoleCopyText,
+]);
 
 // Compile-time guard: every channel value must be a key in IpcContract, and
 // every IpcContract key must appear as a channel value. Adding/removing a

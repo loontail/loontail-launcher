@@ -109,6 +109,11 @@ export class BundleManager {
     try {
       await this.runSync({ slug }, { forLaunch: true });
     } finally {
+      // why: detach before returning so an abort that fires after the sync has
+      // already reached its terminal status (dropActiveSync cleared the slug)
+      // cannot invoke cancelSync on a stale, dropped slug. cancelSync is guarded
+      // for a missing slug, so this ordering is defensive, not load-bearing — but
+      // it keeps the cleanup window closed across refactors.
       externalSignal?.removeEventListener('abort', onExternalAbort);
     }
   }

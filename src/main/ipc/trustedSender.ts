@@ -4,7 +4,7 @@ import {
   type RendererLocation,
   createRendererLocation,
 } from '@main/windows/rendererLocations';
-import { CONSOLE_CHANNEL_PREFIX, type IpcContract } from '@shared/ipc';
+import { CONSOLE_TRUSTED_CHANNELS, type IpcContract } from '@shared/ipc';
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
 
 type TrustedSenderOptions = {
@@ -46,9 +46,10 @@ export const createTrustedSenderCheck = (
     if (event.senderFrame === null) return false;
     if (event.senderFrame.parent !== null) return false;
     if (isTrustedWindowFrame(event, mainWindow, mainLocation)) return true;
-    // The console window runs unsandboxed, so scope it to its own channel group;
-    // it must never be able to invoke auth/launch/settings/system handlers.
-    if (!channel.startsWith(CONSOLE_CHANNEL_PREFIX)) return false;
+    // The console window runs unsandboxed, so scope it to an explicit channel
+    // allowlist; it must never be able to invoke auth/launch/settings/system
+    // handlers.
+    if (!CONSOLE_TRUSTED_CHANNELS.has(channel)) return false;
     const consoleWindow = consoleHub.getWindow();
     if (!consoleWindow) return false;
     return isTrustedWindowFrame(event, consoleWindow, consoleLocation);
