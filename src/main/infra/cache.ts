@@ -76,20 +76,23 @@ const listNamespaceFiles = async (dir: string): Promise<NamespaceEntry[]> => {
     if (isEnoent(error)) return [];
     throw error;
   }
-  const results: NamespaceEntry[] = [];
-  for (const entry of entries) {
-    if (!entry.isFile()) continue;
-    const file = join(dir, entry.name);
-    let info: Stats;
-    try {
-      info = await stat(file);
-    } catch (error) {
-      if (isEnoent(error)) continue;
-      throw error;
-    }
-    results.push({ file, size: info.size, mtimeMs: info.mtimeMs });
-  }
-  return results;
+  const stats = await Promise.all(
+    entries
+      .filter((entry) => entry.isFile())
+      .map(async (entry): Promise<NamespaceEntry | null> => {
+        const file = join(dir, entry.name);
+        let info: Stats;
+        try {
+          info = await stat(file);
+        } catch (error) {
+          // Entry can vanish between readdir and stat (concurrent eviction) — skip.
+          if (isEnoent(error)) return null;
+          throw error;
+        }
+        return { file, size: info.size, mtimeMs: info.mtimeMs };
+      }),
+  );
+  return stats.filter((entry): entry is NamespaceEntry => entry !== null);
 };
 
 export const getNamespaceSize = async (namespace: string): Promise<number> => {

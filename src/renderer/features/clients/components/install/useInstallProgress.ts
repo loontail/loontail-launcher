@@ -15,10 +15,6 @@ export type ClientInstallProgress = {
   progress: InstallProgressView | null;
 };
 
-// Single composite hook so callers don't have to coordinate two stores inline.
-// Memoizes the derived view to keep referential stability across renders where
-// the underlying state is unchanged.
-//
 // `hasLoader` is derived the same way the main-process install pipeline picks
 // the loader: persisted override → client's loader fields → vanilla.
 export const useInstallProgress = (client: Client): ClientInstallProgress => {

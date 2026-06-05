@@ -102,12 +102,7 @@ export const CopyButton = ({
   const content =
     typeof children === 'function'
       ? children(copied)
-      : (children ??
-        (copied ? (
-          <Check className={variant === 'icon' ? 'size-3.5' : 'size-3.5'} />
-        ) : (
-          <Copy className={variant === 'icon' ? 'size-3.5' : 'size-3.5'} />
-        )));
+      : (children ?? (copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />));
 
   return (
     <button

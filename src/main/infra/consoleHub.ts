@@ -43,6 +43,27 @@ const LEVEL_FROM_LOG4J: Record<ReturnType<typeof mapLog4jLevel>, ConsoleLevel> =
   error: ConsoleLevels.ERROR,
 };
 
+export const buildLineInput = (args: {
+  level: ConsoleLevel;
+  source: ConsoleSource;
+  message: string;
+  slug?: ClientSlug | undefined;
+  code?: string | undefined;
+  args?: ConsoleLineArgs | undefined;
+}): ConsoleLineInput => {
+  const line: ConsoleLineInput = {
+    level: args.level,
+    source: args.source,
+    message: args.message,
+  };
+  if (args.slug) line.slug = args.slug;
+  if (args.code) {
+    line.code = args.code;
+    if (args.args) line.args = args.args;
+  }
+  return line;
+};
+
 export type SessionInfo = {
   slug: ClientSlug;
   clientTitle: string;
@@ -131,9 +152,9 @@ export class ConsoleHub {
       source: ConsoleSources.SYSTEM,
       raw: message,
       forcedLevel: ConsoleLevels.SYSTEM,
-      ...(options?.slug ? { slug: options.slug } : {}),
-      ...(options?.code ? { code: options.code } : {}),
-      ...(options?.args ? { args: options.args } : {}),
+      slug: options?.slug,
+      code: options?.code,
+      args: options?.args,
     });
   }
 
@@ -184,10 +205,10 @@ export class ConsoleHub {
   private ingest(args: {
     source: ConsoleSource;
     raw: string;
-    forcedLevel?: ConsoleLevel;
-    slug?: ClientSlug;
-    code?: string;
-    args?: ConsoleLineArgs;
+    forcedLevel?: ConsoleLevel | undefined;
+    slug?: ClientSlug | undefined;
+    code?: string | undefined;
+    args?: ConsoleLineArgs | undefined;
   }): void {
     const { source, raw, forcedLevel, slug, code, args: lineArgs } = args;
     if (!raw) return;
@@ -197,16 +218,16 @@ export class ConsoleHub {
     const segments = cleaned.split(/\r?\n/).filter((segment) => segment.trim().length > 0);
     if (segments.length === 0) return;
 
-    const lines: ConsoleLineInput[] = segments.map((segment) => {
-      const level: ConsoleLevel = forcedLevel ?? guessLevel(source, segment);
-      return {
-        level,
+    const lines: ConsoleLineInput[] = segments.map((segment) =>
+      buildLineInput({
+        level: forcedLevel ?? guessLevel(source, segment),
         source,
         message: segment,
-        ...(slug ? { slug } : {}),
-        ...(code ? (lineArgs ? { code, args: lineArgs } : { code }) : {}),
-      };
-    });
+        slug,
+        code,
+        args: lineArgs,
+      }),
+    );
     this.buffer.append(lines);
 
     if (this.hasWindow()) this.scheduleFlush();

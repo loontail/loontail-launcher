@@ -19,7 +19,7 @@ import { getDiskSpace, getFolderSize, getRamRange, pickInstallFolder } from './s
 const DISK_SPACE_STALE_TIME_MS = 30_000;
 const DISK_SPACE_DEBOUNCE_MS = 300;
 const FOLDER_SIZE_STALE_TIME_MS = 60_000;
-// Main-side mutations (e.g. `persistRuntime` after install) bypass the IPC
+// Main-side mutations (e.g. runtime path stored after install) bypass the IPC
 // mutation channel that calls `setQueryData`. Refetch periodically so the
 // renderer eventually picks them up without a manual reload.
 const LAUNCHER_SETTINGS_STALE_TIME_MS = 5 * 60 * 1000;

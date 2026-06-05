@@ -1,8 +1,8 @@
-import { ConsoleSources } from '@shared/contracts/console';
+import { ConsoleLevels, ConsoleSources } from '@shared/contracts/console';
 import { asClientSlug } from '@shared/contracts/ids';
 import { describe, expect, it } from 'vitest';
 
-import { createConsoleHub } from '@main/infra/consoleHub';
+import { buildLineInput, createConsoleHub } from '@main/infra/consoleHub';
 
 const SLUG = asClientSlug('test-client');
 
@@ -50,5 +50,41 @@ describe('createConsoleHub', () => {
 
     hub.endSession(SLUG);
     expect(hub.getInitial().lines).toHaveLength(beforeEnd);
+  });
+});
+
+describe('buildLineInput', () => {
+  const BASE = {
+    level: ConsoleLevels.INFO,
+    source: ConsoleSources.STDOUT,
+    message: 'hello',
+  } as const;
+
+  it('omits optional fields when absent', () => {
+    expect(buildLineInput({ ...BASE })).toEqual(BASE);
+  });
+
+  it('includes slug when provided', () => {
+    expect(buildLineInput({ ...BASE, slug: SLUG })).toEqual({ ...BASE, slug: SLUG });
+  });
+
+  it('includes code without args', () => {
+    expect(buildLineInput({ ...BASE, code: 'launch.start' })).toEqual({
+      ...BASE,
+      code: 'launch.start',
+    });
+  });
+
+  it('includes code and args together', () => {
+    const args = { count: 3 };
+    expect(buildLineInput({ ...BASE, code: 'launch.start', args })).toEqual({
+      ...BASE,
+      code: 'launch.start',
+      args,
+    });
+  });
+
+  it('drops args when no code is present', () => {
+    expect(buildLineInput({ ...BASE, args: { count: 3 } })).toEqual(BASE);
   });
 });

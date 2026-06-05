@@ -55,10 +55,9 @@ export type InstallProgressView = {
   controls: ProgressControlsKind;
 };
 
-// Stages map to user-facing steps. With a loader, kit emits dedicated `loader`
-// events; without one, kit skips that stage entirely and runs `finalize` after
-// `minecraft`. `finalize` is folded into the *last* step that's actually
-// scheduled — loader if present, otherwise minecraft.
+// `finalize` is folded into the *last* scheduled step — loader if present,
+// otherwise minecraft — because kit skips the `loader` stage when no loader is
+// selected and runs `finalize` directly after `minecraft`.
 const stageToStep = (stage: ProgressStage, hasLoader: boolean): InstallStepKey => {
   if (stage === ProgressStages.PREPARE || stage === ProgressStages.RUNTIME) {
     return InstallStepKeys.RUNTIME;
