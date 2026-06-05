@@ -14,14 +14,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { clearLauncherCache } from '../../clearCache';
+import { formatBytes } from '../../lib/formatBytes';
 import { LanguageSwitcher } from '../LanguageSwitcher';
 
-const BYTES_PER_MB = 1024 * 1024;
-const formatCacheSize = (bytes: number | undefined): string => {
-  if (bytes === undefined) return '…';
-  if (bytes < BYTES_PER_MB) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / BYTES_PER_MB).toFixed(1)} MB`;
-};
+const formatCacheSize = (bytes: number | undefined): string =>
+  formatBytes(bytes, { placeholder: '…', maxUnit: 'mb' });
 
 const VersionRow = () => {
   const versionQuery = useAppVersion();

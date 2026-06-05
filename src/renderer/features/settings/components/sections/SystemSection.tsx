@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   useDiskSpace,
@@ -8,6 +7,7 @@ import {
   useRamRange,
   useSetLauncher,
 } from '../../hooks';
+import { useRamPending } from '../../hooks/useRamPending';
 import { openPath } from '../../systemApi';
 import { FolderInfoBlock } from '../FolderInfoBlock';
 import { RamControl } from '../RamControl';
@@ -24,26 +24,24 @@ export const SystemSection = () => {
     settings?.storage.clientsFolder,
   );
 
-  const [pendingRam, setPendingRam] = useState<number | null>(null);
   const savedRam = settings?.memory.allocatedRamMb ?? 0;
-  const ramValue = pendingRam ?? savedRam;
   const clientsFolder = settings?.storage.clientsFolder ?? '';
+
+  const { ramValue, setRam, handleSave } = useRamPending({
+    savedRam,
+    resetKey: savedRam,
+    persist: (allocatedRamMb) => setLauncherMutate({ memory: { allocatedRamMb } }),
+  });
 
   const settingsReady = settings !== undefined && !settingsPending;
   const ramReady = settingsReady && range !== undefined && !rangePending;
-
-  const handleRamSave = async () => {
-    if (pendingRam === null) return;
-    await setLauncherMutate({ memory: { allocatedRamMb: pendingRam } });
-    setPendingRam(null);
-  };
 
   return (
     <div className="flex flex-col gap-4">
       <RamControl
         value={ramValue}
-        onChange={setPendingRam}
-        onSave={() => void handleRamSave()}
+        onChange={setRam}
+        onSave={() => void handleSave()}
         saved={savedRam}
         range={range ?? []}
         loading={!ramReady}

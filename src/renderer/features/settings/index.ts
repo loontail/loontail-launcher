@@ -20,4 +20,5 @@ export {
   useSetClientOverride,
   useSetLauncher,
 } from './hooks';
+export { useRamPending } from './hooks/useRamPending';
 export { openPath } from './systemApi';

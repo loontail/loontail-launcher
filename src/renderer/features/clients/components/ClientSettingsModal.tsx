@@ -2,28 +2,27 @@ import { useClientStatus, useRepairClient, useUninstallClient } from '@renderer/
 import {
   FolderInfoBlock,
   RamControl,
-  openPath,
-  useChooseClientFolder,
-  useClearClientOverrides,
   useDiskSpace,
   useFolderSize,
   useLauncherSettings,
   useRamRange,
   useResolveFor,
-  useSetClientOverride,
 } from '@renderer/features/settings';
 import { Button } from '@renderer/shared/ui/Button';
 import { Modal } from '@renderer/shared/ui/Modal';
 import type { Client } from '@shared/contracts/client';
+import type { ClientSlug } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
+import type { LauncherSettings, ResolvedClientSettings } from '@shared/contracts/settings';
 import { X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ClientActionsSection } from './client-settings/ClientActionsSection';
 import { ClientLaunchSection } from './client-settings/ClientLaunchSection';
 import { ClientLoaderSection } from './client-settings/ClientLoaderSection';
 import { ClientRuntimeSection } from './client-settings/ClientRuntimeSection';
 import { UninstallConfirmModal } from './client-settings/UninstallConfirmModal';
+import { useClientSettingsActions } from './useClientSettingsActions';
 
 type ClientSettingsModalProps = {
   isOpen: boolean;
@@ -32,66 +31,58 @@ type ClientSettingsModalProps = {
 };
 
 export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsModalProps) => {
-  const { t } = useTranslation();
   const slug = client?.slug ?? null;
-
   const { settings, isPending: settingsPending } = useLauncherSettings();
   const resolved = useResolveFor(slug);
-  const { range, isPending: rangePending } = useRamRange();
-  const { info: diskInfo } = useDiskSpace(resolved?.storage.clientFolder);
-  const { info: folderSize, isPending: folderSizePending } = useFolderSize(
-    resolved?.storage.clientFolder,
+
+  if (!client || !slug || !resolved || !settings) return null;
+
+  return (
+    <ClientSettingsModalContent
+      isOpen={isOpen}
+      client={client}
+      slug={slug}
+      resolved={resolved}
+      settings={settings}
+      settingsPending={settingsPending}
+      onClose={onClose}
+    />
   );
-  const { mutate: setClientOverride, isPending: isSavingOverride } = useSetClientOverride();
-  const { mutate: clearClientOverrides } = useClearClientOverrides();
-  const { mutate: chooseClientFolder } = useChooseClientFolder();
+};
+
+type ContentProps = {
+  isOpen: boolean;
+  client: Client;
+  slug: ClientSlug;
+  resolved: ResolvedClientSettings;
+  settings: LauncherSettings;
+  settingsPending: boolean;
+  onClose: () => void;
+};
+
+const ClientSettingsModalContent = ({
+  isOpen,
+  client,
+  slug,
+  resolved,
+  settings,
+  settingsPending,
+  onClose,
+}: ContentProps) => {
+  const { t } = useTranslation();
+  const { range, isPending: rangePending } = useRamRange();
+  const { info: diskInfo } = useDiskSpace(resolved.storage.clientFolder);
+  const { info: folderSize, isPending: folderSizePending } = useFolderSize(
+    resolved.storage.clientFolder,
+  );
   const runtimeState = useClientStatus(slug);
   const repairMutation = useRepairClient();
   const uninstallMutation = useUninstallClient();
   const [confirmUninstallOpen, setConfirmUninstallOpen] = useState(false);
 
-  const savedRam = resolved?.memory.allocatedRamMb ?? 0;
-  const [pendingRam, setPendingRam] = useState<number | null>(null);
-  const ramValue = pendingRam ?? savedRam;
-
-  // biome-ignore lint/correctness/useExhaustiveDependencies: trigger on modal toggle / client switch — start RAM from fresh resolved value
-  useEffect(() => {
-    setPendingRam(null);
-  }, [isOpen, slug]);
-
-  if (!client || !slug || !resolved || !settings) return null;
+  const actions = useClientSettingsActions({ slug, resolved, resetKey: `${isOpen}:${slug}` });
 
   const ramReady = !settingsPending && !rangePending && range !== undefined;
-
-  const handleRamSave = async () => {
-    if (pendingRam === null) return;
-    await setClientOverride({
-      slug,
-      patch: { memory: { allocatedRamMb: pendingRam } },
-    });
-    setPendingRam(null);
-  };
-
-  const handleToggleConsole = async (value: boolean) => {
-    await setClientOverride({ slug, patch: { launch: { console: value } } });
-  };
-
-  const handleToggleFullscreen = async (value: boolean) => {
-    await setClientOverride({ slug, patch: { launch: { fullscreen: value } } });
-  };
-
-  const handleResetAll = async () => {
-    await clearClientOverrides(slug);
-    setPendingRam(null);
-  };
-
-  const handleChangeFolder = async () => {
-    await chooseClientFolder(slug);
-  };
-
-  const handleOpenFolder = () => {
-    if (resolved.storage.clientFolder) void openPath(resolved.storage.clientFolder);
-  };
   const loaderOverridden = settings.clients[slug]?.loader !== undefined;
   const hasAnyOverride = Object.values(resolved.diff).some(Boolean) || loaderOverridden;
   const expectedRuntimeComponent = client.runtimeVersion?.trim() || null;
@@ -129,13 +120,13 @@ export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsM
 
       <div className="flex flex-col gap-4">
         <RamControl
-          value={ramValue}
-          onChange={setPendingRam}
-          onSave={() => void handleRamSave()}
-          saved={savedRam}
+          value={actions.ram.ramValue}
+          onChange={actions.ram.setRam}
+          onSave={() => void actions.ram.handleSave()}
+          saved={resolved.memory.allocatedRamMb}
           range={range ?? []}
           loading={!ramReady}
-          saving={isSavingOverride}
+          saving={actions.isSavingOverride}
           overridden={resolved.diff.ram}
         />
 
@@ -147,8 +138,8 @@ export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsM
           heading={t('clientSettings.clientFolder')}
           description={t('clientSettings.clientFolderDesc')}
           path={resolved.storage.clientFolder}
-          onOpen={handleOpenFolder}
-          onChange={() => void handleChangeFolder()}
+          onOpen={actions.openFolder}
+          onChange={() => void actions.changeFolder()}
           openLabel={t('clientSettings.openFolder')}
           changeLabel={t('clientSettings.changeFolder')}
           showDiskUsage={resolved.storage.clientFolder.length > 0}
@@ -159,16 +150,16 @@ export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsM
           launch={resolved.launch}
           consoleOverridden={resolved.diff.console}
           fullscreenOverridden={resolved.diff.fullscreen}
-          onToggleConsole={(value) => void handleToggleConsole(value)}
-          onToggleFullscreen={(value) => void handleToggleFullscreen(value)}
+          onToggleConsole={(value) => void actions.toggleConsole(value)}
+          onToggleFullscreen={(value) => void actions.toggleFullscreen(value)}
         />
 
         <ClientLoaderSection
           client={client}
           loader={resolved.loader}
           loaderOverridden={loaderOverridden}
-          isSavingOverride={isSavingOverride}
-          onSwitchLoader={(loader) => setClientOverride({ slug, patch: { loader } })}
+          isSavingOverride={actions.isSavingOverride}
+          onSwitchLoader={(loader) => void actions.setLoader(loader)}
         />
 
         {currentRuntime && <ClientRuntimeSection runtime={currentRuntime} />}
@@ -197,7 +188,7 @@ export const ClientSettingsModal = ({ isOpen, client, onClose }: ClientSettingsM
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => void handleResetAll()}
+          onClick={() => void actions.resetAll()}
           disabled={!hasAnyOverride}
         >
           {t('clientSettings.resetAll')}

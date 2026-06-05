@@ -15,30 +15,33 @@ export const getSettings = (): LauncherSettings => getStoredLauncherSettings();
 export const writeSettings = (next: LauncherSettings): LauncherSettings =>
   setStoredLauncherSettings(next);
 
-export const patchLauncherSettings = (patch: PatchLauncherSettings): LauncherSettings => {
-  const current = getSettings();
-  const next: LauncherSettings = {
-    memory: { ...current.memory },
-    storage: { ...current.storage },
-    launch: { ...current.launch },
-    clients: current.clients,
-  };
-
-  if (patch.memory?.allocatedRamMb !== undefined) {
-    next.memory.allocatedRamMb = patch.memory.allocatedRamMb;
+// Section-wise merge that only overwrites with defined patch fields, so an
+// omitted section or key leaves the current value untouched.
+const mergeSection = <T extends object>(
+  current: T,
+  patch: { [K in keyof T]?: T[K] | undefined } | undefined,
+): T => {
+  if (!patch) return current;
+  const next = { ...current };
+  for (const key in patch) {
+    const value = patch[key as keyof T];
+    if (value !== undefined) next[key as keyof T] = value as T[keyof T];
   }
-  if (patch.storage?.clientsFolder !== undefined) {
-    next.storage.clientsFolder = patch.storage.clientsFolder;
-  }
-  if (patch.launch?.console !== undefined) {
-    next.launch.console = patch.launch.console;
-  }
-  if (patch.launch?.fullscreen !== undefined) {
-    next.launch.fullscreen = patch.launch.fullscreen;
-  }
-
-  return writeSettings(next);
+  return next;
 };
+
+export const applyLauncherPatch = (
+  current: LauncherSettings,
+  patch: PatchLauncherSettings,
+): LauncherSettings => ({
+  memory: mergeSection(current.memory, patch.memory),
+  storage: mergeSection(current.storage, patch.storage),
+  launch: mergeSection(current.launch, patch.launch),
+  clients: current.clients,
+});
+
+export const patchLauncherSettings = (patch: PatchLauncherSettings): LauncherSettings =>
+  writeSettings(applyLauncherPatch(getSettings(), patch));
 
 export const setClientOverride = (
   slug: ClientSlug,

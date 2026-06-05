@@ -5,16 +5,8 @@ import type { DiskInfo, FolderSize } from '@shared/contracts/system';
 import { Folder, HardDrive } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-
-const BYTES_PER_GB = 1024 ** 3;
-
-const formatBytes = (bytes: number | undefined): string => {
-  if (typeof bytes !== 'number') return '—';
-  const gb = bytes / BYTES_PER_GB;
-  if (gb >= 1) return `${gb.toFixed(2)} GB`;
-  const mb = bytes / 1024 ** 2;
-  return `${mb.toFixed(0)} MB`;
-};
+import { computeDiskUsageRatios } from '../lib/diskUsage';
+import { formatBytes } from '../lib/formatBytes';
 
 type FolderInfoBlockProps = {
   folder: DiskInfo | null | undefined;
@@ -63,14 +55,11 @@ export const FolderInfoBlock = ({
     folder.size > 0;
 
   const folderBytes = typeof folderSize?.bytes === 'number' ? folderSize.bytes : null;
-  const diskTotal = hasUsage ? (folder.size ?? 1) : 1;
-  const diskUsedBytes = hasUsage ? diskTotal - (folder.free ?? 0) : 0;
-  const diskUsedRatio = hasUsage ? diskUsedBytes / diskTotal : 0;
-  const folderRatio = hasUsage && folderBytes !== null ? folderBytes / diskTotal : 0;
-  // Clamp so the folder pill can't overshoot the total-used segment when the
-  // folder-size scan lags reality.
-  const clampedFolderRatio = Math.min(folderRatio, diskUsedRatio);
-  const restUsedRatio = Math.max(0, diskUsedRatio - clampedFolderRatio);
+  const { clampedFolderRatio, restUsedRatio } = computeDiskUsageRatios({
+    hasUsage,
+    folder,
+    folderBytes,
+  });
 
   const resolvedOpenLabel = openLabel ?? t('settings.system.openFolder');
   const resolvedChangeLabel = changeLabel ?? t('settings.system.change');

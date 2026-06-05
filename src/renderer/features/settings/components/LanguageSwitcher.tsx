@@ -1,9 +1,4 @@
-import {
-  type Language,
-  SUPPORTED_LANGUAGES,
-  changeLanguage,
-  getCurrentLanguage,
-} from '@renderer/i18n';
+import { type Language, SUPPORTED_LANGUAGES, changeLanguage } from '@renderer/i18n';
 import { cn } from '@renderer/shared/lib/cn';
 import { GbFlagIcon } from '@renderer/shared/ui/icons/GbFlagIcon';
 import { UaFlagIcon } from '@renderer/shared/ui/icons/UaFlagIcon';
@@ -20,10 +15,13 @@ const LANGUAGE_OPTIONS: Record<Language, LanguageOption> = {
   uk: { Flag: UaFlagIcon, label: 'UA' },
 };
 
+const isLanguage = (value: string): value is Language =>
+  (SUPPORTED_LANGUAGES as readonly string[]).includes(value);
+
 export const LanguageSwitcher = () => {
   const { i18n } = useTranslation();
-  const current = getCurrentLanguage();
-  void i18n.language;
+  // Subscribe to i18n.language so the active highlight re-renders on switch.
+  const current = isLanguage(i18n.language) ? i18n.language : 'en';
 
   return (
     <div className="inline-flex gap-1 rounded-full border border-border bg-background p-1">
