@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import {
-  type DownloadAction,
   type InstallAction,
   InstallActionKinds,
   type InstallPlan,
@@ -75,14 +74,20 @@ export const createForgeProcessorCache = (): ForgeProcessorCache => {
   };
 };
 
-const sha1OfFile = async (filePath: string): Promise<string | null> => {
+const sha1OfFile = async (filePath: string, signal?: AbortSignal): Promise<string | null> => {
   try {
     return await new Promise<string>((resolve, reject) => {
       const hash = createHash('sha1');
-      const stream = createReadStream(filePath);
+      const stream = createReadStream(filePath, signal ? { signal } : undefined);
+      // why: destroy the stream on every exit path so an abort mid-hash (or a
+      // late error) never leaks the underlying file descriptor.
+      const settle = (run: () => void): void => {
+        stream.destroy();
+        run();
+      };
       stream.on('data', (chunk) => hash.update(chunk));
-      stream.on('end', () => resolve(hash.digest('hex')));
-      stream.on('error', reject);
+      stream.on('end', () => settle(() => resolve(hash.digest('hex'))));
+      stream.on('error', (error) => settle(() => reject(error)));
     });
   } catch {
     return null;
@@ -102,10 +107,14 @@ const fileMissing = async (filePath: string): Promise<boolean> => {
 // Forge processors emit deterministic outputs, so any divergence means we need
 // to re-run the processor (kit's runProcessor will fail-hard on hash mismatch
 // anyway, but checking here lets us skip processors that are already fine).
-const processorOutputsOk = async (action: RunForgeProcessorAction): Promise<boolean> => {
+const processorOutputsOk = async (
+  action: RunForgeProcessorAction,
+  signal?: AbortSignal,
+): Promise<boolean> => {
   for (const [outPath, expectedSha1] of Object.entries(action.outputs)) {
+    signal?.throwIfAborted();
     if (await fileMissing(outPath)) return false;
-    const actual = await sha1OfFile(outPath);
+    const actual = await sha1OfFile(outPath, signal);
     if (actual !== expectedSha1) return false;
   }
   return true;
@@ -113,10 +122,11 @@ const processorOutputsOk = async (action: RunForgeProcessorAction): Promise<bool
 
 const brokenProcessorIndices = async (
   processors: readonly RunForgeProcessorAction[],
+  signal?: AbortSignal,
 ): Promise<ReadonlySet<number>> => {
   const brokenIndices = new Set<number>();
   for (const action of processors) {
-    if (!(await processorOutputsOk(action))) brokenIndices.add(action.index);
+    if (!(await processorOutputsOk(action, signal))) brokenIndices.add(action.index);
   }
   return brokenIndices;
 };
@@ -140,7 +150,7 @@ export const repairMissingForgeProcessorOutputs = async (
 
   const cachedProcessors = cache.get(target);
   if (cachedProcessors !== undefined) {
-    const cachedBrokenIndices = await brokenProcessorIndices(cachedProcessors);
+    const cachedBrokenIndices = await brokenProcessorIndices(cachedProcessors, options.signal);
     if (cachedBrokenIndices.size === 0) {
       logger.info(
         `[${slug}] processor outputs clean from cache (checked ${cachedProcessors.length})`,
@@ -157,7 +167,7 @@ export const repairMissingForgeProcessorOutputs = async (
   const processors = processorActionsFrom(plan.actions);
   if (processors.length === 0) return { ranProcessors: false, reranCount: 0 };
 
-  const brokenIndices = await brokenProcessorIndices(processors);
+  const brokenIndices = await brokenProcessorIndices(processors, options.signal);
 
   if (brokenIndices.size === 0) {
     logger.info(`[${slug}] processor outputs clean (checked ${processors.length})`);
@@ -176,14 +186,15 @@ export const repairMissingForgeProcessorOutputs = async (
     (action) =>
       action.kind !== InstallActionKinds.RUN_FORGE_PROCESSOR || brokenIndices.has(action.index),
   );
-  const focusedBytes = focusedActions
-    .filter((action): action is DownloadAction => action.kind === InstallActionKinds.DOWNLOAD_FILE)
-    .reduce((sum, action) => sum + (action.expectedSize ?? 0), 0);
+  // Only RUN_FORGE_PROCESSOR actions are dropped, and they carry no bytes, so the
+  // plan's byte total is still accurate for the focused subset. Recomputing from
+  // DOWNLOAD_FILE actions alone undercounted any non-download byte-bearing work the
+  // kit tracker accounts for; carrying plan.totalBytes forward keeps it correct.
   const focusedPlan: InstallPlan = {
     ...plan,
     actions: focusedActions,
     totalActions: focusedActions.length,
-    totalBytes: focusedBytes,
+    totalBytes: plan.totalBytes,
   };
 
   logger.info(

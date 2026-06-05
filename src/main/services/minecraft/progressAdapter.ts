@@ -33,10 +33,6 @@ export type MinecraftProgressAdapter = {
 
 export type PlannedInstallProgressRunner = (plan: InstallPlan) => Promise<void>;
 
-type AspectTaggedProgressEvent = Parameters<ProgressListener>[0] & {
-  readonly aspect?: VerificationKind;
-};
-
 const emitSnapshot = (env: ManagerEnv, slug: ClientSlug, snapshot: ProgressSnapshot): void => {
   env.broadcaster.progress({
     slug,
@@ -102,7 +98,7 @@ const progressStageForVerifyCategory = (category: VerifyFileCategory): ProgressS
 };
 
 const progressStageForAspect = (event: Parameters<ProgressListener>[0]): ProgressStage | null => {
-  const aspect = (event as AspectTaggedProgressEvent).aspect;
+  const aspect = event.aspect;
   return aspect === undefined ? null : PROGRESS_STAGE_FOR_ASPECT[aspect];
 };
 

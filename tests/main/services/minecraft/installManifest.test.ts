@@ -20,6 +20,7 @@ import {
   loadTargetInstallManifest,
   persistTargetInstallManifest,
   saveCurrentTargetInstallManifest,
+  saveTargetInstallManifest,
   targetInstallManifestMatches,
   targetInstallManifestPath,
 } from '@main/services/minecraft/installManifest';
@@ -210,6 +211,19 @@ describe('target install manifest', () => {
     await expect(fs.access(targetInstallManifestPath(directory))).resolves.toBeUndefined();
   });
 
+  it('cleans up the tmp file when the atomic manifest write fails', async () => {
+    const manifest = createTargetInstallManifest(target(directory), new Date(0));
+    const finalPath = targetInstallManifestPath(directory);
+    // Occupy the manifest path with a non-empty directory: the tmp write
+    // succeeds, but the rm(target)+rename swap then fails — the helper must
+    // remove the stray tmp before rethrowing so a retry starts clean.
+    await fs.mkdir(finalPath, { recursive: true });
+    await fs.writeFile(path.join(finalPath, 'occupied'), 'x');
+
+    await expect(saveTargetInstallManifest(directory, manifest)).rejects.toThrow();
+    await expect(fs.access(`${finalPath}.tmp`)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
   it('persistTargetInstallManifest writes the sidecar and swallows write failures', async () => {
     const currentTarget = target(directory);
     await persistTargetInstallManifest(SLUG, directory, currentTarget, 'install');
@@ -236,6 +250,15 @@ describe('target install manifest', () => {
 
     expect(targetInstallManifestMatches(manifest, currentTarget)).toBe(true);
     expect(targetInstallManifestMatches(manifest, changedRuntime)).toBe(false);
+  });
+
+  it('matches on an injected kit version without reading the installed kit', () => {
+    const currentTarget = target(directory);
+    const manifest = createTargetInstallManifest(currentTarget, new Date(0), '9.9.9');
+
+    expect(manifest.kitVersion).toBe('9.9.9');
+    expect(targetInstallManifestMatches(manifest, currentTarget, '9.9.9')).toBe(true);
+    expect(targetInstallManifestMatches(manifest, currentTarget, '0.0.1')).toBe(false);
   });
 
   it('writes the manifest after successful install and repair operations', async () => {

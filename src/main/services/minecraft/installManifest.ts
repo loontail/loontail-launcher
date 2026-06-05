@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 const TARGET_INSTALL_MANIFEST_FILE = 'manifest.json';
 const TARGET_INSTALL_MANIFEST_VERSION = 1;
+const UNKNOWN_KIT_VERSION = 'unknown';
 
 const logger = scopedLogger('minecraft.installManifest');
 const requirePackage = createRequire(import.meta.url);
@@ -40,7 +41,7 @@ const parsePackageVersion = (metadata: unknown): string => {
     const version = (metadata as { readonly version?: unknown }).version;
     if (typeof version === 'string' && version.length > 0) return version;
   }
-  return 'unknown';
+  return UNKNOWN_KIT_VERSION;
 };
 
 const minecraftKitPackage: unknown = requirePackage('@loontail/minecraft-kit/package.json');
@@ -65,6 +66,7 @@ export const targetInstallManifestPath = (clientFolder: string): string =>
 export const createTargetInstallManifest = (
   target: Target,
   verifiedAt: Date = new Date(),
+  kitVersion: string = MINECRAFT_KIT_VERSION,
 ): TargetInstallManifest => ({
   version: TARGET_INSTALL_MANIFEST_VERSION,
   targetId: target.id,
@@ -81,7 +83,7 @@ export const createTargetInstallManifest = (
       ? { majorVersion: target.runtime.majorVersion }
       : {}),
   },
-  kitVersion: MINECRAFT_KIT_VERSION,
+  kitVersion,
   verifiedAt: verifiedAt.toISOString(),
 });
 
@@ -111,8 +113,16 @@ export const saveTargetInstallManifest = async (
   const target = targetInstallManifestPath(clientFolder);
   const temporaryTarget = `${target}.tmp`;
   await fs.mkdir(path.dirname(target), { recursive: true });
-  await fs.writeFile(temporaryTarget, JSON.stringify(manifest, null, 2), 'utf8');
-  await fs.rename(temporaryTarget, target);
+  try {
+    await fs.writeFile(temporaryTarget, JSON.stringify(manifest, null, 2), 'utf8');
+    // Atomic swap. On Windows fs.rename fails when the target exists; remove
+    // first (idempotent on ENOENT) then rename so a retry starts clean.
+    await fs.rm(target, { force: true });
+    await fs.rename(temporaryTarget, target);
+  } catch (error) {
+    await fs.rm(temporaryTarget, { force: true }).catch(() => {});
+    throw error;
+  }
 };
 
 export const saveCurrentTargetInstallManifest = async (
@@ -151,6 +161,7 @@ export const clearTargetInstallManifest = async (clientFolder: string): Promise<
 export const targetInstallManifestMatches = (
   manifest: TargetInstallManifest,
   target: Target,
+  kitVersion: string = MINECRAFT_KIT_VERSION,
 ): boolean =>
   manifest.targetId === target.id &&
   manifest.minecraftVersion === target.minecraft.version &&
@@ -159,7 +170,7 @@ export const targetInstallManifestMatches = (
   manifest.runtime.component === target.runtime.component &&
   manifest.runtime.platformKey === target.runtime.platformKey &&
   manifest.runtime.versionName === target.runtime.versionName &&
-  manifest.kitVersion === MINECRAFT_KIT_VERSION;
+  manifest.kitVersion === kitVersion;
 
 export const hasCurrentTargetInstallManifest = async (
   clientFolder: string,

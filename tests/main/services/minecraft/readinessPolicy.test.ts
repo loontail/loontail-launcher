@@ -52,11 +52,13 @@ describe('resolveClientInstallPresence', () => {
     resetPolicyMocks();
   });
 
-  it('seeds installed from local files (durable manifest + on-disk version)', async () => {
+  it('seeds installed from a durable manifest without scanning version files', async () => {
     await expect(resolveClientInstallPresence(SLUG)).resolves.toBe(InstallStatuses.INSTALLED);
-    // Fully offline: only local files are read — no kit, no target resolve.
+    // Fully offline: only the manifest is read — no kit, no target resolve.
     expect(policyMocks.loadTargetInstallManifest).toHaveBeenCalledWith(CLIENT_FOLDER);
-    expect(policyMocks.isAnythingInstalled).toHaveBeenCalledWith(CLIENT_FOLDER);
+    // The durable manifest implies on-disk files, so the version scan is skipped
+    // on the happy path.
+    expect(policyMocks.isAnythingInstalled).not.toHaveBeenCalled();
   });
 
   it('seeds unverified for a legacy install with on-disk files but no durable manifest', async () => {
@@ -67,6 +69,7 @@ describe('resolveClientInstallPresence', () => {
   });
 
   it('seeds not-installed when no version files are present', async () => {
+    policyMocks.loadTargetInstallManifest.mockResolvedValue(null);
     policyMocks.isAnythingInstalled.mockResolvedValue(false);
 
     await expect(resolveClientInstallPresence(SLUG)).resolves.toBe(InstallStatuses.NOT_INSTALLED);

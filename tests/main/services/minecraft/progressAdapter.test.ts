@@ -1,7 +1,9 @@
 import {
+  DownloadCategories,
   EventTypes,
   type MinecraftKit,
   type ProgressEvent,
+  VerificationKinds,
   VerifyFileCategories,
   VerifyFileStatuses,
 } from '@loontail/minecraft-kit';
@@ -52,6 +54,17 @@ const verifyEvent = (path: string): ProgressEvent => ({
   },
 });
 
+const downloadProgressEvent = (bytesDownloaded: number, totalBytes: number): ProgressEvent => ({
+  type: EventTypes.DOWNLOAD_PROGRESS,
+  file: {
+    url: 'https://files.test.invalid/lib.jar',
+    target: `${CLIENT_FOLDER}/libraries/lib.jar`,
+    category: DownloadCategories.LIBRARY,
+  },
+  bytesDownloaded,
+  totalBytes,
+});
+
 describe('createRepairProgressAdapter', () => {
   afterEach(() => {
     vi.useRealTimers();
@@ -78,6 +91,65 @@ describe('createRepairProgressAdapter', () => {
     });
 
     adapter.dispose();
+  });
+
+  it('lets a typed verification aspect override the file-category stage', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const { env, progress } = makeEnv();
+    const adapter = createRepairProgressAdapter(env, SLUG);
+
+    // CLIENT_JAR normally maps to MINECRAFT, but a RUNTIME aspect tag wins.
+    adapter.onEvent({
+      ...verifyEvent(`${CLIENT_FOLDER}/a.jar`),
+      aspect: VerificationKinds.RUNTIME,
+    });
+
+    expect(progress).toHaveBeenCalledWith(
+      expect.objectContaining({ stage: ProgressStages.RUNTIME }),
+    );
+
+    adapter.dispose();
+  });
+
+  it('falls back to the file category when no aspect is tagged', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const { env, progress } = makeEnv();
+    const adapter = createRepairProgressAdapter(env, SLUG);
+
+    adapter.onEvent(verifyEvent(`${CLIENT_FOLDER}/a.jar`));
+
+    expect(progress).toHaveBeenCalledWith(
+      expect.objectContaining({ stage: ProgressStages.MINECRAFT }),
+    );
+
+    adapter.dispose();
+  });
+
+  it('reports a clamped, non-decreasing download percent', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(1_000);
+    const { env, progress } = makeEnv();
+    const adapter = createRepairProgressAdapter(env, SLUG);
+
+    // First event emits immediately; later events within the throttle window are
+    // coalesced and surfaced by dispose's flush.
+    adapter.onEvent(downloadProgressEvent(25, 100));
+    adapter.onEvent(downloadProgressEvent(150, 100));
+    adapter.dispose();
+
+    const percents = progress.mock.calls.map((call) => call[0].overallPercent as number);
+    expect(percents[0]).toBe(25);
+    // Over-reported bytes are clamped to 100, and the sequence never decreases.
+    expect(percents.at(-1)).toBe(100);
+    for (let i = 1; i < percents.length; i += 1) {
+      expect(percents[i]).toBeGreaterThanOrEqual(percents[i - 1] as number);
+    }
+    // overallPercent mirrors stagePercent for the single repair download stage.
+    for (const call of progress.mock.calls) {
+      expect(call[0].overallPercent).toBe(call[0].stagePercent);
+    }
   });
 
   it('flushes the pending progress on dispose and stops emitting afterwards', () => {

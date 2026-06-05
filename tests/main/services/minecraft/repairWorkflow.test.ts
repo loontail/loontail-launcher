@@ -11,8 +11,7 @@ const workflowMocks = vi.hoisted(() => {
   process.env.API_URL ??= 'http://test.invalid';
   process.env.API_TOKEN ??= 'test-token';
   return {
-    hasCurrentTargetInstallManifest: vi.fn(),
-    isAnythingInstalled: vi.fn(),
+    resolveClientInstallPresence: vi.fn(),
     resolveLaunchVersion: vi.fn(),
   };
 });
@@ -23,12 +22,11 @@ vi.mock('@loontail/minecraft-kit', async (importOriginal) => {
 });
 
 vi.mock('@main/services/minecraft/installManifest', () => ({
-  hasCurrentTargetInstallManifest: workflowMocks.hasCurrentTargetInstallManifest,
-  saveCurrentTargetInstallManifest: vi.fn(),
+  persistTargetInstallManifest: vi.fn(),
 }));
 
-vi.mock('@main/services/minecraft/runtimeState', () => ({
-  isAnythingInstalled: workflowMocks.isAnythingInstalled,
+vi.mock('@main/services/minecraft/readinessPolicy', () => ({
+  resolveClientInstallPresence: workflowMocks.resolveClientInstallPresence,
 }));
 
 import type { Context } from '@main/services/minecraft/context';
@@ -91,20 +89,20 @@ const env = (): ManagerEnv => {
   };
 };
 
-// Drive the cheap presence check (durable manifest + on-disk files) that
-// emitReadinessStatus now uses instead of kit hash verification.
-const presence = (installed: boolean): void => {
-  workflowMocks.hasCurrentTargetInstallManifest.mockResolvedValue(installed);
-  workflowMocks.isAnythingInstalled.mockResolvedValue(installed);
+// Drive the single-source presence check (resolveClientInstallPresence) that
+// emitPostOpStatus now uses instead of an inline manifest+files check.
+const presence = (status: (typeof InstallStatuses)[keyof typeof InstallStatuses]): void => {
+  workflowMocks.resolveClientInstallPresence.mockResolvedValue(status);
 };
 
 describe('repair workflow finalization', () => {
   it('finalizes cancellation as not-installed when the install is no longer present', async () => {
-    presence(false);
+    presence(InstallStatuses.NOT_INSTALLED);
     const operationEnv = env();
 
-    await finalizeRepairCancellation(operationEnv, SLUG, context());
+    await finalizeRepairCancellation(operationEnv, SLUG);
 
+    expect(workflowMocks.resolveClientInstallPresence).toHaveBeenCalledWith(SLUG);
     expect(operationEnv.emitError).not.toHaveBeenCalled();
     expect(operationEnv.broadcaster.status).toHaveBeenLastCalledWith({
       slug: SLUG,
@@ -114,10 +112,10 @@ describe('repair workflow finalization', () => {
   });
 
   it('finalizes cancellation as installed when files are still present', async () => {
-    presence(true);
+    presence(InstallStatuses.INSTALLED);
     const operationEnv = env();
 
-    await finalizeRepairCancellation(operationEnv, SLUG, context());
+    await finalizeRepairCancellation(operationEnv, SLUG);
 
     expect(operationEnv.broadcaster.status).toHaveBeenLastCalledWith({
       slug: SLUG,
@@ -126,8 +124,21 @@ describe('repair workflow finalization', () => {
     });
   });
 
+  it('maps an unverified presence to the caller not-ready status on cancellation', async () => {
+    presence(InstallStatuses.UNVERIFIED);
+    const operationEnv = env();
+
+    await finalizeRepairCancellation(operationEnv, SLUG);
+
+    expect(operationEnv.broadcaster.status).toHaveBeenLastCalledWith({
+      slug: SLUG,
+      status: InstallStatuses.NOT_INSTALLED,
+      paused: false,
+    });
+  });
+
   it('finalizes repair failure with mapped error and presence-based status', async () => {
-    presence(false);
+    presence(InstallStatuses.NOT_INSTALLED);
     const operationEnv = env();
     const error = new MinecraftKitError(
       MinecraftKitErrorCodes.INTEGRITY_HASH_MISMATCH,
@@ -137,7 +148,6 @@ describe('repair workflow finalization', () => {
     await finalizeRepairFailure({
       env: operationEnv,
       slug: SLUG,
-      ctx: context(),
       error,
       signal: new AbortController().signal,
     });

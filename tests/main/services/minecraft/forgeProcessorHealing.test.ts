@@ -130,6 +130,48 @@ describe('repairMissingForgeProcessorOutputs', () => {
     );
   });
 
+  it('carries the plan byte total into the focused repair plan', async () => {
+    const processorOutput = path.join(tempRoot, 'versions', 'forge', 'processed.jar');
+    await fs.mkdir(path.dirname(processorOutput), { recursive: true });
+    await fs.writeFile(processorOutput, 'broken-output', 'utf8');
+    const plan = processorPlan(processorOutput);
+    // Kit can account for bytes beyond the sum of DOWNLOAD_FILE expectedSize
+    // (e.g. extract/write work). The focused plan must preserve that total
+    // rather than recomputing a download-only undercount (here 100).
+    const planWithExtraBytes: InstallPlan = { ...plan, totalBytes: 250 };
+    const runPlan = vi.fn();
+    const kit = {
+      install: {
+        plan: vi.fn(async () => planWithExtraBytes),
+      },
+    } as unknown as MinecraftKit;
+
+    await repairMissingForgeProcessorOutputs(kit, SLUG, target(), cache, { runPlan });
+
+    expect(runPlan).toHaveBeenCalledWith(expect.objectContaining({ totalBytes: 250 }));
+  });
+
+  it('honors an aborted signal while checking processor outputs', async () => {
+    const processorOutput = path.join(tempRoot, 'versions', 'forge', 'processed.jar');
+    await fs.mkdir(path.dirname(processorOutput), { recursive: true });
+    await fs.writeFile(processorOutput, OUTPUT_CONTENT, 'utf8');
+    cache.remember(processorPlan(processorOutput));
+    const controller = new AbortController();
+    controller.abort();
+    const kit = {
+      install: {
+        plan: vi.fn(),
+      },
+    } as unknown as MinecraftKit;
+
+    await expect(
+      repairMissingForgeProcessorOutputs(kit, SLUG, target(), cache, {
+        signal: controller.signal,
+      }),
+    ).rejects.toThrow();
+    expect(kit.install.plan).not.toHaveBeenCalled();
+  });
+
   it('replans after clear() drops the clean cached entry', async () => {
     const processorOutput = path.join(tempRoot, 'versions', 'forge', 'processed.jar');
     await fs.mkdir(path.dirname(processorOutput), { recursive: true });

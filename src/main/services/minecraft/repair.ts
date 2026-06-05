@@ -50,10 +50,10 @@ export const runRepair = async (
     return true;
   } catch (error) {
     if (op.abort.signal.aborted) {
-      await finalizeRepairCancellation(env, slug, ctx);
+      await finalizeRepairCancellation(env, slug);
       return false;
     }
-    await finalizeRepairFailure({ env, slug, ctx, error, signal: op.abort.signal });
+    await finalizeRepairFailure({ env, slug, error, signal: op.abort.signal });
     return false;
   } finally {
     progress.dispose();

@@ -20,10 +20,11 @@ import { isAnythingInstalled } from './runtimeState';
 export const resolveClientInstallPresence = async (slug: ClientSlug): Promise<InstallStatus> => {
   const folder = resolveClientSettings(getSettings(), slug).storage.clientFolder || null;
   if (folder === null) return InstallStatuses.NOT_INSTALLED;
-  const [manifest, installed] = await Promise.all([
-    loadTargetInstallManifest(folder),
-    isAnythingInstalled(folder),
-  ]);
-  if (!installed) return InstallStatuses.NOT_INSTALLED;
-  return manifest !== null ? InstallStatuses.INSTALLED : InstallStatuses.UNVERIFIED;
+  // Our durable manifest is only written after a verified install/repair, so its
+  // presence already implies on-disk files — skip the version scan on the happy
+  // path and only pay it to distinguish a legacy install from an empty folder.
+  const manifest = await loadTargetInstallManifest(folder);
+  if (manifest !== null) return InstallStatuses.INSTALLED;
+  const installed = await isAnythingInstalled(folder);
+  return installed ? InstallStatuses.UNVERIFIED : InstallStatuses.NOT_INSTALLED;
 };

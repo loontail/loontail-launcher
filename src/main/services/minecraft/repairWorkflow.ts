@@ -14,9 +14,9 @@ import type { Context } from './context';
 import type { ManagerEnv } from './env';
 import { classifyError } from './errors';
 import { repairMissingForgeProcessorOutputs } from './forgeProcessorHealing';
-import { hasCurrentTargetInstallManifest, persistTargetInstallManifest } from './installManifest';
+import { persistTargetInstallManifest } from './installManifest';
+import { resolveClientInstallPresence } from './readinessPolicy';
 import { runtimePathFor } from './runtimeFs';
-import { isAnythingInstalled } from './runtimeState';
 
 type RepairOptions = {
   readonly signal: AbortSignal;
@@ -31,7 +31,6 @@ type ForgeProcessorHealOptions = {
 export type RepairFailureFinalizationInput = {
   readonly env: ManagerEnv;
   readonly slug: ClientSlug;
-  readonly ctx: Context;
   readonly error: unknown;
   readonly signal: AbortSignal;
 };
@@ -44,20 +43,18 @@ const loadBundleOwnedPaths = async (ctx: Context): Promise<ReadonlySet<string> |
   return new Set(Object.keys(manifest.files));
 };
 
-// Cheap presence check mirroring the status seed: after a repair cancel/failure
-// report INSTALLED when the durable manifest matches and files are present,
-// otherwise the caller's not-ready status. No hash/manifest verification.
-const emitReadinessStatus = async (
+// After a repair cancel/failure, report whatever the offline presence check says
+// we still have on disk. resolveClientInstallPresence is the single source of
+// truth for "do we already have this install?" (also used to seed open-time
+// status); here UNVERIFIED (files without our manifest) collapses to the caller's
+// not-ready status rather than claiming INSTALLED.
+const emitPostOpStatus = async (
   env: ManagerEnv,
   slug: ClientSlug,
-  ctx: Context,
   notReadyStatus: typeof InstallStatuses.ERROR | typeof InstallStatuses.NOT_INSTALLED,
 ): Promise<void> => {
-  const [hasCurrentManifest, installed] = await Promise.all([
-    hasCurrentTargetInstallManifest(ctx.clientFolder, ctx.target),
-    isAnythingInstalled(ctx.clientFolder),
-  ]);
-  const status = hasCurrentManifest && installed ? InstallStatuses.INSTALLED : notReadyStatus;
+  const presence = await resolveClientInstallPresence(slug);
+  const status = presence === InstallStatuses.INSTALLED ? presence : notReadyStatus;
   env.emitStatus({ slug, status, paused: false });
 };
 
@@ -156,10 +153,9 @@ export const finalizeRepairSuccess = async (
 export const finalizeRepairCancellation = async (
   env: ManagerEnv,
   slug: ClientSlug,
-  ctx: Context,
 ): Promise<void> => {
   env.logger.info(`[${slug}] repair: cancelled`);
-  await emitReadinessStatus(env, slug, ctx, InstallStatuses.NOT_INSTALLED);
+  await emitPostOpStatus(env, slug, InstallStatuses.NOT_INSTALLED);
 };
 
 export const finalizeRepairFailure = async (
@@ -169,5 +165,5 @@ export const finalizeRepairFailure = async (
   const message = errorMessage(input.error);
   input.env.logger.error(`[${input.slug}] repair: failed (${code}) - ${message}`, input.error);
   input.env.emitError(input.slug, code, message);
-  await emitReadinessStatus(input.env, input.slug, input.ctx, InstallStatuses.ERROR);
+  await emitPostOpStatus(input.env, input.slug, InstallStatuses.ERROR);
 };
