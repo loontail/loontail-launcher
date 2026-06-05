@@ -94,10 +94,9 @@ export class BundleManager {
     await this.runSync(req, { forLaunch: false });
   }
 
-  // Called by MinecraftManager.startLaunch after the install step. Awaits the
-  // sync to terminal status (completed/up-to-date) before letting launch
-  // proceed. No-op when the client has no bundleSlug. Errors propagate so the
-  // caller can abort launch.
+  // Awaits the sync to a terminal status before launch; resolves immediately
+  // when the client has no bundle. Errors propagate — the caller aborts launch
+  // on failure.
   async syncForLaunch(slug: ClientSlug, externalSignal?: AbortSignal): Promise<void> {
     if (externalSignal?.aborted) {
       throw new BundleError(BundleErrorCodes.ABORTED, 'Sync aborted before start');
