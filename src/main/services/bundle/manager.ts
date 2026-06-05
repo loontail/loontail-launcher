@@ -113,6 +113,9 @@ export class BundleManager {
     const active = this.activeSyncs.get(slug);
     if (!active) return;
     if (active.task.cancelled) return;
+    // Idempotent: a second pause must not re-arm the idle timer (resetting the
+    // expiry window) or re-emit PAUSED.
+    if (active.task.paused) return;
     active.task.paused = true;
     // Abort current downloads — workers will see the BundleError, swallow it
     // because task.paused === true, and exit cleanly leaving partial state.
@@ -201,12 +204,8 @@ export class BundleManager {
 
   private async runSync(req: BundleStartRequest, options: { forLaunch: boolean }): Promise<void> {
     const { slug } = req;
-    if (this.activeSyncs.has(slug)) {
-      throw new BundleError(
-        BundleErrorCodes.OP_IN_FLIGHT,
-        'A bundle sync is already running for this client',
-      );
-    }
+    // The write lock (acquireWriteLock below) is the single source of truth for
+    // in-flight dedup — it throws OP_IN_FLIGHT when another sync holds the lease.
     const client = await this.tryGetClient(slug);
     if (!client) {
       throw new BundleError(BundleErrorCodes.UNKNOWN, `Client "${slug}" not found`);
@@ -378,9 +377,9 @@ export class BundleManager {
     }
   }
 
-  private resolveClientFolder(slug: ClientSlug): string {
+  private resolveClientFolder(slug: ClientSlug): string | null {
     const resolved = resolveClientSettings(getSettings(), slug);
-    return resolved.storage.clientFolder || '';
+    return resolved.storage.clientFolder || null;
   }
 
   private acquireWriteLock(slug: ClientSlug): ClientOperationLease {
@@ -448,7 +447,6 @@ export class BundleManager {
   private expirePausedSync(slug: ClientSlug): void {
     const active = this.activeSyncs.get(slug);
     if (!active || !active.task.paused) return;
-    active.pauseIdleTimer = null;
     logger.info(`[${slug}] paused sync idle timeout reached — auto-cancelling`);
     this.emitStatus(slug, BundleSyncStatuses.CANCELLED);
     this.rejectAwaiters(

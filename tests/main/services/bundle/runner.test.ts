@@ -80,4 +80,17 @@ describe('runSyncPhases delete pause handling', () => {
     expect(task.processedFiles).toBe(2);
     expect(await exists(path.join(clientFolder, OLD_TWO_PATH))).toBe(false);
   });
+
+  it('flags deletedAny when every target is already gone (ENOENT) so heal still runs', async () => {
+    await fs.rm(path.join(clientFolder, OLD_ONE_PATH));
+    await fs.rm(path.join(clientFolder, OLD_TWO_PATH));
+
+    const task = createSyncTask(SLUG, clientFolder);
+    task.plan = deleteOnlyPlan([OLD_ONE_PATH, OLD_TWO_PATH]);
+    task.pendingDeletes = [...task.plan.toDelete];
+    task.totalFiles = task.pendingDeletes.length;
+
+    await expect(runSyncPhases(task, noopEmit)).resolves.toEqual({ deletedAny: true });
+    expect(task.pendingDeletes).toEqual([]);
+  });
 });

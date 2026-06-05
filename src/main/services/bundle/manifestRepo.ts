@@ -30,10 +30,20 @@ export const saveLocalManifest = async (
   const target = bundleManifestPath(clientFolder);
   const tmp = `${target}.tmp`;
   await fs.mkdir(path.dirname(target), { recursive: true });
-  await fs.writeFile(tmp, JSON.stringify(manifest, null, 2), 'utf8');
-  // Atomic swap — readers see either the previous or the new manifest, never a
-  // half-written file.
-  await fs.rename(tmp, target);
+  try {
+    await fs.writeFile(tmp, JSON.stringify(manifest, null, 2), 'utf8');
+    // Atomic swap — readers see either the previous or the new manifest, never a
+    // half-written file. On Windows fs.rename fails when the target exists, so
+    // remove it first (idempotent on ENOENT) then rename.
+    await fs.rm(target, { force: true });
+    await fs.rename(tmp, target);
+  } catch (err) {
+    // Best-effort: drop the stray .tmp so a retry starts clean.
+    await fs
+      .rm(tmp, { force: true })
+      .catch((rmErr: unknown) => logger.warn(`Failed to remove tmp ${tmp}`, rmErr));
+    throw err;
+  }
 };
 
 export const clearLocalManifest = async (clientFolder: string): Promise<void> => {

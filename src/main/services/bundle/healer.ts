@@ -1,12 +1,13 @@
-import type { MinecraftKit, ProgressListener } from '@loontail/minecraft-kit';
+import type { MinecraftKit, ProgressListener, Target } from '@loontail/minecraft-kit';
 import { errorMessage } from '@main/infra/errorMessage';
 import { scopedLogger } from '@main/infra/logger';
 import { verifyAndRepairExceptBundle } from '@main/services/minecraft/bundleHealing';
+import { buildContext } from '@main/services/minecraft/context';
 import { BundleErrorCodes } from '@shared/contracts/bundle';
 import type { ClientSlug } from '@shared/contracts/ids';
 import { BundleError } from './errors';
 
-const logger = scopedLogger('bundle.healer');
+const logger = scopedLogger('bundle.heal');
 
 export type HealOptions = {
   signal?: AbortSignal;
@@ -27,10 +28,35 @@ export type Healer = {
   ) => Promise<void>;
 };
 
-export const createHealer = (kit: MinecraftKit): Healer => ({
+// Injection seam: tests stub the context build so the heal seam can be
+// exercised without a Strapi/settings round-trip.
+export type ResolvedHealContext = { target: Target; clientFolder: string };
+
+export type CreateHealerDeps = {
+  resolveContext: (kit: MinecraftKit, slug: ClientSlug) => Promise<ResolvedHealContext>;
+};
+
+export const createHealer = (
+  kit: MinecraftKit,
+  deps: CreateHealerDeps = {
+    resolveContext: async (k, slug) => {
+      const ctx = await buildContext(k, slug);
+      return { target: ctx.target, clientFolder: ctx.clientFolder };
+    },
+  },
+): Healer => ({
   healAfterDeletes: async (slug, bundleOwnedPaths, options) => {
     try {
-      const outcome = await verifyAndRepairExceptBundle(kit, slug, bundleOwnedPaths, options);
+      // Resolve the minecraft target once here (the heal bridge no longer does
+      // it), so the verify/repair pass runs against a single resolution.
+      const { target, clientFolder } = await deps.resolveContext(kit, slug);
+      const outcome = await verifyAndRepairExceptBundle(
+        kit,
+        target,
+        clientFolder,
+        bundleOwnedPaths,
+        options,
+      );
       logger.info(
         `[${slug}] heal complete (repaired=${outcome.repaired}, ignoredByBundle=${outcome.ignoredByBundle})`,
       );

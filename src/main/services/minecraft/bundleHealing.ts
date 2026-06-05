@@ -3,13 +3,12 @@ import type {
   MinecraftKit,
   ProgressListener,
   RepairIssueFilter,
+  Target,
   VerificationResult,
 } from '@loontail/minecraft-kit';
 import { scopedLogger } from '@main/infra/logger';
-import type { ClientSlug } from '@shared/contracts/ids';
-import { buildContext } from './context';
 
-const logger = scopedLogger('bundle.heal');
+const logger = scopedLogger('minecraft.bundleHeal');
 
 export type HealOutcome = {
   // Files the bundle currently owns — never repaired even if kit verify flags
@@ -40,6 +39,8 @@ type VerifyAndRepairOptions = {
   onEvent?: ProgressListener;
 };
 
+// exactOptionalPropertyTypes is on and the kit options reject an explicit
+// `undefined`, so build the forwarded options conditionally.
 const opOptions = (
   options: VerifyAndRepairOptions | undefined,
 ): { signal?: AbortSignal; onEvent?: ProgressListener } => ({
@@ -61,31 +62,33 @@ const countBundleOwnedIssues = (
     .length;
 
 // Run kit.verify.minecraft, drop any issues for paths the bundle owns, then
-// repair only what's left. No-op when the filtered set is empty.
+// repair only what's left. No-op when the filtered set is empty. The caller
+// passes the already-resolved minecraft target + clientFolder, so this never
+// re-resolves the target (no Strapi/settings round-trip in the heal path).
 export const verifyAndRepairExceptBundle = async (
   kit: MinecraftKit,
-  slug: ClientSlug,
+  target: Target,
+  clientFolder: string,
   bundleOwnedPaths: ReadonlySet<string>,
   options?: VerifyAndRepairOptions,
 ): Promise<HealOutcome> => {
-  const ctx = await buildContext(kit, slug);
-  const result = await kit.verify.minecraft.run(ctx.target, opOptions(options));
-  const shouldRepairIssue = createBundleRepairIssueFilter(ctx.clientFolder, bundleOwnedPaths);
-  const ignoredByBundle = countBundleOwnedIssues(result, ctx.clientFolder, bundleOwnedPaths);
+  const result = await kit.verify.minecraft.run(target, opOptions(options));
+  const shouldRepairIssue = createBundleRepairIssueFilter(clientFolder, bundleOwnedPaths);
+  const ignoredByBundle = countBundleOwnedIssues(result, clientFolder, bundleOwnedPaths);
   const repairableIssues = result.issues.length - ignoredByBundle;
 
   if (repairableIssues === 0) {
     logger.info(
-      `[${slug}] heal: minecraft slice clean (verified=${result.checkedFiles}, ignored=${ignoredByBundle})`,
+      `heal: minecraft slice clean (verified=${result.checkedFiles}, ignored=${ignoredByBundle})`,
     );
     return { ignoredByBundle, repaired: 0, verifyCompleted: true };
   }
 
   logger.info(
-    `[${slug}] heal: repairing ${repairableIssues} minecraft files (ignored ${ignoredByBundle} bundle-owned)`,
+    `heal: repairing ${repairableIssues} minecraft files (ignored ${ignoredByBundle} bundle-owned)`,
   );
 
-  const plan = await kit.repair.minecraft.plan(ctx.target, {
+  const plan = await kit.repair.minecraft.plan(target, {
     from: result,
     shouldRepairIssue,
     ...(options?.signal ? { signal: options.signal } : {}),

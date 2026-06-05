@@ -187,9 +187,10 @@ const runDeletePhase = async (task: SyncTask, emit: EmitProgress): Promise<Phase
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code === 'ENOENT') {
-        // File already gone — count it as cleaned. We still don't mark
-        // deletedAny because no actual file removal occurred and we have no
-        // signal to heal from it.
+        // File already gone — still flag deletedAny so the heal pass runs. The
+        // bundle no longer owns this path, so any vanilla file it was
+        // overriding must be reconciled even when the delete itself was a no-op.
+        deletedAny = true;
         completedDeletes += 1;
         continue;
       }

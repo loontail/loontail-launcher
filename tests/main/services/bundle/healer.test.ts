@@ -1,0 +1,54 @@
+import type { MinecraftKit, Target, VerificationResult } from '@loontail/minecraft-kit';
+import { asClientSlug } from '@shared/contracts/ids';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.hoisted(() => {
+  process.env.API_URL ??= 'http://test.invalid';
+  process.env.API_TOKEN ??= 'test-token';
+});
+
+vi.mock('@main/infra/logger', () => ({
+  scopedLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+}));
+
+// The healer's default resolveContext imports minecraft/context; this test
+// injects resolveContext, so stub the transitive Strapi/HTTP chain to keep the
+// import side-effect-free.
+vi.mock('@main/services/minecraft/context', () => ({ buildContext: vi.fn() }));
+
+import { type CreateHealerDeps, createHealer } from '@main/services/bundle/healer';
+
+const SLUG = asClientSlug('heal-client');
+const CLIENT_FOLDER = '/clients/heal-client';
+const TARGET = { id: 'fake-target' } as unknown as Target;
+
+const cleanVerification: VerificationResult = {
+  checkedFiles: 3,
+  issues: [],
+} as unknown as VerificationResult;
+
+const makeKit = () =>
+  ({
+    targets: { resolve: vi.fn() },
+    verify: { minecraft: { run: vi.fn(async () => cleanVerification) } },
+    repair: { minecraft: { plan: vi.fn(), run: vi.fn() } },
+  }) as unknown as MinecraftKit;
+
+describe('createHealer.healAfterDeletes', () => {
+  it('threads the resolved target + clientFolder into verify, never re-resolving', async () => {
+    const kit = makeKit();
+    const resolveContext = vi.fn(async () => ({ target: TARGET, clientFolder: CLIENT_FOLDER }));
+    const deps: CreateHealerDeps = { resolveContext };
+    const healer = createHealer(kit, deps);
+
+    await healer.healAfterDeletes(SLUG, new Set<string>());
+
+    expect(resolveContext).toHaveBeenCalledTimes(1);
+    expect(resolveContext).toHaveBeenCalledWith(kit, SLUG);
+    // The injected target flows straight into the verify call — no second
+    // target resolution inside the heal bridge.
+    expect(kit.targets.resolve).not.toHaveBeenCalled();
+    expect(kit.verify.minecraft.run).toHaveBeenCalledTimes(1);
+    expect(kit.verify.minecraft.run).toHaveBeenCalledWith(TARGET, expect.anything());
+  });
+});
