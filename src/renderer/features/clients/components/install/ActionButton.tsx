@@ -1,7 +1,11 @@
 import { cn } from '@renderer/shared/lib/cn';
 import { type ButtonHTMLAttributes, forwardRef } from 'react';
 
-export type ActionVariant = 'primary' | 'ghost' | 'danger';
+// `primary` is the white CTA. `muted` is the neutral secondary (Stop, Cancel,
+// Launching) — monochrome, no chromatic/destructive hue. `ghost` is the quiet
+// inline control (Pause/Resume). `danger` is kept as a name-compatible alias of
+// `muted` plus a stronger outline so cancel reads as the heavier neutral action.
+export type ActionVariant = 'primary' | 'muted' | 'ghost' | 'danger';
 
 export type ActionButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ActionVariant;
@@ -9,15 +13,19 @@ export type ActionButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const VARIANT_CLASSES: Record<ActionVariant, string> = {
   primary:
-    'h-12 min-w-[140px] px-7 text-[14px] tracking-wide bg-primary text-primary-foreground ' +
-    'shadow-[0_8px_24px_-6px_var(--color-glow-overlay-md)] ' +
-    'hover:scale-[1.02] hover:shadow-[0_10px_28px_-6px_var(--color-glow-overlay-lg)] active:scale-[0.97]',
+    'h-11 min-w-35 px-6 text-body-med bg-cta text-on-cta ' +
+    'shadow-[inset_0_1px_0_var(--shadow-inset-highlight)] ' +
+    'hover:bg-cta-hover active:bg-cta-press motion-safe:active:scale-[0.98]',
+  muted:
+    'h-11 min-w-35 px-6 text-body-med bg-surface-2 text-glass ' +
+    'shadow-[inset_0_1px_0_var(--shadow-inset-highlight)] ' +
+    'hover:bg-surface-3 motion-safe:active:scale-[0.98]',
   ghost:
     'h-9 px-4 text-caption border border-edge-md bg-ghost text-glass/75 ' +
-    'hover:border-edge-xl hover:bg-ghost-hover hover:text-glass active:scale-[0.97]',
+    'hover:border-edge-xl hover:bg-ghost-hover hover:text-glass motion-safe:active:scale-[0.98]',
   danger:
-    'h-9 px-4 text-caption border border-destructive/30 bg-destructive/10 text-destructive/85 ' +
-    'hover:border-destructive/40 hover:bg-destructive/15 hover:text-destructive active:scale-[0.97]',
+    'h-9 px-4 text-caption border border-edge-lg bg-surface-2 text-glass/80 ' +
+    'hover:border-edge-xl hover:bg-surface-3 hover:text-glass motion-safe:active:scale-[0.98]',
 };
 
 export const ActionButton = forwardRef<HTMLButtonElement, ActionButtonProps>(
@@ -26,8 +34,8 @@ export const ActionButton = forwardRef<HTMLButtonElement, ActionButtonProps>(
       ref={ref}
       type={type}
       className={cn(
-        'inline-flex cursor-pointer items-center justify-center gap-2 rounded-full font-bold transition-all duration-150',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glass/40 focus-visible:ring-offset-0',
+        'inline-flex cursor-pointer items-center justify-center gap-2 rounded-md font-bold transition-all duration-150 ease-standard',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glass/70 focus-visible:ring-offset-2 focus-visible:ring-offset-overlay',
         'disabled:pointer-events-none disabled:opacity-50',
         VARIANT_CLASSES[variant],
         className,

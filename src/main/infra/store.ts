@@ -6,6 +6,7 @@ import {
   CURRENT_SCHEMA_VERSION,
   STORE_KEY_AUTH,
   STORE_KEY_INSTANCE_REGISTRY,
+  STORE_KEY_LAST_PLAYED,
   STORE_KEY_LAUNCHER_SETTINGS,
   STORE_KEY_SCHEMA_VERSION,
 } from '@shared/constants';
@@ -34,6 +35,7 @@ type LauncherStoreSchema = {
   [STORE_KEY_LAUNCHER_SETTINGS]: LauncherSettings;
   [STORE_KEY_SCHEMA_VERSION]: number;
   [STORE_KEY_INSTANCE_REGISTRY]: InstanceRegistry;
+  [STORE_KEY_LAST_PLAYED]: Record<string, number>;
 };
 
 const emptyInstanceRegistry = (): InstanceRegistry => ({
@@ -104,6 +106,7 @@ const defaults: LauncherStoreSchema = {
   [STORE_KEY_LAUNCHER_SETTINGS]: buildDefaultSettings(),
   [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
   [STORE_KEY_INSTANCE_REGISTRY]: emptyInstanceRegistry(),
+  [STORE_KEY_LAST_PLAYED]: {},
 };
 
 const store = new Store<LauncherStoreSchema>({
@@ -384,3 +387,13 @@ export const setStoredInstanceRegistry = (registry: InstanceRegistry): InstanceR
   store.set(STORE_KEY_INSTANCE_REGISTRY, registry);
   return registry;
 };
+
+// Stamp a build's last-played time. Keyed by CatalogKey so the renderer can
+// match the map against the catalog. A stale key (build later deleted) is
+// harmless — the selector ignores keys with no matching catalog item.
+export const recordPlayed = (key: string): void => {
+  const next = { ...store.get(STORE_KEY_LAST_PLAYED), [key]: Date.now() };
+  store.set(STORE_KEY_LAST_PLAYED, next);
+};
+
+export const getLastPlayed = (): Record<string, number> => store.get(STORE_KEY_LAST_PLAYED);

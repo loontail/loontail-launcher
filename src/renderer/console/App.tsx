@@ -92,7 +92,7 @@ export const ConsoleApp = () => {
   const headerSubtitle = stream.clientTitle || '';
 
   return (
-    <div className="flex h-full flex-col bg-background text-foreground">
+    <div className="flex h-full flex-col bg-canvas text-glass">
       <ConsoleHeader
         status={stream.state.status}
         statusLabel={statusLabel}

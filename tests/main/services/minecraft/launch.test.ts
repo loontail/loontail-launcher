@@ -36,6 +36,7 @@ const launchMocks = vi.hoisted(() => {
     appGetVersion: vi.fn(() => '0.0.0-test'),
     appGetAppPath: vi.fn(() => ''),
     getStoredAuth: vi.fn<() => AuthSession | null>(() => null),
+    recordPlayed: vi.fn<(key: string) => void>(),
     openConsoleWindow: vi.fn(),
     consoleHub: {
       emitState: vi.fn(),
@@ -74,6 +75,7 @@ vi.mock('@main/infra/logger', () => ({
 
 vi.mock('@main/infra/store', () => ({
   getStoredAuth: launchMocks.getStoredAuth,
+  recordPlayed: launchMocks.recordPlayed,
 }));
 
 const SLUG = asClientSlug('test-client');
@@ -159,9 +161,11 @@ const target = (directory: string): Target =>
     },
   }) as unknown as Target;
 
+const CATALOG_KEY = 'local:test-client';
+
 const context = (clientFolder = CLIENT_FOLDER): Context =>
   ({
-    item: { spec: { bundleSlug: null }, presentation: { title: 'Test Client' } },
+    item: { key: CATALOG_KEY, spec: { bundleSlug: null }, presentation: { title: 'Test Client' } },
     clientFolder,
     loader: LoaderChoices.VANILLA,
     target: target(clientFolder),
@@ -332,6 +336,8 @@ describe('runLaunch', () => {
       kind: OpKinds.LAUNCH,
       session: activeSession,
     });
+    // Reaching RUNNING stamps the build's last-played time by its CatalogKey.
+    expect(launchMocks.recordPlayed).toHaveBeenCalledWith(CATALOG_KEY);
     // The launch flow drives the injected console port (not a module singleton)
     // and never opens a window when the console setting is off.
     expect(launchMocks.consoleHub.setActiveSession).toHaveBeenCalled();

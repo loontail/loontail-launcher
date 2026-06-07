@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-// Ref-counted so nested modals (ClientSettingsModal → UninstallConfirmModal)
+// Ref-counted so nested modals (e.g. a confirm dialog opened from another modal)
 // don't unlock body scroll while an outer modal is still open.
 let openModalCount = 0;
 let previousBodyOverflow = '';

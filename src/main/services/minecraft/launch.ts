@@ -22,7 +22,7 @@ import { dashUuid } from '@loontail/yggdrasil-core';
 import { mainConfig } from '@main/config';
 import { errorMessage } from '@main/infra/errorMessage';
 import { scopedLogger } from '@main/infra/logger';
-import { getStoredAuth } from '@main/infra/store';
+import { getStoredAuth, recordPlayed } from '@main/infra/store';
 import type { Account } from '@shared/contracts/account';
 import type { AuthSession } from '@shared/contracts/auth';
 import { ConsoleSources, ConsoleStatuses } from '@shared/contracts/console';
@@ -386,6 +386,10 @@ export const runLaunch = async (
       return;
     }
     env.ops.set(slug, { kind: OpKinds.LAUNCH, session });
+    // The build reached RUNNING — stamp it for the Home recents. Keyed by the
+    // resolved CatalogKey (ctx.item.key), not the operational slug, so the
+    // renderer can match it against the catalog directly.
+    recordPlayed(ctx.item.key);
     env.emitStatus({ slug, status: InstallStatuses.RUNNING, paused: false });
     env.console.emitState({ slug, status: ConsoleStatuses.RUNNING, clientTitle });
     env.console.recordSystem('Process started', {

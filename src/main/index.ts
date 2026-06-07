@@ -25,6 +25,7 @@ import { createCatalogService } from '@main/services/catalog';
 import { createClientOperationLocks } from '@main/services/clientOperationLocks';
 import { createClientsService, getClients } from '@main/services/clients';
 import { createConsoleService } from '@main/services/console';
+import { createHistoryService } from '@main/services/history';
 import { createInstancesService } from '@main/services/instances';
 import { createKit } from '@main/services/kit';
 import { CACHE_SCHEME, createMediaService } from '@main/services/media';
@@ -124,6 +125,7 @@ const start = async (): Promise<void> => {
     extraSources: [instancesService.localSource],
   });
   const serversService = createServersService(router);
+  const historyService = createHistoryService(router);
   const mediaService = createMediaService(router);
   const minecraftService = createMinecraftService(
     router,
@@ -140,7 +142,7 @@ const start = async (): Promise<void> => {
   minecraftService.manager.attachLaunchHook((slug, signal) =>
     bundleService.manager.syncForLaunch(slug, signal),
   );
-  const consoleService = createConsoleService(router, consoleHub);
+  const consoleService = createConsoleService(router, consoleHub, openConsole);
   const updaterService = createUpdaterService(router, mainWindow);
 
   await appService.init();
@@ -152,6 +154,7 @@ const start = async (): Promise<void> => {
   await instancesService.init();
   await catalogService.init();
   await serversService.init();
+  await historyService.init();
   await mediaService.init();
   await minecraftService.init();
   await bundleService.init();
@@ -183,6 +186,7 @@ const start = async (): Promise<void> => {
       bundleService.dispose(),
       minecraftService.dispose(),
       mediaService.dispose(),
+      historyService.dispose(),
       serversService.dispose(),
       catalogService.dispose(),
       instancesService.dispose(),

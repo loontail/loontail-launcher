@@ -20,9 +20,9 @@ export const ConsoleDetailPanel = ({
   const { t } = useTranslation();
 
   return (
-    <div className="flex max-h-[30%] flex-col border-t border-edge bg-background">
+    <div className="flex max-h-[30%] flex-col border-t border-edge bg-surface-0/60">
       <div className="flex items-center justify-between border-b border-edge px-4 py-2">
-        <span className="text-eyebrow font-bold uppercase tracking-eyebrow text-foreground/55">
+        <span className="text-eyebrow font-bold uppercase tracking-eyebrow text-glass/55">
           {t('console.detailHeader')}
         </span>
         <div className="flex items-center gap-1.5">

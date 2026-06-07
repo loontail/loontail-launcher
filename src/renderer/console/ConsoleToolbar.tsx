@@ -40,10 +40,10 @@ export const ConsoleToolbar = ({
   const { t } = useTranslation();
 
   return (
-    <div className="flex flex-wrap items-center gap-2 border-b border-edge px-4 py-2.5">
+    <div className="flex flex-wrap items-center gap-2 border-b border-edge bg-surface-0/60 px-4 py-2.5">
       <div className="relative flex items-center gap-1.5">
         <Search
-          className="pointer-events-none absolute left-2.5 size-3.5 text-foreground/45"
+          className="pointer-events-none absolute left-2.5 size-3.5 text-glass/45"
           aria-hidden="true"
         />
         <Input
@@ -59,12 +59,12 @@ export const ConsoleToolbar = ({
             type="button"
             onClick={search.clear}
             aria-label={t('console.searchClear')}
-            className="absolute right-2 flex h-5 w-5 items-center justify-center rounded-sm text-foreground/50 hover:bg-ghost-hover hover:text-foreground"
+            className="absolute right-2 flex h-5 w-5 items-center justify-center rounded-sm text-glass/50 hover:bg-ghost-hover hover:text-glass"
           >
             <X className="size-3" />
           </button>
         )}
-        <span className="ml-1 min-w-(--console-counter-min) text-center text-console-meta tabular-nums text-foreground/55">
+        <span className="ml-1 min-w-(--console-counter-min) text-center text-console-meta tabular-nums text-glass/55">
           {formatSearchCounter(
             search.searchQuery,
             search.matches.length,

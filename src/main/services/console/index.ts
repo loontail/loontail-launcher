@@ -12,8 +12,16 @@ export type ConsoleService = {
   dispose: () => Promise<void>;
 };
 
-export const createConsoleService = (router: Router, consoleHub: ConsoleHub): ConsoleService => ({
+export const createConsoleService = (
+  router: Router,
+  consoleHub: ConsoleHub,
+  openConsole: () => void,
+): ConsoleService => ({
   init: async () => {
+    router.handle(IPC_CHANNELS.consoleOpen, (rawArgs) => {
+      assertNoIpcArgs(rawArgs, 'console.open takes no arguments');
+      openConsole();
+    });
     router.handle(IPC_CHANNELS.consoleGetInitial, (rawArgs) => {
       assertNoIpcArgs(rawArgs, 'console.getInitial takes no arguments');
       return consoleHub.getInitial();

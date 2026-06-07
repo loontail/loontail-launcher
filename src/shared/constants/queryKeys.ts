@@ -19,6 +19,9 @@ export const QUERY_KEYS = {
   servers: {
     statuses: (addressesKey: string) => ['servers', 'statuses', addressesKey] as const,
   },
+  history: {
+    lastPlayed: ['history', 'lastPlayed'] as const,
+  },
   settings: {
     root: ['settings'] as const,
   },
@@ -42,6 +45,7 @@ export const QUERY_KEY_ROOTS = {
   catalog: 'catalog',
   builds: 'builds',
   servers: 'servers',
+  history: 'history',
   settings: 'settings',
   system: 'system',
   media: 'media',

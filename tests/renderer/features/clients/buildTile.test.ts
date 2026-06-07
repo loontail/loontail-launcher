@@ -69,8 +69,8 @@ describe('BuildTile', () => {
     const html = render(localItem());
     expect(html).not.toContain('<img');
     expect(html).toContain('clients.status.ready');
-    // generated fallback shows the build's initial letter
-    expect(html).toContain('>T<');
+    // generated visual fallback instead of a poster image
+    expect(html).toContain('linear-gradient');
   });
 
   // Source (local/official) is shown by the section heading, not repeated per card.

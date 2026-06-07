@@ -48,6 +48,12 @@
     "officialUnavailable": "Official builds unavailable — showing your local builds",
     "officialEmpty": "No official builds available right now",
     "createBuild": "Create build",
+    "browseOfficial": "Browse official",
+    "searchPlaceholder": "Search builds",
+    "viewGrid": "Grid view",
+    "viewList": "List view",
+    "noResults": "No builds match \"{{query}}\"",
+    "clearSearch": "Clear search",
     "openDetails": "Open {{name}} details",
     "detailAria": "{{name}} build details",
     "emptyTitle": "No builds yet",
@@ -70,13 +76,23 @@
     },
     "screenshots": "Screenshots",
     "about": "About",
-    "servers": "Available servers",
+    "back": "Back",
+    "tabs": {
+      "about": "About",
+      "media": "Media",
+      "servers": "Servers",
+      "settings": "Settings"
+    },
+    "noAbout": "No description for this build yet",
+    "noMedia": "No screenshots for this build yet",
+    "noServers": "No servers for this build",
     "download": "Download",
     "checking": "Checking...",
     "repairing": "Repairing...",
     "repair": "Repair",
     "repairOffer": "Some game files are missing or out of date. Repair this client?",
     "play": "Play",
+    "running": "Running",
     "update": "Update",
     "pause": "Pause",
     "resume": "Resume",
@@ -86,6 +102,7 @@
     "launching": "Launching…",
     "uninstalling": "Removing…",
     "paused": "paused",
+    "progressStalled": "Connection slow — still trying…",
     "setInstallFolder": "Pick a client folder in System settings first",
     "stage": {
       "prepare": "Preparing",
@@ -159,11 +176,13 @@
       "unknown": "Unknown error: {{message}}"
     }
   },
+  "home": {
+    "continue": "Continue",
+    "recentlyPlayed": "Recently played",
+    "emptyTitle": "Pick a build to start playing",
+    "emptyCta": "Browse builds"
+  },
   "clientSettings": {
-    "title": "{{name}}",
-    "subtitle": "Per-client overrides",
-    "openAria": "Open client settings",
-    "close": "Close",
     "clientFolder": "Client folder",
     "clientFolderDesc": "Versions, mods, resource packs and configs for this client live here — separately from other clients.",
     "openFolder": "Open",
@@ -224,9 +243,12 @@
       "next": "Next slide"
     }
   },
-  "navigation": {
-    "back": "Back",
-    "openSettings": "Open settings"
+  "nav": {
+    "rail": "Primary navigation",
+    "home": "Home",
+    "builds": "Builds",
+    "settings": "Settings",
+    "console": "Console"
   },
   "appBar": {
     "alphaTag": "Alpha",

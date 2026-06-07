@@ -8,12 +8,10 @@ import {
 } from '@renderer/features/settings';
 import { getDefaultInstallFolder, pickInstallFolder } from '@renderer/features/settings/systemApi';
 import { NEVER_CACHE } from '@renderer/shared/lib/queryClient';
-import { Button } from '@renderer/shared/ui/Button';
-import { SettingsGroup } from '@renderer/shared/ui/SettingsGroup';
 import { SettingsRow } from '@renderer/shared/ui/SettingsRow';
 import { QUERY_KEYS } from '@shared/constants';
 import { useQuery } from '@tanstack/react-query';
-import { Loader2, Sparkles } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -54,31 +52,26 @@ export const SetupPage = () => {
   const canFinish = localPath.length > 0 && !isSaving;
 
   return (
-    <div className="relative flex h-full flex-1 items-center justify-center overflow-auto bg-background">
-      <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
-        <div className="absolute left-1/2 top-0 size-[900px] -translate-x-1/2 -translate-y-1/3 rounded-full bg-glass/8 blur-[160px]" />
-      </div>
-      <div className="relative z-10 flex w-full max-w-md flex-col gap-5 px-6 py-10">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <div className="flex size-12 items-center justify-center rounded-full border border-border bg-card/80 text-foreground backdrop-blur-sm">
-            <Sparkles className="size-5" strokeWidth={1.75} aria-hidden="true" />
-          </div>
+    <div className="relative flex h-full flex-1 items-center justify-center overflow-auto bg-canvas scrim-app">
+      <div className="relative z-10 flex w-full max-w-md flex-col gap-6 rounded-lg border border-edge bg-surface-1 p-8 motion-safe:animate-route-fade">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <span className="flex size-12 items-center justify-center rounded-full border border-edge-md bg-surface-2">
+            <span className="size-2.5 rotate-45 rounded-xs bg-glass/85 shadow-[0_0_10px_var(--color-glow-glass)]" />
+          </span>
           <div className="flex flex-col gap-1.5">
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">
-              {t('setup.title')}
-            </h1>
-            <p className="text-xs leading-relaxed text-muted-foreground">{t('setup.subtitle')}</p>
+            <h1 className="text-h1 text-text-hi">{t('setup.title')}</h1>
+            <p className="text-body leading-relaxed text-text-mute">{t('setup.subtitle')}</p>
           </div>
         </div>
 
         <div className="flex flex-col gap-3">
-          <SettingsGroup>
+          <div className="overflow-hidden rounded-md border border-edge bg-surface-2">
             <SettingsRow
               label={t('settings.launcher.language')}
               description={t('settings.launcher.languageDesc')}
               right={<LanguageSwitcher />}
             />
-          </SettingsGroup>
+          </div>
 
           <FolderInfoBlock
             folder={diskInfo}
@@ -96,14 +89,15 @@ export const SetupPage = () => {
           />
         </div>
 
-        <Button
-          className="h-10 w-full"
+        <button
+          type="button"
+          className="inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-cta px-6 text-body-med text-on-cta shadow-[inset_0_1px_0_var(--shadow-inset-highlight)] transition-all duration-150 ease-standard hover:bg-cta-hover active:bg-cta-press motion-safe:active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glass/70 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1 disabled:pointer-events-none disabled:opacity-50"
           disabled={!canFinish}
           onClick={() => void handleFinish()}
           aria-busy={isSaving}
         >
           {isSaving ? <Loader2 className="size-4 animate-spin" /> : t('setup.finish')}
-        </Button>
+        </button>
       </div>
     </div>
   );

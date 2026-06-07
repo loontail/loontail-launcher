@@ -20,7 +20,7 @@ const LOADER_OPTIONS: LoaderChoice[] = [
 ];
 
 const SELECT_CLASS =
-  'flex h-9 w-full rounded-sm border border-input bg-background px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:cursor-not-allowed disabled:opacity-50';
+  'flex h-9 w-full rounded-sm border border-edge bg-surface-2 px-3 py-1 text-sm text-glass focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glass/50 disabled:cursor-not-allowed disabled:opacity-50';
 
 type CreateBuildModalProps = {
   isOpen: boolean;
@@ -85,22 +85,23 @@ export const CreateBuildModal = ({ isOpen, onClose, onCreated }: CreateBuildModa
       ariaLabel={t('createBuild.title')}
       className="max-w-md"
     >
-      <h2 className="text-base font-semibold text-foreground">{t('createBuild.title')}</h2>
+      <h2 className="text-h2 text-text-hi">{t('createBuild.title')}</h2>
 
       <form className="flex flex-col gap-4" onSubmit={submit}>
         <label htmlFor="create-build-name" className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">{t('createBuild.name')}</span>
+          <span className="text-caption font-medium text-text-mute">{t('createBuild.name')}</span>
           <Input
             id="create-build-name"
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder={t('createBuild.namePlaceholder')}
             maxLength={80}
+            className="border-edge bg-surface-2 text-glass focus-visible:ring-glass/50 focus-visible:ring-offset-0"
           />
         </label>
 
         <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">
+          <span className="text-caption font-medium text-text-mute">
             {t('createBuild.minecraftVersion')}
           </span>
           <select
@@ -119,9 +120,7 @@ export const CreateBuildModal = ({ isOpen, onClose, onCreated }: CreateBuildModa
         </label>
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">
-            {t('createBuild.loader')}
-          </span>
+          <span className="text-caption font-medium text-text-mute">{t('createBuild.loader')}</span>
           <div className="inline-flex w-fit rounded-full border border-edge-md bg-chip-dark p-0.5">
             {LOADER_OPTIONS.map((option) => {
               const active = loader === option;
@@ -147,7 +146,7 @@ export const CreateBuildModal = ({ isOpen, onClose, onCreated }: CreateBuildModa
 
         {needsLoaderVersion && (
           <label className="flex flex-col gap-1.5">
-            <span className="text-xs font-medium text-muted-foreground">
+            <span className="text-caption font-medium text-text-mute">
               {t('createBuild.loaderVersion')}
             </span>
             <select
@@ -169,7 +168,10 @@ export const CreateBuildModal = ({ isOpen, onClose, onCreated }: CreateBuildModa
         )}
 
         {create.isError && (
-          <p role="alert" className="text-caption text-destructive">
+          <p
+            role="alert"
+            className="rounded-sm border border-edge-md bg-surface-2 px-3 py-2 text-caption text-glass"
+          >
             {t('createBuild.error')}
           </p>
         )}

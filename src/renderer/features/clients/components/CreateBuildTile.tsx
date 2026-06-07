@@ -5,6 +5,8 @@ type CreateBuildTileProps = {
   onClick: () => void;
 };
 
+// Dashed grid card matching a build card's footprint, leading the My Builds
+// group as the affordance to create a new local build.
 export const CreateBuildTile = ({ onClick }: CreateBuildTileProps) => {
   const { t } = useTranslation();
 
@@ -12,12 +14,12 @@ export const CreateBuildTile = ({ onClick }: CreateBuildTileProps) => {
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-full cursor-pointer items-center gap-3.5 rounded-lg border border-dashed border-edge-md bg-chip-dark/20 px-3.5 py-3 text-left text-glass/55 transition-all duration-150 hover:border-edge-lg hover:bg-chip-dark/40 hover:text-glass focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glass/50"
+      className="group flex min-h-44 cursor-pointer flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-edge-lg bg-surface-1/40 p-4 text-center text-text-mute transition-all duration-150 ease-standard hover:border-edge-xl hover:bg-surface-2 hover:text-glass focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glass/50 motion-safe:hover:scale-[1.02] active:scale-[0.99]"
     >
-      <span className="flex size-12 shrink-0 items-center justify-center rounded-md border border-dashed border-edge-md bg-glass/5 transition-colors group-hover:border-edge-lg group-hover:bg-glass/10">
+      <span className="flex size-11 items-center justify-center rounded-full border border-dashed border-edge-lg transition-colors group-hover:border-edge-xl">
         <Plus className="size-5" />
       </span>
-      <span className="text-sm font-semibold">{t('clients.createBuild')}</span>
+      <span className="text-body-med">{t('clients.createBuild')}</span>
     </button>
   );
 };

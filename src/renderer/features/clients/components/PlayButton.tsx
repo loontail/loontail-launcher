@@ -249,9 +249,9 @@ export const PlayButton = ({ item }: PlayButtonProps) => {
     case PlayButtonActions.LAUNCHING:
       return (
         <ActionButton
+          variant="muted"
           onClick={() => void cancel.mutateAsync(slug)}
           disabled={cancel.isPending}
-          className="bg-destructive text-destructive-foreground"
           title={t('clients.launching')}
         >
           <X size={16} />
@@ -267,13 +267,19 @@ export const PlayButton = ({ item }: PlayButtonProps) => {
 
     case PlayButtonActions.RUNNING:
       return (
-        <ActionButton
-          onClick={() => void stop.mutateAsync(slug)}
-          className="bg-destructive text-destructive-foreground"
-        >
-          <Square size={16} />
-          {t('clients.stop')}
-        </ActionButton>
+        <div className="flex items-center gap-3">
+          <span className="inline-flex items-center gap-2 text-body-med text-glass/85">
+            <span
+              className="size-2 rounded-full bg-glass motion-safe:animate-pulse"
+              aria-hidden="true"
+            />
+            {t('clients.running')}
+          </span>
+          <ActionButton variant="muted" onClick={() => void stop.mutateAsync(slug)}>
+            <Square size={16} />
+            {t('clients.stop')}
+          </ActionButton>
+        </div>
       );
 
     case PlayButtonActions.PLAY:

@@ -1,36 +1,70 @@
 @import "tailwindcss";
 @import "@splidejs/react-splide/css/core";
 
+/*
+  Loontail design tokens — "Obsidian Forge", pure monochrome.
+  Dark-only graphite surface ladder + tiered off-white text. No chromatic accent:
+  the primary CTA is white, and focus / active-nav / progress / selection use
+  neutral white/gray. Status is conveyed by icon + shape + text, not hue.
+
+  Legacy token NAMES are preserved (only their values changed) so every existing
+  component keeps building while it is migrated to the new ladder/CTA tokens.
+*/
 @theme {
   --font-sans: "Nunito", system-ui, sans-serif;
 
-  --color-background: oklch(0.15 0 0);
-  --color-foreground: oklch(0.96 0 0);
-  --color-card: oklch(0.18 0 0);
-  --color-card-foreground: oklch(0.96 0 0);
-  --color-popover: oklch(0.18 0 0);
-  --color-popover-foreground: oklch(0.96 0 0);
-  --color-primary: oklch(0.96 0 0);
-  --color-primary-foreground: oklch(0.15 0 0);
-  --color-secondary: oklch(0.25 0 0);
-  --color-secondary-foreground: oklch(0.96 0 0);
-  --color-muted: oklch(0.22 0 0);
-  --color-muted-foreground: oklch(0.65 0 0);
-  --color-accent: oklch(0.25 0 0);
-  --color-accent-foreground: oklch(0.96 0 0);
-  --color-destructive: oklch(0.6 0.18 25);
-  --color-destructive-foreground: oklch(0.96 0 0);
-  --color-success: oklch(0.78 0.16 150);
-  --color-success-foreground: oklch(0.15 0 0);
-  --color-warn: oklch(0.82 0.16 80);
-  --color-warn-foreground: oklch(0.15 0 0);
-  --color-border: oklch(0.28 0 0);
-  --color-input: oklch(0.28 0 0);
-  --color-ring: oklch(0.96 0 0);
+  /* Canvas & opaque surface ladder — lighter = more elevated (not shadows). */
+  --color-canvas: oklch(0.16 0.004 285);
+  --color-surface-0: oklch(0.19 0.004 285);
+  --color-surface-1: oklch(0.22 0.004 285);
+  --color-surface-2: oklch(0.26 0.005 285);
+  --color-surface-3: oklch(0.31 0.006 285);
+
+  /* Primary CTA = white (Play / Install / Update) — the single brightest element. */
+  --color-cta: oklch(0.97 0 0);
+  --color-cta-hover: oklch(1 0 0);
+  --color-cta-press: oklch(0.9 0 0);
+  --color-on-cta: oklch(0.17 0 0);
+
+  /* Tiered off-white text. */
+  --color-text-hi: oklch(0.97 0 0);
+  --color-text: oklch(0.86 0.004 285);
+  --color-text-mute: oklch(0.65 0.006 285);
+  --color-text-faint: oklch(0.5 0.006 285);
+
+  /* Neutral "accent" — focus ring / active nav / progress fill / selection. */
+  --color-accent-soft: oklch(1 0 0 / 0.12);
+
+  /* Legacy semantic names, retuned to the new palette. */
+  --color-background: oklch(0.16 0.004 285);
+  --color-foreground: oklch(0.97 0 0);
+  --color-card: oklch(0.22 0.004 285);
+  --color-card-foreground: oklch(0.97 0 0);
+  --color-popover: oklch(0.24 0.005 285);
+  --color-popover-foreground: oklch(0.97 0 0);
+  --color-primary: oklch(0.97 0 0);
+  --color-primary-foreground: oklch(0.17 0 0);
+  --color-secondary: oklch(0.26 0.005 285);
+  --color-secondary-foreground: oklch(0.92 0 0);
+  --color-muted: oklch(0.22 0.004 285);
+  --color-muted-foreground: oklch(0.65 0.006 285);
+  --color-accent: oklch(0.26 0.005 285);
+  --color-accent-foreground: oklch(0.97 0 0);
+  --color-border: oklch(1 0 0 / 0.1);
+  --color-input: oklch(1 0 0 / 0.12);
+  --color-ring: oklch(0.97 0 0);
+
+  /* Status = monochrome. Differentiated by brightness; meaning carried by icon + text. */
+  --color-destructive: oklch(0.82 0 0);
+  --color-destructive-foreground: oklch(0.17 0 0);
+  --color-success: oklch(0.88 0 0);
+  --color-success-foreground: oklch(0.17 0 0);
+  --color-warn: oklch(0.84 0 0);
+  --color-warn-foreground: oklch(0.17 0 0);
 
   --color-glass: hsl(0 0% 100%);
   --color-overlay: hsl(0 0% 0%);
-  --color-surface: hsl(0 0% 100% / 0.06);
+  --color-surface: oklch(0.22 0.004 285);
   --color-ghost: hsl(0 0% 100% / 0.05);
   --color-ghost-hover: hsl(0 0% 100% / 0.1);
   --color-ghost-active: hsl(0 0% 100% / 0.15);
@@ -45,20 +79,34 @@
   --color-edge-lg: hsl(0 0% 100% / 0.2);
   --color-edge-xl: hsl(0 0% 100% / 0.25);
 
-  /* Glow / shadow tints — referenced via shadow-[0_0_Npx_var(--color-glow-*)] */
   --color-glow-glass: hsl(0 0% 100% / 0.4);
   --color-glow-glass-strong: hsl(0 0% 100% / 0.7);
   --color-glow-overlay-md: hsl(0 0% 0% / 0.55);
   --color-glow-overlay-lg: hsl(0 0% 0% / 0.6);
-  --color-glow-success: oklch(0.78 0.16 150 / 0.55);
+  --color-glow-success: hsl(0 0% 100% / 0.45);
 
-  /* Eyebrow micro-radius for 2px micro-accent in AppBar — one-off, kept as a named token */
-  --radius-xs: 2px;
+  --radius-xs: 4px;
   --radius-sm: 0.5rem;
-  --radius-md: 0.875rem;
-  --radius-lg: 1.25rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
 
-  --tracking-eyebrow: 0.22em;
+  --tracking-eyebrow: 0.18em;
+
+  /* Type scale (Nunito). Sizes carry their line-height + default weight. */
+  --text-display: 1.75rem;
+  --text-display--line-height: 2rem;
+  --text-display--font-weight: 700;
+  --text-h1: 1.25rem;
+  --text-h1--line-height: 1.75rem;
+  --text-h1--font-weight: 700;
+  --text-h2: 1rem;
+  --text-h2--line-height: 1.5rem;
+  --text-h2--font-weight: 600;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.25rem;
+  --text-body-med: 0.875rem;
+  --text-body-med--line-height: 1.25rem;
+  --text-body-med--font-weight: 600;
 
   --text-eyebrow: 11px;
   --text-caption: 12px;
@@ -69,9 +117,31 @@
   --text-progress-label: 13px;
   --text-progress-value: 14px;
 
+  /* Motion easings — enter decelerates, exit accelerates. */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
+  --ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Route content swap — fade + slight rise on enter. */
+  --animate-route-fade: route-fade 180ms var(--ease-decelerate);
+  @keyframes route-fade {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  --shadow-overlay: 0 16px 48px hsl(0 0% 0% / 0.55);
+
   --console-time-width: 5.5rem;
   --console-source-width: 2.75rem;
   --console-counter-min: 3.25rem;
+  --console-subtitle-max: 16.25rem;
 
   --skin-viewer-width: 11.25rem;
   --skin-viewer-height: 13.75rem;
@@ -92,17 +162,24 @@
   padding-right: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
 }
 
-/* Frosted-glass surface with a subtle film-grain texture.
-   Apply to any block (modal panel, popover, sheet) to get the same look.
-   Requires the element to participate in the stacking context (positioned children
-   inside still need their own `position` if they should sit above the grain).
-   The launcher is dark-only today (see docs/ui-guideline.md §7); if a light
-   theme lands later, swap the background fill and noise tint inside this rule. */
+/* Hero text substrate — a build's key art keeps title + Play on darkness. */
+@utility scrim-hero {
+  background-image: linear-gradient(to top, hsl(0 0% 0% / 0.82), transparent 62%);
+}
+
+/* Frosted-glass chrome (title bar, nav rail, hero scrim, overlays).
+   Reserved for chrome only — never the scrolling catalog. Opaque fallback for
+   prefers-reduced-transparency (also avoids backdrop-blur GPU cost). */
 @utility glass {
   position: relative;
   isolation: isolate;
-  background-color: hsl(0 0% 0% / 0.55);
-  backdrop-filter: blur(24px) saturate(140%);
+  background-color: var(--color-surface-2);
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.1);
+
+  @media (prefers-reduced-transparency: no-preference) {
+    background-color: hsl(220 5% 11% / 0.62);
+    backdrop-filter: blur(12px) saturate(120%);
+  }
 
   &::before {
     content: "";
@@ -111,9 +188,22 @@
     z-index: -1;
     pointer-events: none;
     border-radius: inherit;
-    opacity: 0.18;
+    opacity: 0.12;
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='128' height='128' viewBox='0 0 128 128'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='2.4' numOctaves='1' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.5 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
     background-size: 128px 128px;
+  }
+}
+
+/* Stronger frosted panel for floating overlays (sheets, dropdowns). */
+@utility glass-panel {
+  position: relative;
+  isolation: isolate;
+  background-color: var(--color-surface-2);
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.1);
+
+  @media (prefers-reduced-transparency: no-preference) {
+    background-color: hsl(220 5% 11% / 0.84);
+    backdrop-filter: blur(16px) saturate(120%);
   }
 }
 
@@ -125,7 +215,7 @@ body,
 
 body {
   font-family: var(--font-sans);
-  background: var(--color-background);
+  background: var(--color-canvas);
   color: var(--color-foreground);
   -webkit-font-smoothing: antialiased;
   user-select: none;
@@ -192,5 +282,18 @@ img {
   }
   100% {
     transform: translateX(400%);
+  }
+}
+
+/* Reduced-motion backstop: collapse all animation/transition to near-instant.
+   Determinate progress fills remain informative (they are data, not decoration). */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
+import { rollingSpeed } from './progressFormat';
 
-const WINDOW_MS = 3000;
+// 4s rolling window — wide enough to smooth the install kit's per-second jitter,
+// short enough to react to a genuine slowdown within a few ticks.
+const WINDOW_MS = 4000;
 
-// Moving-average bytes/sec derived from successive `bytes` snapshots.
-// Used when the producing runner doesn't already report throughput (the
+// Smoothed bytes/sec derived from successive `bytes` snapshots over a rolling
+// window. Used when the producing runner doesn't already report throughput (the
 // install kit emits cumulative byte counts but no rate).
 //
 // A backwards jump (resume after pause, or replanning) resets the window so
@@ -32,13 +35,27 @@ export const useByteSpeed = (bytes: number | undefined, active: boolean): number
       if (!head || now - head[0] <= WINDOW_MS) break;
       samples.shift();
     }
-    const first = samples[0];
-    const last = samples[samples.length - 1];
-    if (first && last && samples.length >= 2) {
-      const dt = (last[0] - first[0]) / 1000;
-      if (dt > 0) setSpeed((last[1] - first[1]) / dt);
-    }
+    setSpeed(rollingSpeed(samples, now, WINDOW_MS));
   }, [bytes, active]);
 
   return speed;
+};
+
+// Display percent that never walks backwards. The selector recomputes percent
+// from raw byte counts each tick; a stage-boundary recompute or a replan can
+// momentarily report a lower value, which would make the bar visibly retreat.
+// We latch the high-water mark and reset only when the source clearly restarts
+// (a large drop, e.g. moving to the next stepper stage at 0%).
+export const useMonotonicPercent = (percent: number, resetKey: string | number): number => {
+  const peakRef = useRef(0);
+  const keyRef = useRef(resetKey);
+  if (keyRef.current !== resetKey) {
+    keyRef.current = resetKey;
+    peakRef.current = 0;
+  }
+  const clamped = Math.max(0, Math.min(100, percent));
+  if (clamped >= peakRef.current) {
+    peakRef.current = clamped;
+  }
+  return peakRef.current;
 };

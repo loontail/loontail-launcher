@@ -20,29 +20,38 @@ export type ToastEntry = ToastPayload & {
 
 const AUTO_CLOSE_MS = 5000;
 
-const VARIANT_STYLES: Record<ToastVariant, { icon: string; Icon: typeof Info; progress: string }> =
-  {
-    [ToastVariants.SUCCESS]: {
-      icon: 'text-success',
-      Icon: CheckCircle2,
-      progress: 'bg-success/70',
-    },
-    [ToastVariants.ERROR]: {
-      icon: 'text-destructive',
-      Icon: XCircle,
-      progress: 'bg-destructive/70',
-    },
-    [ToastVariants.INFO]: {
-      icon: 'text-glass/80',
-      Icon: Info,
-      progress: 'bg-glass/40',
-    },
-    [ToastVariants.WARN]: {
-      icon: 'text-warn',
-      Icon: AlertTriangle,
-      progress: 'bg-warn/70',
-    },
-  };
+// Monochrome by design: severity is read from the lucide icon's shape plus the
+// left-border brightness, never from hue. `icon`/`border`/`progress` resolve to
+// neutral white tokens at different opacities (brightness differentiates).
+const VARIANT_STYLES: Record<
+  ToastVariant,
+  { icon: string; border: string; Icon: typeof Info; progress: string }
+> = {
+  [ToastVariants.SUCCESS]: {
+    icon: 'text-glass/85',
+    border: 'border-l-glass/40',
+    Icon: CheckCircle2,
+    progress: 'bg-glass/45',
+  },
+  [ToastVariants.ERROR]: {
+    icon: 'text-glass',
+    border: 'border-l-glass/70',
+    Icon: XCircle,
+    progress: 'bg-glass/60',
+  },
+  [ToastVariants.INFO]: {
+    icon: 'text-glass/70',
+    border: 'border-l-glass/25',
+    Icon: Info,
+    progress: 'bg-glass/35',
+  },
+  [ToastVariants.WARN]: {
+    icon: 'text-glass/90',
+    border: 'border-l-glass/55',
+    Icon: AlertTriangle,
+    progress: 'bg-glass/50',
+  },
+};
 
 type ToastItemProps = {
   entry: ToastEntry;
@@ -73,11 +82,15 @@ export const ToastItem = ({ entry, style, paused, onClose, onHeight }: ToastItem
     return () => observer.disconnect();
   }, [entry.id, onHeight]);
 
+  const isError = entry.variant === ToastVariants.ERROR;
+  // Errors (and actionable toasts) never auto-dismiss: they persist until the
+  // user acts on or explicitly dismisses them.
+  const persist = isError || Boolean(entry.action);
+
   // Auto-close with hover-pause: `remainingRef` carries the leftover budget so
-  // re-entry doesn't restart the bar from full. Actionable toasts never
-  // auto-close — they wait for the user to act on or dismiss them.
+  // re-entry doesn't restart the bar from full.
   useEffect(() => {
-    if (entry.closing || entry.action) return;
+    if (entry.closing || persist) return;
     if (paused) {
       if (timerRef.current !== null) {
         window.clearTimeout(timerRef.current);
@@ -105,7 +118,7 @@ export const ToastItem = ({ entry, style, paused, onClose, onHeight }: ToastItem
         );
       }
     };
-  }, [paused, entry.closing, entry.action, onClose]);
+  }, [paused, entry.closing, persist, onClose]);
 
   const handleCopy = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -124,27 +137,33 @@ export const ToastItem = ({ entry, style, paused, onClose, onHeight }: ToastItem
   };
 
   const styles = VARIANT_STYLES[entry.variant];
-  const showCopy = entry.variant === ToastVariants.ERROR;
+  const showCopy = isError;
 
   return (
     <div
       ref={ref}
-      role={entry.variant === ToastVariants.ERROR ? 'alert' : 'status'}
+      role={isError ? 'alert' : 'status'}
+      aria-live={isError ? 'assertive' : 'polite'}
       onMouseEnter={() => setExpanded(true)}
       onMouseLeave={() => setExpanded(false)}
       style={style}
       className={cn(
-        'pointer-events-auto absolute right-0 bottom-0 w-[360px] max-w-[92vw]',
+        'pointer-events-auto absolute right-0 bottom-0 w-90 max-w-[92vw]',
         'transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] will-change-transform',
       )}
     >
-      <div className="relative overflow-hidden rounded-md border border-edge bg-card/85 shadow-2xl backdrop-blur-xl">
+      <div
+        className={cn(
+          'glass-panel relative overflow-hidden rounded-md border border-edge border-l-2 shadow-overlay',
+          styles.border,
+        )}
+      >
         <div className="flex items-start gap-3 py-3 pr-2 pl-3.5">
           <styles.Icon size={18} className={cn('mt-0.5 shrink-0', styles.icon)} />
 
           <p
             className={cn(
-              'min-w-0 flex-1 text-sm leading-snug break-words whitespace-pre-wrap text-glass',
+              'min-w-0 flex-1 text-sm leading-snug wrap-break-word whitespace-pre-wrap text-glass',
               expanded ? 'line-clamp-none' : 'line-clamp-2',
             )}
           >
@@ -160,7 +179,7 @@ export const ToastItem = ({ entry, style, paused, onClose, onHeight }: ToastItem
                 title={t('toast.copyMessage')}
                 className={cn(
                   'cursor-pointer rounded-md p-1 transition-colors hover:bg-ghost-hover hover:text-glass',
-                  copied ? 'text-success' : 'text-glass/55',
+                  copied ? 'text-glass' : 'text-glass/55',
                 )}
               >
                 {copied ? <CheckCircle2 size={14} /> : <Copy size={14} />}
@@ -189,8 +208,8 @@ export const ToastItem = ({ entry, style, paused, onClose, onHeight }: ToastItem
           </div>
         )}
 
-        {!entry.action && (
-          <div className="absolute right-0 bottom-0 left-0 h-[2px] bg-glass/5">
+        {!persist && (
+          <div className="absolute right-0 bottom-0 left-0 h-0.5 bg-glass/5">
             <div
               className={cn('h-full origin-left', styles.progress)}
               style={{

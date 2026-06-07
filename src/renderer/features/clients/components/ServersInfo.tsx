@@ -20,7 +20,7 @@ export const ServersInfo = ({ servers }: ServersInfoProps) => {
         {servers.map((server) => (
           <div
             key={server.address}
-            className="flex items-center justify-between gap-4 rounded-md border border-edge bg-surface px-4 py-3 backdrop-blur-sm"
+            className="flex items-center justify-between gap-4 rounded-md border border-edge bg-surface-1 px-4 py-3"
           >
             <div className="flex min-w-0 flex-1 items-center gap-3">
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-glass/30" />
@@ -40,7 +40,7 @@ export const ServersInfo = ({ servers }: ServersInfoProps) => {
 
   if (!anyOnline) {
     return (
-      <div className="flex items-center gap-2.5 rounded-md border border-edge bg-surface px-4 py-3 backdrop-blur-sm">
+      <div className="flex items-center gap-2.5 rounded-md border border-edge bg-surface-1 px-4 py-3">
         <span className="h-1.5 w-1.5 rounded-full bg-destructive/50" />
         <span className="text-xs text-glass/45">{t('servers.offline')}</span>
       </div>
@@ -58,7 +58,7 @@ export const ServersInfo = ({ servers }: ServersInfoProps) => {
           <div
             key={server.address}
             className={cn(
-              'flex items-center justify-between gap-4 rounded-md border border-edge bg-surface px-4 py-3 backdrop-blur-sm',
+              'flex items-center justify-between gap-4 rounded-md border border-edge bg-surface-1 px-4 py-3',
               !entry.online && 'opacity-60',
             )}
           >
