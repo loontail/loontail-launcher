@@ -6,7 +6,7 @@ import { useServerStatuses } from '../hooks';
 import { resolveServerDisplayEntry } from './serverDisplay';
 
 type ServersInfoProps = {
-  servers: Server[];
+  servers: readonly Server[];
 };
 
 export const ServersInfo = ({ servers }: ServersInfoProps) => {

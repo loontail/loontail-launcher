@@ -83,7 +83,7 @@ const target = (directory: string, patch: Partial<Target> = {}): Target =>
 
 const context = (directory: string): Context =>
   ({
-    client: { slug: SLUG },
+    item: { spec: { bundleSlug: null } },
     clientFolder: directory,
     loader: LoaderChoices.FABRIC,
     target: target(directory),

@@ -161,7 +161,7 @@ const target = (directory: string): Target =>
 
 const context = (clientFolder = CLIENT_FOLDER): Context =>
   ({
-    client: { slug: SLUG, title: 'Test Client' },
+    item: { spec: { bundleSlug: null }, presentation: { title: 'Test Client' } },
     clientFolder,
     loader: LoaderChoices.VANILLA,
     target: target(clientFolder),

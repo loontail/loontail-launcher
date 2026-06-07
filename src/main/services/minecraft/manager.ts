@@ -12,6 +12,7 @@ import {
   setClientOverride as persistClientOverride,
 } from '@main/services/settings/settings';
 import type { Account } from '@shared/contracts/account';
+import { SourceKinds } from '@shared/contracts/catalog';
 import type { ClientSlug } from '@shared/contracts/ids';
 import {
   type InstallStatus,
@@ -146,7 +147,11 @@ export class MinecraftManager {
       // minecraft" to "syncing bundle" (which only renders on top of an
       // installed client).
       this.env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
-      if (this.launchHook) {
+      // Local builds carry no managed bundle overlay (loose mods load natively),
+      // so the bundle launch hook is skipped — it would otherwise try to resolve
+      // the build as a Strapi client and fail. Official builds always run it
+      // (it no-ops internally when there is no bundleSlug).
+      if (this.launchHook && ctx.item.kind !== SourceKinds.LOCAL) {
         try {
           await this.launchHook(slug);
         } catch (error) {
@@ -257,7 +262,9 @@ export class MinecraftManager {
     const checkedAccount = requireAccount(this.accountProvider());
 
     // BundleSyncingOp ensures cancel(slug) can abort the download mid-flight.
-    if (this.launchHook) {
+    // Local builds have no managed bundle overlay, so they skip the sync phase
+    // and launch directly (the hook would fail trying to resolve a Strapi client).
+    if (this.launchHook && ctx.item.kind !== SourceKinds.LOCAL) {
       const bundleOp: Op = { kind: OpKinds.BUNDLE_SYNCING, abort: new AbortController() };
       this.ops.set(slug, bundleOp);
       this.env.emitStatus({ slug, status: InstallStatuses.LAUNCHING, paused: false });
@@ -352,7 +359,7 @@ export class MinecraftManager {
       lock.release();
     }
 
-    if (!repaired || this.launchHook === null) return;
+    if (!repaired || this.launchHook === null || ctx.item.kind === SourceKinds.LOCAL) return;
 
     try {
       await this.launchHook(slug);

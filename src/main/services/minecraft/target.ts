@@ -1,25 +1,28 @@
 import { Loaders, type TargetResolveInput, asMinecraftVersionId } from '@loontail/minecraft-kit';
-import type { Client } from '@shared/contracts/client';
+import type { BuildSpec } from '@shared/contracts/catalog';
 import { type LoaderChoice, LoaderChoices } from '@shared/contracts/settings';
 
 export { resolveLoader, type LoaderResolution } from '@shared/domain/loader';
 
-export const targetIdFor = (client: Client): string => client.slug;
-
-export const clientToTargetInput = (input: {
-  client: Client;
+// Maps a source-agnostic BuildSpec (official or local) onto the kit's target
+// input. `targetId` is the build's source-native identity — the Strapi slug for
+// official builds, the instance UUID for local — kept stable so an existing
+// install manifest's `targetId` keeps matching after the catalog migration.
+export const buildSpecToTargetInput = (input: {
+  targetId: string;
+  spec: BuildSpec;
   clientFolder: string;
   runtimeRoot: string;
   loader: LoaderChoice;
 }): TargetResolveInput => {
-  const { client, clientFolder, runtimeRoot, loader } = input;
-  // Strapi's `runtimeVersion` pins a runtime; falsy → kit picks from javaVersion.component.
-  const runtimeComponent = client.runtimeVersion?.trim() || undefined;
+  const { targetId, spec, clientFolder, runtimeRoot, loader } = input;
+  // A pinned runtime component wins; falsy → kit picks from javaVersion.component.
+  const runtimeComponent = spec.runtimeVersion?.trim() || undefined;
   return {
-    id: targetIdFor(client),
+    id: targetId,
     directory: clientFolder,
-    minecraft: { version: asMinecraftVersionId(client.minecraftVersion) },
-    loader: toKitLoader(loader, client),
+    minecraft: { version: asMinecraftVersionId(spec.minecraftVersion) },
+    loader: toKitLoader(loader, spec),
     runtime: {
       installRoot: runtimeRoot,
       ...(runtimeComponent ? { component: runtimeComponent } : {}),
@@ -27,17 +30,17 @@ export const clientToTargetInput = (input: {
   };
 };
 
-const toKitLoader = (loader: LoaderChoice, client: Client): TargetResolveInput['loader'] => {
+const toKitLoader = (loader: LoaderChoice, spec: BuildSpec): TargetResolveInput['loader'] => {
   switch (loader) {
     case LoaderChoices.FORGE:
       return {
         type: Loaders.FORGE,
-        ...(client.forgeVersion ? { version: client.forgeVersion } : {}),
+        ...(spec.forgeVersion ? { version: spec.forgeVersion } : {}),
       };
     case LoaderChoices.FABRIC:
       return {
         type: Loaders.FABRIC,
-        ...(client.fabricVersion ? { version: client.fabricVersion } : {}),
+        ...(spec.fabricVersion ? { version: spec.fabricVersion } : {}),
       };
     default:
       return { type: Loaders.VANILLA };

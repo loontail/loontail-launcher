@@ -3,7 +3,8 @@ import type { StrapiImageFormat, StrapiMedia as StrapiMediaType } from '@shared/
 
 type StrapiMediaProps = {
   media: StrapiMediaType;
-  className?: string;
+  className?: string | undefined;
+  onError?: (() => void) | undefined;
 };
 
 const FORMAT_PRIORITY: Array<keyof StrapiMediaType['formats']> = [
@@ -21,6 +22,11 @@ const pickBestUrl = (media: StrapiMediaType): string => {
   return media.url;
 };
 
-export const StrapiMedia = ({ media, className }: StrapiMediaProps) => (
-  <img src={toCachedMediaUrl(pickBestUrl(media))} alt={media.name} className={className} />
+export const StrapiMedia = ({ media, className, onError }: StrapiMediaProps) => (
+  <img
+    src={toCachedMediaUrl(pickBestUrl(media))}
+    alt={media.name}
+    className={className}
+    onError={onError}
+  />
 );

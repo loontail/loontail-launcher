@@ -148,7 +148,7 @@ const target = (): Target => {
 
 const context = (resolvedTarget: Target): Context =>
   ({
-    client: { slug: SLUG, title: 'Vanilla Client' },
+    item: { spec: { bundleSlug: null }, presentation: { title: 'Vanilla Client' } },
     clientFolder: CLIENT_FOLDER,
     loader: LoaderChoices.VANILLA,
     target: resolvedTarget,

@@ -1,4 +1,5 @@
 import { localizeBundleError, useStartBundle } from '@renderer/features/bundle';
+import { operationalId } from '@renderer/features/catalog';
 import {
   localizeMinecraftError,
   useCancelInstall,
@@ -12,7 +13,7 @@ import {
   type BundleSyncStatus,
   BundleSyncStatuses,
 } from '@shared/contracts/bundle';
-import type { Client } from '@shared/contracts/client';
+import type { CatalogItem } from '@shared/contracts/catalog';
 import { type InstallStatus, InstallStatuses } from '@shared/contracts/minecraft';
 import type { LoaderChoice } from '@shared/contracts/settings';
 import { isLoaderAvailable } from '@shared/domain/loader';
@@ -22,7 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { LoaderChoiceModal } from './LoaderChoiceModal';
 import { ActionButton, InstallProgress, useInstallProgress } from './install';
 
-type PlayButtonProps = { client: Client };
+type PlayButtonProps = { item: CatalogItem };
 
 export const PlayButtonActions = {
   PROGRESS: 'progress',
@@ -144,10 +145,11 @@ export const selectPlayButtonAction = ({
   }
 };
 
-export const PlayButton = ({ client }: PlayButtonProps) => {
+export const PlayButton = ({ item }: PlayButtonProps) => {
   const { t } = useTranslation();
-  const slug = client.slug;
-  const { install: state, bundle, hasBundle, progress } = useInstallProgress(client);
+  const slug = operationalId(item);
+  const spec = item.spec;
+  const { install: state, bundle, hasBundle, progress } = useInstallProgress(item);
   const resolved = useResolveFor(slug);
   const { settings } = useLauncherSettings();
 
@@ -158,17 +160,15 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
   const startBundle = useStartBundle();
   const [loaderModalOpen, setLoaderModalOpen] = useState(false);
 
-  if (!slug) return null;
-
   const folderReady = Boolean(resolved?.storage.clientFolder);
   const rawPersistedLoader = settings?.clients[slug]?.loader ?? null;
-  // Ignore a persisted choice that no longer matches the client's loader fields —
-  // e.g. user picked Forge, then Strapi removed forgeVersion. Without this the
-  // launcher would skip the picker and try to install a loader the client lacks.
+  // Ignore a persisted choice that no longer matches the build's loader fields —
+  // e.g. user picked Forge, then it was removed upstream. Without this the
+  // launcher would skip the picker and try to install a loader the build lacks.
   const persistedLoader =
-    rawPersistedLoader && isLoaderAvailable(client, rawPersistedLoader) ? rawPersistedLoader : null;
+    rawPersistedLoader && isLoaderAvailable(spec, rawPersistedLoader) ? rawPersistedLoader : null;
   const needsLoaderChoice =
-    Boolean(client.forgeVersion) && Boolean(client.fabricVersion) && !persistedLoader;
+    Boolean(spec.forgeVersion) && Boolean(spec.fabricVersion) && !persistedLoader;
 
   const beginInstall = (loader?: LoaderChoice): Promise<void> =>
     install.mutateAsync({ slug, ...(loader ? { loader } : {}) });
@@ -185,9 +185,9 @@ export const PlayButton = ({ client }: PlayButtonProps) => {
   const loaderModal = (
     <LoaderChoiceModal
       isOpen={loaderModalOpen}
-      clientTitle={client.title}
-      forgeVersion={client.forgeVersion}
-      fabricVersion={client.fabricVersion}
+      clientTitle={item.presentation.title}
+      forgeVersion={spec.forgeVersion}
+      fabricVersion={spec.fabricVersion}
       onPick={(loader) => void beginInstall(loader)}
       onClose={() => setLoaderModalOpen(false)}
     />

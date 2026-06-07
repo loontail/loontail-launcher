@@ -3,18 +3,15 @@ import { cn } from '@renderer/shared/lib/cn';
 import { OverrideMark } from '@renderer/shared/ui/OverrideMark';
 import { SettingsGroup } from '@renderer/shared/ui/SettingsGroup';
 import { SettingsRow } from '@renderer/shared/ui/SettingsRow';
-import type { Client } from '@shared/contracts/client';
+import type { BuildSpec } from '@shared/contracts/catalog';
 import { type LoaderChoice, LoaderChoices } from '@shared/contracts/settings';
 import { resolveLoader } from '@shared/domain/loader';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-const pickLoaderVersion = (
-  loader: LoaderChoice | null,
-  client: Pick<Client, 'forgeVersion' | 'fabricVersion'>,
-): string | null => {
-  if (loader === LoaderChoices.FORGE) return client.forgeVersion ?? null;
-  if (loader === LoaderChoices.FABRIC) return client.fabricVersion ?? null;
+const pickLoaderVersion = (loader: LoaderChoice | null, spec: BuildSpec): string | null => {
+  if (loader === LoaderChoices.FORGE) return spec.forgeVersion ?? null;
+  if (loader === LoaderChoices.FABRIC) return spec.fabricVersion ?? null;
   return null;
 };
 
@@ -65,7 +62,7 @@ const renderLoaderKindControl = (args: {
 };
 
 type ClientLoaderSectionProps = {
-  client: Client;
+  spec: BuildSpec;
   loader: LoaderChoice | null;
   loaderOverridden: boolean;
   isSavingOverride: boolean;
@@ -73,17 +70,17 @@ type ClientLoaderSectionProps = {
 };
 
 export const ClientLoaderSection = ({
-  client,
+  spec,
   loader,
   loaderOverridden,
   isSavingOverride,
   onSwitchLoader,
 }: ClientLoaderSectionProps) => {
   const { t } = useTranslation();
-  const resolution = resolveLoader(client, loader);
+  const resolution = resolveLoader(spec, loader);
   const effectiveLoader = resolution.kind === 'resolved' ? resolution.loader : null;
-  const canSwitchLoader = Boolean(client.forgeVersion) && Boolean(client.fabricVersion);
-  const loaderVersion = pickLoaderVersion(effectiveLoader, client);
+  const canSwitchLoader = Boolean(spec.forgeVersion) && Boolean(spec.fabricVersion);
+  const loaderVersion = pickLoaderVersion(effectiveLoader, spec);
 
   return (
     <SettingsGroup title={t('clientSettings.loader.title')}>
@@ -107,7 +104,7 @@ export const ClientLoaderSection = ({
         label={t('clientSettings.loader.minecraftVersion')}
         right={
           <span className="select-text text-eyebrow font-medium tabular-nums text-glass/70">
-            {client.minecraftVersion || '-'}
+            {spec.minecraftVersion || '-'}
           </span>
         }
       />

@@ -52,7 +52,7 @@ const target = {
 
 const context = (): Context =>
   ({
-    client: { slug: SLUG },
+    item: { spec: { bundleSlug: null } },
     clientFolder: CLIENT_FOLDER,
     target,
   }) as unknown as Context;

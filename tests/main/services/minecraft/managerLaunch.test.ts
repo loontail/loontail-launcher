@@ -93,7 +93,7 @@ const account = (): Account => ({
 
 const context = (): Context =>
   ({
-    client: { slug: SLUG, title: 'Test Client' },
+    item: { spec: { bundleSlug: null }, presentation: { title: 'Test Client' } },
     clientFolder: CLIENT_FOLDER,
     loader: LoaderChoices.VANILLA,
     target: {} as Target,

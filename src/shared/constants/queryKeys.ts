@@ -8,6 +8,14 @@ export const QUERY_KEYS = {
   clients: {
     list: (locale: string) => ['clients', 'list', locale] as const,
   },
+  catalog: {
+    list: (locale: string) => ['catalog', 'list', locale] as const,
+  },
+  builds: {
+    minecraftVersions: ['builds', 'minecraftVersions'] as const,
+    loaderVersions: (loader: string, minecraftVersion: string) =>
+      ['builds', 'loaderVersions', loader, minecraftVersion] as const,
+  },
   servers: {
     statuses: (addressesKey: string) => ['servers', 'statuses', addressesKey] as const,
   },
@@ -31,6 +39,8 @@ export const QUERY_KEY_ROOTS = {
   auth: 'auth',
   app: 'app',
   clients: 'clients',
+  catalog: 'catalog',
+  builds: 'builds',
   servers: 'servers',
   settings: 'settings',
   system: 'system',

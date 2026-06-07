@@ -5,6 +5,7 @@ import { computeDefaultRamMb } from '@main/infra/system';
 import {
   CURRENT_SCHEMA_VERSION,
   STORE_KEY_AUTH,
+  STORE_KEY_INSTANCE_REGISTRY,
   STORE_KEY_LAUNCHER_SETTINGS,
   STORE_KEY_SCHEMA_VERSION,
 } from '@shared/constants';
@@ -17,6 +18,11 @@ import {
   MojangXuidSchema,
   YggdrasilProfileSchema,
 } from '@shared/contracts/auth';
+import {
+  INSTANCE_REGISTRY_SCHEMA_VERSION,
+  type InstanceRegistry,
+  InstanceRegistrySchema,
+} from '@shared/contracts/instance';
 import { type LauncherSettings, LauncherSettingsSchema } from '@shared/contracts/settings';
 import { defaultLauncherSettings, normalizeLauncherSettings } from '@shared/domain/settings';
 import { app, safeStorage } from 'electron';
@@ -27,7 +33,13 @@ type LauncherStoreSchema = {
   [STORE_KEY_AUTH]: StoredAuthMetadata | null;
   [STORE_KEY_LAUNCHER_SETTINGS]: LauncherSettings;
   [STORE_KEY_SCHEMA_VERSION]: number;
+  [STORE_KEY_INSTANCE_REGISTRY]: InstanceRegistry;
 };
+
+const emptyInstanceRegistry = (): InstanceRegistry => ({
+  schema: INSTANCE_REGISTRY_SCHEMA_VERSION,
+  instances: [],
+});
 
 const logger = scopedLogger('store');
 const AUTH_SECRET_STORAGE_VERSION = 1;
@@ -91,6 +103,7 @@ const defaults: LauncherStoreSchema = {
   [STORE_KEY_AUTH]: null,
   [STORE_KEY_LAUNCHER_SETTINGS]: buildDefaultSettings(),
   [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
+  [STORE_KEY_INSTANCE_REGISTRY]: emptyInstanceRegistry(),
 };
 
 const store = new Store<LauncherStoreSchema>({
@@ -354,4 +367,20 @@ export const setStoredLauncherSettings = (settings: LauncherSettings): LauncherS
   const normalized = normalizeLauncherSettings(settings);
   store.set(STORE_KEY_LAUNCHER_SETTINGS, normalized);
   return normalized;
+};
+
+// The local-build index. A malformed value (hand-edited or partially written)
+// degrades to an empty registry rather than throwing; the instances service
+// self-heals it from the on-disk instance manifests.
+export const getStoredInstanceRegistry = (): InstanceRegistry => {
+  const raw = store.get(STORE_KEY_INSTANCE_REGISTRY);
+  const parsed = InstanceRegistrySchema.safeParse(raw);
+  if (parsed.success) return parsed.data;
+  logger.warn('Stored instance registry failed validation; falling back to empty');
+  return emptyInstanceRegistry();
+};
+
+export const setStoredInstanceRegistry = (registry: InstanceRegistry): InstanceRegistry => {
+  store.set(STORE_KEY_INSTANCE_REGISTRY, registry);
+  return registry;
 };

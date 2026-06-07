@@ -21,9 +21,11 @@ import { createAuthService } from '@main/services/auth';
 import { getStoredAccount } from '@main/services/auth/auth';
 import { createYggdrasilClient } from '@main/services/auth/yggdrasilClient';
 import { createBundleService } from '@main/services/bundle';
+import { createCatalogService } from '@main/services/catalog';
 import { createClientOperationLocks } from '@main/services/clientOperationLocks';
-import { createClientsService } from '@main/services/clients';
+import { createClientsService, getClients } from '@main/services/clients';
 import { createConsoleService } from '@main/services/console';
+import { createInstancesService } from '@main/services/instances';
 import { createKit } from '@main/services/kit';
 import { CACHE_SCHEME, createMediaService } from '@main/services/media';
 import { createMinecraftService } from '@main/services/minecraft';
@@ -116,6 +118,11 @@ const start = async (): Promise<void> => {
   const settingsService = createSettingsService(router, mainWindow);
   const skinService = createSkinService(router, kit, yggdrasilGateway, authService.session);
   const clientsService = createClientsService(router);
+  const instancesService = createInstancesService(router, kit);
+  const catalogService = createCatalogService(router, {
+    listClients: getClients,
+    extraSources: [instancesService.localSource],
+  });
   const serversService = createServersService(router);
   const mediaService = createMediaService(router);
   const minecraftService = createMinecraftService(
@@ -142,6 +149,8 @@ const start = async (): Promise<void> => {
   await settingsService.init();
   await skinService.init();
   await clientsService.init();
+  await instancesService.init();
+  await catalogService.init();
   await serversService.init();
   await mediaService.init();
   await minecraftService.init();
@@ -175,6 +184,8 @@ const start = async (): Promise<void> => {
       minecraftService.dispose(),
       mediaService.dispose(),
       serversService.dispose(),
+      catalogService.dispose(),
+      instancesService.dispose(),
       clientsService.dispose(),
       skinService.dispose(),
       settingsService.dispose(),

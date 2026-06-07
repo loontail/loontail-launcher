@@ -18,13 +18,65 @@ export {
   BundleSlugSchema,
   ClientIdSchema,
   ClientSlugSchema,
+  InstanceIdSchema,
   UserIdSchema,
   asBundleSlug,
+  asCatalogKey,
   asClientId,
   asClientSlug,
+  asInstanceId,
   asUserId,
 } from './ids';
-export type { BundleSlug, ClientId, ClientSlug, UserId } from './ids';
+export type { BundleSlug, CatalogKey, ClientId, ClientSlug, InstanceId, UserId } from './ids';
+export {
+  catalogKeyFor,
+  isLocal,
+  isOfficial,
+  localKey,
+  officialKey,
+  parseCatalogKey,
+  SourceKinds,
+} from './catalog';
+export type {
+  BuildSpec,
+  CatalogItem,
+  CatalogListResult,
+  CatalogPresentation,
+  CatalogRef,
+  LocalCatalogItem,
+  MediaRef,
+  OfficialCatalogItem,
+  SourceKind,
+  SourceStatus,
+} from './catalog';
+export {
+  CreateInstancePayloadSchema,
+  INSTANCE_MANIFEST_SCHEMA_VERSION,
+  INSTANCE_REGISTRY_SCHEMA_VERSION,
+  InstanceBundleRefSchema,
+  InstanceLoaderSchema,
+  InstanceManifestSchema,
+  InstanceOriginSchema,
+  InstancePresentationSchema,
+  InstanceRegistryEntrySchema,
+  InstanceRegistrySchema,
+  ListLoaderVersionsArgsSchema,
+  UpdateInstancePayloadSchema,
+} from './instance';
+export type {
+  CreateInstancePayload,
+  InstanceBundleRef,
+  InstanceLoader,
+  InstanceManifest,
+  InstanceOrigin,
+  InstancePresentation,
+  InstanceRegistry,
+  InstanceRegistryEntry,
+  ListLoaderVersionsArgs,
+  LoaderVersionOption,
+  MinecraftVersionOption,
+  UpdateInstancePayload,
+} from './instance';
 export { AUTH_PROVIDERS, LOGIN_ERROR_CODE, LoginPayloadSchema } from './auth';
 export type {
   AuthProvider,

@@ -43,8 +43,27 @@
     }
   },
   "clients": {
-    "sectionTitle": "Доступні клієнти",
-    "empty": "Немає доступних клієнтів",
+    "myBuilds": "Мої збірки",
+    "official": "Офіційні",
+    "officialUnavailable": "Офіційні збірки недоступні — показано ваші локальні",
+    "officialEmpty": "Зараз немає доступних офіційних збірок",
+    "createBuild": "Створити збірку",
+    "openDetails": "Відкрити деталі збірки {{name}}",
+    "detailAria": "Деталі збірки {{name}}",
+    "emptyTitle": "Ще немає збірок",
+    "emptyDescription": "Створіть свою першу локальну Minecraft-збірку, щоб почати, або зачекайте на завантаження офіційних збірок Loontail.",
+    "status": {
+      "unknown": "Перевірка…",
+      "notInstalled": "Не встановлено",
+      "needsVerify": "Потрібна перевірка",
+      "installing": "Встановлення…",
+      "ready": "Готово",
+      "launching": "Запуск…",
+      "running": "Запущено",
+      "repairing": "Відновлення…",
+      "removing": "Видалення…",
+      "error": "Помилка"
+    },
     "versionChip": {
       "full": "Minecraft {{version}}",
       "short": "MC {{version}}"
@@ -158,6 +177,10 @@
     "uninstallDesc": "Видалити файли цього клієнта з диска. Збереження і перевизначення залишаються.",
     "uninstallConfirmTitle": "Видалити файли клієнта?",
     "uninstallConfirm": "Усі файли клієнта «{{name}}» буде видалено з папки встановлення. Спільний рантайм Java залишиться.",
+    "deleteBuild": "Видалити збірку",
+    "deleteBuildDesc": "Назавжди видалити цю локальну збірку та всі її файли.",
+    "deleteConfirmTitle": "Видалити цю збірку?",
+    "deleteConfirm": "«{{name}}» та всі її файли буде назавжди видалено. Цю дію не можна скасувати.",
     "folderChangedToast": "Папку клієнта оновлено",
     "loader": {
       "title": "Лоадер",
@@ -175,6 +198,21 @@
       "componentDesc": "Java-дистрибутив від Mojang, який використовується для запуску клієнта.",
       "path": "Шлях"
     }
+  },
+  "createBuild": {
+    "title": "Створити збірку",
+    "name": "Назва",
+    "namePlaceholder": "Мій модовий світ",
+    "minecraftVersion": "Версія Minecraft",
+    "selectVersion": "Оберіть версію",
+    "loading": "Завантаження…",
+    "versionsUnavailable": "Версії недоступні — перевірте з'єднання",
+    "loader": "Завантажувач модів",
+    "loaderVersion": "Версія завантажувача",
+    "loaderVersionAuto": "Рекомендована (авто)",
+    "versionRecommended": "{{version}} — рекомендована",
+    "create": "Створити",
+    "error": "Не вдалося створити збірку. Спробуйте ще раз."
   },
   "common": {
     "cancel": "Скасувати",

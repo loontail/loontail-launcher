@@ -36,7 +36,7 @@ export type RepairFailureFinalizationInput = {
 };
 
 const loadBundleOwnedPaths = async (ctx: Context): Promise<ReadonlySet<string> | null> => {
-  const bundleSlug = ctx.client.bundleSlug ?? null;
+  const bundleSlug = ctx.item.spec.bundleSlug ?? null;
   if (bundleSlug === null) return null;
   const manifest = await loadLocalManifest(ctx.clientFolder);
   if (manifest?.bundleSlug !== bundleSlug) return null;

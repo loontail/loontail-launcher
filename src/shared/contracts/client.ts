@@ -38,6 +38,10 @@ export const ClientResponseSchema = StrapiEntitySchema.extend({
   servers: z.array(ServerSchema).optional(),
 
   screenshots: z.array(StrapiMediaSchema).default([]),
+  // Media roles in the launcher UI: `background` is the wide banner / hero art
+  // (tile banner + detail-modal backdrop), `poster` is the small square build
+  // ICON (tile/footer icon — never a full-bleed cover), `titleImage` is the
+  // transparent logo shown over the hero.
   background: StrapiMediaSchema,
   poster: StrapiMediaSchema,
   titleImage: StrapiMediaSchema.optional(),

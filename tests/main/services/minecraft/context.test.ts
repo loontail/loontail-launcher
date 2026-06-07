@@ -1,11 +1,12 @@
 import { Loaders, type MinecraftKit, type Target } from '@loontail/minecraft-kit';
+import type { CatalogItem } from '@shared/contracts/catalog';
 import type { Client } from '@shared/contracts/client';
 import { asClientSlug } from '@shared/contracts/ids';
 import type { LauncherSettings } from '@shared/contracts/settings';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const contextMocks = vi.hoisted(() => ({
-  getClient: vi.fn(),
+  resolveBuild: vi.fn(),
   getSettings: vi.fn(),
   setClientOverride: vi.fn(),
 }));
@@ -16,8 +17,8 @@ vi.mock('electron', () => ({
   },
 }));
 
-vi.mock('@main/services/clients', () => ({
-  getClient: contextMocks.getClient,
+vi.mock('@main/services/catalog', () => ({
+  resolveBuildByOpaqueId: contextMocks.resolveBuild,
 }));
 
 vi.mock('@main/services/settings/settings', () => ({
@@ -52,6 +53,22 @@ const client = (): Client =>
     runtimeVersion: TARGET_RUNTIME_COMPONENT,
   }) as Client;
 
+const officialItem = (): CatalogItem =>
+  ({
+    kind: 'official',
+    key: `official:${SLUG}`,
+    ref: { source: 'official', slug: SLUG },
+    spec: {
+      minecraftVersion: '1.20.1',
+      forgeVersion: null,
+      fabricVersion: null,
+      runtimeVersion: TARGET_RUNTIME_COMPONENT,
+      bundleSlug: null,
+    },
+    presentation: { title: 'Runtime Client' },
+    raw: client(),
+  }) as unknown as CatalogItem;
+
 const target = (): Target =>
   ({
     loader: { type: Loaders.VANILLA },
@@ -68,7 +85,7 @@ describe('buildContext', () => {
       ...launcherSettings(),
       clients: {},
     };
-    contextMocks.getClient.mockResolvedValue(client());
+    contextMocks.resolveBuild.mockResolvedValue(officialItem());
     contextMocks.getSettings.mockReturnValue(launcherSettings());
     contextMocks.setClientOverride.mockReturnValue(nextSettings);
     const resolvedTarget = target();
@@ -92,7 +109,7 @@ describe('buildContext', () => {
     };
     const injectedGetSettings = vi.fn(() => launcherSettings());
     const injectedPersist = vi.fn(() => nextSettings);
-    contextMocks.getClient.mockResolvedValue(client());
+    contextMocks.resolveBuild.mockResolvedValue(officialItem());
     const resolvedTarget = target();
     const kit = {
       targets: { resolve: vi.fn(async () => resolvedTarget) },

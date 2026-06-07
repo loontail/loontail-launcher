@@ -7,13 +7,21 @@ import type {
   BundleStartRequest,
   BundleStatusEvent,
 } from '@shared/contracts/bundle';
+import type { CatalogItem, CatalogListResult } from '@shared/contracts/catalog';
 import type { Client } from '@shared/contracts/client';
 import type {
   ConsoleInitialPayload,
   ConsoleLine,
   ConsoleProcessState,
 } from '@shared/contracts/console';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { ClientSlug, InstanceId } from '@shared/contracts/ids';
+import type {
+  CreateInstancePayload,
+  ListLoaderVersionsArgs,
+  LoaderVersionOption,
+  MinecraftVersionOption,
+  UpdateInstancePayload,
+} from '@shared/contracts/instance';
 import type {
   InstallRequest,
   InstallStatus,
@@ -62,6 +70,12 @@ export type IpcContract = {
   'media.clearCache': { args: undefined; result: void };
   'media.getCacheSize': { args: undefined; result: number };
   'clients.list': { args: { locale?: string } | undefined; result: StrapiList<Client> };
+  'catalog.list': { args: { locale?: string } | undefined; result: CatalogListResult };
+  'builds.create': { args: CreateInstancePayload; result: CatalogItem };
+  'builds.update': { args: UpdateInstancePayload; result: CatalogItem };
+  'builds.delete': { args: InstanceId; result: void };
+  'builds.listMinecraftVersions': { args: undefined; result: MinecraftVersionOption[] };
+  'builds.listLoaderVersions': { args: ListLoaderVersionsArgs; result: LoaderVersionOption[] };
   'servers.getStatuses': { args: string[]; result: ServerStatus[] };
   'minecraft.getStatus': {
     args: ClientSlug;

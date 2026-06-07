@@ -43,8 +43,27 @@
     }
   },
   "clients": {
-    "sectionTitle": "Available clients",
-    "empty": "No clients available",
+    "myBuilds": "My Builds",
+    "official": "Official",
+    "officialUnavailable": "Official builds unavailable — showing your local builds",
+    "officialEmpty": "No official builds available right now",
+    "createBuild": "Create build",
+    "openDetails": "Open {{name}} details",
+    "detailAria": "{{name}} build details",
+    "emptyTitle": "No builds yet",
+    "emptyDescription": "Create your first local Minecraft build to get started, or wait for the official Loontail builds to load.",
+    "status": {
+      "unknown": "Checking…",
+      "notInstalled": "Not installed",
+      "needsVerify": "Needs verify",
+      "installing": "Installing…",
+      "ready": "Ready",
+      "launching": "Launching…",
+      "running": "Running",
+      "repairing": "Repairing…",
+      "removing": "Removing…",
+      "error": "Error"
+    },
     "versionChip": {
       "full": "Minecraft {{version}}",
       "short": "MC {{version}}"
@@ -158,6 +177,10 @@
     "uninstallDesc": "Delete this client's files from disk. Saves and overrides are kept.",
     "uninstallConfirmTitle": "Remove client files?",
     "uninstallConfirm": "All files for \"{{name}}\" will be deleted from the install folder. The shared Java runtime stays.",
+    "deleteBuild": "Delete build",
+    "deleteBuildDesc": "Permanently remove this local build and all of its files.",
+    "deleteConfirmTitle": "Delete this build?",
+    "deleteConfirm": "\"{{name}}\" and all of its files will be permanently deleted. This cannot be undone.",
     "folderChangedToast": "Client folder updated",
     "loader": {
       "title": "Loader",
@@ -175,6 +198,21 @@
       "componentDesc": "Mojang-provided Java distribution used to launch this client.",
       "path": "Path"
     }
+  },
+  "createBuild": {
+    "title": "Create a build",
+    "name": "Name",
+    "namePlaceholder": "My Modded World",
+    "minecraftVersion": "Minecraft version",
+    "selectVersion": "Select a version",
+    "loading": "Loading…",
+    "versionsUnavailable": "Versions unavailable — check your connection",
+    "loader": "Mod loader",
+    "loaderVersion": "Loader version",
+    "loaderVersionAuto": "Recommended (auto)",
+    "versionRecommended": "{{version}} — recommended",
+    "create": "Create",
+    "error": "Could not create the build. Try again."
   },
   "common": {
     "cancel": "Cancel",

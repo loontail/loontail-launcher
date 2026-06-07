@@ -95,7 +95,7 @@ const makeLogger = () => ({
 
 const makeContext = (): Context =>
   ({
-    client: { slug: SLUG },
+    item: { spec: { bundleSlug: null } },
     clientFolder: CLIENT_FOLDER,
     loader: LoaderChoices.VANILLA,
     target: emptyTarget,
@@ -361,7 +361,7 @@ describe('runRepair', () => {
       } as unknown as Target;
       const context = {
         ...makeContext(),
-        client: { slug: SLUG, bundleSlug },
+        item: { spec: { bundleSlug } },
         clientFolder: root,
         target,
       } as unknown as Context;

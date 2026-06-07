@@ -1,7 +1,7 @@
 import { AppBar } from '@renderer/features/app-bar';
 import { LoginForm, useCurrentUser } from '@renderer/features/auth';
 import { BundleEventsListener } from '@renderer/features/bundle';
-import { ClientsPage } from '@renderer/features/clients';
+import { BuildsHomePage } from '@renderer/features/clients';
 import { MinecraftEventsListener } from '@renderer/features/minecraft';
 import { NotificationsListener } from '@renderer/features/notifications';
 import { SetupPage, useNeedsSetup } from '@renderer/features/setup';
@@ -82,7 +82,7 @@ export const App = () => {
         {!isBootstrapping && needsSetup && <SetupPage />}
         {!isBootstrapping && !needsSetup && isSignedOut && <LoginForm />}
         {!isBootstrapping && !needsSetup && isAuthenticated && view === Views.HOME && (
-          <ClientsPage />
+          <BuildsHomePage />
         )}
         {!isBootstrapping && !needsSetup && isAuthenticated && view === Views.SETTINGS && (
           <Suspense

@@ -1,5 +1,6 @@
 import { renderClientDescriptionMarkdown } from '@renderer/features/clients/clientDescriptionMarkdown';
-import { ClientOverview } from '@renderer/features/clients/components/ClientOverview';
+import { BuildAbout } from '@renderer/features/clients/components/BuildAbout';
+import { type CatalogItem, officialKey } from '@shared/contracts/catalog';
 import type { Client } from '@shared/contracts/client';
 import { asClientId, asClientSlug } from '@shared/contracts/ids';
 import type { StrapiMedia } from '@shared/contracts/strapi';
@@ -57,6 +58,38 @@ const makeClient = (description: string): Client => ({
   poster: makeMedia(2),
   keywords: [],
 });
+
+const makeItem = (description: string): CatalogItem => {
+  const client = makeClient(description);
+  return {
+    kind: 'official',
+    key: officialKey(client.slug),
+    ref: { source: 'official', slug: client.slug },
+    spec: {
+      minecraftVersion: '',
+      forgeVersion: null,
+      fabricVersion: null,
+      runtimeVersion: null,
+      bundleSlug: null,
+    },
+    presentation: {
+      title: client.title,
+      shortDescription: '',
+      description,
+      available: true,
+      media: {
+        poster: { url: client.poster.url },
+        background: { url: client.background.url },
+        titleImage: null,
+        screenshots: [],
+      },
+      servers: [],
+      createdAt: client.createdAt,
+      updatedAt: client.updatedAt,
+    },
+    raw: client,
+  };
+};
 
 describe('renderClientDescriptionMarkdown', () => {
   it('renders ordinary markdown with safe external links', () => {
@@ -123,9 +156,9 @@ describe('renderClientDescriptionMarkdown', () => {
   });
 });
 
-describe('ClientOverview description rendering', () => {
+describe('BuildAbout description rendering', () => {
   it('uses sanitized markdown for the renderer description surface', () => {
-    const client = makeClient(
+    const item = makeItem(
       [
         'Read [news](https://api.loontail.tld/news).',
         '<script>alert("xss")</script>',
@@ -133,7 +166,7 @@ describe('ClientOverview description rendering', () => {
       ].join('\n\n'),
     );
 
-    const rendered = renderToStaticMarkup(createElement(ClientOverview, { client }));
+    const rendered = renderToStaticMarkup(createElement(BuildAbout, { item }));
 
     expect(rendered).toContain('href="https://api.loontail.tld/news"');
     expect(rendered).toContain('target="_blank"');

@@ -339,7 +339,7 @@ export const runLaunch = async (
       return;
     }
     const consoleEnabled = ctx.resolved.launch.console;
-    const clientTitle = ctx.client.title || slug;
+    const clientTitle = ctx.item.presentation.title || slug;
     env.console.setActiveSession({
       slug,
       clientTitle,

@@ -34,6 +34,7 @@ const loggerMock = vi.hoisted(() => ({
 
 vi.mock('@main/infra/logger', () => ({ scopedLogger: () => loggerMock }));
 
+import type { MinecraftKit } from '@loontail/minecraft-kit';
 import type { ConsoleHub } from '@main/infra/consoleHub';
 import type { Router } from '@main/ipc/router';
 import { registerAppRoutes } from '@main/services/app/routes';
@@ -43,8 +44,11 @@ import type { YggdrasilAuth } from '@main/services/auth/yggdrasilAuth';
 import type { FetchTextures } from '@main/services/auth/yggdrasilClient';
 import type { BundleManager } from '@main/services/bundle/manager';
 import { registerBundleRoutes } from '@main/services/bundle/routes';
+import type { CatalogService } from '@main/services/catalog/catalog';
+import { registerCatalogRoutes } from '@main/services/catalog/routes';
 import { registerClientsRoutes } from '@main/services/clients/routes';
 import { createConsoleService } from '@main/services/console';
+import { registerInstanceRoutes } from '@main/services/instances/routes';
 import { registerMediaRoutes } from '@main/services/media/routes';
 import type { MinecraftManager } from '@main/services/minecraft/manager';
 import { registerMinecraftRoutes } from '@main/services/minecraft/routes';
@@ -92,6 +96,8 @@ describe('IpcContract handler coverage', () => {
     registerMediaRoutes(router);
     registerSkinRoutes(router, stub<SkinHandlers>());
     registerClientsRoutes(router);
+    registerCatalogRoutes(router, stub<CatalogService>());
+    registerInstanceRoutes(router, stub<MinecraftKit>());
     registerServersRoutes(router);
     registerMinecraftRoutes(router, stub<MinecraftManager>());
     registerBundleRoutes(router, stub<BundleManager>());

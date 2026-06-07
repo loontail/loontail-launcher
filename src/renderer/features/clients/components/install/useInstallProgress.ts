@@ -1,7 +1,8 @@
 import { type BundleRuntimeState, useBundleStatus } from '@renderer/features/bundle';
+import { operationalId } from '@renderer/features/catalog';
 import { type ClientRuntimeState, useClientStatus } from '@renderer/features/minecraft';
 import { useLauncherSettings } from '@renderer/features/settings';
-import type { Client } from '@shared/contracts/client';
+import type { CatalogItem } from '@shared/contracts/catalog';
 import { LoaderChoices } from '@shared/contracts/settings';
 import { resolveLoader } from '@shared/domain/loader';
 import { useMemo } from 'react';
@@ -16,14 +17,16 @@ export type ClientInstallProgress = {
 };
 
 // `hasLoader` is derived the same way the main-process install pipeline picks
-// the loader: persisted override → client's loader fields → vanilla.
-export const useInstallProgress = (client: Client): ClientInstallProgress => {
-  const install = useClientStatus(client.slug);
-  const bundle = useBundleStatus(client.slug);
+// the loader: persisted override → the build's loader fields → vanilla.
+export const useInstallProgress = (item: CatalogItem): ClientInstallProgress => {
+  const slug = operationalId(item);
+  const spec = item.spec;
+  const install = useClientStatus(slug);
+  const bundle = useBundleStatus(slug);
   const { settings } = useLauncherSettings();
-  const hasBundle = Boolean(client.bundleSlug);
-  const persistedLoader = settings?.clients[client.slug]?.loader ?? null;
-  const resolution = resolveLoader(client, persistedLoader);
+  const hasBundle = Boolean(spec.bundleSlug);
+  const persistedLoader = settings?.clients[slug]?.loader ?? null;
+  const resolution = resolveLoader(spec, persistedLoader);
   const hasLoader = resolution.kind === 'resolved' && resolution.loader !== LoaderChoices.VANILLA;
   const progress = useMemo(
     () => selectInstallProgress(install, bundle, { hasBundle, hasLoader }),
