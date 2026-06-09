@@ -188,7 +188,10 @@ const start = async (): Promise<void> => {
   let disposed = false;
   const drain = async (): Promise<void> => {
     clientOperationLocks.cancelAll();
-    // Reverse-init order so consumers tear down before the infrastructure they depend on.
+    // Dispose every service concurrently — teardown is independent (each only
+    // releases its own listeners/timers/children), so order doesn't matter and
+    // a slow one can't block the rest. cancelAll above already stopped in-flight
+    // work; the database is closed last, after this settles.
     await Promise.allSettled([
       updaterService.dispose(),
       consoleService.dispose(),

@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { atomicReplace } from '@main/infra/atomicFile';
 import { scopedLogger } from '@main/infra/logger';
 import { type LocalManifest, LocalManifestSchema } from '@shared/contracts/bundle';
 import { bundleManifestPath } from './paths';
@@ -29,21 +30,15 @@ export const saveLocalManifest = async (
 ): Promise<void> => {
   const target = bundleManifestPath(clientFolder);
   const tmp = `${target}.tmp`;
+  const cleanupTmp = (rmErr: unknown): void => logger.warn(`Failed to remove tmp ${tmp}`, rmErr);
   await fs.mkdir(path.dirname(target), { recursive: true });
   try {
     await fs.writeFile(tmp, JSON.stringify(manifest, null, 2), 'utf8');
-    // Atomic swap — readers see either the previous or the new manifest, never a
-    // half-written file. On Windows fs.rename fails when the target exists, so
-    // remove it first (idempotent on ENOENT) then rename.
-    await fs.rm(target, { force: true });
-    await fs.rename(tmp, target);
   } catch (err) {
-    // Best-effort: drop the stray .tmp so a retry starts clean.
-    await fs
-      .rm(tmp, { force: true })
-      .catch((rmErr: unknown) => logger.warn(`Failed to remove tmp ${tmp}`, rmErr));
+    await fs.rm(tmp, { force: true }).catch(cleanupTmp);
     throw err;
   }
+  await atomicReplace(tmp, target, cleanupTmp);
 };
 
 export const clearLocalManifest = async (clientFolder: string): Promise<void> => {

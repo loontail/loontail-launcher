@@ -9,6 +9,7 @@ import {
   BUNDLE_DOWNLOAD_MAX_REDIRECTS,
   BUNDLE_DOWNLOAD_REQUEST_TIMEOUT_MS,
 } from '@main/constants/bundle';
+import { atomicReplace } from '@main/infra/atomicFile';
 import { errorMessage } from '@main/infra/errorMessage';
 import { scopedLogger } from '@main/infra/logger';
 import { BundleErrorCodes, type RemoteManifestEntry } from '@shared/contracts/bundle';
@@ -198,17 +199,11 @@ export const downloadEntry = async (
     );
   });
 
-  // Atomic swap. On Windows fs.rename fails when the target exists; remove
-  // first (idempotent on ENOENT) then rename.
   try {
-    await fsp.rm(destPath, { force: true });
-    await fsp.rename(tmpPath, destPath);
+    await atomicReplace(tmpPath, destPath, (rmErr: unknown) =>
+      logger.warn(`Failed to remove tmp ${tmpPath}`, rmErr),
+    );
   } catch (err) {
-    // Same best-effort cleanup as the network-failure branch above; surface a
-    // warn so a persistent locking issue is visible in the log.
-    await fsp
-      .rm(tmpPath, { force: true })
-      .catch((rmErr: unknown) => logger.warn(`Failed to remove tmp ${tmpPath}`, rmErr));
     throw new BundleError(
       BundleErrorCodes.DOWNLOAD_FAILED,
       `Failed to install ${entry.path}: ${errorMessage(err)}`,

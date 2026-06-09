@@ -9,11 +9,16 @@ import {
   ConsoleSources,
 } from '@shared/contracts/console';
 import type { ClientSlug } from '@shared/contracts/ids';
-import { IPC_EVENTS } from '@shared/ipc';
+import { IPC_EVENTS, type IpcEventPayloads } from '@shared/ipc';
 import type { BrowserWindow } from 'electron';
 import { ConsoleBuffer, type ConsoleLineInput } from './consoleBuffer';
 import { ConsoleWindowSink } from './consoleWindowSink';
 import { type Log4jEvent, Log4jStreamParser, formatLog4jLine, mapLog4jLevel } from './log4jStream';
+
+type ConsoleEventChannel = (typeof IPC_EVENTS)[
+  | 'consoleLines'
+  | 'consoleState'
+  | 'consoleBufferReset'];
 
 const FLUSH_INTERVAL_MS = 50;
 
@@ -265,7 +270,12 @@ export class ConsoleHub {
     this.flushTimer = null;
   }
 
-  private sendToWindow(channel: string, payload: unknown): void {
+  // Typed to the console.* event channels so a wrong channel/payload pairing
+  // fails tsc instead of silently shipping a mismatched wire shape.
+  private sendToWindow<E extends ConsoleEventChannel>(
+    channel: E,
+    payload: IpcEventPayloads[E],
+  ): void {
     this.sink.send(channel, payload);
   }
 }

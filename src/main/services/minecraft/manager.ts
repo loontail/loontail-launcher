@@ -98,6 +98,14 @@ export class MinecraftManager {
     this.launchHook = hook;
   }
 
+  // The bundle launch hook runs only for official builds; LOCAL builds load
+  // loose mods natively and have no managed overlay (the hook would fail trying
+  // to resolve them as a Strapi client). Returns the hook when eligible.
+  private bundleHookFor(ctx: Context): LaunchHook | null {
+    if (this.launchHook === null || ctx.item.kind === SourceKinds.LOCAL) return null;
+    return this.launchHook;
+  }
+
   async getStatus(slug: ClientSlug): Promise<{ status: InstallStatus; paused: boolean }> {
     const op = this.ops.get(slug);
     if (op) {
@@ -142,12 +150,12 @@ export class MinecraftManager {
       // installed client).
       this.env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
       // Local builds carry no managed bundle overlay (loose mods load natively),
-      // so the bundle launch hook is skipped — it would otherwise try to resolve
-      // the build as a Strapi client and fail. Official builds always run it
-      // (it no-ops internally when there is no bundleSlug).
-      if (this.launchHook && ctx.item.kind !== SourceKinds.LOCAL) {
+      // so the bundle launch hook is skipped (see bundleHookFor). Official
+      // builds always run it (it no-ops internally when there is no bundleSlug).
+      const installHook = this.bundleHookFor(ctx);
+      if (installHook) {
         try {
-          await this.launchHook(slug);
+          await installHook(slug);
         } catch (error) {
           // Bundle failures surface via the bundle.error event channel; the
           // Minecraft install itself is done, so we keep the INSTALLED state.
@@ -269,14 +277,14 @@ export class MinecraftManager {
     }
 
     // BundleSyncingOp ensures cancel(slug) can abort the download mid-flight.
-    // Local builds have no managed bundle overlay, so they skip the sync phase
-    // and launch directly (the hook would fail trying to resolve a Strapi client).
-    if (this.launchHook && ctx.item.kind !== SourceKinds.LOCAL) {
+    // Local builds skip the sync phase and launch directly (see bundleHookFor).
+    const launchHook = this.bundleHookFor(ctx);
+    if (launchHook) {
       const bundleOp: Op = { kind: OpKinds.BUNDLE_SYNCING, abort: new AbortController() };
       this.ops.set(slug, bundleOp);
       this.env.emitStatus({ slug, status: InstallStatuses.LAUNCHING, paused: false });
       try {
-        await this.launchHook(slug, bundleOp.abort.signal);
+        await launchHook(slug, bundleOp.abort.signal);
       } catch (error) {
         if (bundleOp.abort.signal.aborted) {
           this.env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
@@ -366,10 +374,11 @@ export class MinecraftManager {
       lock.release();
     }
 
-    if (!repaired || this.launchHook === null || ctx.item.kind === SourceKinds.LOCAL) return;
+    const repairHook = this.bundleHookFor(ctx);
+    if (!repaired || !repairHook) return;
 
     try {
-      await this.launchHook(slug);
+      await repairHook(slug);
     } catch (error) {
       logger.warn(`[${slug}] repair: bundle sync after repair failed`, error);
     }
