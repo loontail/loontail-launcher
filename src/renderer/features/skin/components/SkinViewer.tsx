@@ -41,9 +41,10 @@ export const SkinViewer = ({
       setFailed(true);
       return;
     }
-    if (skinUrl) void viewer.loadSkin(skinUrl);
-    if (capeUrl) void viewer.loadCape(capeUrl);
     viewerRef.current = viewer;
+    // The first skin/cape load is left to the dedicated [skinUrl]/[capeUrl]
+    // effects below — they also run on mount (and handle the reset cases), so
+    // loading here too would fetch each texture twice.
     onReady?.({ viewer, canvas });
     return () => {
       viewer.dispose();
