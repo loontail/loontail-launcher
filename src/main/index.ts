@@ -13,7 +13,7 @@ import { createConsoleHub } from '@main/infra/consoleHub';
 import { initLogger, scopedLogger } from '@main/infra/logger';
 import { attachNotifier, notify } from '@main/infra/notifier';
 import { configureSessionSecurity } from '@main/infra/session';
-import { initStore } from '@main/infra/store';
+import { closeDatabase, initStore } from '@main/infra/store';
 import { createRouter } from '@main/ipc/router';
 import { createTrustedSenderCheck } from '@main/ipc/trustedSender';
 import { createAppService } from '@main/services/app';
@@ -198,6 +198,7 @@ const start = async (): Promise<void> => {
       appService.dispose(),
     ]);
     router.dispose();
+    closeDatabase();
     logger.info('Launcher disposed');
   };
 

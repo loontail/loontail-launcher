@@ -42,11 +42,18 @@ import { stubConsolePort, stubOpenConsole } from './managerStubs';
 
 const SLUG = asClientSlug('test-client');
 const CLIENT_FOLDER = 'Z:/missing-client-folder';
-const USER_DATA = 'Z:/userData';
+// Real temp dir: the SQLite-backed store opens launcher.db here when the repair
+// readiness check resolves settings, so the directory must exist on disk.
+const USER_DATA = vi.hoisted(() => {
+  const { mkdtempSync } = require('node:fs') as typeof import('node:fs');
+  const { tmpdir } = require('node:os') as typeof import('node:os');
+  const { join } = require('node:path') as typeof import('node:path');
+  return mkdtempSync(join(tmpdir(), 'launcher-install-userdata-'));
+});
 const RUNTIME_COMPONENT = 'java-runtime-gamma';
 
 const electronMocks = vi.hoisted(() => ({
-  getPath: vi.fn(() => 'Z:/userData'),
+  getPath: vi.fn(() => USER_DATA),
 }));
 
 vi.mock('electron', () => ({
