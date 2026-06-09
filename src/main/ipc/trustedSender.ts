@@ -22,10 +22,11 @@ const isTrustedWindowFrame = (
   return location.isAllowedUrl(event.senderFrame.url);
 };
 
-// Deferred console lookup so a freshly reopened window is recognised by its
-// current webContents id.
+// `getMainWindow` is resolved per-call so a recreated window (macOS dock
+// re-open) is recognised by its current webContents id rather than the
+// destroyed original's — otherwise every IPC from the new window is rejected.
 export const createTrustedSenderCheck = (
-  mainWindow: BrowserWindow,
+  getMainWindow: () => BrowserWindow,
   consoleHub: ConsoleHub,
   options: TrustedSenderOptions = {},
 ) => {
@@ -45,7 +46,7 @@ export const createTrustedSenderCheck = (
   return (event: IpcMainInvokeEvent, channel: keyof IpcContract): boolean => {
     if (event.senderFrame === null) return false;
     if (event.senderFrame.parent !== null) return false;
-    if (isTrustedWindowFrame(event, mainWindow, mainLocation)) return true;
+    if (isTrustedWindowFrame(event, getMainWindow(), mainLocation)) return true;
     // The console window runs unsandboxed, so scope it to an explicit channel
     // allowlist; it must never be able to invoke auth/launch/settings/system
     // handlers.

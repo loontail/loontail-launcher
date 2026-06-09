@@ -11,11 +11,22 @@ const logger = scopedLogger('media-protocol');
 const decodeSourceUrl = (cacheUrl: string): string | null => {
   if (!cacheUrl.startsWith(PATH_PREFIX)) return null;
   const encoded = cacheUrl.slice(PATH_PREFIX.length);
+  let decoded: string;
   try {
-    return decodeURIComponent(encoded);
+    decoded = decodeURIComponent(encoded);
   } catch {
     return null;
   }
+  // Only proxy real remote media. Rejecting non-http(s) schemes (file:, data:,
+  // app:, …) stops a crafted cache:// URL from making the main process fetch an
+  // arbitrary local or internal resource (SSRF).
+  try {
+    const { protocol: scheme } = new URL(decoded);
+    if (scheme !== 'http:' && scheme !== 'https:') return null;
+  } catch {
+    return null;
+  }
+  return decoded;
 };
 
 export const registerMediaProtocol = (): void => {

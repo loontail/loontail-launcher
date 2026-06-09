@@ -28,7 +28,7 @@ const getOpenPathAllowedRoots = (): string[] => {
   return [app.getPath('userData'), settings.storage.clientsFolder, ...clientRoots].filter(Boolean);
 };
 
-export const registerSystemRoutes = (router: Router, mainWindow: BrowserWindow): void => {
+export const registerSystemRoutes = (router: Router, getMainWindow: () => BrowserWindow): void => {
   router.handle(IPC_CHANNELS.systemGetRamRange, (rawArgs) => {
     assertNoIpcArgs(rawArgs, 'system.getRamRange takes no arguments');
     return getRamRange();
@@ -46,7 +46,7 @@ export const registerSystemRoutes = (router: Router, mainWindow: BrowserWindow):
 
   router.handle(IPC_CHANNELS.systemPickInstallFolder, async (rawArgs) => {
     assertNoIpcArgs(rawArgs, 'system.pickInstallFolder takes no arguments');
-    const picked = await pickFolderWithSuffix(mainWindow, null);
+    const picked = await pickFolderWithSuffix(getMainWindow(), null);
     if (picked) await ensureDirectory(picked.path);
     return picked;
   });

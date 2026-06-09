@@ -15,7 +15,10 @@ import {
 import { IPC_CHANNELS } from '@shared/ipc';
 import type { BrowserWindow } from 'electron';
 
-export const registerSettingsRoutes = (router: Router, mainWindow: BrowserWindow): void => {
+export const registerSettingsRoutes = (
+  router: Router,
+  getMainWindow: () => BrowserWindow,
+): void => {
   router.handle(IPC_CHANNELS.settingsGet, (rawArgs) => {
     assertNoIpcArgs(rawArgs, 'settings.get takes no arguments');
     return getSettings();
@@ -42,7 +45,7 @@ export const registerSettingsRoutes = (router: Router, mainWindow: BrowserWindow
 
   router.handle(IPC_CHANNELS.settingsChooseClientFolder, async (rawArgs) => {
     const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED_MSG);
-    const picked = await pickFolderWithSuffix(mainWindow, slug);
+    const picked = await pickFolderWithSuffix(getMainWindow(), slug);
     if (!picked) return null;
     const next = setClientOverride(slug, { storage: { clientFolder: picked.path } });
     const installed = await directoryHasEntries(picked.path);

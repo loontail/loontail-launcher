@@ -92,8 +92,8 @@ describe('IpcContract handler coverage', () => {
 
     registerAppRoutes(router);
     registerAuthRoutes(router, stub<YggdrasilAuth>(), stub<MojangAuth>(), stub<FetchTextures>());
-    registerSettingsRoutes(router, fakeWindow());
-    registerSystemRoutes(router, fakeWindow());
+    registerSettingsRoutes(router, fakeWindow);
+    registerSystemRoutes(router, fakeWindow);
     registerMediaRoutes(router);
     registerSkinRoutes(router, stub<SkinHandlers>());
     registerClientsRoutes(router);
@@ -104,7 +104,7 @@ describe('IpcContract handler coverage', () => {
     registerMinecraftRoutes(router, stub<MinecraftManager>());
     registerBundleRoutes(router, stub<BundleManager>());
     await createConsoleService(router, fakeConsoleHub(), () => {}).init();
-    await createUpdaterService(router, fakeWindow()).init();
+    await createUpdaterService(router, fakeWindow).init();
 
     const contractChannels = Object.values(IPC_CHANNELS) as Array<keyof IpcContract>;
 

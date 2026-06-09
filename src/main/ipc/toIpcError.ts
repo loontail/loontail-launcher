@@ -14,6 +14,16 @@ type CodedError = Error & { code: string };
 const isCodedError = (error: unknown): error is CodedError =>
   error instanceof Error && typeof (error as { code?: unknown }).code === 'string';
 
+// Node fs/net failures (ENOENT, EACCES, EPERM, EBUSY, …) are Errors with a
+// string `code` too, but their `message` embeds absolute filesystem paths and
+// the code means nothing to the renderer's localizers. Detect them by their
+// errno/syscall fields so they take the generic handler-failed path instead of
+// leaking the raw OS code and user paths across the bridge in production.
+const isNodeErrnoException = (error: Error): boolean => {
+  const errno = error as NodeJS.ErrnoException;
+  return typeof errno.syscall === 'string' || typeof errno.errno === 'number';
+};
+
 const isIpcErrorShape = (error: unknown): error is IpcError =>
   typeof error === 'object' &&
   error !== null &&
@@ -36,13 +46,18 @@ const build = (code: string, message: string, details?: unknown): IpcError =>
 
 // Single boundary that turns any thrown value into the structured IpcError that
 // crosses the bridge. Order matters: a kit error keeps a stable launcher code
-// (its internal code/context surface only as dev details, never on the wire),
-// domain errors (SkinError/ManagerError/BundleError) carry their own code
-// through, an already-structured IpcError is preserved verbatim, and anything
-// else collapses to a generic handler-failed / unknown code.
+// (its internal code/context surface only as dev details, never on the wire), a
+// Node fs/net errno error collapses to a generic handler-failed code so its
+// path-bearing message never reaches the renderer, domain errors
+// (SkinError/ManagerError/BundleError) carry their own code through, an
+// already-structured IpcError is preserved verbatim, and anything else
+// collapses to a generic handler-failed / unknown code.
 export const toIpcError = (error: unknown): IpcError => {
   if (isMinecraftKitError(error)) {
     return build(ERROR_CODES.IpcHandlerFailed, error.message, devDetailsForError(error));
+  }
+  if (error instanceof Error && isNodeErrnoException(error)) {
+    return build(ERROR_CODES.IpcHandlerFailed, 'Operation failed', devDetailsForError(error));
   }
   if (isCodedError(error)) {
     return build(error.code, error.message, devDetailsForError(error));

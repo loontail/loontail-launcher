@@ -9,10 +9,10 @@ export type SettingsService = {
 
 export const createSettingsService = (
   router: Router,
-  mainWindow: BrowserWindow,
+  getMainWindow: () => BrowserWindow,
 ): SettingsService => ({
   init: async () => {
-    registerSettingsRoutes(router, mainWindow);
+    registerSettingsRoutes(router, getMainWindow);
   },
   // No subscriptions or timers to release.
   dispose: () => Promise.resolve(),

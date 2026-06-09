@@ -190,15 +190,21 @@ export class ConsoleHub {
   }
 
   emitState(state: ConsoleProcessState): void {
-    if (this.activeSession && this.activeSession.slug === state.slug) {
+    // Only tag the state with the active session's title when it actually
+    // belongs to that session. A terminal state for a different slug (e.g. an
+    // older client exiting after a newer launch became active) must keep its
+    // own title rather than being mislabeled with the active client's.
+    const matchesActive = this.activeSession?.slug === state.slug;
+    if (this.activeSession && matchesActive) {
       this.activeSession = {
         ...this.activeSession,
         state: { ...state, clientTitle: this.activeSession.clientTitle },
       };
     }
-    const payload: ConsoleProcessState = this.activeSession
-      ? { ...state, clientTitle: this.activeSession.clientTitle }
-      : state;
+    const payload: ConsoleProcessState =
+      this.activeSession && matchesActive
+        ? { ...state, clientTitle: this.activeSession.clientTitle }
+        : state;
     this.sendToWindow(IPC_EVENTS.consoleState, payload);
   }
 

@@ -56,6 +56,21 @@ describe('normalizeLauncherSettings', () => {
     expect(result).toEqual(defaultLauncherSettings());
   });
 
+  it('rejects non-integer, negative, and non-finite RAM so the result satisfies its schema', () => {
+    const base = defaultLauncherSettings().memory.allocatedRamMb;
+    const slug = asClientSlug('main-client');
+    for (const bad of [4096.5, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const result = normalizeLauncherSettings({
+        memory: { allocatedRamMb: bad },
+        storage: { clientsFolder: '' },
+        launch: { console: false, fullscreen: false },
+        clients: { [slug]: { memory: { allocatedRamMb: bad } } },
+      });
+      expect(result.memory.allocatedRamMb).toBe(base);
+      expect(result.clients[slug]).toEqual({});
+    }
+  });
+
   it('keeps known fields and discards unknown ones', () => {
     const slug = asClientSlug('main-client');
     const result = normalizeLauncherSettings({

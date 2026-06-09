@@ -40,7 +40,7 @@ beforeEach(() => {
 describe('createTrustedSenderCheck', () => {
   it('trusts the main window only at the main renderer entry', () => {
     const mainWindow = fakeWindow(1);
-    const isTrusted = createTrustedSenderCheck(mainWindow, consoleHub, {
+    const isTrusted = createTrustedSenderCheck(() => mainWindow, consoleHub, {
       rendererRoot,
       devServerUrl: null,
     });
@@ -53,7 +53,7 @@ describe('createTrustedSenderCheck', () => {
   it('trusts the console window only at the console renderer entry', () => {
     const mainWindow = fakeWindow(1);
     consoleWindowState.current = fakeWindow(2);
-    const isTrusted = createTrustedSenderCheck(mainWindow, consoleHub, {
+    const isTrusted = createTrustedSenderCheck(() => mainWindow, consoleHub, {
       rendererRoot,
       devServerUrl: null,
     });
@@ -66,7 +66,7 @@ describe('createTrustedSenderCheck', () => {
   it('denies the console window any channel outside the console group', () => {
     const mainWindow = fakeWindow(1);
     consoleWindowState.current = fakeWindow(2);
-    const isTrusted = createTrustedSenderCheck(mainWindow, consoleHub, {
+    const isTrusted = createTrustedSenderCheck(() => mainWindow, consoleHub, {
       rendererRoot,
       devServerUrl: null,
     });
@@ -79,7 +79,7 @@ describe('createTrustedSenderCheck', () => {
 
   it('rejects child frames even when their URL matches an allowed entry', () => {
     const mainWindow = fakeWindow(1);
-    const isTrusted = createTrustedSenderCheck(mainWindow, consoleHub, {
+    const isTrusted = createTrustedSenderCheck(() => mainWindow, consoleHub, {
       rendererRoot,
       devServerUrl: null,
     });
@@ -90,7 +90,7 @@ describe('createTrustedSenderCheck', () => {
   it('grants the console window exactly the explicit allowlist and nothing else', () => {
     const mainWindow = fakeWindow(1);
     consoleWindowState.current = fakeWindow(2);
-    const isTrusted = createTrustedSenderCheck(mainWindow, consoleHub, {
+    const isTrusted = createTrustedSenderCheck(() => mainWindow, consoleHub, {
       rendererRoot,
       devServerUrl: null,
     });
@@ -115,7 +115,7 @@ describe('createTrustedSenderCheck', () => {
 
   it('uses the currently attached console window after reopening', () => {
     const mainWindow = fakeWindow(1);
-    const isTrusted = createTrustedSenderCheck(mainWindow, consoleHub, {
+    const isTrusted = createTrustedSenderCheck(() => mainWindow, consoleHub, {
       rendererRoot,
       devServerUrl: null,
     });

@@ -26,11 +26,15 @@ const entryFromManifest = (
 // failure must not crash bootstrap.
 export const reconcileRegistry = async (): Promise<void> => {
   try {
-    const byDir = new Map<string, InstanceRegistryEntry>();
+    // Keyed by manifest id, not dir: the stored dir and the rediscovered dir can
+    // spell the same path differently (joinClientFolder uses '/', path.join uses
+    // the OS separator), so a dir-keyed map would duplicate every instance. The
+    // id is canonical, so this also collapses any already-corrupt double entries.
+    const byId = new Map<string, InstanceRegistryEntry>();
 
     for (const entry of listInstanceEntries()) {
       const manifest = await loadInstanceManifest(entry.dir);
-      if (manifest) byDir.set(entry.dir, entryFromManifest(entry.dir, manifest));
+      if (manifest) byId.set(manifest.id, entryFromManifest(entry.dir, manifest));
     }
 
     const clientsFolder = getSettings().storage.clientsFolder;
@@ -43,13 +47,14 @@ export const reconcileRegistry = async (): Promise<void> => {
       }
       for (const child of children) {
         const dir = path.join(clientsFolder, child);
-        if (byDir.has(dir)) continue;
         const manifest = await loadInstanceManifest(dir);
-        if (manifest) byDir.set(dir, entryFromManifest(dir, manifest));
+        if (manifest && !byId.has(manifest.id)) {
+          byId.set(manifest.id, entryFromManifest(dir, manifest));
+        }
       }
     }
 
-    replaceInstanceEntries([...byDir.values()]);
+    replaceInstanceEntries([...byId.values()]);
   } catch (error) {
     logger.warn('Failed to reconcile instance registry', error);
   }

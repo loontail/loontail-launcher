@@ -133,10 +133,18 @@ export const downloadEntry = async (
   await new Promise<void>((resolve, reject) => {
     const writeStream = fs.createWriteStream(tmpPath);
     const hash = createHash('sha256');
+    const signal = options.signal;
     let settled = false;
+    const onAbort = () => fail(new BundleError(BundleErrorCodes.ABORTED, 'Download aborted'));
+    // Detach the abort listener on every settle path. `{ once: true }` only
+    // auto-removes it when it actually fires, and every file in a sync shares
+    // one AbortSignal, so a successful download would otherwise leave an
+    // orphaned listener behind — thousands of them on a large bundle.
+    const cleanup = () => signal?.removeEventListener('abort', onAbort);
     const fail = (err: unknown) => {
       if (settled) return;
       settled = true;
+      cleanup();
       response.destroy();
       writeStream.destroy();
       reject(err);
@@ -150,6 +158,7 @@ export const downloadEntry = async (
     writeStream.on('finish', () => {
       if (settled) return;
       settled = true;
+      cleanup();
       if (entry.sha256) {
         const observed = hash.digest('hex');
         if (observed !== entry.sha256) {
@@ -164,16 +173,12 @@ export const downloadEntry = async (
       }
       resolve();
     });
-    if (options.signal) {
-      if (options.signal.aborted) {
+    if (signal) {
+      if (signal.aborted) {
         fail(new BundleError(BundleErrorCodes.ABORTED, 'Download aborted'));
         return;
       }
-      options.signal.addEventListener(
-        'abort',
-        () => fail(new BundleError(BundleErrorCodes.ABORTED, 'Download aborted')),
-        { once: true },
-      );
+      signal.addEventListener('abort', onAbort, { once: true });
     }
     response.pipe(writeStream);
   }).catch(async (err: unknown) => {

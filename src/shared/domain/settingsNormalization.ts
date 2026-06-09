@@ -7,6 +7,12 @@ import {
 } from '@shared/contracts/settings';
 import { defaultLauncherSettings } from './settingsDefaults';
 
+// MemorySettingsSchema is `z.number().int().nonnegative()`, so the normalizer
+// must reject floats, negatives, and NaN/Infinity — otherwise it can emit a
+// value that fails the very schema it feeds.
+const isNonNegativeInt = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= 0;
+
 const normalizeRuntimeRef = (value: unknown): ClientRuntimeRef | undefined => {
   if (!value || typeof value !== 'object') return undefined;
   const raw = value as Record<string, unknown>;
@@ -26,7 +32,7 @@ const normalizeClientOverride = (value: unknown): ClientSettingsOverride => {
 
   if (raw.memory && typeof raw.memory === 'object') {
     const memory = raw.memory as Record<string, unknown>;
-    if (typeof memory.allocatedRamMb === 'number') {
+    if (isNonNegativeInt(memory.allocatedRamMb)) {
       out.memory = { allocatedRamMb: memory.allocatedRamMb };
     }
   }
@@ -76,12 +82,10 @@ export const normalizeLauncherSettings = (value: unknown): LauncherSettings => {
     }
   }
 
+  const ramCandidate = memory?.allocatedRamMb;
   return {
     memory: {
-      allocatedRamMb:
-        typeof memory?.allocatedRamMb === 'number'
-          ? memory.allocatedRamMb
-          : base.memory.allocatedRamMb,
+      allocatedRamMb: isNonNegativeInt(ramCandidate) ? ramCandidate : base.memory.allocatedRamMb,
     },
     storage: {
       clientsFolder:

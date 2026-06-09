@@ -258,8 +258,23 @@ export class MinecraftManager {
 
   async startLaunch(slug: ClientSlug): Promise<void> {
     this.requireIdle(slug);
-    const ctx = await buildContext(this.kit, slug);
-    const checkedAccount = requireAccount(this.accountProvider());
+    // Claim the slug synchronously (no await between the check and the claim) so
+    // a second concurrent startLaunch trips requireIdle instead of both passing
+    // the gate during buildContext and spawning two sessions for one client.
+    // Setup failures release the claim; the paths below replace it with their
+    // own op (bundle sync, then the launch op inside runLaunch).
+    const startingOp: Op = { kind: OpKinds.LAUNCH_STARTING, abort: new AbortController() };
+    this.ops.set(slug, startingOp);
+
+    let ctx: Context;
+    let checkedAccount: Account;
+    try {
+      ctx = await buildContext(this.kit, slug);
+      checkedAccount = requireAccount(this.accountProvider());
+    } catch (error) {
+      if (this.ops.get(slug) === startingOp) this.ops.delete(slug);
+      throw error;
+    }
 
     // BundleSyncingOp ensures cancel(slug) can abort the download mid-flight.
     // Local builds have no managed bundle overlay, so they skip the sync phase

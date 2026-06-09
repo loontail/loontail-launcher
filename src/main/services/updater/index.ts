@@ -22,8 +22,12 @@ export type UpdaterService = {
 
 const isSquirrelEnabled = (): boolean => app.isPackaged && process.platform === 'win32';
 
-export const createUpdaterService = (router: Router, mainWindow: BrowserWindow): UpdaterService => {
+export const createUpdaterService = (
+  router: Router,
+  getMainWindow: () => BrowserWindow,
+): UpdaterService => {
   const broadcast = (payload: UpdaterStatusEvent): void => {
+    const mainWindow = getMainWindow();
     if (mainWindow.isDestroyed()) return;
     mainWindow.webContents.send(IPC_EVENTS.updaterStatus, payload);
   };

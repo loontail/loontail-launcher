@@ -6,6 +6,7 @@ import {
   useCurrentRoute,
   useNavigationStore,
 } from '@renderer/shared/lib/stores/navigation';
+import { isAnyModalOpen } from '@renderer/shared/ui/Modal';
 import type { CatalogKey } from '@shared/contracts/ids';
 import { Loader2 } from 'lucide-react';
 import { Suspense, lazy, useEffect } from 'react';
@@ -22,7 +23,8 @@ const useGlobalBack = () => {
   useEffect(() => {
     if (!canGoBack) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') pop();
+      // An open modal owns Escape (it closes itself); don't also pop the route.
+      if (event.key === 'Escape' && !isAnyModalOpen()) pop();
     };
     // Mouse "back" thumb button reports as button index 3 on mouseup.
     const onMouseUp = (event: MouseEvent) => {

@@ -81,6 +81,17 @@ describe('toIpcError', () => {
     });
   });
 
+  it('routes a Node fs errno error to a generic message so the path never leaks', () => {
+    const error = Object.assign(
+      new Error("ENOENT: no such file or directory, open 'C:\\Users\\me\\secret\\instance.json'"),
+      { code: 'ENOENT', errno: -4058, syscall: 'open', path: 'C:\\Users\\me\\secret' },
+    );
+    const result = toIpcError(error);
+    expect(result.code).toBe(ERROR_CODES.IpcHandlerFailed);
+    expect(result.message).toBe('Operation failed');
+    expect(JSON.stringify(result)).not.toContain('secret');
+  });
+
   it('collapses a non-Error value to UNKNOWN', () => {
     expect(toIpcError('nope')).toEqual({ code: ERROR_CODES.Unknown, message: 'Unknown error' });
   });
