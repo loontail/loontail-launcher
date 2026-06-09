@@ -38,6 +38,7 @@ export const manifestToCatalogItem = (
     shortDescription: '',
     description: manifest.presentation.description,
     available: true,
+    iconPreset: manifest.presentation.iconPreset,
     media: {
       poster: manifest.presentation.icon
         ? { url: mediaUrl(dir, manifest.presentation.icon) }

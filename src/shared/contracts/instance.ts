@@ -27,6 +27,9 @@ export const InstancePresentationSchema = z.object({
   // Relative path (under the instance dir) to a user-supplied icon, served via
   // the media protocol. Null → UI renders a generated placeholder.
   icon: z.string().nullable().default(null),
+  // A built-in icon key (lucide glyph) chosen at create time. Null → generated
+  // initial placeholder. Lets a fresh build pick an identity without an upload.
+  iconPreset: z.string().nullable().default(null),
   screenshots: z.array(z.string()).default([]),
 });
 
@@ -61,6 +64,7 @@ export const InstanceManifestSchema = z.object({
   presentation: InstancePresentationSchema.default({
     description: '',
     icon: null,
+    iconPreset: null,
     screenshots: [],
   }),
   servers: z.array(ServerSchema).default([]),
@@ -100,6 +104,7 @@ export const CreateInstancePayloadSchema = z.object({
   loader: LoaderChoiceSchema,
   loaderVersion: z.string().min(1).optional(),
   runtimeVersion: z.string().min(1).optional(),
+  iconPreset: z.string().min(1).optional(),
 });
 
 export type CreateInstancePayload = z.infer<typeof CreateInstancePayloadSchema>;

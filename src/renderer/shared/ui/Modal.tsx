@@ -117,7 +117,7 @@ export const Modal = ({
         aria-label={ariaLabel}
         onMouseDown={(event) => event.stopPropagation()}
         className={cn(
-          'glass relative flex w-full max-w-lg flex-col gap-4 rounded-md border border-border p-6 shadow-2xl',
+          'glass relative flex w-full max-w-lg flex-col gap-4 rounded-lg border border-border p-6 shadow-2xl',
           className,
         )}
       >

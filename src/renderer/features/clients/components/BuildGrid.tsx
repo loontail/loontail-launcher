@@ -12,7 +12,7 @@ type BuildGridProps = {
 };
 
 const LIST_CLASS = 'flex flex-col gap-2';
-const GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3';
+const GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(13.5rem,1fr))] gap-4';
 
 // Catalog layout: grid mode auto-fills poster cards with a sensible min width;
 // list mode stacks compact rows.

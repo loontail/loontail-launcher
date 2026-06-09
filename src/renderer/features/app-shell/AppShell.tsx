@@ -9,8 +9,7 @@ import {
 import type { CatalogKey } from '@shared/contracts/ids';
 import { Loader2 } from 'lucide-react';
 import { Suspense, lazy, useEffect } from 'react';
-import { NavRail } from './NavRail';
-import { TitleBar } from './TitleBar';
+import { TopNav } from './TopNav';
 
 const SettingsPage = lazy(() =>
   import('@renderer/features/settings').then((module) => ({ default: module.SettingsPage })),
@@ -70,15 +69,17 @@ const RouteContent = () => {
   const route = useCurrentRoute();
   if (route.name === 'settings') {
     return (
-      <Suspense
-        fallback={
-          <div className="flex flex-1 items-center justify-center">
-            <Loader2 className="size-6 animate-spin text-text-mute" />
-          </div>
-        }
-      >
-        <SettingsPage />
-      </Suspense>
+      <div className="h-full overflow-y-auto pt-12">
+        <Suspense
+          fallback={
+            <div className="flex h-full items-center justify-center">
+              <Loader2 className="size-6 animate-spin text-text-mute" />
+            </div>
+          }
+        >
+          <SettingsPage />
+        </Suspense>
+      </div>
     );
   }
   if (route.name === 'build') {
@@ -99,17 +100,11 @@ export const AppShell = ({ showTitleBar }: AppShellProps) => {
   useGlobalBack();
 
   return (
-    <div className="flex h-full flex-col">
-      {showTitleBar && <TitleBar />}
-      <div className="flex flex-1 overflow-hidden">
-        <NavRail />
-        <main
-          key={route.name}
-          className="flex flex-1 flex-col overflow-hidden motion-safe:animate-route-fade"
-        >
-          <RouteContent />
-        </main>
-      </div>
+    <div className="relative h-full overflow-hidden">
+      <TopNav customTitleBar={showTitleBar} />
+      <main key={route.name} className="h-full overflow-hidden motion-safe:animate-route-fade">
+        <RouteContent />
+      </main>
     </div>
   );
 };

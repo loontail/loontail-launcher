@@ -63,6 +63,9 @@ export type CatalogPresentation = {
   readonly shortDescription: string;
   readonly description: string;
   readonly available: boolean;
+  // A built-in lucide icon key chosen for a local build (null/absent → poster or
+  // generated initial). Official builds never set this.
+  readonly iconPreset?: string | null;
   readonly media: {
     readonly poster: MediaRef | null;
     readonly background: MediaRef | null;

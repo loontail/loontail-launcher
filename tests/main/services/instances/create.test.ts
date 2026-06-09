@@ -150,7 +150,7 @@ describe('updateInstance', () => {
     loader: { type: 'vanilla', version: null },
     runtimeVersion: null,
     bundle: { source: 'none' },
-    presentation: { description: 'old', icon: null, screenshots: [] },
+    presentation: { description: 'old', icon: null, iconPreset: null, screenshots: [] },
     servers: [],
     origin: null,
     createdAt: NOW,

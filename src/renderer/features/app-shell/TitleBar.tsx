@@ -1,27 +1,16 @@
 import { UpdaterBadge } from '@renderer/features/updater';
 import { cn } from '@renderer/shared/lib/cn';
-import { useEffect, useState } from 'react';
+import { useWindowFocused } from '@renderer/shared/lib/useWindowFocused';
 import { useTranslation } from 'react-i18next';
 
 const APP_BRAND = 'Loontail Launcher';
 
 export const TitleBar = () => {
   const { t } = useTranslation();
-  const [focused, setFocused] = useState(() => document.hasFocus());
-
-  useEffect(() => {
-    const onFocus = () => setFocused(true);
-    const onBlur = () => setFocused(false);
-    window.addEventListener('focus', onFocus);
-    window.addEventListener('blur', onBlur);
-    return () => {
-      window.removeEventListener('focus', onFocus);
-      window.removeEventListener('blur', onBlur);
-    };
-  }, []);
+  const focused = useWindowFocused();
 
   return (
-    <header className="app-region-drag relative z-50 flex h-10 shrink-0 select-none items-center bg-transparent">
+    <header className="app-region-drag relative z-50 flex h-12 shrink-0 select-none items-center bg-transparent">
       <div className="title-bar-safe flex h-full w-full items-center">
         <div
           className={cn(

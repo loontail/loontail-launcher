@@ -1,79 +1,83 @@
+import { BuildSettingsModal } from '@renderer/features/clients';
+import { cn } from '@renderer/shared/lib/cn';
+import { PAGE_CONTAINER } from '@renderer/shared/lib/layout';
 import { useNavigationStore } from '@renderer/shared/lib/stores/navigation';
 import { Skeleton } from '@renderer/shared/ui/Skeleton';
-import { Boxes } from 'lucide-react';
-import type { ReactNode } from 'react';
-import { useTranslation } from 'react-i18next';
-import { ContinueCard } from './ContinueCard';
-import { RecentStrip } from './RecentStrip';
+import type { CatalogItem } from '@shared/contracts/catalog';
+import { useState } from 'react';
+import { HomeEmptyState } from './HomeEmptyState';
+import { HomeHero } from './HomeHero';
+import { RecentFilmstrip } from './RecentFilmstrip';
 import { useRecentBuilds } from './useRecentBuilds';
 
-const SectionHeading = ({ children }: { children: string }) => (
-  <h2 className="text-microlabel font-bold uppercase tracking-eyebrow text-glass/40">{children}</h2>
-);
-
 const HomeSkeleton = () => (
-  <>
-    <Skeleton className="h-52 w-full rounded-lg" />
-    <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] gap-3">
-      {Array.from({ length: 5 }).map((_, index) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: skeletons have no identity
-        <div key={index} className="flex flex-col gap-2">
-          <Skeleton className="aspect-video w-full rounded-md" />
-          <Skeleton className="h-3.5 w-3/4 rounded-sm" />
-        </div>
-      ))}
+  <div className="absolute inset-0 bg-surface-0">
+    <div className={cn(PAGE_CONTAINER, 'flex h-full flex-col justify-center pb-48 pt-14')}>
+      <div className="flex max-w-2xl flex-col gap-4">
+        <Skeleton className="h-3 w-32 rounded-sm" />
+        <Skeleton className="h-14 w-80 rounded-md" />
+        <Skeleton className="h-4 w-52 rounded-sm" />
+        <Skeleton className="mt-3 h-11 w-40 rounded-md" />
+      </div>
     </div>
-  </>
+    <div className="absolute inset-x-0 bottom-0 pb-6">
+      <div className={cn(PAGE_CONTAINER, 'flex gap-3')}>
+        {Array.from({ length: 5 }).map((_, index) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: skeletons have no identity
+          <Skeleton key={index} className="h-24 w-44 shrink-0 rounded-lg" />
+        ))}
+      </div>
+    </div>
+  </div>
 );
-
-const HomeEmptyState = ({ onBrowse }: { onBrowse: () => void }) => {
-  const { t } = useTranslation();
-  return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 py-20 text-center">
-      <span className="flex size-16 items-center justify-center rounded-2xl border border-edge bg-chip-dark text-glass/40">
-        <Boxes className="size-7" />
-      </span>
-      <p className="max-w-sm text-sm text-glass/55">{t('home.emptyTitle')}</p>
-      <button
-        type="button"
-        onClick={onBrowse}
-        className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glass/50"
-      >
-        {t('home.emptyCta')}
-      </button>
-    </div>
-  );
-};
 
 export const HomePage = () => {
-  const { t } = useTranslation();
   const { recent, isPending } = useRecentBuilds();
   const push = useNavigationStore((s) => s.push);
+  const [index, setIndex] = useState(0);
+  const [settingsItem, setSettingsItem] = useState<CatalogItem | null>(null);
 
-  const renderBody = (): ReactNode => {
-    if (isPending) return <HomeSkeleton />;
-    const [hero, ...rest] = recent;
-    if (!hero) {
-      return <HomeEmptyState onBrowse={() => push({ name: 'builds' })} />;
-    }
+  if (isPending) {
     return (
-      <>
-        <ContinueCard item={hero} />
-        {rest.length > 0 && (
-          <section className="flex flex-col gap-3">
-            <SectionHeading>{t('home.recentlyPlayed')}</SectionHeading>
-            <RecentStrip items={rest} />
-          </section>
-        )}
-      </>
+      <div className="relative h-full overflow-hidden">
+        <HomeSkeleton />
+      </div>
     );
-  };
+  }
+
+  if (recent.length === 0) {
+    return <HomeEmptyState />;
+  }
+
+  const safeIndex = Math.min(index, recent.length - 1);
+  const active = recent[safeIndex];
+  if (!active) return null;
+
+  const open = (item: CatalogItem): void => push({ name: 'build', key: item.key });
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto flex min-h-full w-full max-w-295 flex-col gap-8 px-8 py-8">
-        {renderBody()}
+    <div className="relative h-full overflow-hidden">
+      <div key={active.key} className="absolute inset-0 motion-safe:animate-route-fade">
+        <HomeHero
+          item={active}
+          onOpenSettings={() => setSettingsItem(active)}
+          onOpenDetails={() => open(active)}
+        />
       </div>
+
+      <output aria-live="polite" className="sr-only">
+        {active.presentation.title}
+      </output>
+
+      <div className="absolute inset-x-0 bottom-0 bg-linear-to-t from-canvas via-canvas/85 to-transparent pb-6 pt-12">
+        <div className={PAGE_CONTAINER}>
+          <RecentFilmstrip items={recent} activeIndex={safeIndex} onSelect={setIndex} />
+        </div>
+      </div>
+
+      {settingsItem && (
+        <BuildSettingsModal item={settingsItem} isOpen onClose={() => setSettingsItem(null)} />
+      )}
     </div>
   );
 };

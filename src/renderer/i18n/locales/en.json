@@ -45,10 +45,18 @@
   "clients": {
     "myBuilds": "My Builds",
     "official": "Official",
-    "officialUnavailable": "Official builds unavailable — showing your local builds",
-    "officialEmpty": "No official builds available right now",
     "createBuild": "Create build",
-    "browseOfficial": "Browse official",
+    "curatedBy": "Curated by Loontail",
+    "details": "Details",
+    "viewAll": "View all",
+    "viewToggleAria": "Toggle grid or list view",
+    "stat": {
+      "version": "Version",
+      "minecraft": "Minecraft",
+      "loader": "Loader",
+      "servers": "Servers",
+      "screenshots": "Screenshots"
+    },
     "searchPlaceholder": "Search builds",
     "viewGrid": "Grid view",
     "viewList": "List view",
@@ -56,8 +64,8 @@
     "clearSearch": "Clear search",
     "openDetails": "Open {{name}} details",
     "detailAria": "{{name}} build details",
-    "emptyTitle": "No builds yet",
-    "emptyDescription": "Create your first local Minecraft build to get started, or wait for the official Loontail builds to load.",
+    "myBuildsEmptyTitle": "No builds of your own yet",
+    "myBuildsEmptyDescription": "Create a build to set up your own instance with the version and loader you want.",
     "status": {
       "unknown": "Checking…",
       "notInstalled": "Not installed",
@@ -76,16 +84,13 @@
     },
     "screenshots": "Screenshots",
     "about": "About",
-    "back": "Back",
     "tabs": {
-      "about": "About",
-      "media": "Media",
+      "overview": "Overview",
+      "screenshots": "Screenshots",
       "servers": "Servers",
       "settings": "Settings"
     },
     "noAbout": "No description for this build yet",
-    "noMedia": "No screenshots for this build yet",
-    "noServers": "No servers for this build",
     "download": "Download",
     "checking": "Checking...",
     "repairing": "Repairing...",
@@ -177,9 +182,10 @@
     }
   },
   "home": {
-    "continue": "Continue",
-    "recentlyPlayed": "Recently played",
-    "emptyTitle": "Pick a build to start playing",
+    "continuePlaying": "Continue playing",
+    "recent": "Recent",
+    "emptyTitle": "No builds yet",
+    "emptyDescription": "Find a ready-made build on the Builds page, or create your own to start playing.",
     "emptyCta": "Browse builds"
   },
   "clientSettings": {
@@ -220,7 +226,9 @@
   },
   "createBuild": {
     "title": "Create a build",
+    "subtitle": "Set up a fresh instance",
     "name": "Name",
+    "icon": "Icon",
     "namePlaceholder": "My Modded World",
     "minecraftVersion": "Minecraft version",
     "selectVersion": "Select a version",
@@ -248,7 +256,8 @@
     "home": "Home",
     "builds": "Builds",
     "settings": "Settings",
-    "console": "Console"
+    "console": "Console",
+    "back": "Back"
   },
   "appBar": {
     "alphaTag": "Alpha",

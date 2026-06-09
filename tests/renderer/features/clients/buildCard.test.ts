@@ -11,7 +11,12 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-import { BuildTile } from '@renderer/features/clients/components/BuildTile';
+// Stub the bundled PNG backdrops so the test doesn't pull asset modules through Vite.
+vi.mock('@renderer/features/clients/components/localBackgrounds', () => ({
+  localBackgroundFor: () => 'mock-bg.png',
+}));
+
+import { BuildCard } from '@renderer/features/clients/components/BuildCard';
 
 const baseSpec = {
   minecraftVersion: '1.21.4',
@@ -52,30 +57,24 @@ const localItem = (): CatalogItem =>
   }) as unknown as CatalogItem;
 
 const render = (item: CatalogItem): string =>
-  renderToStaticMarkup(createElement(BuildTile, { item, onOpen: () => undefined }));
+  renderToStaticMarkup(createElement(BuildCard, { item, onOpen: () => undefined }));
 
-describe('BuildTile', () => {
-  it('renders an official build with poster artwork, title, status and meta line', () => {
+describe('BuildCard', () => {
+  it('renders an official build with key-art, title, status and a meta line', () => {
     const html = render(officialItem());
     expect(html).toContain('<img');
     expect(html).toContain('Survival');
     expect(html).toContain('clients.status.ready');
-    // quiet meta line: MC version · loader (no metadata pills)
     expect(html).toContain('clients.versionChip.short');
     expect(html).toContain('clientSettings.loader.vanilla');
+    expect(html).not.toContain('clients.mineBadge');
   });
 
-  it('renders a local build with a generated fallback (no image) and its status', () => {
+  it('renders a local build over a seeded backdrop, with its status (no "Mine" tag)', () => {
     const html = render(localItem());
-    expect(html).not.toContain('<img');
+    expect(html).toContain('Test Build');
+    expect(html).not.toContain('clients.mineBadge');
     expect(html).toContain('clients.status.ready');
-    // generated visual fallback instead of a poster image
-    expect(html).toContain('linear-gradient');
-  });
-
-  // Source (local/official) is shown by the section heading, not repeated per card.
-  it('does not render a source badge on the card', () => {
-    expect(render(officialItem())).not.toContain('clients.badge.official');
-    expect(render(localItem())).not.toContain('clients.badge.local');
+    expect(html).toContain('mock-bg.png');
   });
 });

@@ -1,70 +1,56 @@
 import { useCatalog } from '@renderer/features/catalog';
 import { cn } from '@renderer/shared/lib/cn';
+import { PAGE_CONTAINER } from '@renderer/shared/lib/layout';
 import { useNavigationStore } from '@renderer/shared/lib/stores/navigation';
+import { Button } from '@renderer/shared/ui/Button';
 import { Input } from '@renderer/shared/ui/Input';
-import { QUERY_KEY_ROOTS } from '@shared/constants';
+import { Segmented } from '@renderer/shared/ui/Segmented';
 import { type CatalogItem, SourceKinds } from '@shared/contracts/catalog';
-import { useQueryClient } from '@tanstack/react-query';
-import { CloudOff, LayoutGrid, List, Search, X } from 'lucide-react';
+import { Boxes, LayoutGrid, List, Plus, Search, X } from 'lucide-react';
 import { type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { BuildCard } from './BuildCard';
 import { BuildGrid } from './BuildGrid';
 import { BuildGridSkeleton } from './BuildGridSkeleton';
-import { BuildTile } from './BuildTile';
 import { CreateBuildModal } from './CreateBuildModal';
-import { CreateBuildTile } from './CreateBuildTile';
-import { EmptyBuildsState } from './EmptyBuildsState';
 import { type BuildViewMode, buildViewModeStore } from './viewMode';
 
-const SectionHeading = ({ children }: { children: string }) => (
-  <h2 className="text-microlabel font-bold uppercase tracking-eyebrow text-glass/40">{children}</h2>
+const SectionHeading = ({ title, aside }: { title: string; aside?: ReactNode }) => (
+  <div className="flex items-center justify-between gap-3">
+    <h2 className="text-microlabel font-bold uppercase tracking-eyebrow text-text-mute">{title}</h2>
+    {aside}
+  </div>
 );
 
-const matchesQuery = (item: CatalogItem, query: string): boolean =>
-  item.presentation.title.toLowerCase().includes(query);
-
-const ViewModeToggle = ({
-  mode,
-  onChange,
-}: {
-  mode: BuildViewMode;
-  onChange: (mode: BuildViewMode) => void;
-}) => {
+// Shown under "My builds" when the user has authored none. Their own builds are
+// always created here, so this carries the single create affordance for the
+// empty case (the section header drops its button when there's nothing beside).
+const MyBuildsEmpty = ({ onCreate }: { onCreate: () => void }) => {
   const { t } = useTranslation();
-  const options: { value: BuildViewMode; icon: typeof LayoutGrid; label: string }[] = [
-    { value: 'grid', icon: LayoutGrid, label: t('clients.viewGrid') },
-    { value: 'list', icon: List, label: t('clients.viewList') },
-  ];
   return (
-    <div className="inline-flex shrink-0 rounded-md border border-edge-md bg-chip-dark p-0.5">
-      {options.map(({ value, icon: Icon, label }) => {
-        const active = mode === value;
-        return (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={active}
-            aria-label={label}
-            onClick={() => onChange(value)}
-            className={cn(
-              'flex size-7 items-center justify-center rounded-sm transition-colors',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glass/40',
-              active ? 'bg-surface-2 text-glass' : 'text-text-mute hover:text-glass',
-            )}
-          >
-            <Icon className="size-4" />
-          </button>
-        );
-      })}
+    <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-edge-md bg-surface-1/40 px-6 py-12 text-center">
+      <span className="flex size-12 items-center justify-center rounded-xl border border-edge bg-surface-2 text-text-mute">
+        <Boxes className="size-6" />
+      </span>
+      <div className="flex max-w-sm flex-col gap-1">
+        <p className="text-body-med text-text-hi">{t('clients.myBuildsEmptyTitle')}</p>
+        <p className="text-caption text-text-mute">{t('clients.myBuildsEmptyDescription')}</p>
+      </div>
+      <Button variant="secondary" size="sm" onClick={onCreate}>
+        <Plus className="size-4" />
+        {t('clients.createBuild')}
+      </Button>
     </div>
   );
 };
 
+const matchesQuery = (item: CatalogItem, query: string): boolean =>
+  item.presentation.title.toLowerCase().includes(query);
+
 export const BuildsHomePage = () => {
   const { t } = useTranslation();
-  const { items, officialOk, isPending } = useCatalog();
+  const { items, isPending } = useCatalog();
   const push = useNavigationStore((s) => s.push);
-  const queryClient = useQueryClient();
   const viewMode = buildViewModeStore.useValue();
   const setViewMode = buildViewModeStore.useSetValue();
   const [createOpen, setCreateOpen] = useState(false);
@@ -72,9 +58,6 @@ export const BuildsHomePage = () => {
 
   const query = search.trim().toLowerCase();
   const openBuild = (item: CatalogItem): void => push({ name: 'build', key: item.key });
-  const refetchCatalog = (): void => {
-    void queryClient.invalidateQueries({ queryKey: [QUERY_KEY_ROOTS.catalog] });
-  };
 
   const { localItems, officialItems } = useMemo(() => {
     const filtered = query ? items.filter((item) => matchesQuery(item, query)) : items;
@@ -86,42 +69,17 @@ export const BuildsHomePage = () => {
 
   const renderTiles = (group: CatalogItem[]): ReactNode =>
     group.map((item) => (
-      <BuildTile key={item.key} item={item} onOpen={openBuild} variant={viewMode} />
+      <BuildCard key={item.key} item={item} onOpen={openBuild} variant={viewMode} />
     ));
 
-  // My Builds always offers the create affordance when not searching, so the
-  // group is "present" whenever there are local matches OR no search is active.
+  // My builds always shows (with its own empty state); Official only appears when
+  // there are official builds to list — an empty/unreachable catalog hides it.
   const showMyBuilds = !query || localItems.length > 0;
-  const showOfficial = officialItems.length > 0 || (!query && !officialOk);
+  const showOfficial = officialItems.length > 0;
   const noResults = query.length > 0 && localItems.length === 0 && officialItems.length === 0;
-  const trulyEmpty = !query && items.length === 0 && officialOk;
-
-  const renderOfficialBody = (): ReactNode => {
-    if (officialItems.length > 0) {
-      return (
-        <BuildGrid variant={viewMode} roving resetKey={`${viewMode}:${officialItems.length}`}>
-          {renderTiles(officialItems)}
-        </BuildGrid>
-      );
-    }
-    if (!officialOk) {
-      return (
-        <div className="flex items-center gap-2 rounded-md border border-edge bg-chip-dark px-3 py-2.5 text-caption text-text-mute">
-          <CloudOff className="size-4 shrink-0" />
-          {t('clients.officialUnavailable')}
-        </div>
-      );
-    }
-    return <p className="text-caption text-text-mute">{t('clients.officialEmpty')}</p>;
-  };
 
   const renderBody = (): ReactNode => {
     if (isPending) return <BuildGridSkeleton />;
-    if (trulyEmpty) {
-      return (
-        <EmptyBuildsState onCreate={() => setCreateOpen(true)} onBrowseOfficial={refetchCatalog} />
-      );
-    }
     if (noResults) {
       return (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 py-20 text-center">
@@ -131,60 +89,82 @@ export const BuildsHomePage = () => {
           <p className="max-w-sm text-body text-text-mute">
             {t('clients.noResults', { query: search.trim() })}
           </p>
-          <button
-            type="button"
-            onClick={() => setSearch('')}
-            className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-edge-md bg-surface-1 px-4 py-2 text-body-med text-glass transition-colors hover:border-edge-lg hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glass/50"
-          >
+          <Button variant="secondary" onClick={() => setSearch('')}>
             <X className="size-4" />
             {t('clients.clearSearch')}
-          </button>
+          </Button>
         </div>
       );
     }
     return (
-      <>
+      <div className="flex flex-col gap-8">
         {showMyBuilds && (
-          <section className="flex flex-col gap-3">
-            <SectionHeading>{t('clients.myBuilds')}</SectionHeading>
-            <BuildGrid
-              variant={viewMode}
-              roving
-              resetKey={`${viewMode}:${query ? 0 : 1}:${localItems.length}`}
-            >
-              {!query && <CreateBuildTile onClick={() => setCreateOpen(true)} />}
-              {renderTiles(localItems)}
-            </BuildGrid>
+          <section className="flex flex-col gap-3.5">
+            <SectionHeading
+              title={t('clients.myBuilds')}
+              aside={
+                !query && localItems.length > 0 ? (
+                  <Button variant="secondary" size="sm" onClick={() => setCreateOpen(true)}>
+                    <Plus className="size-4" />
+                    {t('clients.createBuild')}
+                  </Button>
+                ) : undefined
+              }
+            />
+            {localItems.length > 0 ? (
+              <BuildGrid variant={viewMode} roving resetKey={`my:${viewMode}:${localItems.length}`}>
+                {renderTiles(localItems)}
+              </BuildGrid>
+            ) : (
+              <MyBuildsEmpty onCreate={() => setCreateOpen(true)} />
+            )}
           </section>
         )}
 
         {showOfficial && (
-          <section className="flex flex-col gap-3">
-            <SectionHeading>{t('clients.official')}</SectionHeading>
-            {renderOfficialBody()}
+          <section className="flex flex-col gap-3.5">
+            <SectionHeading
+              title={t('clients.official')}
+              aside={<span className="text-caption text-text-mute">{t('clients.curatedBy')}</span>}
+            />
+            <BuildGrid
+              variant={viewMode}
+              roving
+              resetKey={`official:${viewMode}:${officialItems.length}`}
+            >
+              {renderTiles(officialItems)}
+            </BuildGrid>
           </section>
         )}
-      </>
+      </div>
     );
   };
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="mx-auto flex min-h-full w-full max-w-295 flex-col gap-6 px-8 py-8">
+    <div className="h-full overflow-y-auto pt-12">
+      <div className={cn(PAGE_CONTAINER, 'flex min-h-full flex-col gap-7 pb-12 pt-6')}>
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="mr-auto text-h1 text-glass">{t('nav.builds')}</h1>
-          <div className="relative w-full max-w-xs">
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-text-mute" />
+          <h1 className="mr-auto text-display text-text-hi">{t('nav.builds')}</h1>
+          <div className="relative w-full max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-mute" />
             <Input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder={t('clients.searchPlaceholder')}
               aria-label={t('clients.searchPlaceholder')}
-              className="pl-8"
+              className="h-10 rounded-md border-edge bg-surface-1 pl-9"
             />
           </div>
-          <ViewModeToggle mode={viewMode} onChange={setViewMode} />
+          <Segmented<BuildViewMode>
+            ariaLabel={t('clients.viewToggleAria')}
+            value={viewMode}
+            onChange={setViewMode}
+            options={[
+              { value: 'grid', icon: LayoutGrid, ariaLabel: t('clients.viewGrid') },
+              { value: 'list', icon: List, ariaLabel: t('clients.viewList') },
+            ]}
+          />
         </div>
         {renderBody()}
       </div>

@@ -94,6 +94,12 @@ export const createInstance = async (
     minecraftVersion: payload.minecraftVersion,
     loader: { type: payload.loader, version: loaderVersion },
     runtimeVersion: payload.runtimeVersion ?? null,
+    presentation: {
+      description: '',
+      icon: null,
+      iconPreset: payload.iconPreset ?? null,
+      screenshots: [],
+    },
     createdAt: timestamp,
     updatedAt: timestamp,
   });

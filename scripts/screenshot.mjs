@@ -37,10 +37,19 @@ const APP_ENTRY = path.join(ROOT, 'out', 'main', 'index.js');
 const LABEL = process.argv[2]?.replace(/[^a-z0-9._-]/gi, '') ?? '';
 const OUT_DIR = LABEL ? path.join(ROOT, '.shots', LABEL) : path.join(ROOT, '.shots');
 
-const VIEWPORT = { width: 1000, height: 624 };
+const VIEWPORT = {
+  width: Number(process.env.SHOTS_W) || 1000,
+  height: Number(process.env.SHOTS_H) || 624,
+};
 
 // lucide-react renders each icon as `svg.lucide-<name>`, so these locators are
 // independent of the (i18n-translated) aria-labels on the buttons.
+// The top nav uses text tabs ("Home"/"Builds") + an icon settings button
+// (aria-label "Settings"). Catalog/recent build cards carry [data-build-card]
+// so detail navigation is independent of card markup.
+const goBuilds = (page) =>
+  page.getByRole('button', { name: 'Builds', exact: true }).first().click({ timeout: 4000 });
+
 const SCREENS = [
   {
     // The authenticated app opens on Home (the dashboard).
@@ -50,27 +59,20 @@ const SCREENS = [
   {
     name: 'builds',
     prepare: async (page) => {
-      await page.locator('button:has(svg.lucide-layout-grid)').first().click({ timeout: 4000 });
+      await goBuilds(page);
     },
   },
   {
     name: 'build-detail',
     prepare: async (page) => {
-      await page.locator('button:has(svg.lucide-layout-grid)').first().click({ timeout: 4000 });
+      await goBuilds(page);
       await settle(600);
-      // Real build tiles are the main-area buttons that aren't the toolbar
-      // grid/list toggles or the dashed "create" tile (plus icon).
-      await page
-        .locator(
-          'main button:not(:has(svg.lucide-plus)):not(:has(svg.lucide-layout-grid)):not(:has(svg.lucide-list))',
-        )
-        .first()
-        .click({ timeout: 5000 });
+      await page.locator('[data-build-card]').first().click({ timeout: 5000 });
       await settle(500);
     },
     after: async (page) => {
       await page
-        .locator('button:has(svg.lucide-arrow-left)')
+        .getByRole('button', { name: /^(Back|Builds|Home)$/ })
         .first()
         .click({ timeout: 4000 })
         .catch(() => {});
@@ -79,11 +81,60 @@ const SCREENS = [
   {
     name: 'settings',
     prepare: async (page) => {
-      await page.locator('button:has(svg.lucide-settings)').first().click({ timeout: 4000 });
+      await page.getByRole('button', { name: 'Settings' }).first().click({ timeout: 4000 });
+    },
+    after: async (page) => {
+      // Settings collapses the bar to a single back arrow (aria-label "Back") that
+      // sits where the Settings icon was — there's no Home/Builds tab to click.
+      await page
+        .getByRole('button', { name: 'Back', exact: true })
+        .first()
+        .click({ timeout: 4000 })
+        .catch(() => {});
+    },
+  },
+  {
+    name: 'builds-list',
+    prepare: async (page) => {
+      await goBuilds(page);
+      await settle(400);
+      await page.getByRole('radio', { name: 'List view' }).first().click({ timeout: 4000 });
+      await settle(400);
     },
     after: async (page) => {
       await page
-        .locator('button:has(svg.lucide-house)')
+        .getByRole('radio', { name: 'Grid view' })
+        .first()
+        .click({ timeout: 4000 })
+        .catch(() => {});
+    },
+  },
+  {
+    name: 'create-modal',
+    prepare: async (page) => {
+      await goBuilds(page);
+      await settle(400);
+      await page.getByRole('button', { name: 'Create build' }).first().click({ timeout: 4000 });
+      await settle(400);
+    },
+    after: async (page) => {
+      await page.keyboard.press('Escape').catch(() => {});
+    },
+  },
+  {
+    name: 'settings-modal',
+    prepare: async (page) => {
+      await goBuilds(page);
+      await settle(500);
+      await page.locator('[data-build-card]').first().click({ timeout: 5000 });
+      await settle(500);
+      await page.getByRole('button', { name: 'Settings' }).first().click({ timeout: 4000 });
+      await settle(400);
+    },
+    after: async (page) => {
+      await page.keyboard.press('Escape').catch(() => {});
+      await page
+        .getByRole('button', { name: /^(Back|Builds|Home)$/ })
         .first()
         .click({ timeout: 4000 })
         .catch(() => {});

@@ -13,7 +13,7 @@ export type ActionButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const VARIANT_CLASSES: Record<ActionVariant, string> = {
   primary:
-    'h-11 min-w-35 px-6 text-body-med bg-cta text-on-cta ' +
+    'h-11 min-w-35 rounded-full px-6 text-body-med bg-cta text-on-cta ' +
     'shadow-[inset_0_1px_0_var(--shadow-inset-highlight)] ' +
     'hover:bg-cta-hover active:bg-cta-press motion-safe:active:scale-[0.98]',
   muted:
@@ -35,7 +35,7 @@ export const ActionButton = forwardRef<HTMLButtonElement, ActionButtonProps>(
       type={type}
       className={cn(
         'inline-flex cursor-pointer items-center justify-center gap-2 rounded-md font-bold transition-all duration-150 ease-standard',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glass/70 focus-visible:ring-offset-2 focus-visible:ring-offset-overlay',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60',
         'disabled:pointer-events-none disabled:opacity-50',
         VARIANT_CLASSES[variant],
         className,
