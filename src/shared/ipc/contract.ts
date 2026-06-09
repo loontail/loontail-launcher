@@ -120,5 +120,3 @@ export type IpcEventPayloads = {
   'console.state': ConsoleProcessState;
   'console.bufferReset': null;
 };
-
-export type IpcEventPayload<E extends keyof IpcEventPayloads> = IpcEventPayloads[E];

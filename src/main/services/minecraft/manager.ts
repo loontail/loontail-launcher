@@ -101,15 +101,9 @@ export class MinecraftManager {
   async getStatus(slug: ClientSlug): Promise<{ status: InstallStatus; paused: boolean }> {
     const op = this.ops.get(slug);
     if (op) {
-      if (op.kind === OpKinds.INSTALL) {
-        return {
-          status: op.status,
-          paused: op.status === InstallStatuses.INSTALLING ? op.paused : false,
-        };
-      }
       return {
         status: OP_TO_STATUS[op.kind],
-        paused: false,
+        paused: op.kind === OpKinds.INSTALL ? op.paused : false,
       };
     }
     // Opening the launcher must not verify the install (no hashing, no network,
@@ -168,7 +162,6 @@ export class MinecraftManager {
   pause(slug: ClientSlug): void {
     const op = this.ops.get(slug);
     if (op?.kind !== OpKinds.INSTALL) return;
-    if (op.status !== InstallStatuses.INSTALLING) return;
     op.paused = true;
     op.pauseController.pause();
     this.env.emitStatus({ slug, status: InstallStatuses.INSTALLING, paused: true });
@@ -177,7 +170,6 @@ export class MinecraftManager {
   resume(slug: ClientSlug): void {
     const op = this.ops.get(slug);
     if (op?.kind !== OpKinds.INSTALL) return;
-    if (op.status !== InstallStatuses.INSTALLING) return;
     op.paused = false;
     op.pauseController.resume();
     this.env.emitStatus({ slug, status: InstallStatuses.INSTALLING, paused: false });

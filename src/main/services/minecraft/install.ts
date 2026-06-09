@@ -21,7 +21,6 @@ export const beginInstall = (
 ): InstallOp => {
   const op: InstallOp = {
     kind: OpKinds.INSTALL,
-    status: InstallStatuses.INSTALLING,
     pauseController: new PauseController(),
     abort: new AbortController(),
     paused: false,

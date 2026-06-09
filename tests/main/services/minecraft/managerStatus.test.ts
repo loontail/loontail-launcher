@@ -128,7 +128,6 @@ describe('MinecraftManager.getStatus', () => {
     const manager = makeManager();
     const op: InstallOp = {
       kind: OpKinds.INSTALL,
-      status: InstallStatuses.INSTALLING,
       pauseController: new PauseController(),
       abort: new AbortController(),
       paused: true,

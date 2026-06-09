@@ -1,4 +1,4 @@
-import type { IpcContract } from './contract';
+import type { IpcContract, IpcEventPayloads } from './contract';
 
 export const IPC_CHANNELS = {
   appGetVersion: 'app.getVersion',
@@ -95,4 +95,16 @@ export const IPC_EVENTS = {
   appNotification: 'app.notification',
 } as const;
 
-export type IpcEventName = (typeof IPC_EVENTS)[keyof typeof IPC_EVENTS];
+type IpcEventValue = (typeof IPC_EVENTS)[keyof typeof IPC_EVENTS];
+
+// Compile-time guard mirroring IpcChannelsCoverContract for the event side:
+// every IPC_EVENTS value must be a key in IpcEventPayloads and vice versa, so
+// adding an event without its payload type (or renaming one) fails tsc.
+type IpcEventsCoverPayloads = Exclude<keyof IpcEventPayloads, IpcEventValue> extends never
+  ? Exclude<IpcEventValue, keyof IpcEventPayloads> extends never
+    ? true
+    : ['event missing in IpcEventPayloads:', Exclude<IpcEventValue, keyof IpcEventPayloads>]
+  : ['payload event missing in IPC_EVENTS:', Exclude<keyof IpcEventPayloads, IpcEventValue>];
+
+const _ipcEventsCoverageCheck: IpcEventsCoverPayloads = true;
+void _ipcEventsCoverageCheck;

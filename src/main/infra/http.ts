@@ -21,7 +21,6 @@ type RequestOptions = {
 
 const logger = scopedLogger('infra.http');
 
-const REDACTED_AUTHORIZATION = 'Bearer ***';
 const BODY_PREVIEW_LIMIT = 500;
 
 export class HttpError extends Error {
@@ -38,12 +37,6 @@ export class HttpError extends Error {
 export const buildAuthHeader = (token: string): Record<string, string> => ({
   Authorization: `Bearer ${token}`,
 });
-
-// Log paths only — never emit the real bearer token.
-export const redactAuthHeader = (headers: Record<string, string>): Record<string, string> => {
-  if (!('Authorization' in headers)) return headers;
-  return { ...headers, Authorization: REDACTED_AUTHORIZATION };
-};
 
 const buildHeaders = (token: string | undefined): Record<string, string> => ({
   'Content-Type': 'application/json',

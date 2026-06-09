@@ -1,9 +1,8 @@
 export { CONSOLE_TRUSTED_CHANNELS, IPC_CHANNELS, IPC_EVENTS } from './channels';
-export type { IpcChannel, IpcEventName } from './channels';
+export type { IpcChannel } from './channels';
 export type {
   IpcArgs,
   IpcContract,
-  IpcEventPayload,
   IpcEventPayloads,
   IpcResult,
   UpdaterStatusEvent,
