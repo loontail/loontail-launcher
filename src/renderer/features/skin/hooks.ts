@@ -5,36 +5,16 @@ import { toCachedMediaUrl } from '@renderer/shared/lib/mediaUrl';
 import { toast } from '@renderer/shared/ui/Toast';
 import { QUERY_KEYS } from '@shared/constants';
 import type { Account } from '@shared/contracts/account';
-import { SkinErrorCodes, type SkinKind, SkinKinds } from '@shared/contracts/skin';
+import { SkinErrorCodes, SkinKinds } from '@shared/contracts/skin';
 import { type IpcError, isIpcError } from '@shared/ipc';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { type ChangeEvent, useCallback, useMemo, useRef } from 'react';
+import { type ChangeEvent, useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { clearSkin, uploadSkin } from './api';
 import { localizeSkinError } from './errorCopy';
 import { normalizeTextureToPng } from './texture';
 import { usePendingTexture } from './usePendingTexture';
 import { validateTexture } from './validateTexture';
-
-export type UploadSkinInput = {
-  type: SkinKind;
-  buffer: ArrayBuffer;
-};
-
-export const useUploadSkin = () => {
-  const queryClient = useQueryClient();
-  const mutation = useMutation({
-    // saveAll surfaces a localized per-texture toast; skip the generic global one.
-    meta: { skipGlobalErrorToast: true },
-    mutationFn: async ({ type, buffer }: UploadSkinInput) => {
-      const result = await uploadSkin(type, buffer);
-      queryClient.setQueryData<Account | null>(QUERY_KEYS.auth.me, (previous) =>
-        previous ? { ...previous, [type]: result.url } : previous,
-      );
-    },
-  });
-  return { mutate: mutation.mutateAsync, isPending: mutation.isPending };
-};
 
 export const useClearSkin = () => {
   const { t } = useTranslation();
@@ -60,9 +40,13 @@ export const useClearSkin = () => {
 export const useSkinEditor = () => {
   const { t } = useTranslation();
   const { user } = useCurrentUser();
+  const queryClient = useQueryClient();
   const provider = user?.provider ?? null;
-  const upload = useUploadSkin();
   const reset = useClearSkin();
+  // Skin and cape upload concurrently; a local flag tracks the combined save
+  // instead of one shared mutation observer (which two parallel mutateAsync
+  // calls would race, corrupting its pending state).
+  const [isSaving, setIsSaving] = useState(false);
 
   const remoteSkin = user?.skin ? toCachedMediaUrl(user.skin) : null;
   const remoteCape = user?.cape ? toCachedMediaUrl(user.cape) : null;
@@ -114,24 +98,32 @@ export const useSkinEditor = () => {
         const error: IpcError = { code: SkinErrorCodes.INVALID_IMAGE, message: reason };
         throw error;
       }
-      await upload.mutate({ type: job.type, buffer });
+      const result = await uploadSkin(job.type, buffer);
+      queryClient.setQueryData<Account | null>(QUERY_KEYS.auth.me, (previous) =>
+        previous ? { ...previous, [job.type]: result.url } : previous,
+      );
       job.pending.clearIfCurrent(objectUrl);
     };
 
     // Upload independently so one texture failing leaves the other saved and
     // its own pending preview intact for a retry.
-    const results = await Promise.allSettled(jobs.map(uploadOne));
-    results.forEach((result, index) => {
-      if (result.status !== 'rejected') return;
-      const label = jobs[index]?.label;
-      const reason: unknown = result.reason;
-      if (isIpcError(reason)) {
-        toast.error(localizeSkinError(reason.code, reason.message, t));
-        return;
-      }
-      toast.error(t('settings.account.uploadFailedToast', { texture: label }));
-    });
-  }, [skinPending, capePending, upload, t]);
+    setIsSaving(true);
+    try {
+      const results = await Promise.allSettled(jobs.map(uploadOne));
+      results.forEach((result, index) => {
+        if (result.status !== 'rejected') return;
+        const label = jobs[index]?.label;
+        const reason: unknown = result.reason;
+        if (isIpcError(reason)) {
+          toast.error(localizeSkinError(reason.code, reason.message, t));
+          return;
+        }
+        toast.error(t('settings.account.uploadFailedToast', { texture: label }));
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  }, [skinPending, capePending, queryClient, t]);
 
   const cancelAll = useCallback(() => {
     skinPending.clear();
@@ -167,7 +159,6 @@ export const useSkinEditor = () => {
     [onCapeFile],
   );
 
-  const isSaving = upload.isPending;
   const isResetting = reset.isPending;
   const isBusy = isSaving || isResetting;
   const hasPending = skinPending.hasPending || capePending.hasPending;

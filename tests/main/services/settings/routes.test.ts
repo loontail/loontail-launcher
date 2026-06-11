@@ -57,7 +57,7 @@ const SETTINGS: LauncherSettings = {
 
 const registerWith = () => {
   const { router, handlers } = createTestRouter();
-  registerSettingsRoutes(router, {} as BrowserWindow);
+  registerSettingsRoutes(router, () => ({}) as BrowserWindow);
   return handlers;
 };
 

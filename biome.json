@@ -58,6 +58,16 @@
           }
         }
       }
+    },
+    {
+      "include": ["**/*.css"],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noUnknownMediaFeatureName": "off"
+          }
+        }
+      }
     }
   ]
 }

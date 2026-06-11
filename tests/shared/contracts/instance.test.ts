@@ -22,7 +22,12 @@ describe('InstanceManifestSchema', () => {
     const parsed = InstanceManifestSchema.parse(minimalManifest);
     expect(parsed.runtimeVersion).toBeNull();
     expect(parsed.bundle).toEqual({ source: 'none' });
-    expect(parsed.presentation).toEqual({ description: '', icon: null, screenshots: [] });
+    expect(parsed.presentation).toEqual({
+      description: '',
+      icon: null,
+      iconPreset: null,
+      screenshots: [],
+    });
     expect(parsed.servers).toEqual([]);
     expect(parsed.origin).toBeNull();
   });

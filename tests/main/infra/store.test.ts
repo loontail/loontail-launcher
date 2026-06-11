@@ -29,151 +29,142 @@ vi.mock('electron', () => ({
   safeStorage: safeStorageMocks,
 }));
 
-// vitest does not propagate the `electron` mock above into electron-store's
-// CommonJS `require('electron')`, so electron-store falls back to envPaths
-// and writes outside our tmp. Mock electron-store with a thin file-backed
-// stand-in that reads/writes <tmpUserData>/launcher.json synchronously.
-vi.mock('electron-store', () => {
-  const { existsSync, mkdirSync, readFileSync, writeFileSync } =
-    require('node:fs') as typeof import('node:fs');
-  const { join } = require('node:path') as typeof import('node:path');
-  type StoreOptions<S> = { name?: string; defaults?: S };
-
-  class FakeStore<S extends Record<string, unknown>> {
-    private file: string;
-    private cache: S;
-    constructor(options: StoreOptions<S>) {
-      mkdirSync(tmpUserData, { recursive: true });
-      this.file = join(tmpUserData, `${options.name ?? 'config'}.json`);
-      const defaults = options.defaults ?? ({} as S);
-      const onDisk = existsSync(this.file)
-        ? (JSON.parse(readFileSync(this.file, 'utf8')) as S)
-        : ({} as S);
-      this.cache = { ...defaults, ...onDisk };
-    }
-    get<K extends keyof S>(key: K): S[K] {
-      return this.cache[key];
-    }
-    set<K extends keyof S>(key: K, value: S[K]): void {
-      this.cache[key] = value;
-      writeFileSync(this.file, JSON.stringify(this.cache), 'utf8');
-    }
-  }
-
-  return { default: FakeStore };
-});
-
 vi.mock('@main/infra/logger', () => ({
   scopedLogger: () => loggerMocks,
 }));
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { getDb } from '@main/infra/db/connection';
+import * as store from '@main/infra/store';
 import {
   CURRENT_SCHEMA_VERSION,
   STORE_KEY_AUTH,
+  STORE_KEY_INSTANCE_REGISTRY,
+  STORE_KEY_LAST_PLAYED,
   STORE_KEY_LAUNCHER_SETTINGS,
   STORE_KEY_SCHEMA_VERSION,
 } from '@shared/constants';
-import type { AuthSession } from '@shared/contracts/auth';
 import type { LauncherSettings } from '@shared/contracts/settings';
 
-const storeFile = path.join(tmpUserData, 'launcher.json');
-const authSecretFile = path.join(tmpUserData, 'auth-session.bin');
+const dbFile = path.join(tmpUserData, 'launcher.db');
+const legacyStoreFile = path.join(tmpUserData, 'launcher.json');
+const legacyAuthSecretFile = path.join(tmpUserData, 'auth-session.bin');
 const mojangClientId = '11111111-2222-3333-4444-555555555555';
 const mojangPlayerUuid = '00000000-1111-2222-3333-444444444444';
 const mojangXuid = '1234567890';
 
-const writeStore = (payload: Record<string, unknown>): void => {
-  fs.writeFileSync(storeFile, JSON.stringify(payload), 'utf8');
+const yggMetadata = {
+  provider: 'yggdrasil' as const,
+  profile: { uuid: '0123456789abcdef0123456789abcdef', name: 'someone' },
 };
 
-const writeAuthSecret = (payload: Record<string, unknown>): void => {
-  fs.writeFileSync(authSecretFile, JSON.stringify(payload), 'utf8');
+// Seed the legacy electron-store layout so initStore's one-time import runs.
+const writeLegacyStore = (payload: Record<string, unknown>): void => {
+  fs.writeFileSync(legacyStoreFile, JSON.stringify(payload), 'utf8');
 };
 
-const loadStoreModule = async (): Promise<typeof import('@main/infra/store')> => {
-  vi.resetModules();
-  const storeModule = await import('@main/infra/store');
-  // Store bootstrap is now explicit (initStore) instead of an import-time side
-  // effect; run it so migration/purge behaviour matches the shipped flow.
-  storeModule.initStore();
-  return storeModule;
+// The legacy secret file holds safeStorage-encrypted bytes. With the identity
+// mock above, that is just the JSON payload as UTF-8.
+const writeLegacyAuthSecret = (payload: Record<string, unknown>): void => {
+  fs.writeFileSync(legacyAuthSecretFile, Buffer.from(JSON.stringify(payload), 'utf8'));
+};
+
+const authRow = (): { metadata: string; secret: Buffer | null } | undefined =>
+  getDb().prepare('SELECT metadata, secret FROM auth_account WHERE id = 1').get() as
+    | { metadata: string; secret: Buffer | null }
+    | undefined;
+
+const metaValue = (key: string): string | null =>
+  (
+    getDb().prepare('SELECT value FROM meta WHERE key = ?').get(key) as
+      | { value: string }
+      | undefined
+  )?.value ?? null;
+
+const removeFile = (file: string): void => {
+  if (fs.existsSync(file)) fs.rmSync(file);
 };
 
 beforeEach(() => {
-  loggerMocks.warn.mockClear();
-  loggerMocks.info.mockClear();
-  loggerMocks.error.mockClear();
-  loggerMocks.debug.mockClear();
-  safeStorageMocks.isEncryptionAvailable.mockReset();
-  safeStorageMocks.getSelectedStorageBackend.mockReset();
-  safeStorageMocks.encryptString.mockReset();
-  safeStorageMocks.decryptString.mockReset();
-  safeStorageMocks.isEncryptionAvailable.mockReturnValue(true);
-  safeStorageMocks.getSelectedStorageBackend.mockReturnValue('gnome_libsecret');
-  safeStorageMocks.encryptString.mockImplementation((plainText: string) =>
-    Buffer.from(plainText, 'utf8'),
-  );
-  safeStorageMocks.decryptString.mockImplementation((encrypted: Buffer) =>
-    encrypted.toString('utf8'),
-  );
-  if (fs.existsSync(storeFile)) fs.rmSync(storeFile);
-  if (fs.existsSync(authSecretFile)) fs.rmSync(authSecretFile);
+  for (const mock of Object.values(loggerMocks)) mock.mockClear();
+  safeStorageMocks.isEncryptionAvailable.mockReset().mockReturnValue(true);
+  safeStorageMocks.getSelectedStorageBackend.mockReset().mockReturnValue('gnome_libsecret');
+  safeStorageMocks.encryptString
+    .mockReset()
+    .mockImplementation((plainText: string) => Buffer.from(plainText, 'utf8'));
+  safeStorageMocks.decryptString
+    .mockReset()
+    .mockImplementation((encrypted: Buffer) => encrypted.toString('utf8'));
+
+  store.closeDatabase();
+  for (const file of [
+    dbFile,
+    `${dbFile}-wal`,
+    `${dbFile}-shm`,
+    legacyStoreFile,
+    legacyAuthSecretFile,
+  ]) {
+    removeFile(file);
+  }
+  removeFile(`${legacyStoreFile}.imported`);
+  removeFile(`${legacyAuthSecretFile}.imported`);
 });
 
 afterAll(() => {
+  store.closeDatabase();
   fs.rmSync(tmpUserData, { recursive: true, force: true });
 });
 
 describe('getStoredAuth', () => {
-  it('returns the persisted session from account metadata and secure storage', async () => {
-    writeStore({
-      [STORE_KEY_AUTH]: {
-        provider: 'yggdrasil',
-        profile: { uuid: '0123456789abcdef0123456789abcdef', name: 'someone' },
-      },
+  it('round-trips a persisted session through metadata and the secret blob', () => {
+    store.initStore();
+    store.setStoredAuth({ ...yggMetadata, accessToken: 'access', clientToken: 'client' });
+
+    const session = store.getStoredAuth();
+    expect(session).toMatchObject({ provider: 'yggdrasil', accessToken: 'access' });
+    expect(authRow()?.metadata).not.toContain('accessToken');
+    expect(authRow()?.secret).toBeInstanceOf(Buffer);
+    expect(loggerMocks.warn).not.toHaveBeenCalled();
+  });
+
+  it('imports and reads a persisted session from the legacy store plus secret file', () => {
+    writeLegacyStore({
+      [STORE_KEY_AUTH]: yggMetadata,
       [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
     });
-    writeAuthSecret({
+    writeLegacyAuthSecret({
       version: 1,
       provider: 'yggdrasil',
       accessToken: 'access',
       clientToken: 'client',
     });
+    store.initStore();
 
-    const { getStoredAuth } = await loadStoreModule();
-    const session = getStoredAuth();
-    expect(session).toMatchObject({ provider: 'yggdrasil', accessToken: 'access' });
+    expect(store.getStoredAuth()).toMatchObject({ provider: 'yggdrasil', accessToken: 'access' });
     expect(loggerMocks.warn).not.toHaveBeenCalled();
   });
 
-  it('migrates a legacy plaintext session into metadata plus secure storage', async () => {
-    writeStore({
-      [STORE_KEY_AUTH]: {
-        provider: 'yggdrasil',
-        accessToken: 'access',
-        clientToken: 'client',
-        profile: { uuid: '0123456789abcdef0123456789abcdef', name: 'someone' },
-      },
+  it('migrates a legacy plaintext session into metadata plus the secret blob', () => {
+    writeLegacyStore({
+      [STORE_KEY_AUTH]: { ...yggMetadata, accessToken: 'access', clientToken: 'client' },
       [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
     });
+    store.initStore();
 
-    const { getStoredAuth } = await loadStoreModule();
-    const session = getStoredAuth();
+    const session = store.getStoredAuth();
     expect(session).toMatchObject({ provider: 'yggdrasil', accessToken: 'access' });
-    expect(fs.existsSync(authSecretFile)).toBe(true);
-    const launcherJson = fs.readFileSync(storeFile, 'utf8');
-    expect(launcherJson).not.toContain('accessToken');
-    expect(launcherJson).not.toContain('clientToken');
-    expect(launcherJson).not.toContain('refreshToken');
+    expect(authRow()?.secret).toBeInstanceOf(Buffer);
+    const metadata = authRow()?.metadata ?? '';
+    expect(metadata).not.toContain('accessToken');
+    expect(metadata).not.toContain('clientToken');
     expect(loggerMocks.info).toHaveBeenCalledWith(
       'Migrated auth session secrets to secure storage',
     );
   });
 
-  it('migrates a legacy plaintext Mojang session into secure storage', async () => {
-    writeStore({
+  it('migrates a legacy plaintext Mojang session into the secret blob', () => {
+    writeLegacyStore({
       [STORE_KEY_AUTH]: {
         provider: 'mojang',
         accessToken: 'minecraft-access',
@@ -185,60 +176,52 @@ describe('getStoredAuth', () => {
       },
       [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
     });
+    store.initStore();
 
-    const { getStoredAuth } = await loadStoreModule();
-    const session = getStoredAuth();
-    expect(session).toMatchObject({
+    expect(store.getStoredAuth()).toMatchObject({
       provider: 'mojang',
       accessToken: 'minecraft-access',
       refreshToken: 'microsoft-refresh',
     });
-    expect(fs.existsSync(authSecretFile)).toBe(true);
-    const launcherJson = fs.readFileSync(storeFile, 'utf8');
-    expect(launcherJson).not.toContain('accessToken');
-    expect(launcherJson).not.toContain('clientToken');
-    expect(launcherJson).not.toContain('refreshToken');
+    const metadata = authRow()?.metadata ?? '';
+    expect(metadata).not.toContain('accessToken');
+    expect(metadata).not.toContain('refreshToken');
   });
 
-  it('returns null and warns when the persisted blob is malformed', async () => {
-    writeStore({
-      [STORE_KEY_AUTH]: { provider: 'yggdrasil', accessToken: 1, clientToken: 'c' },
-      [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
-    });
+  it('returns null and warns when the persisted metadata is malformed', () => {
+    store.initStore();
+    getDb()
+      .prepare('INSERT INTO auth_account (id, metadata, secret) VALUES (1, ?, ?)')
+      .run(JSON.stringify({ provider: 'yggdrasil', accessToken: 1, clientToken: 'c' }), null);
 
-    const { getStoredAuth } = await loadStoreModule();
-    expect(getStoredAuth()).toBeNull();
+    expect(store.getStoredAuth()).toBeNull();
     expect(loggerMocks.warn).toHaveBeenCalledTimes(1);
   });
 
-  it('returns null when a persisted Mojang session has malformed metadata', async () => {
-    writeStore({
-      [STORE_KEY_AUTH]: {
-        provider: 'mojang',
-        expiresAt: 1_700_000_000,
-        clientId: mojangClientId,
-        xuid: mojangXuid,
-        profile: { uuid: mojangPlayerUuid, username: 'someone', skins: [] },
-      },
-      [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
-    });
-    writeAuthSecret({
-      version: 1,
-      provider: 'mojang',
-      accessToken: 'minecraft-access',
-      refreshToken: 'microsoft-refresh',
-    });
+  it('returns null when a persisted Mojang session has malformed metadata', () => {
+    store.initStore();
+    getDb()
+      .prepare('INSERT INTO auth_account (id, metadata, secret) VALUES (1, ?, ?)')
+      .run(
+        JSON.stringify({
+          provider: 'mojang',
+          expiresAt: 1_700_000_000,
+          clientId: mojangClientId,
+          xuid: mojangXuid,
+          profile: { uuid: mojangPlayerUuid, username: 'someone', skins: [] },
+        }),
+        Buffer.from(
+          JSON.stringify({ version: 1, provider: 'mojang', accessToken: 'a', refreshToken: 'r' }),
+        ),
+      );
 
-    const { getStoredAuth } = await loadStoreModule();
-    expect(getStoredAuth()).toBeNull();
-    expect(JSON.parse(fs.readFileSync(storeFile, 'utf8'))).toMatchObject({
-      [STORE_KEY_AUTH]: null,
-    });
+    expect(store.getStoredAuth()).toBeNull();
+    expect(authRow()).toBeUndefined();
     expect(loggerMocks.warn).toHaveBeenCalledTimes(1);
   });
 
-  it('purges legacy strapi-tagged sessions on first load', async () => {
-    writeStore({
+  it('purges legacy strapi-tagged sessions on first load', () => {
+    writeLegacyStore({
       [STORE_KEY_AUTH]: {
         provider: 'strapi',
         jwt: 'a.b.c',
@@ -246,74 +229,44 @@ describe('getStoredAuth', () => {
       },
       [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
     });
+    store.initStore();
 
-    const { getStoredAuth } = await loadStoreModule();
-    expect(getStoredAuth()).toBeNull();
+    expect(store.getStoredAuth()).toBeNull();
     expect(loggerMocks.warn).toHaveBeenCalled();
   });
 
-  it('clears the local session when secure storage is missing', async () => {
-    writeStore({
-      [STORE_KEY_AUTH]: {
-        provider: 'yggdrasil',
-        profile: { uuid: '0123456789abcdef0123456789abcdef', name: 'someone' },
-      },
-      [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
-    });
+  it('clears the local session when the secret blob is missing', () => {
+    store.initStore();
+    getDb()
+      .prepare('INSERT INTO auth_account (id, metadata, secret) VALUES (1, ?, ?)')
+      .run(JSON.stringify(yggMetadata), null);
 
-    const { getStoredAuth } = await loadStoreModule();
-    expect(getStoredAuth()).toBeNull();
-    expect(JSON.parse(fs.readFileSync(storeFile, 'utf8'))).toMatchObject({
-      [STORE_KEY_AUTH]: null,
-    });
+    expect(store.getStoredAuth()).toBeNull();
+    expect(authRow()).toBeUndefined();
     expect(loggerMocks.warn).toHaveBeenCalledWith(
       'Stored auth secret could not be read; forcing a fresh sign-in',
       { message: 'Stored auth secret is missing' },
     );
   });
 
-  it('clears the local session when secure storage is unavailable', async () => {
-    writeStore({
-      [STORE_KEY_AUTH]: {
-        provider: 'yggdrasil',
-        profile: { uuid: '0123456789abcdef0123456789abcdef', name: 'someone' },
-      },
-      [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
-    });
-    writeAuthSecret({
-      version: 1,
-      provider: 'yggdrasil',
-      accessToken: 'access',
-      clientToken: 'client',
-    });
+  it('clears the local session when secure storage is unavailable', () => {
+    store.initStore();
+    store.setStoredAuth({ ...yggMetadata, accessToken: 'access', clientToken: 'client' });
     safeStorageMocks.isEncryptionAvailable.mockReturnValue(false);
 
-    const { getStoredAuth } = await loadStoreModule();
-    expect(getStoredAuth()).toBeNull();
-    expect(JSON.parse(fs.readFileSync(storeFile, 'utf8'))).toMatchObject({
-      [STORE_KEY_AUTH]: null,
-    });
+    expect(store.getStoredAuth()).toBeNull();
+    expect(authRow()).toBeUndefined();
   });
 });
 
 describe('clearStoredAuth', () => {
-  it('removes account metadata and secure storage entries', async () => {
-    const session = {
-      provider: 'yggdrasil',
-      accessToken: 'access',
-      clientToken: 'client',
-      profile: { uuid: '0123456789abcdef0123456789abcdef', name: 'someone' },
-    } satisfies AuthSession;
+  it('removes the account metadata and secret blob', () => {
+    store.initStore();
+    store.setStoredAuth({ ...yggMetadata, accessToken: 'access', clientToken: 'client' });
+    expect(authRow()).toBeDefined();
 
-    const { clearStoredAuth, setStoredAuth } = await loadStoreModule();
-    setStoredAuth(session);
-    expect(fs.existsSync(authSecretFile)).toBe(true);
-
-    clearStoredAuth();
-    expect(fs.existsSync(authSecretFile)).toBe(false);
-    expect(JSON.parse(fs.readFileSync(storeFile, 'utf8'))).toMatchObject({
-      [STORE_KEY_AUTH]: null,
-    });
+    store.clearStoredAuth();
+    expect(authRow()).toBeUndefined();
   });
 });
 
@@ -325,15 +278,13 @@ const settingsFixture = (allocatedRamMb = 0): LauncherSettings => ({
 });
 
 describe('applySettingsMigrations', () => {
-  it('throws on a gap in the migration chain', async () => {
-    const { applySettingsMigrations } = await loadStoreModule();
-    expect(() => applySettingsMigrations(settingsFixture(), 0, 1, {})).toThrow(
+  it('throws on a gap in the migration chain', () => {
+    expect(() => store.applySettingsMigrations(settingsFixture(), 0, 1, {})).toThrow(
       'Missing schema migration step from version 0 to 1',
     );
   });
 
-  it('applies steps in order, threading each output into the next', async () => {
-    const { applySettingsMigrations } = await loadStoreModule();
+  it('applies steps in order, threading each output into the next', () => {
     const calls: number[] = [];
     const migrations = {
       0: (settings: LauncherSettings): LauncherSettings => {
@@ -346,55 +297,34 @@ describe('applySettingsMigrations', () => {
       },
     };
 
-    const result = applySettingsMigrations(settingsFixture(), 0, 2, migrations);
+    const result = store.applySettingsMigrations(settingsFixture(), 0, 2, migrations);
 
     expect(calls).toEqual([0, 1]);
     expect(result.memory.allocatedRamMb).toBe(15);
   });
 
-  it('returns the settings unchanged when already at the target version', async () => {
-    const { applySettingsMigrations } = await loadStoreModule();
+  it('returns the settings unchanged when already at the target version', () => {
     const settings = settingsFixture(4096);
-    expect(applySettingsMigrations(settings, 1, 1, {})).toBe(settings);
+    expect(store.applySettingsMigrations(settings, 1, 1, {})).toBe(settings);
   });
 
-  it('throws at the first missing step in a partial chain', async () => {
-    const { applySettingsMigrations } = await loadStoreModule();
+  it('throws at the first missing step in a partial chain', () => {
     const migrations = { 0: (settings: LauncherSettings): LauncherSettings => settings };
-    expect(() => applySettingsMigrations(settingsFixture(), 0, 2, migrations)).toThrow(
+    expect(() => store.applySettingsMigrations(settingsFixture(), 0, 2, migrations)).toThrow(
       'Missing schema migration step from version 1 to 2',
     );
   });
 
-  it('migrates a version-0 store to the current version at module load', async () => {
-    writeStore({
-      [STORE_KEY_LAUNCHER_SETTINGS]: {
-        memory: { allocatedRamMb: 4096 },
-        storage: { clientsFolder: '/tmp/clients' },
-        launch: { console: true, fullscreen: false },
-        clients: {},
-      },
-      [STORE_KEY_SCHEMA_VERSION]: 0,
-    });
-
-    const { getStoredLauncherSettings } = await loadStoreModule();
-    expect(getStoredLauncherSettings().memory.allocatedRamMb).toBe(4096);
-
-    const persisted = JSON.parse(fs.readFileSync(storeFile, 'utf8'));
-    expect(persisted[STORE_KEY_SCHEMA_VERSION]).toBe(CURRENT_SCHEMA_VERSION);
-  });
-
-  it('supplies a migration step for every version up to CURRENT_SCHEMA_VERSION', async () => {
-    const { applySettingsMigrations } = await loadStoreModule();
+  it('supplies a migration step for every version up to CURRENT_SCHEMA_VERSION', () => {
     expect(() =>
-      applySettingsMigrations(settingsFixture(), 0, CURRENT_SCHEMA_VERSION),
+      store.applySettingsMigrations(settingsFixture(), 0, CURRENT_SCHEMA_VERSION),
     ).not.toThrow();
   });
 });
 
 describe('initStore', () => {
-  it('performs no store migration until called', async () => {
-    writeStore({
+  it('performs no import or migration until called', () => {
+    writeLegacyStore({
       [STORE_KEY_LAUNCHER_SETTINGS]: {
         memory: { allocatedRamMb: 4096 },
         storage: { clientsFolder: '/tmp/clients' },
@@ -404,18 +334,63 @@ describe('initStore', () => {
       [STORE_KEY_SCHEMA_VERSION]: 0,
     });
 
-    vi.resetModules();
-    const storeModule = await import('@main/infra/store');
-    expect(JSON.parse(fs.readFileSync(storeFile, 'utf8'))[STORE_KEY_SCHEMA_VERSION]).toBe(0);
+    expect(fs.existsSync(legacyStoreFile)).toBe(true);
+    expect(fs.existsSync(`${legacyStoreFile}.imported`)).toBe(false);
 
-    storeModule.initStore();
-    expect(JSON.parse(fs.readFileSync(storeFile, 'utf8'))[STORE_KEY_SCHEMA_VERSION]).toBe(
-      CURRENT_SCHEMA_VERSION,
-    );
+    store.initStore();
+
+    expect(fs.existsSync(`${legacyStoreFile}.imported`)).toBe(true);
+    expect(metaValue(STORE_KEY_SCHEMA_VERSION)).toBe(String(CURRENT_SCHEMA_VERSION));
   });
 
-  it('drops a legacy strapi-tagged session only once called', async () => {
-    writeStore({
+  it('migrates a version-0 legacy store to the current version on import', () => {
+    writeLegacyStore({
+      [STORE_KEY_LAUNCHER_SETTINGS]: {
+        memory: { allocatedRamMb: 4096 },
+        storage: { clientsFolder: '/tmp/clients' },
+        launch: { console: true, fullscreen: false },
+        clients: {},
+      },
+      [STORE_KEY_SCHEMA_VERSION]: 0,
+    });
+    store.initStore();
+
+    expect(store.getStoredLauncherSettings().memory.allocatedRamMb).toBe(4096);
+    expect(metaValue(STORE_KEY_SCHEMA_VERSION)).toBe(String(CURRENT_SCHEMA_VERSION));
+  });
+
+  it('imports the instance registry and last-played map from the legacy store', () => {
+    writeLegacyStore({
+      [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
+      [STORE_KEY_INSTANCE_REGISTRY]: {
+        schema: 1,
+        instances: [
+          {
+            id: 'aaaaaaaa-1111-2222-3333-444444444444',
+            name: 'Build A',
+            dir: '/tmp/a',
+            updatedAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+      [STORE_KEY_LAST_PLAYED]: { 'local:abc': 1700000000000 },
+    });
+    store.initStore();
+
+    expect(store.getStoredInstanceRegistry().instances).toHaveLength(1);
+    expect(store.getStoredInstanceRegistry().instances[0]?.name).toBe('Build A');
+    expect(store.getLastPlayed()).toEqual({ 'local:abc': 1700000000000 });
+  });
+
+  it('seeds defaults on a fresh install with no legacy store', () => {
+    store.initStore();
+    expect(fs.existsSync(legacyStoreFile)).toBe(false);
+    expect(metaValue(STORE_KEY_SCHEMA_VERSION)).toBe(String(CURRENT_SCHEMA_VERSION));
+    expect(typeof store.getStoredLauncherSettings().memory.allocatedRamMb).toBe('number');
+  });
+
+  it('drops a legacy strapi-tagged session once called', () => {
+    writeLegacyStore({
       [STORE_KEY_AUTH]: {
         provider: 'strapi',
         jwt: 'a.b.c',
@@ -423,48 +398,35 @@ describe('initStore', () => {
       },
       [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
     });
-
-    vi.resetModules();
-    const storeModule = await import('@main/infra/store');
-    expect(JSON.parse(fs.readFileSync(storeFile, 'utf8'))[STORE_KEY_AUTH]).toMatchObject({
-      provider: 'strapi',
-    });
-
-    storeModule.initStore();
-    expect(JSON.parse(fs.readFileSync(storeFile, 'utf8'))[STORE_KEY_AUTH]).toBeNull();
+    store.initStore();
+    expect(authRow()).toBeUndefined();
   });
 });
 
 describe('getStoredLauncherSettings', () => {
-  it('returns defaults and warns when the persisted blob is malformed', async () => {
-    writeStore({
-      [STORE_KEY_LAUNCHER_SETTINGS]: { memory: 'not-an-object', storage: null, launch: 42 },
-      [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
-    });
+  it('returns defaults and warns when a stored override is structurally invalid', () => {
+    store.initStore();
+    getDb()
+      .prepare('INSERT INTO client_overrides (slug, data) VALUES (?, ?)')
+      .run('broken', JSON.stringify({ memory: { allocatedRamMb: 'not-a-number' } }));
 
-    const { getStoredLauncherSettings } = await loadStoreModule();
-    const settings = getStoredLauncherSettings();
+    const settings = store.getStoredLauncherSettings();
     expect(typeof settings.memory.allocatedRamMb).toBe('number');
     expect(settings.memory.allocatedRamMb).toBeGreaterThanOrEqual(0);
-    expect(settings.storage.clientsFolder).toBe('');
-    expect(settings.launch).toEqual({ console: false, fullscreen: false });
     expect(settings.clients).toEqual({});
     expect(loggerMocks.warn).toHaveBeenCalledTimes(1);
   });
 
-  it('passes through a valid blob without warning', async () => {
-    writeStore({
-      [STORE_KEY_LAUNCHER_SETTINGS]: {
-        memory: { allocatedRamMb: 4096 },
-        storage: { clientsFolder: '/tmp/clients' },
-        launch: { console: true, fullscreen: false },
-        clients: {},
-      },
-      [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
+  it('round-trips a valid settings object', () => {
+    store.initStore();
+    store.setStoredLauncherSettings({
+      memory: { allocatedRamMb: 4096 },
+      storage: { clientsFolder: '/tmp/clients' },
+      launch: { console: true, fullscreen: false },
+      clients: {},
     });
 
-    const { getStoredLauncherSettings } = await loadStoreModule();
-    const settings = getStoredLauncherSettings();
+    const settings = store.getStoredLauncherSettings();
     expect(settings.memory.allocatedRamMb).toBe(4096);
     expect(settings.storage.clientsFolder).toBe('/tmp/clients');
     expect(loggerMocks.warn).not.toHaveBeenCalled();

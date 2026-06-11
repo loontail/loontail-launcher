@@ -23,7 +23,6 @@ export const getRamRange = (): number[] => {
 
 export const computeDefaultRamMb = (): number => {
   const range = getRamRange();
-  if (range.length === 0) return 0;
   const cutoffIndex = Math.max(1, Math.floor(range.length / 3));
   const lower = range.slice(0, cutoffIndex);
   return Math.max(...lower);

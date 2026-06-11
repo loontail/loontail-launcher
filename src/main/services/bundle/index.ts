@@ -16,11 +16,11 @@ export type BundleService = {
 
 export const createBundleService = (
   router: Router,
-  mainWindow: BrowserWindow,
+  getMainWindow: () => BrowserWindow,
   kit: MinecraftKit,
   operationLocks: ClientOperationLocks,
 ): BundleService => {
-  const broadcaster = createBundleBroadcaster(mainWindow);
+  const broadcaster = createBundleBroadcaster(getMainWindow);
   const healer = createHealer(kit);
   const manager = new BundleManager(broadcaster, healer, operationLocks);
   return {

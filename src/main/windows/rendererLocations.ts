@@ -26,7 +26,7 @@ const FILE_PROTOCOL = 'file:';
 const ROOT_PATH = '/';
 const INDEX_PATH = '/index.html';
 
-const safeParseUrl = (rawUrl: string): URL | null => {
+export const safeParseUrl = (rawUrl: string): URL | null => {
   try {
     return new URL(rawUrl);
   } catch {

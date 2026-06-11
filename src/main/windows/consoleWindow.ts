@@ -3,12 +3,8 @@ import type { ConsoleHub } from '@main/infra/consoleHub';
 import { scopedLogger } from '@main/infra/logger';
 import { BrowserWindow } from 'electron';
 import { RENDERER_ENTRY_FILES, createRendererLocation } from './rendererLocations';
-import {
-  TITLE_BAR_HEIGHT,
-  TITLE_BAR_OVERLAY_COLOR,
-  TITLE_BAR_SYMBOL_COLOR,
-  WINDOW_BACKGROUND_COLOR,
-} from './windowColors';
+import { applyNavigationGuards, withFrameOptions } from './secureWindow';
+import { WINDOW_BACKGROUND_COLOR } from './windowColors';
 
 const DEFAULT_WIDTH = 960;
 const DEFAULT_HEIGHT = 600;
@@ -17,10 +13,8 @@ const MIN_HEIGHT = 420;
 
 const logger = scopedLogger('consoleWindow');
 
-const useNativeFrame = (): boolean => process.platform === 'linux';
-
-const buildOptions = (): Electron.BrowserWindowConstructorOptions => {
-  const base: Electron.BrowserWindowConstructorOptions = {
+const buildOptions = (): Electron.BrowserWindowConstructorOptions =>
+  withFrameOptions({
     width: DEFAULT_WIDTH,
     height: DEFAULT_HEIGHT,
     minWidth: MIN_WIDTH,
@@ -40,19 +34,7 @@ const buildOptions = (): Electron.BrowserWindowConstructorOptions => {
       // Keep drawing while the launcher is focused or Minecraft is fullscreen.
       backgroundThrottling: false,
     },
-  };
-  if (useNativeFrame()) return { ...base, frame: true };
-  return {
-    ...base,
-    frame: false,
-    titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: TITLE_BAR_OVERLAY_COLOR,
-      symbolColor: TITLE_BAR_SYMBOL_COLOR,
-      height: TITLE_BAR_HEIGHT,
-    },
-  };
-};
+  });
 
 export const openConsoleWindow = (consoleHub: ConsoleHub): BrowserWindow => {
   const existing = consoleHub.getWindow();
@@ -72,17 +54,7 @@ export const openConsoleWindow = (consoleHub: ConsoleHub): BrowserWindow => {
     return { action: 'deny' };
   });
 
-  window.webContents.on('will-navigate', (event, url) => {
-    if (!rendererLocation.isAllowedUrl(url)) {
-      event.preventDefault();
-      logger.info(`Denied console navigation: ${url}`);
-    }
-  });
-
-  window.webContents.on('will-attach-webview', (event) => {
-    event.preventDefault();
-    logger.info('Denied console webview attachment');
-  });
+  applyNavigationGuards(window, rendererLocation, logger);
 
   if (rendererLocation.loadUrl) {
     void window.loadURL(rendererLocation.loadUrl);

@@ -14,7 +14,7 @@ export const ConsoleHeader = ({ status, statusLabel, headerSubtitle }: ConsoleHe
   const { t } = useTranslation();
 
   return (
-    <header className="app-region-drag relative z-50 flex h-10 shrink-0 select-none items-center bg-transparent">
+    <header className="app-region-drag glass relative z-50 flex h-10 shrink-0 select-none items-center">
       <div className="title-bar-safe flex h-full w-full items-center border-b border-edge">
         <div className="app-region-no-drag flex h-full items-center gap-2.5 pl-4">
           <span className="flex h-4 w-4 items-center justify-center text-glass/55">
@@ -27,7 +27,7 @@ export const ConsoleHeader = ({ status, statusLabel, headerSubtitle }: ConsoleHe
             <>
               <span className="h-3 w-px bg-edge-md" aria-hidden="true" />
               <span
-                className="max-w-[260px] truncate text-caption font-semibold text-glass/85"
+                className="max-w-(--console-subtitle-max) truncate text-caption font-semibold text-glass/85"
                 title={headerSubtitle}
               >
                 {headerSubtitle}

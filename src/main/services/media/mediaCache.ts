@@ -38,6 +38,20 @@ const guessMimeFromUrl = (url: string): string => {
   return MIME_BY_EXT[ext] ?? 'application/octet-stream';
 };
 
+// The served Content-Type is stored in a tiny sidecar entry next to the body so
+// a cache hit reports the real type instead of guessing from the URL — Strapi
+// and skin URLs are often extensionless, where the guess degrades to
+// application/octet-stream. A missing sidecar (old entry) falls back to the guess.
+const typeKey = (cacheKey: string): string => `${cacheKey}.type`;
+
+const storeMime = (cacheKey: string, mimeType: string): Promise<void> =>
+  writeBuffer(CACHE_NAMESPACE, typeKey(cacheKey), Buffer.from(mimeType, 'utf8'));
+
+const readMime = async (cacheKey: string): Promise<string | null> => {
+  const stored = await readBuffer(CACHE_NAMESPACE, typeKey(cacheKey));
+  return stored ? stored.toString('utf8') : null;
+};
+
 const FETCH_TIMEOUT_MS = 30_000;
 
 const inFlight = new Map<string, Promise<CachedMedia | null>>();
@@ -60,12 +74,11 @@ const fetchAndStore = async (sourceUrl: string, cacheKey: string): Promise<Cache
       return null;
     }
     const buffer = Buffer.from(await response.arrayBuffer());
+    const mimeType = response.headers.get('content-type') ?? guessMimeFromUrl(sourceUrl);
     await writeBuffer(CACHE_NAMESPACE, cacheKey, buffer);
+    await storeMime(cacheKey, mimeType);
     scheduleEviction();
-    return {
-      body: buffer,
-      mimeType: response.headers.get('content-type') ?? guessMimeFromUrl(sourceUrl),
-    };
+    return { body: buffer, mimeType };
   } catch (error) {
     logger.warn(`Network error fetching media: ${sourceUrl}`, error);
     return null;
@@ -76,7 +89,7 @@ export const fetchCachedMedia = async (sourceUrl: string): Promise<CachedMedia |
   const cacheKey = hashUrl(sourceUrl);
   const cached = await readBuffer(CACHE_NAMESPACE, cacheKey);
   if (cached) {
-    return { body: cached, mimeType: guessMimeFromUrl(sourceUrl) };
+    return { body: cached, mimeType: (await readMime(cacheKey)) ?? guessMimeFromUrl(sourceUrl) };
   }
 
   // De-dupe concurrent <img>s in the same render tick.
@@ -91,12 +104,17 @@ export const fetchCachedMedia = async (sourceUrl: string): Promise<CachedMedia |
 };
 
 export const prewarmMediaCache = async (sourceUrl: string, body: Buffer): Promise<void> => {
-  await writeBuffer(CACHE_NAMESPACE, hashUrl(sourceUrl), body);
+  const cacheKey = hashUrl(sourceUrl);
+  await writeBuffer(CACHE_NAMESPACE, cacheKey, body);
+  // Prewarm only ever stores an uploaded skin/cape PNG (validated upstream).
+  await storeMime(cacheKey, 'image/png');
   scheduleEviction();
 };
 
 export const invalidateMediaCache = async (sourceUrl: string): Promise<void> => {
-  await deleteBuffer(CACHE_NAMESPACE, hashUrl(sourceUrl));
+  const cacheKey = hashUrl(sourceUrl);
+  await deleteBuffer(CACHE_NAMESPACE, cacheKey);
+  await deleteBuffer(CACHE_NAMESPACE, typeKey(cacheKey));
 };
 
 export const clearMediaCache = async (): Promise<void> => {

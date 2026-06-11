@@ -9,6 +9,7 @@ import {
   BUNDLE_DOWNLOAD_MAX_REDIRECTS,
   BUNDLE_DOWNLOAD_REQUEST_TIMEOUT_MS,
 } from '@main/constants/bundle';
+import { atomicReplace } from '@main/infra/atomicFile';
 import { errorMessage } from '@main/infra/errorMessage';
 import { scopedLogger } from '@main/infra/logger';
 import { BundleErrorCodes, type RemoteManifestEntry } from '@shared/contracts/bundle';
@@ -133,10 +134,18 @@ export const downloadEntry = async (
   await new Promise<void>((resolve, reject) => {
     const writeStream = fs.createWriteStream(tmpPath);
     const hash = createHash('sha256');
+    const signal = options.signal;
     let settled = false;
+    const onAbort = () => fail(new BundleError(BundleErrorCodes.ABORTED, 'Download aborted'));
+    // Detach the abort listener on every settle path. `{ once: true }` only
+    // auto-removes it when it actually fires, and every file in a sync shares
+    // one AbortSignal, so a successful download would otherwise leave an
+    // orphaned listener behind — thousands of them on a large bundle.
+    const cleanup = () => signal?.removeEventListener('abort', onAbort);
     const fail = (err: unknown) => {
       if (settled) return;
       settled = true;
+      cleanup();
       response.destroy();
       writeStream.destroy();
       reject(err);
@@ -150,6 +159,7 @@ export const downloadEntry = async (
     writeStream.on('finish', () => {
       if (settled) return;
       settled = true;
+      cleanup();
       if (entry.sha256) {
         const observed = hash.digest('hex');
         if (observed !== entry.sha256) {
@@ -164,16 +174,12 @@ export const downloadEntry = async (
       }
       resolve();
     });
-    if (options.signal) {
-      if (options.signal.aborted) {
+    if (signal) {
+      if (signal.aborted) {
         fail(new BundleError(BundleErrorCodes.ABORTED, 'Download aborted'));
         return;
       }
-      options.signal.addEventListener(
-        'abort',
-        () => fail(new BundleError(BundleErrorCodes.ABORTED, 'Download aborted')),
-        { once: true },
-      );
+      signal.addEventListener('abort', onAbort, { once: true });
     }
     response.pipe(writeStream);
   }).catch(async (err: unknown) => {
@@ -193,17 +199,11 @@ export const downloadEntry = async (
     );
   });
 
-  // Atomic swap. On Windows fs.rename fails when the target exists; remove
-  // first (idempotent on ENOENT) then rename.
   try {
-    await fsp.rm(destPath, { force: true });
-    await fsp.rename(tmpPath, destPath);
+    await atomicReplace(tmpPath, destPath, (rmErr: unknown) =>
+      logger.warn(`Failed to remove tmp ${tmpPath}`, rmErr),
+    );
   } catch (err) {
-    // Same best-effort cleanup as the network-failure branch above; surface a
-    // warn so a persistent locking issue is visible in the log.
-    await fsp
-      .rm(tmpPath, { force: true })
-      .catch((rmErr: unknown) => logger.warn(`Failed to remove tmp ${tmpPath}`, rmErr));
     throw new BundleError(
       BundleErrorCodes.DOWNLOAD_FAILED,
       `Failed to install ${entry.path}: ${errorMessage(err)}`,

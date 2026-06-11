@@ -14,6 +14,13 @@ files:
   - "!**/.vscode/*"
   - "!**/{.eslintrc*,.prettierrc*,.editorconfig,.gitignore,.gitattributes}"
   - "!**/{tsconfig*,biome.json,vitest.config*}"
+# better-sqlite3 is a native module: its compiled .node binary cannot be loaded
+# from inside the asar archive, so unpack it. electron-builder rebuilds it for
+# the Electron ABI during packaging (default npmRebuild).
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**"
+  - "**/node_modules/bindings/**"
+  - "**/node_modules/file-uri-to-path/**"
 # Ship the bundled `authlib-injector` jar alongside the app so the launch
 # path can resolve it at `process.resourcesPath/authlib-injector/`. The jar
 # itself lives in `@loontail/yggdrasil-client/vendor/`; electron-builder

@@ -22,6 +22,11 @@ import { SkinError } from './errors';
 
 const logger = scopedLogger('skin');
 
+// A 64x64 skin PNG is only a few KB; this caps a renderer that bypasses the
+// canvas re-encode and hands us a hand-crafted ArrayBuffer with a valid header
+// but megabytes of trailing chunks (validatePngBuffer only reads the header).
+const MAX_TEXTURE_BYTES = 256 * 1024;
+
 // Compile-time guard: `validatePngBuffer` takes yggdrasil-core's `SkinAssetKind`.
 // Our `SkinKind` shares the same 'skin'|'cape' literals but is declared
 // independently; this assertion fails tsc if the two unions ever diverge.
@@ -214,6 +219,9 @@ export const createSkinHandlers = (
   };
 
   const uploadSkin = async (payload: UploadSkinPayload): Promise<UploadSkinResult> => {
+    if (payload.buffer.byteLength > MAX_TEXTURE_BYTES) {
+      throw new SkinError(SkinErrorCodes.INVALID_IMAGE, 'Texture exceeds the maximum allowed size');
+    }
     const verdict = validatePngBuffer(payload.buffer, payload.type);
     if (!verdict.ok) {
       throw new SkinError(SkinErrorCodes.INVALID_IMAGE, verdict.reason);
@@ -251,7 +259,9 @@ export const createSkinHandlers = (
       const profile = await kit.auth.profile.resetSkin({ accessToken: session.accessToken });
       authSession.updateMojangProfile(session, profile);
     } catch (error) {
-      logger.warn('Failed to reset Mojang skin', error);
+      logger.error('Failed to reset Mojang skin', error);
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      throw new SkinError(SkinErrorCodes.CLEAR_FAILED, `Failed to clear skin: ${message}`);
     }
   };
 

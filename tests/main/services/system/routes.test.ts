@@ -140,7 +140,7 @@ describe('registerSystemRoutes', () => {
   it('does not register a renderer-reachable openExternal route', () => {
     const { router, handlers } = createTestRouter();
 
-    registerSystemRoutes(router, {} as BrowserWindow);
+    registerSystemRoutes(router, () => ({}) as BrowserWindow);
 
     expect(handlers.has('system.openExternal')).toBe(false);
   });
@@ -149,7 +149,7 @@ describe('registerSystemRoutes', () => {
     const defaultClientFolder = makeDir(clientsRoot, 'vanilla');
     const allowedTargets = [userData, defaultClientFolder, clientFolder, runtimePath];
     const { router, handlers } = createTestRouter();
-    registerSystemRoutes(router, {} as BrowserWindow);
+    registerSystemRoutes(router, () => ({}) as BrowserWindow);
 
     const openPathHandler = getOpenPathHandler(handlers);
     for (const target of allowedTargets) {
@@ -168,7 +168,7 @@ describe('registerSystemRoutes', () => {
   it('refuses arbitrary paths outside launcher-owned roots', async () => {
     const outsidePath = makeDir(tempRoot, 'outside');
     const { router, handlers } = createTestRouter();
-    registerSystemRoutes(router, {} as BrowserWindow);
+    registerSystemRoutes(router, () => ({}) as BrowserWindow);
 
     await getOpenPathHandler(handlers)(outsidePath);
 

@@ -100,7 +100,10 @@ business logic that touches the outside world is allowed to live.
 - `main/infra/` — low-level integrations:
   - `fs.ts` — file system helpers.
   - `http.ts` — fetch wrapper with Zod-validated responses.
-  - `store.ts` — `electron-store` wrapper for persisted settings.
+  - `store.ts` — persistence facade (validation, auth secret split,
+    settings migrations) over the SQLite layer in `infra/db/`.
+  - `db/` — `better-sqlite3` connection, schema, repositories, and the
+    one-time import from the legacy `electron-store` layout.
   - `logger.ts` — `electron-log` configuration and scoping.
 - `main/windows/` — `BrowserWindow` creation, menus, tray.
 
@@ -190,8 +193,9 @@ Currently shipping services:
 
 - `app` — version info.
 - `auth` — Yggdrasil credential login plus Mojang/Microsoft browser sign-in.
-  Account metadata is persisted in `electron-store`; bearer and refresh
-  tokens are stored through Electron `safeStorage`.
+  Account metadata is persisted in the SQLite store; bearer and refresh
+  tokens are encrypted with Electron `safeStorage` and held as a BLOB in the
+  same database.
 - `system` — RAM range, disk space, folder pick, OS path open.
 - `settings` — `launcherSettings` CRUD + per-client overrides.
 - `skin` — uploads / clears Minecraft skin & cape via skins-registry.
@@ -226,21 +230,33 @@ There is no global app store. There is no Redux.
 
 ## 7. Persistence
 
-- `electron-store` in `userData/` holds:
-  - `auth` — non-secret account metadata or `null`: provider, username/profile
-    data, UUID/XUID, client id, token expiry, and skin/cape URLs when provided
-    by the upstream profile.
-  - `launcherSettings` — `memory`, `storage`, `launch`, per-client overrides keyed by `ClientSlug`.
-  - `schemaVersion` — integer; bumped on incompatible schema changes. Each
-    bump adds a step to the `MIGRATIONS` map in `main/infra/store.ts`; an
-    out-of-band stored version aborts startup with a typed error.
-- Auth token material is not stored in plaintext `electron-store`. Yggdrasil
+- A single **SQLite** database (`better-sqlite3`) at `userData/launcher.db`
+  holds all launcher state, accessed only through the `main/infra/store.ts`
+  facade. Tables:
+  - `settings` — singleton row of `memory`, `storage`, `launch` columns.
+  - `client_overrides` — per-`ClientSlug` override rows (JSON payload).
+  - `auth_account` — singleton row: non-secret account `metadata` (provider,
+    username/profile, UUID/XUID, client id, token expiry) plus the encrypted
+    secret `BLOB`. Absent row ⇒ signed out.
+  - `instances` — the local-build registry index (one row per build).
+  - `last_played` — `CatalogKey → epoch ms` rows.
+  - `meta` — scalar metadata, including `schemaVersion`.
+- `schemaVersion` is bumped on incompatible `LauncherSettings` changes. Each
+  bump adds a step to the `MIGRATIONS` map in `main/infra/store.ts`; an
+  out-of-band stored version aborts startup with a typed error. The physical
+  table layout has its own version via SQLite `PRAGMA user_version`
+  (`infra/db/schema.ts`).
+- Auth token material is never stored in plaintext. Yggdrasil
   `accessToken`/`clientToken` and Mojang `accessToken`/`refreshToken` are
-  encrypted with Electron `safeStorage` into `userData/auth-session.bin`.
-  `safeStorage` uses Windows DPAPI and macOS Keychain. On Linux the launcher
-  accepts only libsecret or KWallet backends; `basic_text` and unavailable
-  encryption clear the local session and require sign-in instead of falling
-  back to plaintext storage.
+  encrypted with Electron `safeStorage` and kept as the `auth_account.secret`
+  BLOB. `safeStorage` uses Windows DPAPI and macOS Keychain. On Linux the
+  launcher accepts only libsecret or KWallet backends; `basic_text` and
+  unavailable encryption clear the local session and require sign-in instead
+  of falling back to plaintext storage.
+- On first launch after upgrading from the legacy `electron-store` layout,
+  `infra/db/legacyImport.ts` imports `launcher.json` (and the encrypted
+  `auth-session.bin`) into the database once, then renames the old files aside
+  with an `.imported` suffix.
 - Client install directories: `{clientsFolder}/{slug}/` (the user-configured
   folder, or its per-client override). `clientsFolder` lives under
   `app.getPath('userData')` by default.
@@ -249,8 +265,8 @@ There is no global app store. There is no Redux.
 - Java runtimes: `userData/runtimes/<component>/`.
 - Logs: `userData/logs/` (rotated by `electron-log`, 5 MB per file with
   one archived `*.old.log`, so on-disk log size stays around 10 MB).
-- No SQLite or Drizzle until a real need appears (history, search,
-  large structured data).
+- Binary blobs (cached media, Java runtimes, client/instance files) stay on
+  disk as files — only structured launcher state lives in SQLite.
 
 All file paths are produced by `main/infra/{system,cache}.ts` helpers that
 resolve against `app.getPath('userData')` or the user's explicit override

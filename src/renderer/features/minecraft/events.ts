@@ -84,6 +84,10 @@ export const MinecraftEventsListener = (): null => {
         void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.system.folderSizeRoot });
         void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.system.diskSpaceRoot });
       }
+      // The main process stamps last-played on RUNNING; refresh the Home recents.
+      if (rest.status === InstallStatuses.RUNNING) {
+        void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.history.lastPlayed });
+      }
     });
     const offProgress = window.api.on(IPC_EVENTS.minecraftProgress, ({ slug, ...rest }) =>
       patch(slug, compact(rest) as Partial<ClientRuntimeState>),

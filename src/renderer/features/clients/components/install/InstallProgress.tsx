@@ -26,11 +26,11 @@ export const InstallProgress = ({ slug, view }: InstallProgressProps) => {
     <div
       aria-live="polite"
       aria-atomic="true"
-      className="flex w-full flex-col gap-4 rounded-lg border border-edge bg-surface p-5 backdrop-blur-md"
+      className="flex w-full flex-col gap-4 rounded-md border border-edge bg-surface-1 p-5"
     >
-      <p className="text-microlabel font-bold uppercase tracking-[0.22em] text-glass/55">
+      <p className="text-microlabel font-bold uppercase tracking-eyebrow text-text-mute">
         {t(HEADER_KEY_BY_MODE[mode])}
-        {stepIndicator && <span className="ml-2 text-glass/40">- {stepIndicator}</span>}
+        {stepIndicator && <span className="ml-2 text-text-faint">· {stepIndicator}</span>}
       </p>
 
       <InstallStepper steps={steps} />

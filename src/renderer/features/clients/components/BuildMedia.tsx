@@ -2,6 +2,7 @@ import { type CatalogItem, isOfficial } from '@shared/contracts/catalog';
 import { type ReactNode, useState } from 'react';
 import { BuildVisualFallback } from './BuildVisualFallback';
 import { StrapiMedia } from './StrapiMedia';
+import { localBackgroundFor } from './localBackgrounds';
 
 type MediaSlot = 'poster' | 'background' | 'titleImage';
 
@@ -41,8 +42,21 @@ export const BuildMedia = ({ item, slot, className, fallback = 'visual' }: Build
   }
 
   const ref = item.presentation.media[slot];
-  if (!ref) return renderFallback(item, fallback, className);
-  return <img src={ref.url} alt="" className={className} onError={() => setFailed(true)} />;
+  if (ref)
+    return <img src={ref.url} alt="" className={className} onError={() => setFailed(true)} />;
+  // Personal builds rarely ship key-art; give the backdrop slot a stable, seeded
+  // Minecraft screenshot instead of a flat gradient. Other slots keep the gradient.
+  if (slot === 'background') {
+    return (
+      <img
+        src={localBackgroundFor(item.key)}
+        alt=""
+        className={className}
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+  return renderFallback(item, fallback, className);
 };
 
 export const buildScreenshotCount = (item: CatalogItem): number =>

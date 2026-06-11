@@ -7,9 +7,12 @@ export type SystemService = {
   dispose: () => Promise<void>;
 };
 
-export const createSystemService = (router: Router, mainWindow: BrowserWindow): SystemService => ({
+export const createSystemService = (
+  router: Router,
+  getMainWindow: () => BrowserWindow,
+): SystemService => ({
   init: async () => {
-    registerSystemRoutes(router, mainWindow);
+    registerSystemRoutes(router, getMainWindow);
   },
   // No subscriptions or timers to release.
   dispose: () => Promise.resolve(),

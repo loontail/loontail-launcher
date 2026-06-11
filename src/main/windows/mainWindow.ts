@@ -2,13 +2,9 @@ import { join } from 'node:path';
 import { mainConfig } from '@main/config';
 import { scopedLogger } from '@main/infra/logger';
 import { BrowserWindow, shell } from 'electron';
-import { RENDERER_ENTRY_FILES, createRendererLocation } from './rendererLocations';
-import {
-  TITLE_BAR_HEIGHT,
-  TITLE_BAR_OVERLAY_COLOR,
-  TITLE_BAR_SYMBOL_COLOR,
-  WINDOW_BACKGROUND_COLOR,
-} from './windowColors';
+import { RENDERER_ENTRY_FILES, createRendererLocation, safeParseUrl } from './rendererLocations';
+import { applyNavigationGuards, withFrameOptions } from './secureWindow';
+import { WINDOW_BACKGROUND_COLOR } from './windowColors';
 
 const DEFAULT_WIDTH = 1000;
 const DEFAULT_HEIGHT = 624;
@@ -16,16 +12,6 @@ const MIN_WIDTH = 1000;
 const MIN_HEIGHT = 624;
 
 const logger = scopedLogger('mainWindow');
-
-const useNativeFrame = (): boolean => process.platform === 'linux';
-
-const safeParseUrl = (raw: string): URL | null => {
-  try {
-    return new URL(raw);
-  } catch {
-    return null;
-  }
-};
 
 // Allowlist for shell.openExternal targets. Strapi host comes from mainConfig
 // so dev/prod stay aligned; default posture is deny.
@@ -47,8 +33,8 @@ const isAllowedExternalUrl = (raw: string, allowlist: ReadonlySet<string>): bool
   return false;
 };
 
-const buildWindowOptions = (): Electron.BrowserWindowConstructorOptions => {
-  const base: Electron.BrowserWindowConstructorOptions = {
+const buildWindowOptions = (): Electron.BrowserWindowConstructorOptions =>
+  withFrameOptions({
     width: DEFAULT_WIDTH,
     height: DEFAULT_HEIGHT,
     minWidth: MIN_WIDTH,
@@ -64,23 +50,7 @@ const buildWindowOptions = (): Electron.BrowserWindowConstructorOptions => {
       webSecurity: true,
       allowRunningInsecureContent: false,
     },
-  };
-
-  if (useNativeFrame()) {
-    return { ...base, frame: true };
-  }
-
-  return {
-    ...base,
-    frame: false,
-    titleBarStyle: 'hidden',
-    titleBarOverlay: {
-      color: TITLE_BAR_OVERLAY_COLOR,
-      symbolColor: TITLE_BAR_SYMBOL_COLOR,
-      height: TITLE_BAR_HEIGHT,
-    },
-  };
-};
+  });
 
 export const createMainWindow = (): BrowserWindow => {
   const window = new BrowserWindow(buildWindowOptions());
@@ -100,17 +70,7 @@ export const createMainWindow = (): BrowserWindow => {
     return { action: 'deny' };
   });
 
-  window.webContents.on('will-navigate', (event, url) => {
-    if (!rendererLocation.isAllowedUrl(url)) {
-      event.preventDefault();
-      logger.info(`Denied in-window navigation: ${url}`);
-    }
-  });
-
-  window.webContents.on('will-attach-webview', (event) => {
-    event.preventDefault();
-    logger.info('Denied webview attachment');
-  });
+  applyNavigationGuards(window, rendererLocation, logger);
 
   if (rendererLocation.loadUrl) {
     void window.loadURL(rendererLocation.loadUrl);

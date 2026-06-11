@@ -37,7 +37,7 @@ export const ConsoleLogBody = ({
   return (
     <div className="relative flex flex-1 flex-col min-h-0">
       {droppedCount > 0 && (
-        <div className="z-10 border-b border-edge bg-chip-dark px-4 py-1 text-center text-eyebrow text-foreground/55">
+        <div className="z-10 border-b border-edge bg-chip-dark px-4 py-1 text-center text-eyebrow text-glass/55">
           {t('console.droppedHint', { count: droppedCount })}
         </div>
       )}
@@ -46,7 +46,7 @@ export const ConsoleLogBody = ({
         className="console-body console-mono relative flex-1 overflow-auto bg-background text-console-body leading-snug"
       >
         {totalLines === 0 && (
-          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-caption text-foreground/40">
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center text-caption text-glass/40">
             {t('console.empty')}
           </div>
         )}

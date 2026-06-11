@@ -9,11 +9,16 @@ import {
   ConsoleSources,
 } from '@shared/contracts/console';
 import type { ClientSlug } from '@shared/contracts/ids';
-import { IPC_EVENTS } from '@shared/ipc';
+import { IPC_EVENTS, type IpcEventPayloads } from '@shared/ipc';
 import type { BrowserWindow } from 'electron';
 import { ConsoleBuffer, type ConsoleLineInput } from './consoleBuffer';
 import { ConsoleWindowSink } from './consoleWindowSink';
 import { type Log4jEvent, Log4jStreamParser, formatLog4jLine, mapLog4jLevel } from './log4jStream';
+
+type ConsoleEventChannel = (typeof IPC_EVENTS)[
+  | 'consoleLines'
+  | 'consoleState'
+  | 'consoleBufferReset'];
 
 const FLUSH_INTERVAL_MS = 50;
 
@@ -190,15 +195,21 @@ export class ConsoleHub {
   }
 
   emitState(state: ConsoleProcessState): void {
-    if (this.activeSession && this.activeSession.slug === state.slug) {
+    // Only tag the state with the active session's title when it actually
+    // belongs to that session. A terminal state for a different slug (e.g. an
+    // older client exiting after a newer launch became active) must keep its
+    // own title rather than being mislabeled with the active client's.
+    const matchesActive = this.activeSession?.slug === state.slug;
+    if (this.activeSession && matchesActive) {
       this.activeSession = {
         ...this.activeSession,
         state: { ...state, clientTitle: this.activeSession.clientTitle },
       };
     }
-    const payload: ConsoleProcessState = this.activeSession
-      ? { ...state, clientTitle: this.activeSession.clientTitle }
-      : state;
+    const payload: ConsoleProcessState =
+      this.activeSession && matchesActive
+        ? { ...state, clientTitle: this.activeSession.clientTitle }
+        : state;
     this.sendToWindow(IPC_EVENTS.consoleState, payload);
   }
 
@@ -259,7 +270,12 @@ export class ConsoleHub {
     this.flushTimer = null;
   }
 
-  private sendToWindow(channel: string, payload: unknown): void {
+  // Typed to the console.* event channels so a wrong channel/payload pairing
+  // fails tsc instead of silently shipping a mismatched wire shape.
+  private sendToWindow<E extends ConsoleEventChannel>(
+    channel: E,
+    payload: IpcEventPayloads[E],
+  ): void {
     this.sink.send(channel, payload);
   }
 }

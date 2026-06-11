@@ -77,6 +77,7 @@ export type IpcContract = {
   'builds.listMinecraftVersions': { args: undefined; result: MinecraftVersionOption[] };
   'builds.listLoaderVersions': { args: ListLoaderVersionsArgs; result: LoaderVersionOption[] };
   'servers.getStatuses': { args: string[]; result: ServerStatus[] };
+  'history.lastPlayed': { args: undefined; result: Record<string, number> };
   'minecraft.getStatus': {
     args: ClientSlug;
     result: { status: InstallStatus; paused: boolean };
@@ -94,6 +95,7 @@ export type IpcContract = {
   'bundle.resume': { args: ClientSlug; result: void };
   'bundle.cancel': { args: ClientSlug; result: void };
   'bundle.checkStatus': { args: ClientSlug; result: BundleInstallState };
+  'console.open': { args: undefined; result: void };
   'console.getInitial': { args: undefined; result: ConsoleInitialPayload };
   'console.clear': { args: undefined; result: void };
   'console.copyAll': { args: undefined; result: void };
@@ -118,5 +120,3 @@ export type IpcEventPayloads = {
   'console.state': ConsoleProcessState;
   'console.bufferReset': null;
 };
-
-export type IpcEventPayload<E extends keyof IpcEventPayloads> = IpcEventPayloads[E];

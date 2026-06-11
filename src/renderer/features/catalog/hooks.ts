@@ -15,6 +15,9 @@ export type UseCatalogResult = {
   // banner; local builds always render regardless.
   officialOk: boolean;
   isPending: boolean;
+  // True while a (re)fetch is in flight, including background refetches after an
+  // invalidation — lets consumers wait out a just-created build landing.
+  isFetching: boolean;
   isError: boolean;
 };
 
@@ -29,7 +32,13 @@ export const useCatalog = (): UseCatalogResult => {
   const items = useMemo(() => query.data?.items.slice() ?? [], [query.data]);
   const officialOk =
     query.data?.sources.find((source) => source.id === SourceKinds.OFFICIAL)?.ok ?? true;
-  return { items, officialOk, isPending: query.isPending, isError: query.isError };
+  return {
+    items,
+    officialOk,
+    isPending: query.isPending,
+    isFetching: query.isFetching,
+    isError: query.isError,
+  };
 };
 
 const useCatalogMutation = <TInput, TResult>(mutationFn: (input: TInput) => Promise<TResult>) => {

@@ -48,6 +48,7 @@ import type { CatalogService } from '@main/services/catalog/catalog';
 import { registerCatalogRoutes } from '@main/services/catalog/routes';
 import { registerClientsRoutes } from '@main/services/clients/routes';
 import { createConsoleService } from '@main/services/console';
+import { registerHistoryRoutes } from '@main/services/history/routes';
 import { registerInstanceRoutes } from '@main/services/instances/routes';
 import { registerMediaRoutes } from '@main/services/media/routes';
 import type { MinecraftManager } from '@main/services/minecraft/manager';
@@ -91,18 +92,19 @@ describe('IpcContract handler coverage', () => {
 
     registerAppRoutes(router);
     registerAuthRoutes(router, stub<YggdrasilAuth>(), stub<MojangAuth>(), stub<FetchTextures>());
-    registerSettingsRoutes(router, fakeWindow());
-    registerSystemRoutes(router, fakeWindow());
+    registerSettingsRoutes(router, fakeWindow);
+    registerSystemRoutes(router, fakeWindow);
     registerMediaRoutes(router);
     registerSkinRoutes(router, stub<SkinHandlers>());
     registerClientsRoutes(router);
     registerCatalogRoutes(router, stub<CatalogService>());
     registerInstanceRoutes(router, stub<MinecraftKit>());
     registerServersRoutes(router);
+    registerHistoryRoutes(router);
     registerMinecraftRoutes(router, stub<MinecraftManager>());
     registerBundleRoutes(router, stub<BundleManager>());
-    await createConsoleService(router, fakeConsoleHub()).init();
-    await createUpdaterService(router, fakeWindow()).init();
+    await createConsoleService(router, fakeConsoleHub(), () => {}).init();
+    await createUpdaterService(router, fakeWindow).init();
 
     const contractChannels = Object.values(IPC_CHANNELS) as Array<keyof IpcContract>;
 

@@ -1,3 +1,4 @@
+import { writeClipboardText } from '@main/infra/clipboard';
 import {
   ensureDirectory,
   getDiskSpace,
@@ -10,7 +11,7 @@ import { assertNoIpcArgs, parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
 import { getSettings } from '@main/services/settings/settings';
 import { IPC_CHANNELS } from '@shared/ipc';
-import { type BrowserWindow, app, clipboard } from 'electron';
+import { type BrowserWindow, app } from 'electron';
 import { z } from 'zod';
 
 const PathArgSchema = z.string().min(1);
@@ -28,7 +29,7 @@ const getOpenPathAllowedRoots = (): string[] => {
   return [app.getPath('userData'), settings.storage.clientsFolder, ...clientRoots].filter(Boolean);
 };
 
-export const registerSystemRoutes = (router: Router, mainWindow: BrowserWindow): void => {
+export const registerSystemRoutes = (router: Router, getMainWindow: () => BrowserWindow): void => {
   router.handle(IPC_CHANNELS.systemGetRamRange, (rawArgs) => {
     assertNoIpcArgs(rawArgs, 'system.getRamRange takes no arguments');
     return getRamRange();
@@ -46,7 +47,7 @@ export const registerSystemRoutes = (router: Router, mainWindow: BrowserWindow):
 
   router.handle(IPC_CHANNELS.systemPickInstallFolder, async (rawArgs) => {
     assertNoIpcArgs(rawArgs, 'system.pickInstallFolder takes no arguments');
-    const picked = await pickFolderWithSuffix(mainWindow, null);
+    const picked = await pickFolderWithSuffix(getMainWindow(), null);
     if (picked) await ensureDirectory(picked.path);
     return picked;
   });
@@ -61,12 +62,8 @@ export const registerSystemRoutes = (router: Router, mainWindow: BrowserWindow):
     await openPath(path, getOpenPathAllowedRoots());
   });
 
-  // Write via the native clipboard module: the renderer's permission handler
-  // denies `clipboard-write` by default, so navigator.clipboard.writeText
-  // silently fails. Going through main bypasses Chromium's focus / permission
-  // gating entirely.
   router.handle(IPC_CHANNELS.systemCopyText, (rawArgs) => {
     const text = parseIpcArgs(z.string(), rawArgs, 'text must be a string');
-    clipboard.writeText(text);
+    writeClipboardText(text);
   });
 };

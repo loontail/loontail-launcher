@@ -45,13 +45,27 @@
   "clients": {
     "myBuilds": "Мої збірки",
     "official": "Офіційні",
-    "officialUnavailable": "Офіційні збірки недоступні — показано ваші локальні",
-    "officialEmpty": "Зараз немає доступних офіційних збірок",
     "createBuild": "Створити збірку",
+    "curatedBy": "Куратор — Loontail",
+    "details": "Деталі",
+    "viewAll": "Усі",
+    "viewToggleAria": "Перемкнути вигляд сітки або списку",
+    "stat": {
+      "version": "Версія",
+      "minecraft": "Minecraft",
+      "loader": "Завантажувач",
+      "servers": "Сервери",
+      "screenshots": "Скриншоти"
+    },
+    "searchPlaceholder": "Пошук збірок",
+    "viewGrid": "Сітка",
+    "viewList": "Список",
+    "noResults": "Немає збірок за запитом «{{query}}»",
+    "clearSearch": "Очистити пошук",
     "openDetails": "Відкрити деталі збірки {{name}}",
     "detailAria": "Деталі збірки {{name}}",
-    "emptyTitle": "Ще немає збірок",
-    "emptyDescription": "Створіть свою першу локальну Minecraft-збірку, щоб почати, або зачекайте на завантаження офіційних збірок Loontail.",
+    "myBuildsEmptyTitle": "Ще немає власних збірок",
+    "myBuildsEmptyDescription": "Створіть збірку, щоб налаштувати власний екземпляр з потрібною версією та завантажувачем.",
     "status": {
       "unknown": "Перевірка…",
       "notInstalled": "Не встановлено",
@@ -70,13 +84,20 @@
     },
     "screenshots": "Скриншоти",
     "about": "Про клієнт",
-    "servers": "Доступні сервери",
+    "tabs": {
+      "overview": "Огляд",
+      "screenshots": "Скриншоти",
+      "servers": "Сервери",
+      "settings": "Налаштування"
+    },
+    "noAbout": "Для цієї збірки ще немає опису",
     "download": "Завантажити",
     "checking": "Перевірка...",
     "repairing": "Відновлення...",
     "repair": "Відновити",
     "repairOffer": "Деякі файли гри відсутні або застаріли. Відновити цей клієнт?",
     "play": "Грати",
+    "running": "Запущено",
     "update": "Оновити",
     "pause": "Пауза",
     "resume": "Продовжити",
@@ -86,6 +107,7 @@
     "launching": "Запуск…",
     "uninstalling": "Видалення…",
     "paused": "пауза",
+    "progressStalled": "Повільне з'єднання — продовжуємо спроби…",
     "setInstallFolder": "Спочатку оберіть папку клієнтів у налаштуваннях",
     "stage": {
       "prepare": "Підготовка",
@@ -159,11 +181,14 @@
       "unknown": "Невідома помилка: {{message}}"
     }
   },
+  "home": {
+    "continuePlaying": "Продовжити гру",
+    "recent": "Нещодавні",
+    "emptyTitle": "Поки що немає збірок",
+    "emptyDescription": "Знайдіть готову збірку на сторінці «Збірки» або створіть власну, щоб почати грати.",
+    "emptyCta": "Переглянути збірки"
+  },
   "clientSettings": {
-    "title": "{{name}}",
-    "subtitle": "Налаштування для цього клієнта",
-    "openAria": "Відкрити налаштування клієнта",
-    "close": "Закрити",
     "clientFolder": "Папка клієнта",
     "clientFolderDesc": "Версії, моди, ресурс-паки та конфіги цього клієнта зберігаються тут — окремо від інших клієнтів.",
     "openFolder": "Відкрити",
@@ -201,7 +226,9 @@
   },
   "createBuild": {
     "title": "Створити збірку",
+    "subtitle": "Налаштуйте новий екземпляр",
     "name": "Назва",
+    "icon": "Іконка",
     "namePlaceholder": "Мій модовий світ",
     "minecraftVersion": "Версія Minecraft",
     "selectVersion": "Оберіть версію",
@@ -224,9 +251,13 @@
       "next": "Наступний слайд"
     }
   },
-  "navigation": {
-    "back": "Назад",
-    "openSettings": "Відкрити налаштування"
+  "nav": {
+    "rail": "Основна навігація",
+    "home": "Головна",
+    "builds": "Збірки",
+    "settings": "Налаштування",
+    "console": "Консоль",
+    "back": "Назад"
   },
   "appBar": {
     "alphaTag": "Альфа",

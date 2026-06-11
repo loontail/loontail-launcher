@@ -115,7 +115,12 @@ export const pruneClientOverrides = (
   const next: Record<string, ClientSettingsOverride> = {};
   let removed = false;
   for (const [slug, override] of Object.entries(settings.clients)) {
-    if (override === undefined) continue;
+    // override is typed `| undefined` under noUncheckedIndexedAccess; the guard
+    // both narrows it and drops any stray undefined entry from the rebuilt map.
+    if (override === undefined) {
+      removed = true;
+      continue;
+    }
     if (keepSlugs.has(slug)) {
       next[slug] = override;
     } else {

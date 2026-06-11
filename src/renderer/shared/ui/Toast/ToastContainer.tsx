@@ -57,7 +57,7 @@ export const ToastContainer = () => {
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
       style={{ height: layout.height }}
-      className="pointer-events-none fixed right-4 bottom-4 z-[60] w-[360px] max-w-[92vw] transition-[height] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]"
+      className="pointer-events-none fixed right-4 bottom-4 z-[60] w-90 max-w-[92vw] transition-[height] duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]"
     >
       {layout.items.map(({ entry, paused, style }) => (
         <ToastItem

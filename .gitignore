@@ -2,6 +2,7 @@ node_modules/
 out/
 dist/
 build/
+.shots/
 *.log
 *.tsbuildinfo
 .DS_Store
@@ -11,3 +12,5 @@ build/
 .env
 .env.local
 .env.*.local
+.superpowers/
+.tmp-profile/

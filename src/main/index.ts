@@ -13,7 +13,7 @@ import { createConsoleHub } from '@main/infra/consoleHub';
 import { initLogger, scopedLogger } from '@main/infra/logger';
 import { attachNotifier, notify } from '@main/infra/notifier';
 import { configureSessionSecurity } from '@main/infra/session';
-import { initStore } from '@main/infra/store';
+import { closeDatabase, initStore } from '@main/infra/store';
 import { createRouter } from '@main/ipc/router';
 import { createTrustedSenderCheck } from '@main/ipc/trustedSender';
 import { createAppService } from '@main/services/app';
@@ -25,6 +25,7 @@ import { createCatalogService } from '@main/services/catalog';
 import { createClientOperationLocks } from '@main/services/clientOperationLocks';
 import { createClientsService, getClients } from '@main/services/clients';
 import { createConsoleService } from '@main/services/console';
+import { createHistoryService } from '@main/services/history';
 import { createInstancesService } from '@main/services/instances';
 import { createKit } from '@main/services/kit';
 import { CACHE_SCHEME, createMediaService } from '@main/services/media';
@@ -98,7 +99,12 @@ const start = async (): Promise<void> => {
 
   configureSessionSecurity();
 
-  const mainWindow = createMainWindow();
+  // Held in a mutable holder and read through getMainWindow so every
+  // window-dependent consumer follows the live window across a macOS dock
+  // re-open (which destroys then recreates it), instead of capturing the
+  // original by value and going dead.
+  let mainWindow = createMainWindow();
+  const getMainWindow = (): BrowserWindow => mainWindow;
   attachNotifier(mainWindow);
   // One console hub for the process, created here and threaded into every
   // consumer (launch flow, console service, trusted-sender check) instead of a
@@ -107,15 +113,15 @@ const start = async (): Promise<void> => {
   const openConsole = (): void => {
     openConsoleWindow(consoleHub);
   };
-  const router = createRouter(createTrustedSenderCheck(mainWindow, consoleHub));
+  const router = createRouter(createTrustedSenderCheck(getMainWindow, consoleHub));
 
   const kit = createKit();
   const yggdrasilGateway = createYggdrasilClient();
   const clientOperationLocks = createClientOperationLocks();
   const appService = createAppService(router);
   const authService = createAuthService(router, kit, yggdrasilGateway);
-  const systemService = createSystemService(router, mainWindow);
-  const settingsService = createSettingsService(router, mainWindow);
+  const systemService = createSystemService(router, getMainWindow);
+  const settingsService = createSettingsService(router, getMainWindow);
   const skinService = createSkinService(router, kit, yggdrasilGateway, authService.session);
   const clientsService = createClientsService(router);
   const instancesService = createInstancesService(router, kit);
@@ -124,24 +130,25 @@ const start = async (): Promise<void> => {
     extraSources: [instancesService.localSource],
   });
   const serversService = createServersService(router);
+  const historyService = createHistoryService(router);
   const mediaService = createMediaService(router);
   const minecraftService = createMinecraftService(
     router,
-    mainWindow,
+    getMainWindow,
     kit,
     clientOperationLocks,
     consoleHub,
     openConsole,
     getStoredAccount,
   );
-  const bundleService = createBundleService(router, mainWindow, kit, clientOperationLocks);
+  const bundleService = createBundleService(router, getMainWindow, kit, clientOperationLocks);
   // Wire bundle sync into the launch flow — runs after install, before launch.
   // No-op for clients without a bundleSlug (handled inside syncForLaunch).
   minecraftService.manager.attachLaunchHook((slug, signal) =>
     bundleService.manager.syncForLaunch(slug, signal),
   );
-  const consoleService = createConsoleService(router, consoleHub);
-  const updaterService = createUpdaterService(router, mainWindow);
+  const consoleService = createConsoleService(router, consoleHub, openConsole);
+  const updaterService = createUpdaterService(router, getMainWindow);
 
   await appService.init();
   await authService.init();
@@ -152,6 +159,7 @@ const start = async (): Promise<void> => {
   await instancesService.init();
   await catalogService.init();
   await serversService.init();
+  await historyService.init();
   await mediaService.init();
   await minecraftService.init();
   await bundleService.init();
@@ -169,20 +177,28 @@ const start = async (): Promise<void> => {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      createMainWindow();
+      // Recreate the window and re-point the holder + notifier at it; the
+      // window-dependent services read it through getMainWindow, so they follow
+      // the new window without rewiring.
+      mainWindow = createMainWindow();
+      attachNotifier(mainWindow);
     }
   });
 
   let disposed = false;
   const drain = async (): Promise<void> => {
     clientOperationLocks.cancelAll();
-    // Reverse-init order so consumers tear down before the infrastructure they depend on.
+    // Dispose every service concurrently — teardown is independent (each only
+    // releases its own listeners/timers/children), so order doesn't matter and
+    // a slow one can't block the rest. cancelAll above already stopped in-flight
+    // work; the database is closed last, after this settles.
     await Promise.allSettled([
       updaterService.dispose(),
       consoleService.dispose(),
       bundleService.dispose(),
       minecraftService.dispose(),
       mediaService.dispose(),
+      historyService.dispose(),
       serversService.dispose(),
       catalogService.dispose(),
       instancesService.dispose(),
@@ -194,6 +210,7 @@ const start = async (): Promise<void> => {
       appService.dispose(),
     ]);
     router.dispose();
+    closeDatabase();
     logger.info('Launcher disposed');
   };
 

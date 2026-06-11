@@ -17,14 +17,14 @@ export type MinecraftService = {
 
 export const createMinecraftService = (
   router: Router,
-  mainWindow: BrowserWindow,
+  getMainWindow: () => BrowserWindow,
   kit: MinecraftKit,
   operationLocks: ClientOperationLocks,
   consoleHub: ConsolePort,
   openConsole: () => void,
   accountProvider: AccountProvider,
 ): MinecraftService => {
-  const broadcaster = createBroadcaster(mainWindow);
+  const broadcaster = createBroadcaster(getMainWindow);
   const manager = new MinecraftManager(
     broadcaster,
     kit,

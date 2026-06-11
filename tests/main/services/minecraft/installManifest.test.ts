@@ -124,7 +124,6 @@ const repairAllReport = (): RepairAllReport => ({
 
 const installOp = (): InstallOp => ({
   kind: OpKinds.INSTALL,
-  status: InstallStatuses.INSTALLING,
   pauseController: {
     pause: vi.fn(),
     resume: vi.fn(),

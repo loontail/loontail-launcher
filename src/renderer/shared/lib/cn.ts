@@ -12,6 +12,11 @@ const twMerge = extendTailwindMerge({
       'font-size': [
         {
           text: [
+            'display',
+            'h1',
+            'h2',
+            'body',
+            'body-med',
             'eyebrow',
             'caption',
             'microlabel',

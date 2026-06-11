@@ -49,6 +49,22 @@ export type YggdrasilAuth = {
   signOut: (session: YggdrasilSession) => Promise<void>;
 };
 
+type IssuedSession = {
+  accessToken: string;
+  clientToken: string;
+  selectedProfile: { id: string; name: string };
+};
+
+// Build a stored session from an authenticate/refresh result. Normalises the
+// server-provided UUID to lowercase undashed so all downstream code (storage,
+// IPC, launch composer) sees the same shape regardless of upstream casing.
+const sessionFromIssued = (issued: IssuedSession): YggdrasilSession => ({
+  provider: 'yggdrasil',
+  accessToken: issued.accessToken,
+  clientToken: issued.clientToken,
+  profile: { uuid: undashUuid(issued.selectedProfile.id), name: issued.selectedProfile.name },
+});
+
 export const createYggdrasilAuth = (client: YggdrasilClient): YggdrasilAuth => {
   const signIn = async (payload: LoginPayload): Promise<YggdrasilLoginResult> => {
     try {
@@ -56,16 +72,7 @@ export const createYggdrasilAuth = (client: YggdrasilClient): YggdrasilAuth => {
         username: payload.identifier,
         password: payload.password,
       });
-      const session: YggdrasilSession = {
-        provider: 'yggdrasil',
-        accessToken: issued.accessToken,
-        clientToken: issued.clientToken,
-        // Normalise the server-provided UUID to lowercase undashed so all
-        // downstream code (storage, IPC, launch composer) sees the same
-        // shape regardless of upstream casing.
-        profile: { uuid: undashUuid(issued.selectedProfile.id), name: issued.selectedProfile.name },
-      };
-      return { ok: true, session };
+      return { ok: true, session: sessionFromIssued(issued) };
     } catch (error) {
       const code = loginErrorFromError(error);
       if (code === LOGIN_ERROR_CODE.Unknown) {
@@ -97,16 +104,7 @@ export const createYggdrasilAuth = (client: YggdrasilClient): YggdrasilAuth => {
         accessToken: session.accessToken,
         clientToken: session.clientToken,
       });
-      const next: YggdrasilSession = {
-        provider: 'yggdrasil',
-        accessToken: rotated.accessToken,
-        clientToken: rotated.clientToken,
-        profile: {
-          uuid: undashUuid(rotated.selectedProfile.id),
-          name: rotated.selectedProfile.name,
-        },
-      };
-      return { kind: 'ok', session: next };
+      return { kind: 'ok', session: sessionFromIssued(rotated) };
     } catch (error) {
       if (isHttpStatus(error, HTTP_FORBIDDEN)) return { kind: 'expired' };
       if (isNetworkFailure(error)) return { kind: 'offline' };

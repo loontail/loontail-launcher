@@ -21,7 +21,6 @@ import type { Broadcaster } from '@main/services/minecraft/broadcast';
 import { MinecraftManager } from '@main/services/minecraft/manager';
 import { type Op, OpKinds } from '@main/services/minecraft/ops';
 import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
-import { InstallStatuses } from '@shared/contracts/minecraft';
 import { stubAccountProvider, stubConsolePort, stubOpenConsole } from './managerStubs';
 
 const SLUG = asClientSlug('test-client');
@@ -42,7 +41,6 @@ const setOp = (manager: MinecraftManager, op: Op): void => {
 
 const installOp = (): Op => ({
   kind: OpKinds.INSTALL,
-  status: InstallStatuses.INSTALLING,
   pauseController: new PauseController(),
   abort: new AbortController(),
   paused: false,

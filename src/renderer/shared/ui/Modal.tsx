@@ -5,7 +5,7 @@ import { createPortal } from 'react-dom';
 const FOCUSABLE_SELECTOR =
   'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-// Ref-counted so nested modals (ClientSettingsModal → UninstallConfirmModal)
+// Ref-counted so nested modals (e.g. a confirm dialog opened from another modal)
 // don't unlock body scroll while an outer modal is still open.
 let openModalCount = 0;
 let previousBodyOverflow = '';
@@ -24,6 +24,11 @@ const unlockBodyScroll = () => {
     document.body.style.overflow = previousBodyOverflow;
   }
 };
+
+// True while any modal is mounted. An open modal owns the Escape key (it closes
+// itself), so the global back handler consults this to avoid also popping the
+// route on the same keypress.
+export const isAnyModalOpen = (): boolean => openModalCount > 0;
 
 type ModalProps = {
   isOpen: boolean;
@@ -117,7 +122,7 @@ export const Modal = ({
         aria-label={ariaLabel}
         onMouseDown={(event) => event.stopPropagation()}
         className={cn(
-          'glass relative flex w-full max-w-lg flex-col gap-4 rounded-md border border-border p-6 shadow-2xl',
+          'glass relative flex w-full max-w-lg flex-col gap-4 rounded-lg border border-border p-6 shadow-2xl',
           className,
         )}
       >

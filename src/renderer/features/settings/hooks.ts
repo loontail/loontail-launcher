@@ -97,36 +97,48 @@ export const useRamRange = () => {
   return { range: query.data, isPending: query.isPending };
 };
 
-export const useDiskSpace = (path: string | undefined | null) => {
-  // Debounce so rapid client switching doesn't fan out N IPC calls.
-  const [debouncedPath, setDebouncedPath] = useState<string | undefined | null>(path);
+const useDebouncedValue = <T>(value: T, delayMs: number): T => {
+  const [debounced, setDebounced] = useState(value);
   useEffect(() => {
-    const handle = window.setTimeout(() => setDebouncedPath(path), DISK_SPACE_DEBOUNCE_MS);
+    const handle = window.setTimeout(() => setDebounced(value), delayMs);
     return () => window.clearTimeout(handle);
-  }, [path]);
+  }, [value, delayMs]);
+  return debounced;
+};
+
+// Shared shape for the path-sized lookups: debounce the path (so rapid client
+// switching doesn't fan out N IPC calls), then run an enabled, path-keyed query.
+const useDebouncedPathQuery = <T>(config: {
+  path: string | undefined | null;
+  staleTime: number;
+  queryKey: (path: string) => readonly unknown[];
+  fetch: (path: string) => Promise<T>;
+}) => {
+  const resolved = useDebouncedValue(config.path, DISK_SPACE_DEBOUNCE_MS) ?? '';
   const query = useQuery({
-    queryKey: QUERY_KEYS.system.diskSpace(debouncedPath ?? ''),
-    queryFn: () => getDiskSpace(debouncedPath ?? ''),
-    enabled: typeof debouncedPath === 'string' && debouncedPath.length > 0,
-    staleTime: DISK_SPACE_STALE_TIME_MS,
+    queryKey: config.queryKey(resolved),
+    queryFn: () => config.fetch(resolved),
+    enabled: resolved.length > 0,
+    staleTime: config.staleTime,
   });
   return { info: query.data, isPending: query.isPending };
 };
 
-export const useFolderSize = (path: string | undefined | null) => {
-  const [debouncedPath, setDebouncedPath] = useState<string | undefined | null>(path);
-  useEffect(() => {
-    const handle = window.setTimeout(() => setDebouncedPath(path), DISK_SPACE_DEBOUNCE_MS);
-    return () => window.clearTimeout(handle);
-  }, [path]);
-  const query = useQuery({
-    queryKey: QUERY_KEYS.system.folderSize(debouncedPath ?? ''),
-    queryFn: () => getFolderSize(debouncedPath ?? ''),
-    enabled: typeof debouncedPath === 'string' && debouncedPath.length > 0,
-    staleTime: FOLDER_SIZE_STALE_TIME_MS,
+export const useDiskSpace = (path: string | undefined | null) =>
+  useDebouncedPathQuery({
+    path,
+    staleTime: DISK_SPACE_STALE_TIME_MS,
+    queryKey: QUERY_KEYS.system.diskSpace,
+    fetch: getDiskSpace,
   });
-  return { info: query.data, isPending: query.isPending };
-};
+
+export const useFolderSize = (path: string | undefined | null) =>
+  useDebouncedPathQuery({
+    path,
+    staleTime: FOLDER_SIZE_STALE_TIME_MS,
+    queryKey: QUERY_KEYS.system.folderSize,
+    fetch: getFolderSize,
+  });
 
 export const useResolveFor = (slug: ClientSlug | null | undefined) => {
   const { settings } = useLauncherSettings();

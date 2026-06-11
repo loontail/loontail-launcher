@@ -22,7 +22,7 @@ import { dashUuid } from '@loontail/yggdrasil-core';
 import { mainConfig } from '@main/config';
 import { errorMessage } from '@main/infra/errorMessage';
 import { scopedLogger } from '@main/infra/logger';
-import { getStoredAuth } from '@main/infra/store';
+import { getStoredAuth, recordPlayed } from '@main/infra/store';
 import type { Account } from '@shared/contracts/account';
 import type { AuthSession } from '@shared/contracts/auth';
 import { ConsoleSources, ConsoleStatuses } from '@shared/contracts/console';
@@ -386,15 +386,10 @@ export const runLaunch = async (
       return;
     }
     env.ops.set(slug, { kind: OpKinds.LAUNCH, session });
-    env.emitStatus({ slug, status: InstallStatuses.RUNNING, paused: false });
-    env.console.emitState({ slug, status: ConsoleStatuses.RUNNING, clientTitle });
-    env.console.recordSystem('Process started', {
-      code: 'console.system.processStarted',
-      slug,
-    });
-
-    // Kit rejects session.exited on non-zero exit; trailing .catch guards
-    // against endLaunch itself throwing.
+    // Observe termination before any post-spawn bookkeeping that could throw: a
+    // failure below must never leave the process unobserved or the LAUNCH op
+    // stranded (which would brick the slug via requireIdle). Kit rejects
+    // session.exited on non-zero exit; the trailing .catch guards endLaunch.
     void session.exited
       .then((exit) => {
         endLaunch(env, slug, undefined, exit);
@@ -405,6 +400,22 @@ export const runLaunch = async (
       .catch((error: unknown) => {
         env.logger.error(`[${slug}] endLaunch threw`, error);
       });
+
+    // The build reached RUNNING — stamp it for the Home recents. Keyed by the
+    // resolved CatalogKey (ctx.item.key), not the operational slug, so the
+    // renderer can match it against the catalog directly. Best-effort: a stamp
+    // failure must not derail a launch that already succeeded.
+    try {
+      recordPlayed(ctx.item.key);
+    } catch (error) {
+      env.logger.warn(`[${slug}] failed to record last-played`, error);
+    }
+    env.emitStatus({ slug, status: InstallStatuses.RUNNING, paused: false });
+    env.console.emitState({ slug, status: ConsoleStatuses.RUNNING, clientTitle });
+    env.console.recordSystem('Process started', {
+      code: 'console.system.processStarted',
+      slug,
+    });
   } catch (error) {
     if (startupSignal.aborted) {
       restoreInstalled();
