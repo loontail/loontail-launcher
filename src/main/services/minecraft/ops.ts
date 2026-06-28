@@ -68,40 +68,8 @@ export const OP_TO_STATUS: Record<OpKind, InstallStatus> = {
   [OpKinds.LAUNCH]: InstallStatuses.RUNNING,
 };
 
-export class OpRegistry {
-  // The backing Map is shared into ManagerEnv.ops and mutated by the consumer
-  // modules (install/launch/repair/uninstall) through that reference, so it is
-  // exposed via `map` rather than re-wrapped — env.ops and the registry must
-  // point at the same object.
-  private readonly entries = new Map<CatalogKey, Op>();
-
-  get map(): Map<CatalogKey, Op> {
-    return this.entries;
-  }
-
-  get(key: CatalogKey): Op | undefined {
-    return this.entries.get(key);
-  }
-
-  set(key: CatalogKey, op: Op): void {
-    this.entries.set(key, op);
-  }
-
-  delete(key: CatalogKey): boolean {
-    return this.entries.delete(key);
-  }
-
-  has(key: CatalogKey): boolean {
-    return this.entries.has(key);
-  }
-
-  keys(): IterableIterator<CatalogKey> {
-    return this.entries.keys();
-  }
-}
-
-// Test-only: mirrors seedActiveSync so op-map seeding lives behind the registry
-// API instead of a private-field cast.
-export const seedOp = (registry: OpRegistry, key: CatalogKey, op: Op): void => {
-  registry.set(key, op);
-};
+// The manager and the consumer modules (install/launch/repair/uninstall) share
+// one live Map of in-flight ops per slug: the manager reads it back via this.ops
+// while the consumers mutate it through ManagerEnv.ops, both pointing at the same
+// object.
+export type OpMap = Map<CatalogKey, Op>;

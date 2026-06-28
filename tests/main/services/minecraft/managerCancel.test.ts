@@ -17,7 +17,7 @@ vi.mock('@main/services/settings/settings', () => ({
 import { createClientOperationLocks } from '@main/services/clientOperationLocks';
 import type { Broadcaster } from '@main/services/minecraft/broadcast';
 import { MinecraftManager } from '@main/services/minecraft/manager';
-import { type Op, OpKinds, OpRegistry, seedOp } from '@main/services/minecraft/ops';
+import { type Op, OpKinds, type OpMap } from '@main/services/minecraft/ops';
 import { asCatalogKey } from '@shared/contracts/ids';
 import {
   stubAccountProvider,
@@ -29,8 +29,8 @@ import {
 
 const SLUG = asCatalogKey('official:test-client');
 
-const makeManager = (): { manager: MinecraftManager; ops: OpRegistry } => {
-  const ops = new OpRegistry();
+const makeManager = (): { manager: MinecraftManager; ops: OpMap } => {
+  const ops: OpMap = new Map();
   const manager = new MinecraftManager(
     { status: vi.fn(), progress: vi.fn(), log: vi.fn(), error: vi.fn() } as unknown as Broadcaster,
     { targets: { resolve: vi.fn() } } as unknown as MinecraftKit,
@@ -57,7 +57,7 @@ describe('MinecraftManager.cancel', () => {
   it('aborts an install op and marks it cancelled', () => {
     const { manager, ops } = makeManager();
     const op = installOp();
-    seedOp(ops, SLUG, op);
+    ops.set(SLUG, op);
 
     manager.cancel(SLUG);
 
@@ -73,7 +73,7 @@ describe('MinecraftManager.cancel', () => {
   ] as const)('aborts the %s op', (kind) => {
     const { manager, ops } = makeManager();
     const abort = new AbortController();
-    seedOp(ops, SLUG, { kind, abort } as Op);
+    ops.set(SLUG, { kind, abort } as Op);
 
     manager.cancel(SLUG);
 
@@ -82,7 +82,7 @@ describe('MinecraftManager.cancel', () => {
 
   it('warns but does not throw when cancelling an uninstall op', () => {
     const { manager, ops } = makeManager();
-    seedOp(ops, SLUG, { kind: OpKinds.UNINSTALL } as Op);
+    ops.set(SLUG, { kind: OpKinds.UNINSTALL } as Op);
 
     expect(() => manager.cancel(SLUG)).not.toThrow();
     expect(loggerMocks.warn).toHaveBeenCalled();
@@ -90,7 +90,7 @@ describe('MinecraftManager.cancel', () => {
 
   it('does nothing for a running launch op', () => {
     const { manager, ops } = makeManager();
-    seedOp(ops, SLUG, {
+    ops.set(SLUG, {
       kind: OpKinds.LAUNCH,
       session: { abort: vi.fn() },
       consoleEnabled: false,
@@ -104,7 +104,7 @@ describe('MinecraftManager.cancelAll', () => {
   it('aborts an in-flight bundle sync on shutdown', () => {
     const { manager, ops } = makeManager();
     const abort = new AbortController();
-    seedOp(ops, SLUG, { kind: OpKinds.BUNDLE_SYNCING, abort } as Op);
+    ops.set(SLUG, { kind: OpKinds.BUNDLE_SYNCING, abort } as Op);
 
     manager.cancelAll();
 
@@ -114,7 +114,7 @@ describe('MinecraftManager.cancelAll', () => {
   it('leaves a running launch session untouched', () => {
     const { manager, ops } = makeManager();
     const sessionAbort = vi.fn();
-    seedOp(ops, SLUG, {
+    ops.set(SLUG, {
       kind: OpKinds.LAUNCH,
       session: { abort: sessionAbort },
       consoleEnabled: false,

@@ -35,7 +35,7 @@ import { ManagerError } from './errors';
 import { createForgeProcessorCache } from './forgeProcessorHealing';
 import { beginInstall, runInstall } from './install';
 import { requireAccount, runLaunch } from './launch';
-import { OP_TO_STATUS, type Op, OpKinds, OpRegistry, type RepairOp } from './ops';
+import { OP_TO_STATUS, type Op, OpKinds, type OpMap, type RepairOp } from './ops';
 import { resolveClientInstallPresence } from './readinessPolicy';
 import { runRepair } from './repair';
 import { runUninstall } from './uninstall';
@@ -74,7 +74,7 @@ export type ResolveBundleRepairFilter = (
 export type ResolveBuild = (key: CatalogKey) => Promise<CatalogItem | null>;
 
 export class MinecraftManager {
-  private readonly ops: OpRegistry;
+  private readonly ops: OpMap;
   private readonly env: ManagerEnv;
   private readonly kit: MinecraftKit;
   private launchHook: LaunchHook | null = null;
@@ -88,16 +88,16 @@ export class MinecraftManager {
     private readonly accountProvider: AccountProvider,
     resolveBundleRepairFilter: ResolveBundleRepairFilter,
     private readonly resolveBuild: ResolveBuild,
-    ops: OpRegistry = new OpRegistry(),
+    ops: OpMap = new Map(),
   ) {
     this.ops = ops;
     this.kit = kit;
     this.env = {
       kit,
       broadcaster,
-      // env.ops must alias the registry's backing Map: the consumer modules
+      // env.ops must be the same Map the manager holds: the consumer modules
       // mutate ops through this reference and the manager reads them back.
-      ops: ops.map,
+      ops,
       forgeProcessorCache: createForgeProcessorCache(),
       console,
       openConsole,
@@ -210,24 +210,14 @@ export class MinecraftManager {
       // builds always run it (it no-ops internally when there is no bundleSlug).
       const installHook = this.bundleHookFor(ctx);
       if (installHook) {
-        // Register a BUNDLE_SYNCING op for the duration of the sync (symmetric
-        // with startLaunch's official path) so getStatus reports the sync,
-        // cancel(slug) can abort the download, and cancelAll reaches it on quit.
-        const bundleOp: Op = { kind: OpKinds.BUNDLE_SYNCING, abort: new AbortController() };
-        this.ops.set(slug, bundleOp);
-        try {
-          await installHook(slug, bundleOp.abort.signal);
-        } catch (error) {
-          // On abort the op is being dropped below and getStatus falls back to
-          // presence (INSTALLED), so the cancel is not an error. Other bundle
-          // failures surface via the bundle.error channel; the Minecraft install
-          // itself is done, so we keep the INSTALLED state either way.
-          if (!bundleOp.abort.signal.aborted) {
-            logger.warn(`[${slug}] install: bundle sync after install failed`, error);
-          }
-        } finally {
-          this.ops.delete(slug);
-        }
+        // On abort getStatus falls back to presence (INSTALLED), so the cancel is
+        // not an error. Other bundle failures surface via the bundle.error
+        // channel; the Minecraft install itself is done, so the INSTALLED state
+        // already emitted above is kept either way.
+        await this.runBundleSyncPhase(slug, installHook, {
+          onFailure: (error) =>
+            logger.warn(`[${slug}] install: bundle sync after install failed`, error),
+        });
       }
     })().catch(() => {
       // runInstall failure already reported by handleInstallFailure; nothing to do.
@@ -358,33 +348,29 @@ export class MinecraftManager {
       return;
     }
 
-    // BundleSyncingOp ensures cancel(slug) can abort the download mid-flight.
-    // Local builds skip the sync phase and launch directly (see bundleHookFor).
+    // The bundle sync claims a BUNDLE_SYNCING op so cancel(slug) can abort the
+    // download mid-flight. Local builds skip the sync phase and launch directly
+    // (see bundleHookFor).
     const launchHook = this.bundleHookFor(ctx);
     if (launchHook) {
-      const bundleOp: Op = { kind: OpKinds.BUNDLE_SYNCING, abort: new AbortController() };
-      this.ops.set(slug, bundleOp);
       this.env.emitStatus({ slug, status: InstallStatuses.LAUNCHING, paused: false });
-      try {
-        await launchHook(slug, bundleOp.abort.signal);
-      } catch (error) {
-        if (bundleOp.abort.signal.aborted) {
-          this.env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
-          return;
-        }
-        logger.error(`[${slug}] launch: bundle sync failed`, error);
-        // A non-aborted bundle failure (offline, manifest fetch error) must not
-        // freeze the client on LAUNCHING — the base game is still installed and
-        // launchable. Settle status back to INSTALLED and return without
-        // rethrowing: the bundle error already reached the renderer via the
-        // bundle error channel (BundleEventsListener toasts the localized code),
-        // so propagating it would double-surface as the launch IPC rejection's
-        // global toast (mirror runLaunch's swallow at launch.ts:445-447).
+      const settleInstalled = () =>
         this.env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
-        return;
-      } finally {
-        this.ops.delete(slug);
-      }
+      // A non-aborted bundle failure (offline, manifest fetch error) must not
+      // freeze the client on LAUNCHING — the base game is still installed and
+      // launchable. Settle status back to INSTALLED on both abort and failure and
+      // do not proceed to runLaunch: a failure already reached the renderer via the
+      // bundle error channel (BundleEventsListener toasts the localized code), so
+      // propagating it would double-surface as the launch IPC rejection's global
+      // toast (mirror runLaunch's swallow at launch.ts:447-449).
+      const outcome = await this.runBundleSyncPhase(slug, launchHook, {
+        onAbort: settleInstalled,
+        onFailure: (error) => {
+          logger.error(`[${slug}] launch: bundle sync failed`, error);
+          settleInstalled();
+        },
+      });
+      if (outcome !== 'completed') return;
     }
 
     await runLaunch(this.env, slug, ctx, checkedAccount);
@@ -419,6 +405,35 @@ export class MinecraftManager {
         default:
           assertNever(op);
       }
+    }
+  }
+
+  // Shared body of the post-install / pre-launch / post-repair bundle sync: claim
+  // a BUNDLE_SYNCING op so getStatus reports the sync, cancel(slug) can abort the
+  // download mid-flight, and cancelAll reaches it on quit; await the hook; then
+  // drop the op. Decodes abort-vs-error once: a cancel resolves to 'aborted'
+  // (silent — getStatus falls back to presence), any other rejection resolves to
+  // 'failed'. The optional handlers let callers add a status emit / log without
+  // re-deriving the classification. Never rethrows.
+  private async runBundleSyncPhase(
+    slug: CatalogKey,
+    hook: LaunchHook,
+    handlers: { onAbort?: () => void; onFailure?: (error: unknown) => void } = {},
+  ): Promise<'completed' | 'aborted' | 'failed'> {
+    const bundleOp: Op = { kind: OpKinds.BUNDLE_SYNCING, abort: new AbortController() };
+    this.ops.set(slug, bundleOp);
+    try {
+      await hook(slug, bundleOp.abort.signal);
+      return 'completed';
+    } catch (error) {
+      if (bundleOp.abort.signal.aborted) {
+        handlers.onAbort?.();
+        return 'aborted';
+      }
+      handlers.onFailure?.(error);
+      return 'failed';
+    } finally {
+      this.ops.delete(slug);
     }
   }
 
@@ -463,21 +478,10 @@ export class MinecraftManager {
     const repairHook = this.bundleHookFor(ctx);
     if (!repaired || !repairHook) return;
 
-    // Register a BUNDLE_SYNCING op for the duration of the sync (symmetric with
-    // startLaunch's official path) so getStatus reports the sync, cancel(slug)
-    // can abort the download, and cancelAll reaches it on quit.
-    const bundleOp: Op = { kind: OpKinds.BUNDLE_SYNCING, abort: new AbortController() };
-    this.ops.set(slug, bundleOp);
-    try {
-      await repairHook(slug, bundleOp.abort.signal);
-    } catch (error) {
-      // On abort the op is being dropped below and getStatus falls back to
-      // presence, so the cancel is not an error worth logging.
-      if (!bundleOp.abort.signal.aborted) {
-        logger.warn(`[${slug}] repair: bundle sync after repair failed`, error);
-      }
-    } finally {
-      this.ops.delete(slug);
-    }
+    // On abort getStatus falls back to presence, so the cancel is not an error
+    // worth logging.
+    await this.runBundleSyncPhase(slug, repairHook, {
+      onFailure: (error) => logger.warn(`[${slug}] repair: bundle sync after repair failed`, error),
+    });
   }
 }

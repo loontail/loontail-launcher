@@ -34,7 +34,7 @@ vi.mock('@main/services/settings/settings', () => ({
 
 import { createClientOperationLocks } from '@main/services/clientOperationLocks';
 import { MinecraftManager } from '@main/services/minecraft/manager';
-import { type InstallOp, OpKinds, OpRegistry, seedOp } from '@main/services/minecraft/ops';
+import { type InstallOp, OpKinds, type OpMap } from '@main/services/minecraft/ops';
 import { asCatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
 import { makeLauncherSettings, makeMinecraftBroadcaster } from '../../../helpers/fixtures';
@@ -50,7 +50,7 @@ const SLUG = asCatalogKey('official:test-client');
 
 const launcherSettings = () => makeLauncherSettings();
 
-const makeManager = (ops?: OpRegistry): MinecraftManager =>
+const makeManager = (ops?: OpMap): MinecraftManager =>
   new MinecraftManager(
     makeMinecraftBroadcaster(),
     {
@@ -62,7 +62,7 @@ const makeManager = (ops?: OpRegistry): MinecraftManager =>
     stubAccountProvider(),
     stubResolveBundleRepairFilter(),
     stubResolveBuild(),
-    ops ?? new OpRegistry(),
+    ops ?? new Map(),
   );
 
 const resetStatusMocks = (): void => {
@@ -111,7 +111,7 @@ describe('MinecraftManager.getStatus', () => {
 
   it('reports an in-flight install op as installing with its paused flag', async () => {
     resetStatusMocks();
-    const ops = new OpRegistry();
+    const ops: OpMap = new Map();
     const manager = makeManager(ops);
     const op: InstallOp = {
       kind: OpKinds.INSTALL,
@@ -120,7 +120,7 @@ describe('MinecraftManager.getStatus', () => {
       paused: true,
       cancelled: false,
     };
-    seedOp(ops, SLUG, op);
+    ops.set(SLUG, op);
 
     await expect(manager.getStatus(SLUG)).resolves.toEqual({
       status: InstallStatuses.INSTALLING,

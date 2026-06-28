@@ -54,7 +54,7 @@ vi.mock('@main/services/minecraft/launch', async (importOriginal) => {
 
 import { createClientOperationLocks } from '@main/services/clientOperationLocks';
 import { MinecraftManager } from '@main/services/minecraft/manager';
-import { OpKinds, OpRegistry } from '@main/services/minecraft/ops';
+import { OpKinds, type OpMap } from '@main/services/minecraft/ops';
 import {
   stubConsolePort,
   stubOpenConsole,
@@ -287,16 +287,16 @@ describe('MinecraftManager readiness integration', () => {
 });
 
 // Drives the full install -> post-install bundle sync -> launch lifecycle through
-// the public API against a REAL OpRegistry (W0 seam) and asserts the registry
-// never holds more than one op per slug across the transitions: each phase
-// replaces the prior op rather than stacking, and every phase clears itself.
-describe('MinecraftManager install -> launch op-per-slug invariant (real OpRegistry)', () => {
+// the public API against the REAL op Map and asserts it never holds more than one
+// op per slug across the transitions: each phase replaces the prior op rather than
+// stacking, and every phase clears itself.
+describe('MinecraftManager install -> launch op-per-slug invariant (real op map)', () => {
   it('keeps exactly one op per slug across install, bundle sync, and launch', async () => {
     const resolvedTarget = target();
     resetMocks(resolvedTarget);
 
-    const ops = new OpRegistry();
-    const sizeOf = (registry: OpRegistry): number => [...registry.keys()].length;
+    const ops: OpMap = new Map();
+    const sizeOf = (map: OpMap): number => map.size;
 
     const installHookKinds: Array<string | undefined> = [];
     const launchHookKinds: Array<string | undefined> = [];

@@ -61,7 +61,7 @@ vi.mock('@main/services/minecraft/repair', () => ({
 }));
 
 import { MinecraftManager } from '@main/services/minecraft/manager';
-import { OP_TO_STATUS, OpKinds, type OpRegistry } from '@main/services/minecraft/ops';
+import { OP_TO_STATUS, OpKinds, type OpMap } from '@main/services/minecraft/ops';
 import { makeLauncherSettings, makeMinecraftBroadcaster } from '../../../helpers/fixtures';
 import {
   stubAccountProvider,
@@ -93,7 +93,7 @@ const context = (): Context =>
 const makeManager = (
   broadcaster: Broadcaster,
   operationLocks: ClientOperationLocks,
-  ops?: OpRegistry,
+  ops?: OpMap,
 ): MinecraftManager =>
   new MinecraftManager(
     broadcaster,
