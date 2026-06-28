@@ -191,6 +191,36 @@ describe('getStoredAuth', () => {
     expect(metadata).not.toContain('refreshToken');
   });
 
+  it('keeps a legacy plaintext Mojang row when secure storage is transiently unavailable during migration', () => {
+    writeLegacyStore({
+      [STORE_KEY_AUTH]: {
+        provider: 'mojang',
+        accessToken: 'minecraft-access',
+        expiresAt: Date.UTC(2099, 0, 1),
+        refreshToken: 'microsoft-refresh',
+        clientId: mojangClientId,
+        xuid: mojangXuid,
+        profile: { uuid: mojangPlayerUuid, username: 'someone', skins: [] },
+      },
+      [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
+    });
+    // runAuthStoreMigrationIfNeeded is NOT triggered by initStore directly; the
+    // import seeds the row, and the first getStoredAuth attempts migration.
+    safeStorageMocks.isEncryptionAvailable.mockReturnValue(false);
+    store.initStore();
+
+    expect(store.getStoredAuth()).toBeNull();
+    // The legacy plaintext row survives the transient outage for a later retry.
+    expect(authRow()).toBeDefined();
+
+    // When secure storage recovers, the legacy row migrates into the secret blob.
+    safeStorageMocks.isEncryptionAvailable.mockReturnValue(true);
+    expect(store.getStoredAuth()).toMatchObject({
+      provider: 'mojang',
+      accessToken: 'minecraft-access',
+    });
+  });
+
   it('returns null and warns when the persisted metadata is malformed', () => {
     store.initStore();
     getDb()
@@ -252,13 +282,35 @@ describe('getStoredAuth', () => {
     );
   });
 
-  it('clears the local session when secure storage is unavailable', () => {
+  it('keeps the stored session when secure storage is transiently unavailable', () => {
     store.initStore();
     store.setStoredAuth(
       { ...yggMetadata, accessToken: 'access', clientToken: 'client' },
       YGG_SESSION_TOKEN,
     );
+    // A keyring/DBus hiccup: decrypt is impossible right now, but the row is
+    // still valid and must survive for the next read (BUG-3, transient branch).
     safeStorageMocks.isEncryptionAvailable.mockReturnValue(false);
+
+    expect(store.getStoredAuth()).toBeNull();
+    expect(authRow()).toBeDefined();
+
+    // Once secure storage recovers, the same row hydrates the session again.
+    safeStorageMocks.isEncryptionAvailable.mockReturnValue(true);
+    expect(store.getStoredAuth()).toMatchObject({ provider: 'yggdrasil', accessToken: 'access' });
+  });
+
+  it('clears the session when the secret blob is present but undecryptable (corrupt)', () => {
+    store.initStore();
+    store.setStoredAuth(
+      { ...yggMetadata, accessToken: 'access', clientToken: 'client' },
+      YGG_SESSION_TOKEN,
+    );
+    // Secure storage is available, but the blob no longer decrypts/validates:
+    // a genuinely corrupt secret IS destructive (BUG-3, corrupt branch).
+    safeStorageMocks.decryptString.mockImplementation(() => {
+      throw new Error('bad ciphertext');
+    });
 
     expect(store.getStoredAuth()).toBeNull();
     expect(authRow()).toBeUndefined();

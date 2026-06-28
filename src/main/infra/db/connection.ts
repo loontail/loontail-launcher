@@ -36,8 +36,17 @@ export const getDb = (): Db => {
 
 // Close and forget the handle. Production calls this on `before-quit`; tests use
 // it to release the file lock between cases before deleting the database file.
+// Checkpoint and truncate the WAL before closing so the last synchronous writes
+// (settings, last-played) land in the main database file on a clean shutdown
+// instead of lingering in `-wal` until the next open. Best-effort: a checkpoint
+// failure must not block the close, and WAL recovers on next open regardless.
 export const closeDatabase = (): void => {
   if (!instance) return;
+  try {
+    instance.pragma('wal_checkpoint(TRUNCATE)');
+  } catch {
+    // Ignore: the close below still finalizes, and WAL recovers on next open.
+  }
   instance.close();
   instance = null;
 };

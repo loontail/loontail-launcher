@@ -105,17 +105,10 @@ export const readAuthRow = (db: Db): AuthRow | null => {
   return row ?? null;
 };
 
-export const writeAuthRow = (db: Db, metadata: string, secret: Buffer): void => {
-  db.prepare(
-    `INSERT INTO auth_account (id, metadata, secret) VALUES (1, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET metadata = excluded.metadata, secret = excluded.secret`,
-  ).run(metadata, secret);
-};
-
-// Import-only variant that tolerates a missing secret: a legacy plaintext
-// session carries its tokens inside `metadata` and has no encrypted blob yet,
-// so the store re-splits it on first read. Live writes always supply a secret.
-export const seedAuthRow = (db: Db, metadata: string, secret: Buffer | null): void => {
+// `secret` is null only on the legacy-import path: a plaintext session carries
+// its tokens inside `metadata` and has no encrypted blob yet, so the store
+// re-splits it on first read. Live writes always supply an encrypted secret.
+export const writeAuthRow = (db: Db, metadata: string, secret: Buffer | null): void => {
   db.prepare(
     `INSERT INTO auth_account (id, metadata, secret) VALUES (1, ?, ?)
      ON CONFLICT(id) DO UPDATE SET metadata = excluded.metadata, secret = excluded.secret`,

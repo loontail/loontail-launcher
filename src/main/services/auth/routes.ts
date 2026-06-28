@@ -13,6 +13,7 @@ import { IPC_CHANNELS } from '@shared/ipc';
 import { buildLoginResult, fetchCurrentUser, login, logout, register } from './auth';
 import type { LoontailAuth } from './loontailAuth';
 import { type MojangAuth, MojangBrowserOpenError } from './mojangAuth';
+import type { SessionRefresher } from './sessionRefresh';
 import type { FetchTextures } from './yggdrasilClient';
 
 // Map a kit-side sign-in failure to the renderer's `LoginErrorCode`. The
@@ -32,6 +33,7 @@ export const registerAuthRoutes = (
   loontailAuth: LoontailAuth,
   mojangAuth: MojangAuth,
   fetchTextures: FetchTextures,
+  refresher: SessionRefresher,
 ): void => {
   router.handle(IPC_CHANNELS.authLogin, async (rawArgs) => {
     const payload = parseIpcArgs(LoginPayloadSchema, rawArgs, 'Invalid login payload');
@@ -45,7 +47,7 @@ export const registerAuthRoutes = (
 
   router.handle(IPC_CHANNELS.authMe, (rawArgs) => {
     assertNoIpcArgs(rawArgs, 'auth.me takes no arguments');
-    return fetchCurrentUser(loontailAuth, mojangAuth, fetchTextures);
+    return fetchCurrentUser(refresher, mojangAuth, fetchTextures);
   });
 
   router.handle(IPC_CHANNELS.authLogout, (rawArgs) => {

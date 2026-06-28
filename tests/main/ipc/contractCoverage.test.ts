@@ -33,6 +33,7 @@ import { registerAppRoutes } from '@main/services/app/routes';
 import type { LoontailAuth } from '@main/services/auth/loontailAuth';
 import type { MojangAuth } from '@main/services/auth/mojangAuth';
 import { registerAuthRoutes } from '@main/services/auth/routes';
+import type { SessionRefresher } from '@main/services/auth/sessionRefresh';
 import type { FetchTextures } from '@main/services/auth/yggdrasilClient';
 import type { BundleManager } from '@main/services/bundle/manager';
 import { registerBundleRoutes } from '@main/services/bundle/routes';
@@ -82,7 +83,13 @@ describe('IpcContract handler coverage', () => {
     const { router, registered } = recordingRouter();
 
     registerAppRoutes(router);
-    registerAuthRoutes(router, stub<LoontailAuth>(), stub<MojangAuth>(), stub<FetchTextures>());
+    registerAuthRoutes(
+      router,
+      stub<LoontailAuth>(),
+      stub<MojangAuth>(),
+      stub<FetchTextures>(),
+      stub<SessionRefresher>(),
+    );
     registerSettingsRoutes(router, fakeWindow);
     registerSystemRoutes(router, fakeWindow);
     registerMediaRoutes(router);

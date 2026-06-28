@@ -1,9 +1,6 @@
-import type {
-  AuthenticatedIdentity,
-  LoontailAuth,
-  RefreshResult,
-} from '@main/services/auth/loontailAuth';
+import type { AuthenticatedIdentity, RefreshResult } from '@main/services/auth/loontailAuth';
 import type { MojangAuth, VerifyMojangResult } from '@main/services/auth/mojangAuth';
+import type { SessionRefresher } from '@main/services/auth/sessionRefresh';
 import type { MojangSession, YggdrasilSession } from '@shared/contracts/auth';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -69,10 +66,11 @@ const mojangSession = (username = 'player'): MojangSession =>
     profile: { uuid: 'uuid', username, skins: [] },
   }) as unknown as MojangSession;
 
-const loontailAuth = (result?: RefreshResult): LoontailAuth =>
-  ({
-    refresh: vi.fn().mockResolvedValue(result),
-  }) as unknown as LoontailAuth;
+// The shared refresher owns the rotate + setStoredAuth; verifySession only
+// consumes its RefreshResult, so the mock returns the result directly.
+const refresher = (result?: RefreshResult): SessionRefresher => ({
+  refresh: vi.fn().mockResolvedValue(result),
+});
 
 const mojangAuth = (result?: VerifyMojangResult): MojangAuth =>
   ({
@@ -96,27 +94,27 @@ afterEach(() => {
 describe('verifySession', () => {
   it('returns null without touching a provider when no session is stored', async () => {
     storeMocks.getStoredAuth.mockReturnValue(null);
-    const ygg = loontailAuth();
+    const ref = refresher();
 
-    expect(await verifySession(ygg, mojangAuth(), fetchTexturesMock)).toBeNull();
-    expect(ygg.refresh).not.toHaveBeenCalled();
+    expect(await verifySession(ref, mojangAuth(), fetchTexturesMock)).toBeNull();
+    expect(ref.refresh).not.toHaveBeenCalled();
   });
 
   it('clears the session and returns null when no API bearer is stored', async () => {
     storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
     storeMocks.getStoredSessionToken.mockReturnValue(null);
-    const ygg = loontailAuth();
+    const ref = refresher();
 
-    expect(await verifySession(ygg, mojangAuth(), fetchTexturesMock)).toBeNull();
+    expect(await verifySession(ref, mojangAuth(), fetchTexturesMock)).toBeNull();
     expect(storeMocks.clearStoredAuth).toHaveBeenCalledTimes(1);
-    expect(ygg.refresh).not.toHaveBeenCalled();
+    expect(ref.refresh).not.toHaveBeenCalled();
   });
 
   it('clears the session and returns null when refresh reports expired', async () => {
     storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
 
     expect(
-      await verifySession(loontailAuth({ kind: 'expired' }), mojangAuth(), fetchTexturesMock),
+      await verifySession(refresher({ kind: 'expired' }), mojangAuth(), fetchTexturesMock),
     ).toBeNull();
     expect(storeMocks.clearStoredAuth).toHaveBeenCalledTimes(1);
     expect(storeMocks.setStoredAuth).not.toHaveBeenCalled();
@@ -126,7 +124,7 @@ describe('verifySession', () => {
     storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
 
     const account = await verifySession(
-      loontailAuth({ kind: 'offline' }),
+      refresher({ kind: 'offline' }),
       mojangAuth(),
       fetchTexturesMock,
     );
@@ -151,7 +149,7 @@ describe('verifySession', () => {
     });
 
     const account = await verifySession(
-      loontailAuth({ kind: 'ok', identity: identity() }),
+      refresher({ kind: 'ok', identity: identity() }),
       mojangAuth(),
       fetchTexturesMock,
     );
@@ -166,17 +164,16 @@ describe('verifySession', () => {
     expect(fetchTexturesMock).toHaveBeenCalledWith('0123456789abcdef0123456789abcdef');
   });
 
-  it('persists the rotated yggdrasil session and token on success', async () => {
+  it('delegates persistence to the shared refresher (no direct setStoredAuth) on success', async () => {
     storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
-    const rotated = identity();
+    const ref = refresher({ kind: 'ok', identity: identity() });
 
-    await verifySession(
-      loontailAuth({ kind: 'ok', identity: rotated }),
-      mojangAuth(),
-      fetchTexturesMock,
-    );
+    await verifySession(ref, mojangAuth(), fetchTexturesMock);
 
-    expect(storeMocks.setStoredAuth).toHaveBeenCalledWith(rotated.session, rotated.sessionToken);
+    // The refresher owns the rotate + setStoredAuth; verifySession must not
+    // persist the yggdrasil session itself (BUG-1: one rotation, one writer).
+    expect(ref.refresh).toHaveBeenCalledTimes(1);
+    expect(storeMocks.setStoredAuth).not.toHaveBeenCalled();
   });
 
   it('falls back to the bare account when success-path texture enrichment fails', async () => {
@@ -184,7 +181,7 @@ describe('verifySession', () => {
     fetchTexturesMock.mockRejectedValue(new Error('textures down'));
 
     const account = await verifySession(
-      loontailAuth({ kind: 'ok', identity: identity() }),
+      refresher({ kind: 'ok', identity: identity() }),
       mojangAuth(),
       fetchTexturesMock,
     );
@@ -197,7 +194,7 @@ describe('verifySession', () => {
     storeMocks.getStoredAuth.mockReturnValue(mojangSession());
 
     expect(
-      await verifySession(loontailAuth(), mojangAuth({ kind: 'expired' }), fetchTexturesMock),
+      await verifySession(refresher(), mojangAuth({ kind: 'expired' }), fetchTexturesMock),
     ).toBeNull();
     expect(storeMocks.clearStoredAuth).toHaveBeenCalledTimes(1);
   });
@@ -206,7 +203,7 @@ describe('verifySession', () => {
     storeMocks.getStoredAuth.mockReturnValue(mojangSession());
 
     const account = await verifySession(
-      loontailAuth(),
+      refresher(),
       mojangAuth({ kind: 'offline' }),
       fetchTexturesMock,
     );
@@ -221,7 +218,7 @@ describe('verifySession', () => {
     const rotated = mojangSession('rotated-player');
 
     const account = await verifySession(
-      loontailAuth(),
+      refresher(),
       mojangAuth({ kind: 'ok', session: rotated }),
       fetchTexturesMock,
     );

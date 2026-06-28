@@ -199,4 +199,53 @@ describe('buildPlan', () => {
     expect(plan.toSkip.map((e) => e.path)).toEqual(entries.slice(0, 25).map((e) => e.path));
     expect(plan.toDownload.map((e) => e.path)).toEqual(entries.slice(25).map((e) => e.path));
   });
+
+  describe('Windows path-case drift (BUG-4)', () => {
+    const realPlatform = process.platform;
+
+    beforeEach(() => {
+      Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
+    });
+
+    afterEach(() => {
+      Object.defineProperty(process, 'platform', { value: realPlatform, configurable: true });
+    });
+
+    it('does NOT queue a local file for deletion when the remote re-emits it with different casing', async () => {
+      // Remote names the file `Mods/Foo.jar`; the prior local manifest recorded
+      // `mods/foo.jar`. On a case-insensitive filesystem these are the same file,
+      // so it must not be queued for deletion.
+      const remoteManifest = remote([{ path: 'Mods/Foo.jar', content: 'foo' }]);
+      await fs.mkdir(path.join(dir, 'mods'), { recursive: true });
+      await fs.writeFile(path.join(dir, 'mods/foo.jar'), 'foo');
+      const local: LocalManifest = {
+        bundleSlug: asBundleSlug('b'),
+        manifestHash: 'h',
+        syncedAt: '2024-01-01',
+        files: { 'mods/foo.jar': { sha256: sha256('foo'), size: 3 } },
+      };
+
+      const plan = await buildPlan(remoteManifest, local, dir);
+
+      expect(plan.toDelete).toHaveLength(0);
+    });
+
+    it('matches the local manifest fast-path across casing drift so the file is skipped, not re-downloaded', async () => {
+      const remoteManifest = remote([{ path: 'Mods/Foo.jar', content: 'foo' }]);
+      await fs.mkdir(path.join(dir, 'Mods'), { recursive: true });
+      await fs.writeFile(path.join(dir, 'Mods/Foo.jar'), 'foo');
+      const local: LocalManifest = {
+        bundleSlug: asBundleSlug('b'),
+        manifestHash: 'h',
+        syncedAt: '2024-01-01',
+        files: { 'mods/foo.jar': { sha256: sha256('foo'), size: 3 } },
+      };
+
+      const plan = await buildPlan(remoteManifest, local, dir);
+
+      expect(plan.toSkip.map((e) => e.path)).toEqual(['Mods/Foo.jar']);
+      expect(plan.toDownload).toHaveLength(0);
+      expect(plan.toUpdate).toHaveLength(0);
+    });
+  });
 });

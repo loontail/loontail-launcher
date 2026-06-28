@@ -54,6 +54,24 @@ let sessionPort: SessionAuthPort | null = null;
 
 export const registerSessionAuthPort = (port: SessionAuthPort): void => {
   sessionPort = port;
+  // A fresh port owns its own session lifecycle; drop any refresh memoized
+  // against the previous one so a re-register never returns a stale rotation.
+  refreshing = null;
+};
+
+// De-duplicate concurrent refresh-and-retry. Session rotation is single-use
+// server-side, so N parallel 401s must trigger exactly ONE refresh: the first
+// caller starts it, the rest await the same promise and retry with the same
+// rotated token (BUG-1). Cleared in `finally` so the next genuine staleness
+// refreshes again.
+let refreshing: Promise<string | null> | null = null;
+
+const refreshOnce = (port: SessionAuthPort): Promise<string | null> => {
+  if (refreshing) return refreshing;
+  refreshing = port.refresh().finally(() => {
+    refreshing = null;
+  });
+  return refreshing;
 };
 
 const requireSessionPort = (): SessionAuthPort => {
@@ -96,12 +114,22 @@ export const httpRequest = async (url: string, options: RequestOptions): Promise
     return rawFetch(fullUrl, method, payload, undefined, signal);
   }
   const port = requireSessionPort();
-  const response = await rawFetch(fullUrl, method, payload, port.getToken() ?? undefined, signal);
+  const requestToken = port.getToken();
+  const response = await rawFetch(fullUrl, method, payload, requestToken ?? undefined, signal);
   if (!isSessionRejection(response)) return response;
-  // 401/403: the session may have expired. Rotate it once and retry; if refresh
-  // fails the original rejection stands and the caller surfaces a re-login.
+  // 401/403: the session may have expired. Before refreshing, re-read the
+  // stored token — a concurrent request (or a login) may have already rotated
+  // it while this call was in flight. If it changed, retry with the fresh token
+  // instead of refreshing again and burning the now-current single-use token.
+  const current = port.getToken();
+  if (current && current !== requestToken) {
+    return rawFetch(fullUrl, method, payload, current, signal);
+  }
+  // Otherwise rotate once (de-duplicated across concurrent 401s) and retry; if
+  // refresh fails the original rejection stands and the caller surfaces a
+  // re-login.
   logger.warn(`${method} ${url} rejected (${response.status}); attempting session refresh`);
-  const rotated = await port.refresh();
+  const rotated = await refreshOnce(port);
   if (!rotated) return response;
   return rawFetch(fullUrl, method, payload, rotated, signal);
 };

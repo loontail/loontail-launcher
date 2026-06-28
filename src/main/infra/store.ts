@@ -197,14 +197,31 @@ const secureStorageFailure = (error: unknown): { message: string } => ({
   message: error instanceof Error ? error.message : 'Unknown secure storage error',
 });
 
+// Tagged "the secret store itself is unavailable" error. This is TRANSIENT — a
+// keyring/DBus hiccup or a not-yet-ready backend — and must NOT destroy a still-
+// valid stored session: callers fail soft (return null, keep the row) and retry
+// on the next read. Distinct from a present-but-corrupt blob, which IS deleted.
+class SecureStorageUnavailableError extends Error {
+  readonly transient = true as const;
+  constructor(message: string) {
+    super(message);
+    this.name = 'SecureStorageUnavailableError';
+  }
+}
+
+const isTransientSecureStorageError = (error: unknown): boolean =>
+  error instanceof SecureStorageUnavailableError;
+
 const assertSecureStorageAvailable = (): void => {
   if (!safeStorage.isEncryptionAvailable()) {
-    throw new Error('Secure auth storage is unavailable');
+    throw new SecureStorageUnavailableError('Secure auth storage is unavailable');
   }
   if (process.platform !== 'linux') return;
   const backend = safeStorage.getSelectedStorageBackend();
   if (!SUPPORTED_LINUX_SECRET_BACKENDS.has(backend)) {
-    throw new Error(`Secure auth storage is unavailable for Linux backend ${backend}`);
+    throw new SecureStorageUnavailableError(
+      `Secure auth storage is unavailable for Linux backend ${backend}`,
+    );
   }
 };
 
@@ -282,6 +299,16 @@ const migrateLegacyAuthSession = (session: AuthSession): AuthSession | null => {
     logger.info('Migrated auth session secrets to secure storage');
     return session;
   } catch (error) {
+    if (isTransientSecureStorageError(error)) {
+      // Secure storage is transiently unavailable. Leave the legacy row in
+      // place so the migration retries on the next read instead of dropping a
+      // still-valid session. setStoredAuth already left the row untouched.
+      logger.warn(
+        'Secure auth storage is temporarily unavailable; deferring legacy session migration',
+        secureStorageFailure(error),
+      );
+      return null;
+    }
     logger.warn(
       'Failed to migrate auth session secrets to secure storage; forcing a fresh sign-in',
       secureStorageFailure(error),
@@ -347,6 +374,15 @@ export const getStoredAuth = (): AuthSession | null => {
     if (parsed.success) return parsed.data;
     throw new Error('Stored auth session failed validation after secure-storage rehydration');
   } catch (error) {
+    if (isTransientSecureStorageError(error)) {
+      // Secure storage is transiently unavailable. Keep the row so the next
+      // read can recover the still-valid session instead of forcing a re-login.
+      logger.warn(
+        'Secure auth storage is temporarily unavailable; keeping the stored session',
+        secureStorageFailure(error),
+      );
+      return null;
+    }
     logger.warn(
       'Stored auth secret could not be read; forcing a fresh sign-in',
       secureStorageFailure(error),
@@ -378,6 +414,11 @@ export const setStoredAuth = (session: AuthSession | null, sessionToken?: string
     );
     writeAuthRow(getDb(), JSON.stringify(metadataFromSession(session)), encrypted);
   } catch (error) {
+    if (isTransientSecureStorageError(error)) {
+      // Don't wipe an existing row over a transient store outage — surface the
+      // failure so the caller can retry once secure storage is back.
+      throw error;
+    }
     clearStoredAuth();
     throw new Error('Failed to persist auth session securely', { cause: error });
   }

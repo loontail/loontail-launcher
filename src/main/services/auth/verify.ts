@@ -6,8 +6,8 @@ import {
 } from '@main/infra/store';
 import { type Account, accountFromSession } from '@shared/contracts/account';
 import type { YggdrasilSession } from '@shared/contracts/auth';
-import type { LoontailAuth } from './loontailAuth';
 import type { MojangAuth } from './mojangAuth';
+import type { SessionRefresher } from './sessionRefresh';
 import type { FetchTextures } from './yggdrasilClient';
 
 import { scopedLogger } from '@main/infra/logger';
@@ -40,11 +40,14 @@ export const enrichYggdrasilAccount = async (
 // `null` if no session is stored or the server invalidated it, and the
 // cached account if the network is unavailable (offline fallback).
 //
-// Yggdrasil verification rotates the session via POST /api/auth/refresh: a
-// success persists the new tokens and enriches the account; an `expired` result
-// clears the session; an `offline` result keeps the cached account.
+// Yggdrasil verification rotates the session via the shared `SessionRefresher`
+// (POST /api/auth/refresh) so it is de-duplicated against the HTTP layer's
+// refresh-and-retry and never double-rotates a single-use token: a success has
+// already persisted the new tokens (the refresher owns setStoredAuth), so this
+// only enriches the account; an `expired` result clears the session; an
+// `offline` result keeps the cached account.
 export const verifySession = async (
-  loontailAuth: LoontailAuth,
+  refresher: SessionRefresher,
   mojangAuth: MojangAuth,
   fetchTextures: FetchTextures,
 ): Promise<Account | null> => {
@@ -58,7 +61,7 @@ export const verifySession = async (
       clearStoredAuth();
       return null;
     }
-    const result = await loontailAuth.refresh(sessionToken);
+    const result = await refresher.refresh();
     if (result.kind === 'expired') {
       clearStoredAuth();
       return null;
@@ -69,7 +72,6 @@ export const verifySession = async (
       return accountFromSession(session);
     }
     const { identity } = result;
-    setStoredAuth(identity.session, identity.sessionToken);
     return enrichYggdrasilAccount(identity.session, identity.account, fetchTextures);
   }
 

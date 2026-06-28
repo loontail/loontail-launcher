@@ -6,7 +6,20 @@ import type { LocalManifest, RemoteManifest, RemoteManifestEntry } from '@shared
 import { BundleError } from './errors';
 import { sha256File } from './hash';
 import { flattenRemoteEntries } from './manifestUtils';
-import { normalizePathForSet, resolveSafeEntryPath } from './paths';
+import { normalizePathForSet, resolveSafeEntryPath, toComparisonKey } from './paths';
+
+// Index a local manifest's files by their comparison key so lookups survive a
+// casing drift between the remote manifest and what a prior sync recorded (see
+// `toComparisonKey`). The stored keys keep their original casing for fs ops.
+type LocalFileRecord = LocalManifest['files'][string];
+const indexLocalFiles = (local: LocalManifest | null): Map<string, LocalFileRecord> => {
+  const index = new Map<string, LocalFileRecord>();
+  if (!local) return index;
+  for (const [key, record] of Object.entries(local.files)) {
+    index.set(toComparisonKey(key), record);
+  }
+  return index;
+};
 
 export type PlanFlags = {
   // True for "Repair" mode: ignore local manifest fast-path, re-hash everything
@@ -45,12 +58,12 @@ const exists = async (absPath: string): Promise<boolean> => {
 // disk for force mode and the "no local record" branch, never mutates).
 const classifyEntry = async (
   entry: RemoteManifestEntry,
-  local: LocalManifest | null,
+  localFiles: Map<string, LocalFileRecord>,
   clientFolder: string,
   force: boolean,
 ): Promise<Verdict> => {
   const destPath = resolveSafeEntryPath(clientFolder, entry.path);
-  const normalizedKey = normalizePathForSet(entry.path);
+  const comparisonKey = toComparisonKey(entry.path);
 
   // downloadOnce: fire-and-forget files (installers, one-shot patches).
   // Never re-checked once placed.
@@ -61,12 +74,12 @@ const classifyEntry = async (
   // No sha256 → can't verify integrity; safest to always re-fetch unless
   // we've already accepted it in a previous successful sync.
   if (!entry.sha256) {
-    const known = local?.files[normalizedKey];
+    const known = localFiles.get(comparisonKey);
     return !force && known && (await exists(destPath)) ? 'skip' : 'download';
   }
 
   if (!force) {
-    const known = local?.files[normalizedKey];
+    const known = localFiles.get(comparisonKey);
     if (known && known.sha256 === entry.sha256 && (await exists(destPath))) {
       return 'skip';
     }
@@ -103,9 +116,17 @@ export const buildPlan = async (
   const force = flags.force === true;
   const signal = flags.signal;
   const remoteEntries = flattenRemoteEntries(remote);
+  // Healer-facing set keeps the storage casing: the healer compares it against
+  // disk-derived paths (kit-verify issues) whose casing must be matched exactly
+  // on case-sensitive platforms, so this set must not be case-folded.
   const bundleOwnedRelativePaths = new Set<string>(
     remoteEntries.map((e) => normalizePathForSet(e.path)),
   );
+  // Separate case-insensitive (on Windows) membership set for the local-only
+  // delete diff: a casing drift must not queue a still-remote-owned file for
+  // deletion (BUG-4).
+  const remoteComparisonKeys = new Set<string>(remoteEntries.map((e) => toComparisonKey(e.path)));
+  const localFiles = indexLocalFiles(local);
 
   const limit = createLimiter(BUNDLE_DOWNLOAD_CONCURRENCY);
   const verdicts = await Promise.all(
@@ -114,7 +135,7 @@ export const buildPlan = async (
         if (signal?.aborted) {
           throw new BundleError(BundleErrorCodes.ABORTED, 'Bundle planning aborted');
         }
-        return classifyEntry(entry, local, clientFolder, force);
+        return classifyEntry(entry, localFiles, clientFolder, force);
       }),
     ),
   );
@@ -136,11 +157,13 @@ export const buildPlan = async (
   });
 
   // Local-only files that no longer appear in the remote → delete after the
-  // download phase.
+  // download phase. Membership is tested case-insensitively (on Windows) so a
+  // casing drift between manifests does not delete a still-owned file, but the
+  // original-cased local key is what gets queued for the actual fs delete.
   const toDelete: string[] = [];
   if (local) {
     for (const localPath of Object.keys(local.files)) {
-      if (!bundleOwnedRelativePaths.has(localPath)) {
+      if (!remoteComparisonKeys.has(toComparisonKey(localPath))) {
         toDelete.push(localPath);
       }
     }

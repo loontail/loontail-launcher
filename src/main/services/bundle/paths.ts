@@ -44,4 +44,17 @@ export const isAncestor = (parent: string, child: string): boolean => {
 };
 
 // Normalize for cross-platform set membership (Windows backslashes → forward).
+// This is the *storage* form used for local-manifest keys and the bundle-owned
+// set — it preserves the original casing, which the actual fs path must keep.
 export const normalizePathForSet = (p: string): string => p.replace(/\\/g, '/');
+
+// Comparison key for set membership and local-manifest lookup ONLY. On Windows
+// the filesystem is case-insensitive, so a remote manifest emitting a different
+// casing than a prior local manifest recorded (e.g. `Mods/x.jar` vs
+// `mods/x.jar`) must still be treated as the same file — otherwise a still-owned
+// file is queued for deletion and the heal pass churns. The original-cased path
+// is always kept for the fs operation itself.
+export const toComparisonKey = (p: string): string => {
+  const normalized = normalizePathForSet(p);
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
+};

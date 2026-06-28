@@ -13,6 +13,7 @@ import type {
 } from '@shared/contracts/auth';
 import type { AuthenticatedIdentity, LoontailAuth, LoontailAuthResult } from './loontailAuth';
 import type { MojangAuth } from './mojangAuth';
+import type { SessionRefresher } from './sessionRefresh';
 import { enrichYggdrasilAccount, verifySession } from './verify';
 import type { FetchTextures } from './yggdrasilClient';
 
@@ -65,10 +66,10 @@ export const register = async (
 ): Promise<LoginResult> => handleAuthResult(await loontailAuth.register(payload), fetchTextures);
 
 export const fetchCurrentUser = (
-  loontailAuth: LoontailAuth,
+  refresher: SessionRefresher,
   mojangAuth: MojangAuth,
   fetchTextures: FetchTextures,
-): Promise<Account | null> => verifySession(loontailAuth, mojangAuth, fetchTextures);
+): Promise<Account | null> => verifySession(refresher, mojangAuth, fetchTextures);
 
 export const logout = (loontailAuth: LoontailAuth): Promise<void> => {
   const session = getStoredAuth();

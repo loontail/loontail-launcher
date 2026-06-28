@@ -58,12 +58,13 @@ const exists = async (targetPath: string): Promise<boolean> => {
   }
 };
 
-const makeEntry = (url: string): RemoteManifestEntry => ({
+const makeEntry = (url: string, sha256?: string): RemoteManifestEntry => ({
   path: TEST_ENTRY_PATH,
   name: 'example.jar',
   size: TEST_FILE_BODY.length,
   isDir: false,
   url,
+  ...(sha256 ? { sha256 } : {}),
 });
 
 describe('downloadEntry URL policy', () => {
@@ -108,6 +109,25 @@ describe('downloadEntry URL policy', () => {
     ).rejects.toMatchObject({ code: BundleErrorCodes.ABORTED });
 
     expect(currentRequests.size).toBe(0);
+    await expect(exists(targetPath)).resolves.toBe(false);
+    await expect(exists(`${targetPath}.tmp`)).resolves.toBe(false);
+  });
+
+  it('rejects with DOWNLOAD_INTEGRITY_FAILED and removes the tmp on a SHA-256 mismatch', async () => {
+    const { server, origin } = await startServer((_request, response) => {
+      response.writeHead(200, { 'Content-Type': 'application/octet-stream' });
+      response.end(TEST_FILE_BODY);
+    });
+    servers.push(server);
+    const targetPath = path.join(tempDir, TEST_ENTRY_PATH);
+
+    await expect(
+      downloadEntry(makeEntry(`${origin}/files/example.jar`, 'deadbeef'.repeat(8)), targetPath, {
+        currentRequests: new Set(),
+      }),
+    ).rejects.toMatchObject({ code: BundleErrorCodes.DOWNLOAD_INTEGRITY_FAILED });
+
+    // fail()'s shared cleanup path removes the tmp and never installs the file.
     await expect(exists(targetPath)).resolves.toBe(false);
     await expect(exists(`${targetPath}.tmp`)).resolves.toBe(false);
   });

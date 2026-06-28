@@ -15,9 +15,9 @@ import type { Db } from './connection';
 import {
   readSettings,
   replaceInstanceEntries,
-  seedAuthRow,
   setMeta,
   upsertLastPlayed,
+  writeAuthRow,
   writeSettings,
 } from './repos';
 
@@ -71,7 +71,7 @@ const importAuth = (db: Db, raw: Record<string, unknown>, userDataDir: string): 
   if (!auth || typeof auth !== 'object') return;
   const binPath = path.join(userDataDir, LEGACY_AUTH_SECRET_FILE);
   const secret = existsSync(binPath) ? readFileSync(binPath) : null;
-  seedAuthRow(db, JSON.stringify(auth), secret);
+  writeAuthRow(db, JSON.stringify(auth), secret);
 };
 
 const importInstances = (db: Db, raw: Record<string, unknown>): void => {

@@ -62,6 +62,62 @@ describe('httpRequest session auth', () => {
     expect(authHeader(1)).toBe('Bearer rotated-token');
   });
 
+  it('triggers exactly one refresh for two concurrent 401s and retries both with the rotated token', async () => {
+    // Both requests fly with the same stale token; the rotation is single-use,
+    // so only ONE refresh may fire and both retries must reuse its result.
+    let resolveRefresh: (token: string) => void = () => {};
+    const refresh = vi.fn(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveRefresh = resolve;
+        }),
+    );
+    registerSessionAuthPort({ getToken: () => 'stale-token', refresh });
+    fetchMock
+      .mockResolvedValueOnce(unauthorized()) // request A initial
+      .mockResolvedValueOnce(unauthorized()) // request B initial
+      .mockResolvedValueOnce(ok()) // request A retry
+      .mockResolvedValueOnce(ok()); // request B retry
+
+    const a = httpRequest('/clients', { method: 'GET', auth: 'session' });
+    const b = httpRequest('/bundle', { method: 'GET', auth: 'session' });
+    // Let both initial fetches settle and both land on the shared refresh.
+    await Promise.resolve();
+    await Promise.resolve();
+    resolveRefresh('rotated-token');
+
+    const [ra, rb] = await Promise.all([a, b]);
+
+    expect(ra.status).toBe(200);
+    expect(rb.status).toBe(200);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+    // Both retries carry the single rotated token.
+    expect(authHeader(2)).toBe('Bearer rotated-token');
+    expect(authHeader(3)).toBe('Bearer rotated-token');
+  });
+
+  it('retries with the already-rotated token instead of refreshing again when the token changed mid-flight', async () => {
+    // The stored token rotated out from under this request (a concurrent
+    // refresh or a login) before its 401 came back, so it must reuse the fresh
+    // token rather than burn the now-current single-use token on a refresh.
+    const tokens = ['stale-token', 'fresh-token'];
+    let read = 0;
+    const refresh = vi.fn().mockResolvedValue('should-not-be-used');
+    registerSessionAuthPort({
+      getToken: () => tokens[Math.min(read++, tokens.length - 1)] ?? null,
+      refresh,
+    });
+    fetchMock.mockResolvedValueOnce(unauthorized()).mockResolvedValueOnce(ok());
+
+    const response = await httpRequest('/clients', { method: 'GET', auth: 'session' });
+
+    expect(response.status).toBe(200);
+    expect(refresh).not.toHaveBeenCalled();
+    expect(authHeader(0)).toBe('Bearer stale-token');
+    expect(authHeader(1)).toBe('Bearer fresh-token');
+  });
+
   it('returns the original rejection when refresh fails', async () => {
     const refresh = vi.fn().mockResolvedValue(null);
     registerSessionAuthPort({ getToken: () => 'stale-token', refresh });

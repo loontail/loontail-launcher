@@ -135,7 +135,9 @@ describe('registerAuthRoutes', () => {
       .fn()
       .mockRejectedValue(new MojangBrowserOpenError('Failed to open browser'));
 
-    registerAuthRoutes(router, loontailAuth(vi.fn()), mojangAuth({ signInWithMojang }), vi.fn());
+    registerAuthRoutes(router, loontailAuth(vi.fn()), mojangAuth({ signInWithMojang }), vi.fn(), {
+      refresh: vi.fn(),
+    });
 
     const handler = handlers.get(IPC_CHANNELS.authMojangSignIn);
     if (!handler) throw new Error('auth.mojangSignIn handler was not registered');
@@ -152,7 +154,9 @@ describe('registerAuthRoutes', () => {
     const session = mojangSessionWithSkin();
     const signInWithMojang = vi.fn().mockResolvedValue(session);
 
-    registerAuthRoutes(router, loontailAuth(vi.fn()), mojangAuth({ signInWithMojang }), vi.fn());
+    registerAuthRoutes(router, loontailAuth(vi.fn()), mojangAuth({ signInWithMojang }), vi.fn(), {
+      refresh: vi.fn(),
+    });
 
     const handler = handlers.get(IPC_CHANNELS.authMojangSignIn);
     if (!handler) throw new Error('auth.mojangSignIn handler was not registered');

@@ -174,12 +174,13 @@ export const downloadEntry = async (
     writeStream.on('error', fail);
     writeStream.on('finish', () => {
       if (settled) return;
-      settled = true;
-      cleanup();
       if (entry.sha256) {
         const observed = hash.digest('hex');
         if (observed !== entry.sha256) {
-          reject(
+          // Route through fail() so the integrity reject shares the same
+          // settled/cleanup/stream-teardown semantics as every other reject
+          // path; the streams are already finished so the destroys are no-ops.
+          fail(
             new BundleError(
               BundleErrorCodes.DOWNLOAD_INTEGRITY_FAILED,
               `SHA-256 mismatch for ${entry.path}: expected ${entry.sha256}, got ${observed}`,
@@ -188,6 +189,8 @@ export const downloadEntry = async (
           return;
         }
       }
+      settled = true;
+      cleanup();
       resolve();
     });
     if (signal) {
