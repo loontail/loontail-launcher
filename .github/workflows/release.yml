@@ -8,8 +8,8 @@ permissions:
   contents: write
 
 # Required secrets:
-#   API_URL            — Strapi base URL baked into the build
-#   API_TOKEN          — Strapi token baked into the build
+#   API_URL            — launcher API base URL baked into the build
+#   API_TOKEN          — launcher API token baked into the build
 #   RELEASE_TOKEN      — fine-grained PAT (Contents: read/write) belonging to a
 #                        user in the repo's branch ruleset bypass list. Used by
 #                        the bump job to push the version commit directly to
@@ -20,7 +20,7 @@ permissions:
 # Optional secrets:
 #   MOJANG_CLIENT_ID   — Azure AD application id baked into the build to enable
 #                        the "Sign in with Microsoft" button. Without it, the
-#                        Strapi-account login still works but MS sign-in fails
+#                        Yggdrasil-account login still works but MS sign-in fails
 #                        with a generic error.
 #   NETWORK_API_URL    — base URL of the Loontail in-game network service baked
 #                        into the build for the embedded network agent. Without

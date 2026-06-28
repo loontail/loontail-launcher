@@ -636,7 +636,7 @@ describe('runLaunch', () => {
     expect(options?.extraJvmArgs).toEqual(expect.arrayContaining([`-javaagent:${agentJar}`]));
   });
 
-  it('hands the session token to the in-game agent via -Dloontail.network.serviceToken', async () => {
+  it('hands the session token to the in-game agent via the child JVM env, never a -D arg', async () => {
     launchMocks.getStoredSessionToken.mockReturnValue('handoff-session-token');
     const fixture = await createLaunchFixture();
     const appPath = fixture.ctx.target.directory;
@@ -651,18 +651,44 @@ describe('runLaunch', () => {
         runtime: { ...fixture.ctx.target.runtime, majorVersion: 21 },
       },
     } as Context;
-    const compose = vi.fn(async (_target: Target, _options: unknown) => fixture.composition);
-    const run = vi.fn(() => session());
+    let composedJvmArgs: readonly string[] = [];
+    const compose = vi.fn(
+      async (_target: Target, options: { extraJvmArgs?: readonly string[] }) => {
+        composedJvmArgs = options.extraJvmArgs ?? [];
+        // Echo the composed JVM args onto the composition so the assertion can prove
+        // the token never lands in the launched command line.
+        return { ...fixture.composition, jvmArgs: composedJvmArgs };
+      },
+    );
+    let ranComposition: LaunchComposition | undefined;
+    const run = vi.fn((composition: LaunchComposition) => {
+      ranComposition = composition;
+      return session();
+    });
     const kit = { launch: { compose, run } } as unknown as MinecraftKit;
 
     await runLaunch(env(kit, new Map<CatalogKey, Op>()), SLUG, ctx, account());
 
-    const options = compose.mock.calls[0]?.[1] as
-      | { readonly extraJvmArgs?: readonly string[] }
-      | undefined;
-    expect(options?.extraJvmArgs).toEqual(
-      expect.arrayContaining(['-Dloontail.network.serviceToken=handoff-session-token']),
+    // The token is delivered through the spawned process env, not a JVM property.
+    expect(ranComposition?.env).toMatchObject({
+      LOONTAIL_NETWORK_SERVICE_TOKEN: 'handoff-session-token',
+    });
+    // It must NOT ride on a -D arg (readable in the OS process list) nor appear in
+    // the JVM args / launched command string.
+    expect(composedJvmArgs).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('loontail.network.serviceToken')]),
     );
+    expect(ranComposition?.jvmArgs).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('handoff-session-token')]),
+    );
+    const launchedCommand = [
+      ranComposition?.javaPath,
+      ...(ranComposition?.jvmArgs ?? []),
+      ranComposition?.mainClass,
+      ...(ranComposition?.gameArgs ?? []),
+    ].join(' ');
+    expect(launchedCommand).not.toContain('handoff-session-token');
+    // The non-secret service URL still rides on -D (when configured) — unchanged.
   });
 
   it('redacts the service token from the launch-command log line (no on-disk leak)', async () => {

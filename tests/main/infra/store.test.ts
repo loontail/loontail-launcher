@@ -253,10 +253,10 @@ describe('getStoredAuth', () => {
     expect(loggerMocks.warn).toHaveBeenCalledTimes(1);
   });
 
-  it('purges legacy strapi-tagged sessions on first load', () => {
+  it('purges sessions tagged with a legacy/unrecognized provider on first load', () => {
     writeLegacyStore({
       [STORE_KEY_AUTH]: {
-        provider: 'strapi',
+        provider: 'legacy',
         jwt: 'a.b.c',
         user: { id: 1, username: 'someone', email: 'someone@example.com', blocked: false },
       },
@@ -450,10 +450,10 @@ describe('initStore', () => {
     expect(typeof store.getStoredLauncherSettings().memory.allocatedRamMb).toBe('number');
   });
 
-  it('drops a legacy strapi-tagged session once called', () => {
+  it('drops a session tagged with a legacy/unrecognized provider once called', () => {
     writeLegacyStore({
       [STORE_KEY_AUTH]: {
-        provider: 'strapi',
+        provider: 'legacy',
         jwt: 'a.b.c',
         user: { id: 1, username: 'someone', email: 'someone@example.com', blocked: false },
       },

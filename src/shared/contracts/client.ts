@@ -7,6 +7,17 @@ export const KeywordSchema = z.object({
   title: z.string(),
 });
 
+// Summary of the client's owned bundle, inlined by the backend (null/absent when the
+// client has no linked bundle). Mirrors the service's BundleSummaryDto camelCase wire
+// shape; `bundleSlug` above stays the canonical pointer.
+export const BundleSummarySchema = z.object({
+  slug: z.string(),
+  version: z.union([z.string(), z.null()]).optional(),
+  status: z.string(),
+  filesCount: z.number(),
+  manifestUrl: z.string(),
+});
+
 // The catalog wire shape. Relations are inlined; media URLs are backend-relative
 // (the service layer absolutizes them). Versions and bundleSlug may be null.
 export const ClientResponseSchema = z.object({
@@ -25,6 +36,10 @@ export const ClientResponseSchema = z.object({
   // Pointer to a bundle-registry build overlaid on the Minecraft install.
   // Empty/null → no bundle phase for this client.
   bundleSlug: z.union([z.string(), z.null()]).optional(),
+
+  // Inlined summary of the owned bundle the backend now sends alongside bundleSlug.
+  // Optional/nullable so older payloads (and clients with no bundle) still validate.
+  bundle: BundleSummarySchema.nullable().optional(),
 
   servers: z.array(ServerSchema).default([]),
 

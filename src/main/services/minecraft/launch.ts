@@ -101,37 +101,51 @@ const resolveNetworkAgentJar = (): string =>
     ? path.join(process.resourcesPath, 'loontail-agent', LOONTAIL_AGENT_JAR)
     : path.join(app.getAppPath(), 'resources', 'agent', LOONTAIL_AGENT_JAR);
 
-// JVM args that attach the in-game network agent, or [] when it must not attach.
-// The overlay is strictly best-effort: a wrong Java or missing jar never blocks launch.
-const buildNetworkAgentJvmArgs = async (
+// The env var the agent reads the session token from (AgentSettings reads it via
+// PropertySource.SYSTEM, which falls back from -D properties to System.getenv).
+const SERVICE_TOKEN_ENV = 'LOONTAIL_NETWORK_SERVICE_TOKEN';
+
+type NetworkAgentAttachment = {
+  // JVM args that attach the in-game agent (the -javaagent jar + non-secret -D props).
+  readonly jvmArgs: readonly string[];
+  // Env vars to set on the spawned game process. The session token rides here, NOT
+  // on a -D arg, so it never appears in the OS process list.
+  readonly env: Readonly<Record<string, string>>;
+};
+
+const NO_NETWORK_AGENT: NetworkAgentAttachment = { jvmArgs: [], env: {} };
+
+// Resolves how to attach the in-game network agent, or NO_NETWORK_AGENT when it must
+// not attach. The overlay is strictly best-effort: a wrong Java or missing jar never
+// blocks launch.
+const buildNetworkAgentAttachment = async (
   slug: CatalogKey,
   javaMajor: number | undefined,
-): Promise<readonly string[]> => {
+): Promise<NetworkAgentAttachment> => {
   if (javaMajor === undefined || javaMajor < NETWORK_AGENT_MIN_JAVA) {
     launchLogger.info(
       `[${slug}] launch: network agent not attached (Java ${javaMajor ?? '?'} < ${NETWORK_AGENT_MIN_JAVA})`,
     );
-    return [];
+    return NO_NETWORK_AGENT;
   }
   try {
     const jarPath = resolveNetworkAgentJar();
     await fs.access(jarPath);
-    const args = [`-javaagent:${jarPath}`];
+    const jvmArgs = [`-javaagent:${jarPath}`];
     if (mainConfig.networkServiceUrl) {
-      args.push(`-Dloontail.network.serviceUrl=${mainConfig.networkServiceUrl}`);
+      jvmArgs.push(`-Dloontail.network.serviceUrl=${mainConfig.networkServiceUrl}`);
     }
-    // Hand the agent the same session token so it authenticates as this user.
-    // Known leak: the token rides on a `-D` property, readable in the local
-    // process list. Moving it off `-D` needs a coordinated agent change and is
-    // tracked for a follow-up; the on-disk log leak is closed by redactServiceToken.
+    // Hand the agent the same session token so it authenticates as this user. The
+    // token is the player's API bearer, so it must not ride on a `-D` property
+    // (readable in the OS process list). Deliver it through the child JVM's
+    // environment instead; the agent reads LOONTAIL_NETWORK_SERVICE_TOKEN via
+    // PropertySource.SYSTEM's getenv fallback.
     const sessionToken = getStoredSessionToken();
-    if (sessionToken) {
-      args.push(`-Dloontail.network.serviceToken=${sessionToken}`);
-    }
-    return args;
+    const env = sessionToken ? { [SERVICE_TOKEN_ENV]: sessionToken } : {};
+    return { jvmArgs, env };
   } catch (error) {
     launchLogger.warn(`[${slug}] launch: network agent not attached (${errorMessage(error)})`);
-    return [];
+    return NO_NETWORK_AGENT;
   }
 };
 
@@ -305,11 +319,11 @@ export const runLaunch = async (
     if (resolved.extraJvmArgs.length > 0) {
       launchLogger.info(`[${slug}] launch: injecting authlib-injector (yggdrasil session)`);
     }
-    const networkAgentArgs = await buildNetworkAgentJvmArgs(slug, ctx.target.runtime.majorVersion);
-    if (networkAgentArgs.length > 0) {
+    const networkAgent = await buildNetworkAgentAttachment(slug, ctx.target.runtime.majorVersion);
+    if (networkAgent.jvmArgs.length > 0) {
       launchLogger.info(`[${slug}] launch: attaching Loontail network agent (in-game overlay)`);
     }
-    const extraJvmArgs = [...resolved.extraJvmArgs, ...networkAgentArgs];
+    const extraJvmArgs = [...resolved.extraJvmArgs, ...networkAgent.jvmArgs];
     let composition: LaunchComposition;
     try {
       composition = await env.kit.launch.compose(ctx.target, {
@@ -328,6 +342,15 @@ export const runLaunch = async (
         return;
       }
       throw toComposeFailure(error);
+    }
+    // Merge the agent's env (the session token) into the composition so the kit's
+    // spawner sets it on the child JVM. The default ChildProcessSpawner merges this
+    // over process.env, so the rest of the environment is preserved.
+    if (Object.keys(networkAgent.env).length > 0) {
+      composition = {
+        ...composition,
+        env: { ...composition.env, ...networkAgent.env },
+      };
     }
     if (startupSignal.aborted) {
       restoreInstalled();
