@@ -4,7 +4,12 @@ import type { ClientOperationLocks } from '@main/services/clientOperationLocks';
 import type { BrowserWindow } from 'electron';
 import { createBroadcaster } from './broadcast';
 import type { ConsolePort } from './env';
-import { type AccountProvider, MinecraftManager } from './manager';
+import {
+  type AccountProvider,
+  MinecraftManager,
+  type ResolveBuild,
+  type ResolveBundleRepairFilter,
+} from './manager';
 import { registerMinecraftRoutes } from './routes';
 
 export type MinecraftService = {
@@ -23,6 +28,8 @@ export const createMinecraftService = (
   consoleHub: ConsolePort,
   openConsole: () => void,
   accountProvider: AccountProvider,
+  resolveBundleRepairFilter: ResolveBundleRepairFilter,
+  resolveBuild: ResolveBuild,
 ): MinecraftService => {
   const broadcaster = createBroadcaster(getMainWindow);
   const manager = new MinecraftManager(
@@ -32,6 +39,8 @@ export const createMinecraftService = (
     consoleHub,
     openConsole,
     accountProvider,
+    resolveBundleRepairFilter,
+    resolveBuild,
   );
   return {
     init: async () => {

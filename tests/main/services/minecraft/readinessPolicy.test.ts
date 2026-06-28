@@ -1,11 +1,9 @@
-import { asClientSlug } from '@shared/contracts/ids';
+import { asCatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
-import type { LauncherSettings } from '@shared/contracts/settings';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { makeLauncherSettings } from '../../../helpers/fixtures';
 
 const policyMocks = vi.hoisted(() => {
-  process.env.API_URL ??= 'http://test.invalid';
-  process.env.API_TOKEN ??= 'test-token';
   return {
     getSettings: vi.fn(),
     loadTargetInstallManifest: vi.fn(),
@@ -27,15 +25,11 @@ vi.mock('@main/services/settings/settings', () => ({
 
 import { resolveClientInstallPresence } from '@main/services/minecraft/readinessPolicy';
 
-const SLUG = asClientSlug('test-client');
+const SLUG = asCatalogKey('official:test-client');
 const CLIENT_FOLDER = 'Z:/clients/test-client';
 
-const launcherSettings = (clientsFolder = 'Z:/clients'): LauncherSettings => ({
-  memory: { allocatedRamMb: 0 },
-  storage: { clientsFolder },
-  launch: { console: false, fullscreen: false },
-  clients: {},
-});
+const launcherSettings = (clientsFolder = 'Z:/clients') =>
+  makeLauncherSettings({ storage: { clientsFolder } });
 
 const resetPolicyMocks = (): void => {
   policyMocks.getSettings.mockReset();

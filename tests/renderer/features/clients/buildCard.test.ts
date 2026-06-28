@@ -34,8 +34,9 @@ const officialItem = (): CatalogItem =>
     spec: baseSpec,
     presentation: { title: 'Survival', shortDescription: '', description: '', available: true },
     raw: {
-      poster: { url: 'https://cdn.example/poster.webp', name: 'poster', formats: {} },
-      background: { url: 'https://cdn.example/bg.webp', name: 'bg', formats: {} },
+      poster: { url: 'https://cdn.example/poster.webp', width: null, height: null },
+      background: { url: 'https://cdn.example/bg.webp', width: null, height: null },
+      titleImage: null,
       screenshots: [],
       keywords: [],
     },

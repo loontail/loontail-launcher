@@ -5,7 +5,7 @@ import { SettingsGroup } from '@renderer/shared/ui/SettingsGroup';
 import { SettingsRow } from '@renderer/shared/ui/SettingsRow';
 import type { BuildSpec } from '@shared/contracts/catalog';
 import { type LoaderChoice, LoaderChoices } from '@shared/contracts/settings';
-import { resolveLoader } from '@shared/domain/loader';
+import { canChooseLoader, resolveLoader } from '@shared/domain/loader';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -79,7 +79,7 @@ export const ClientLoaderSection = ({
   const { t } = useTranslation();
   const resolution = resolveLoader(spec, loader);
   const effectiveLoader = resolution.kind === 'resolved' ? resolution.loader : null;
-  const canSwitchLoader = Boolean(spec.forgeVersion) && Boolean(spec.fabricVersion);
+  const canSwitchLoader = canChooseLoader(spec);
   const loaderVersion = pickLoaderVersion(effectiveLoader, spec);
 
   return (

@@ -1,4 +1,4 @@
-import { asClientSlug } from '@shared/contracts/ids';
+import { asCatalogKey } from '@shared/contracts/ids';
 import { LoaderChoices } from '@shared/contracts/settings';
 import type { LauncherSettings } from '@shared/contracts/settings';
 import {
@@ -22,20 +22,29 @@ const baseSettings = (): LauncherSettings => ({
 });
 
 describe('joinClientFolder', () => {
+  const UUID = '550e8400-e29b-41d4-a716-446655440000';
+
   it('returns empty string when clientsFolder is empty', () => {
-    expect(joinClientFolder('', asClientSlug('foo'))).toBe('');
+    expect(joinClientFolder('', asCatalogKey('official:foo'))).toBe('');
   });
 
-  it('inserts forward slash separator when missing', () => {
-    expect(joinClientFolder('/games', asClientSlug('survival'))).toBe('/games/survival');
+  it('derives the folder name from the bare ref, not the CatalogKey', () => {
+    expect(joinClientFolder('/games', asCatalogKey('official:survival'))).toBe('/games/survival');
+    expect(joinClientFolder('/games', asCatalogKey(`local:${UUID}`))).toBe(`/games/${UUID}`);
   });
 
   it('preserves trailing forward slash without doubling', () => {
-    expect(joinClientFolder('/games/', asClientSlug('survival'))).toBe('/games/survival');
+    expect(joinClientFolder('/games/', asCatalogKey('official:survival'))).toBe('/games/survival');
   });
 
   it('preserves trailing backslash without doubling', () => {
-    expect(joinClientFolder('C:\\games\\', asClientSlug('survival'))).toBe('C:\\games\\survival');
+    expect(joinClientFolder('C:\\games\\', asCatalogKey('official:survival'))).toBe(
+      'C:\\games\\survival',
+    );
+  });
+
+  it('falls back to a pre-migration bare key as-is', () => {
+    expect(joinClientFolder('/games', asCatalogKey('survival'))).toBe('/games/survival');
   });
 });
 
@@ -58,7 +67,7 @@ describe('normalizeLauncherSettings', () => {
 
   it('rejects non-integer, negative, and non-finite RAM so the result satisfies its schema', () => {
     const base = defaultLauncherSettings().memory.allocatedRamMb;
-    const slug = asClientSlug('main-client');
+    const slug = asCatalogKey('official:main-client');
     for (const bad of [4096.5, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
       const result = normalizeLauncherSettings({
         memory: { allocatedRamMb: bad },
@@ -72,7 +81,7 @@ describe('normalizeLauncherSettings', () => {
   });
 
   it('keeps known fields and discards unknown ones', () => {
-    const slug = asClientSlug('main-client');
+    const slug = asCatalogKey('official:main-client');
     const result = normalizeLauncherSettings({
       memory: { allocatedRamMb: 4096, garbage: true },
       storage: { clientsFolder: '/c', other: 1 },
@@ -86,8 +95,8 @@ describe('normalizeLauncherSettings', () => {
   });
 
   it('drops invalid runtime overrides and invalid loader choices', () => {
-    const slugA = asClientSlug('cl-a');
-    const slugB = asClientSlug('cl-b');
+    const slugA = asCatalogKey('official:cl-a');
+    const slugB = asCatalogKey('official:cl-b');
     const result = normalizeLauncherSettings({
       memory: { allocatedRamMb: 0 },
       storage: { clientsFolder: '' },
@@ -110,7 +119,7 @@ describe('normalizeLauncherSettings', () => {
     });
   });
 
-  it('skips entries with empty / undefined / null slug keys', () => {
+  it('skips entries with empty / undefined / null slug keys and migrates a bare key', () => {
     const result = normalizeLauncherSettings({
       memory: { allocatedRamMb: 0 },
       storage: { clientsFolder: '' },
@@ -122,7 +131,8 @@ describe('normalizeLauncherSettings', () => {
         good: { memory: { allocatedRamMb: 8192 } },
       },
     });
-    expect(Object.keys(result.clients)).toEqual(['good']);
+    // A surviving bare key is lifted onto the official namespace by the migration.
+    expect(Object.keys(result.clients)).toEqual(['official:good']);
   });
 });
 
@@ -144,14 +154,14 @@ describe('resolveClientSettings', () => {
 
   it('returns defaults plus joined folder for an unknown slug', () => {
     const settings = baseSettings();
-    const slug = asClientSlug('survival');
+    const slug = asCatalogKey('official:survival');
     const resolved = resolveClientSettings(settings, slug);
     expect(resolved.storage.clientFolder).toBe('/games/survival');
     expect(resolved.diff.folder).toBe(false);
   });
 
   it('reports a diff only on fields the override actually changes', () => {
-    const slug = asClientSlug('survival');
+    const slug = asCatalogKey('official:survival');
     const settings: LauncherSettings = {
       ...baseSettings(),
       clients: {
@@ -176,7 +186,7 @@ describe('resolveClientSettings', () => {
   });
 
   it('honours a clientFolder override and flags folder diff', () => {
-    const slug = asClientSlug('survival');
+    const slug = asCatalogKey('official:survival');
     const settings: LauncherSettings = {
       ...baseSettings(),
       clients: {
@@ -203,7 +213,7 @@ describe('hasClientOverrides', () => {
 });
 
 describe('setClientOverride / clearClientOverrides', () => {
-  const slug = asClientSlug('survival');
+  const slug = asCatalogKey('official:survival');
 
   it('removes a key whose value matches the global default', () => {
     const settings = baseSettings();
@@ -299,7 +309,7 @@ describe('setClientOverride / clearClientOverrides', () => {
 
 describe('pruneClientOverrides', () => {
   it('returns the same reference when nothing needs to be pruned', () => {
-    const slug = asClientSlug('survival');
+    const slug = asCatalogKey('official:survival');
     const settings: LauncherSettings = {
       ...baseSettings(),
       clients: { [slug]: { memory: { allocatedRamMb: 4096 } } },
@@ -309,8 +319,8 @@ describe('pruneClientOverrides', () => {
   });
 
   it('removes overrides for slugs not in the keep set', () => {
-    const keepSlug = asClientSlug('kept');
-    const dropSlug = asClientSlug('gone');
+    const keepSlug = asCatalogKey('official:kept');
+    const dropSlug = asCatalogKey('official:gone');
     const settings: LauncherSettings = {
       ...baseSettings(),
       clients: {
@@ -320,5 +330,21 @@ describe('pruneClientOverrides', () => {
     };
     const next = pruneClientOverrides(settings, new Set([keepSlug]));
     expect(Object.keys(next.clients)).toEqual([keepSlug]);
+  });
+
+  it('keeps a known local build override while pruning an orphaned official one', () => {
+    const localKey = asCatalogKey('local:550e8400-e29b-41d4-a716-446655440000');
+    const orphanOfficial = asCatalogKey('official:gone');
+    const settings: LauncherSettings = {
+      ...baseSettings(),
+      clients: {
+        [localKey]: { loader: LoaderChoices.FABRIC },
+        [orphanOfficial]: { memory: { allocatedRamMb: 4096 } },
+      },
+    };
+    // The sweep builds the keep-set from official + local CatalogKeys; a local
+    // build in that set must survive even though no Strapi slug matches it.
+    const next = pruneClientOverrides(settings, new Set([localKey]));
+    expect(Object.keys(next.clients)).toEqual([localKey]);
   });
 });

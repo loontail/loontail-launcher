@@ -1,5 +1,5 @@
 import { directoryHasEntries, pickFolderWithSuffix } from '@main/infra/system';
-import { SLUG_REQUIRED_MSG, assertNoIpcArgs, parseIpcArgs } from '@main/ipc/parseArgs';
+import { KEY_REQUIRED_MSG, assertNoIpcArgs, parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
 import {
   clearClientOverride,
@@ -7,7 +7,8 @@ import {
   patchLauncherSettings,
   setClientOverride,
 } from '@main/services/settings/settings';
-import { ClientSlugSchema } from '@shared/contracts/ids';
+import { catalogKeyToRefValue } from '@shared/contracts/catalog';
+import { CatalogKeySchema } from '@shared/contracts/ids';
 import {
   PatchLauncherSettingsSchema,
   SetClientOverridePayloadSchema,
@@ -39,15 +40,19 @@ export const registerSettingsRoutes = (
   });
 
   router.handle(IPC_CHANNELS.settingsClearClientOverrides, (rawArgs) => {
-    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED_MSG);
-    return clearClientOverride(slug);
+    const key = parseIpcArgs(CatalogKeySchema, rawArgs, KEY_REQUIRED_MSG);
+    return clearClientOverride(key);
   });
 
   router.handle(IPC_CHANNELS.settingsChooseClientFolder, async (rawArgs) => {
-    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED_MSG);
-    const picked = await pickFolderWithSuffix(getMainWindow(), slug);
+    const key = parseIpcArgs(CatalogKeySchema, rawArgs, KEY_REQUIRED_MSG);
+    // The folder suffix is the bare ref value, never the CatalogKey: `:` is an
+    // illegal Windows filename char. A malformed key is impossible here (schema
+    // validated), so the fallback only guards the type.
+    const suffix = catalogKeyToRefValue(key) ?? (key as string);
+    const picked = await pickFolderWithSuffix(getMainWindow(), suffix);
     if (!picked) return null;
-    const next = setClientOverride(slug, { storage: { clientFolder: picked.path } });
+    const next = setClientOverride(key, { storage: { clientFolder: picked.path } });
     const installed = await directoryHasEntries(picked.path);
     return { settings: next, installed };
   });

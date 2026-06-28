@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { mainConfig } from '@main/config';
 import { errorMessage } from '@main/infra/errorMessage';
 import { HttpError, httpRequest } from '@main/infra/http';
@@ -8,6 +7,7 @@ import { type RemoteManifest, RemoteManifestSchema } from '@shared/contracts/bun
 import { BundleErrorCodes } from '@shared/contracts/bundle';
 import type { BundleSlug } from '@shared/contracts/ids';
 import { BundleError } from './errors';
+import { sha256String } from './hash';
 import { resolveBundleManifestEntryUrl } from './urlPolicy';
 
 const logger = scopedLogger('bundle.api');
@@ -15,14 +15,12 @@ const logger = scopedLogger('bundle.api');
 export type RemoteManifestFetchResult = {
   manifest: RemoteManifest;
   // SHA-256 of the raw JSON, used as a stable drift signal that survives key
-  // re-ordering as long as Strapi serializes consistently (it does — the file
+  // re-ordering as long as the CMS serializes consistently (it does — the file
   // is read from disk verbatim).
   manifestHash: string;
 };
 
-const sha256 = (input: string): string => createHash('sha256').update(input, 'utf8').digest('hex');
-
-// Strapi's bundle-registry plugin can emit server-root-relative URLs (e.g.
+// The bundle-registry endpoint can emit server-root-relative URLs (e.g.
 // `/bundle-registry/builds/<slug>/files/<path>`) when the plugin's `publicUrl`
 // is unset and `server.url` is empty. Resolve those against the configured
 // API base so the downloader can treat every URL as absolute.
@@ -47,7 +45,7 @@ export const fetchRemoteManifest = async (
   try {
     response = await httpRequest(path, {
       method: 'GET',
-      auth: 'apiToken',
+      auth: 'session',
       ...(signal ? { signal } : {}),
     });
   } catch (err) {
@@ -91,7 +89,7 @@ export const fetchRemoteManifest = async (
   }
   return {
     manifest: absolutizeManifestUrls(validated.data, mainConfig.apiUrl),
-    manifestHash: sha256(rawText),
+    manifestHash: sha256String(rawText),
   };
 };
 

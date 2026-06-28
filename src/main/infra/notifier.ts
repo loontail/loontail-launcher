@@ -1,5 +1,5 @@
 import { type NotificationPayload, NotificationVariants } from '@shared/contracts/notification';
-import { IPC_EVENTS } from '@shared/ipc';
+import { IPC_EVENTS, emit } from '@shared/ipc';
 import type { BrowserWindow } from 'electron';
 
 let mainWindow: BrowserWindow | null = null;
@@ -11,13 +11,7 @@ export const attachNotifier = (window: BrowserWindow): void => {
 };
 
 const send = (payload: NotificationPayload): void => {
-  const window = mainWindow;
-  if (!window || window.isDestroyed()) return;
-  try {
-    window.webContents.send(IPC_EVENTS.appNotification, payload);
-  } catch {
-    /* renderer torn down between checks — drop the push */
-  }
+  emit(mainWindow, IPC_EVENTS.appNotification, payload);
 };
 
 export const notify = {

@@ -134,20 +134,6 @@ const buildSteps = (hasLoader: boolean, hasBundle: boolean): InstallStep[] => [
   ...(hasBundle ? [makeStep(InstallStepKeys.BUNDLE)] : []),
 ];
 
-// Bytes coming from the install kit are mixed-scale: `bytesDownloaded` is
-// install-wide, but `totalBytes` is just the current stage's total. Showing
-// them together (e.g. "633 MB / 18 MB") looks nonsensical when the stage is
-// small. We recover stage-level bytes from stagePercent + totalBytes so the
-// "X / Y" line stays self-consistent.
-const installStageBytes = (
-  stageTotal: number,
-  stagePercent: number,
-): { done: number; total: number } => {
-  if (stageTotal <= 0) return { done: 0, total: 0 };
-  const done = (clamp(stagePercent) / 100) * stageTotal;
-  return { done, total: stageTotal };
-};
-
 // Returns null when nothing is in progress — the card collapses immediately.
 export const selectInstallProgress = (
   client: ClientRuntimeState,
@@ -193,14 +179,14 @@ export const selectInstallProgress = (
     markPrecedingDone(steps, currentKey);
     const current = steps.find((s) => s.key === currentKey);
     if (current) {
-      const { done, total } = installStageBytes(client.totalBytes ?? 0, client.stagePercent ?? 0);
       current.state = paused ? StepStates.PAUSED : StepStates.ACTIVE;
       applyProgress(current, {
         percent: client.stagePercent ?? 0,
         indeterminate: repairRunning && stage === undefined,
         currentFile: client.currentFile,
-        bytesDownloaded: done,
-        bytesTotal: total,
+        bytesDownloaded: client.bytesDownloaded,
+        bytesTotal: client.totalBytes,
+        speedBytesPerSec: client.speedBytesPerSec,
         subStage: stage,
       });
     }

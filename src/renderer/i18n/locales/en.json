@@ -6,7 +6,7 @@
   "updater": {
     "badge": {
       "available": "Downloading {{version}}…",
-      "downloading": "Downloading {{percent}}%",
+      "availableNoVersion": "Downloading update…",
       "ready": "Restart now",
       "readyTitle": "Update {{version}} ready — click to restart and apply"
     },
@@ -278,16 +278,16 @@
     "account": {
       "heroEyebrow": "Player",
       "providerMojang": "Microsoft",
-      "providerStrapi": "Loontail",
+      "providerLoontail": "Loontail",
       "copyUsername": "Copy username",
       "usernameCopied": "Copied",
       "skinLabel": "Skin",
       "capeLabel": "Cape",
       "specSkinMojang": "PNG, up to 64×64",
-      "specSkinStrapi": "PNG, up to 256×256",
-      "specCapeStrapi": "PNG, up to 256×256",
+      "specSkinLoontail": "PNG, up to 256×256",
+      "specCapeLoontail": "PNG, up to 256×256",
       "helperMojang": "Your skin is uploaded straight to Mojang's profile servers and follows your Microsoft account across every Minecraft session — vanilla, modded, multiplayer.",
-      "helperStrapi": "Your skin and cape live on your Loontail account and stay in sync across every Loontail server you join.",
+      "helperLoontail": "Your skin and cape live on your Loontail account and stay in sync across every Loontail server you join.",
       "uploadSkin": "Upload skin",
       "uploadCape": "Upload cape",
       "reset": "Reset",

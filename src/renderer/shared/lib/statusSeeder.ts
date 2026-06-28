@@ -1,9 +1,9 @@
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 
 const DEFAULT_MAX_CONCURRENCY = 3;
 
 export type StatusSeeder<TResult> = {
-  seedStatus: (slug: ClientSlug) => Promise<TResult>;
+  seedStatus: (slug: CatalogKey) => Promise<TResult>;
   reset: () => void;
 };
 
@@ -13,12 +13,12 @@ export type StatusSeeder<TResult> = {
 // Generic over the fetched shape so both the bundle and minecraft features share
 // one implementation, each instantiated with its own status fetcher.
 export const createStatusSeeder = <TResult>(
-  fetchStatus: (slug: ClientSlug) => Promise<TResult>,
+  fetchStatus: (slug: CatalogKey) => Promise<TResult>,
   maxConcurrency: number = DEFAULT_MAX_CONCURRENCY,
 ): StatusSeeder<TResult> => {
   let activeCount = 0;
   const queue: Array<() => void> = [];
-  const requests = new Map<ClientSlug, Promise<TResult>>();
+  const requests = new Map<CatalogKey, Promise<TResult>>();
 
   const flush = (): void => {
     while (activeCount < maxConcurrency) {
@@ -29,7 +29,7 @@ export const createStatusSeeder = <TResult>(
     }
   };
 
-  const seedStatus = (slug: ClientSlug): Promise<TResult> => {
+  const seedStatus = (slug: CatalogKey): Promise<TResult> => {
     const existing = requests.get(slug);
     if (existing) return existing;
 

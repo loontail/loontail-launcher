@@ -3,11 +3,11 @@ import {
   ClientOperationResources,
   createClientOperationLocks,
 } from '@main/services/clientOperationLocks';
-import { asClientSlug } from '@shared/contracts/ids';
+import { asCatalogKey } from '@shared/contracts/ids';
 import { describe, expect, it } from 'vitest';
 
-const ALPHA_SLUG = asClientSlug('alpha');
-const BETA_SLUG = asClientSlug('beta');
+const ALPHA_SLUG = asCatalogKey('official:alpha');
+const BETA_SLUG = asCatalogKey('official:beta');
 
 describe('client operation locks', () => {
   it('blocks a second operation for the same client resource', () => {

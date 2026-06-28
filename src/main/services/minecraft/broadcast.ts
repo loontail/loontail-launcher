@@ -3,7 +3,7 @@ import type {
   MinecraftProgressEvent,
   MinecraftStatusEvent,
 } from '@shared/contracts/minecraft';
-import { IPC_EVENTS } from '@shared/ipc';
+import { IPC_EVENTS, emit } from '@shared/ipc';
 import type { BrowserWindow } from 'electron';
 
 // `getWindow` resolves the live main window on each send: it can be recreated
@@ -11,19 +11,13 @@ import type { BrowserWindow } from 'electron';
 // would broadcast into the destroyed original.
 export const createBroadcaster = (getWindow: () => BrowserWindow) => ({
   status: (payload: MinecraftStatusEvent): void => {
-    const window = getWindow();
-    if (window.isDestroyed()) return;
-    window.webContents.send(IPC_EVENTS.minecraftStatus, payload);
+    emit(getWindow(), IPC_EVENTS.minecraftStatus, payload);
   },
   progress: (payload: MinecraftProgressEvent): void => {
-    const window = getWindow();
-    if (window.isDestroyed()) return;
-    window.webContents.send(IPC_EVENTS.minecraftProgress, payload);
+    emit(getWindow(), IPC_EVENTS.minecraftProgress, payload);
   },
   error: (payload: MinecraftErrorEvent): void => {
-    const window = getWindow();
-    if (window.isDestroyed()) return;
-    window.webContents.send(IPC_EVENTS.minecraftError, payload);
+    emit(getWindow(), IPC_EVENTS.minecraftError, payload);
   },
 });
 

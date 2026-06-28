@@ -1,7 +1,8 @@
 import { join } from 'node:path';
 import { mainConfig } from '@main/config';
+import type { ConsoleHub } from '@main/infra/consoleHub';
 import { scopedLogger } from '@main/infra/logger';
-import { BrowserWindow, shell } from 'electron';
+import { type App, BrowserWindow, shell } from 'electron';
 import { RENDERER_ENTRY_FILES, createRendererLocation, safeParseUrl } from './rendererLocations';
 import { applyNavigationGuards, withFrameOptions } from './secureWindow';
 import { WINDOW_BACKGROUND_COLOR } from './windowColors';
@@ -13,7 +14,7 @@ const MIN_HEIGHT = 624;
 
 const logger = scopedLogger('mainWindow');
 
-// Allowlist for shell.openExternal targets. Strapi host comes from mainConfig
+// Allowlist for shell.openExternal targets. CMS host comes from mainConfig
 // so dev/prod stay aligned; default posture is deny.
 const buildExternalHostAllowlist = (): ReadonlySet<string> => {
   const allowed = new Set<string>();
@@ -80,4 +81,51 @@ export const createMainWindow = (): BrowserWindow => {
   }
 
   return window;
+};
+
+export type MainWindowLifecycleDeps = {
+  app: Pick<App, 'on'>;
+  consoleHub: Pick<ConsoleHub, 'getWindow'>;
+  createWindow: () => BrowserWindow;
+  attachNotifier: (window: BrowserWindow) => void;
+};
+
+export type MainWindowHolder = {
+  get: () => BrowserWindow;
+};
+
+// Owns the single main-window reference and ties its lifecycle to the rest of
+// the process: closing the main window also closes the console (it is a child
+// surface of the launcher, not a standalone app), `second-instance` focuses the
+// main window specifically rather than whichever window happens to be first,
+// and macOS `activate` only recreates when the main window is gone (a lingering
+// console must not suppress the re-open). The reference is read through `get`
+// so window-dependent services follow a macOS dock re-open without rewiring.
+export const installMainWindowLifecycle = (deps: MainWindowLifecycleDeps): MainWindowHolder => {
+  const { app, consoleHub, createWindow, attachNotifier } = deps;
+
+  let current = createWindow();
+  attachNotifier(current);
+
+  const bindClose = (window: BrowserWindow): void => {
+    window.on('closed', () => {
+      consoleHub.getWindow()?.close();
+    });
+  };
+  bindClose(current);
+
+  app.on('second-instance', () => {
+    if (current.isDestroyed()) return;
+    if (current.isMinimized()) current.restore();
+    current.focus();
+  });
+
+  app.on('activate', () => {
+    if (!current.isDestroyed()) return;
+    current = createWindow();
+    attachNotifier(current);
+    bindClose(current);
+  });
+
+  return { get: () => current };
 };

@@ -3,7 +3,7 @@ import type {
   BundleProgressEvent,
   BundleStatusEvent,
 } from '@shared/contracts/bundle';
-import { IPC_EVENTS } from '@shared/ipc';
+import { IPC_EVENTS, emit } from '@shared/ipc';
 import type { BrowserWindow } from 'electron';
 
 // `getWindow` resolves the live main window on each send: it can be recreated
@@ -11,19 +11,13 @@ import type { BrowserWindow } from 'electron';
 // would broadcast into the destroyed original.
 export const createBundleBroadcaster = (getWindow: () => BrowserWindow) => ({
   status: (payload: BundleStatusEvent): void => {
-    const window = getWindow();
-    if (window.isDestroyed()) return;
-    window.webContents.send(IPC_EVENTS.bundleStatus, payload);
+    emit(getWindow(), IPC_EVENTS.bundleStatus, payload);
   },
   progress: (payload: BundleProgressEvent): void => {
-    const window = getWindow();
-    if (window.isDestroyed()) return;
-    window.webContents.send(IPC_EVENTS.bundleProgress, payload);
+    emit(getWindow(), IPC_EVENTS.bundleProgress, payload);
   },
   error: (payload: BundleErrorEvent): void => {
-    const window = getWindow();
-    if (window.isDestroyed()) return;
-    window.webContents.send(IPC_EVENTS.bundleError, payload);
+    emit(getWindow(), IPC_EVENTS.bundleError, payload);
   },
 });
 

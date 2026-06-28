@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { BundleSlugSchema, ClientSlugSchema, InstanceIdSchema } from './ids';
+import { ServerSchema } from './media';
 import { LoaderChoiceSchema } from './settings';
-import { ServerSchema } from './strapi';
 
 // Bump when the on-disk `instance.json` shape changes incompatibly; the
 // instance repo migrates older manifests forward on read.

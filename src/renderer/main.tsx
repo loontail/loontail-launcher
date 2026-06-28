@@ -22,7 +22,7 @@ if (rootElement === null) {
 
 const queryClient = createQueryClient();
 
-// Localized Strapi fields (title, description, media) are cached per-locale by
+// Localized CMS fields (title, description, media) are cached per-locale by
 // query key; drop the previous locale's entries so the UI doesn't briefly show
 // stale text/images while the new locale fetches in the background.
 i18n.on('languageChanged', () => {

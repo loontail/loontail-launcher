@@ -1,10 +1,10 @@
 import { ConsoleLevels, ConsoleSources } from '@shared/contracts/console';
-import { asClientSlug } from '@shared/contracts/ids';
+import { asCatalogKey } from '@shared/contracts/ids';
 import { describe, expect, it } from 'vitest';
 
 import { buildLineInput, createConsoleHub } from '@main/infra/consoleHub';
 
-const SLUG = asClientSlug('test-client');
+const SLUG = asCatalogKey('official:test-client');
 
 const PARTIAL_EVENT =
   '<log4j:Event logger="net.minecraft.crash" timestamp="1" level="ERROR" thread="main">';

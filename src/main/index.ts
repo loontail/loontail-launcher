@@ -21,9 +21,10 @@ import { createAuthService } from '@main/services/auth';
 import { getStoredAccount } from '@main/services/auth/auth';
 import { createYggdrasilClient } from '@main/services/auth/yggdrasilClient';
 import { createBundleService } from '@main/services/bundle';
+import { resolveBundleRepairFilter } from '@main/services/bundle/ownership';
 import { createCatalogService } from '@main/services/catalog';
 import { createClientOperationLocks } from '@main/services/clientOperationLocks';
-import { createClientsService, getClients } from '@main/services/clients';
+import { getClient, getClients } from '@main/services/clients';
 import { createConsoleService } from '@main/services/console';
 import { createHistoryService } from '@main/services/history';
 import { createInstancesService } from '@main/services/instances';
@@ -36,8 +37,8 @@ import { createSkinService } from '@main/services/skin';
 import { createSystemService } from '@main/services/system';
 import { createUpdaterService } from '@main/services/updater';
 import { openConsoleWindow } from '@main/windows/consoleWindow';
-import { createMainWindow } from '@main/windows/mainWindow';
-import { BrowserWindow, app, dialog, protocol } from 'electron';
+import { createMainWindow, installMainWindowLifecycle } from '@main/windows/mainWindow';
+import { type BrowserWindow, app, dialog, protocol } from 'electron';
 
 initLogger();
 const logger = scopedLogger('bootstrap');
@@ -82,14 +83,6 @@ protocol.registerSchemesAsPrivileged([
   },
 ]);
 
-app.on('second-instance', () => {
-  const [existing] = BrowserWindow.getAllWindows();
-  if (existing) {
-    if (existing.isMinimized()) existing.restore();
-    existing.focus();
-  }
-});
-
 const start = async (): Promise<void> => {
   await app.whenReady();
 
@@ -99,17 +92,21 @@ const start = async (): Promise<void> => {
 
   configureSessionSecurity();
 
-  // Held in a mutable holder and read through getMainWindow so every
-  // window-dependent consumer follows the live window across a macOS dock
-  // re-open (which destroys then recreates it), instead of capturing the
-  // original by value and going dead.
-  let mainWindow = createMainWindow();
-  const getMainWindow = (): BrowserWindow => mainWindow;
-  attachNotifier(mainWindow);
   // One console hub for the process, created here and threaded into every
   // consumer (launch flow, console service, trusted-sender check) instead of a
   // module singleton, so its buffer/timer state is owned by the bootstrap.
   const consoleHub = createConsoleHub();
+  // The main window is owned by the lifecycle holder: closing it also closes
+  // the console, `second-instance`/`activate` target the main ref, and the
+  // notifier follows a macOS dock re-open. Read through getMainWindow so every
+  // window-dependent consumer follows the live window without rewiring.
+  const mainWindowHolder = installMainWindowLifecycle({
+    app,
+    consoleHub,
+    createWindow: createMainWindow,
+    attachNotifier,
+  });
+  const getMainWindow = (): BrowserWindow => mainWindowHolder.get();
   const openConsole = (): void => {
     openConsoleWindow(consoleHub);
   };
@@ -123,7 +120,6 @@ const start = async (): Promise<void> => {
   const systemService = createSystemService(router, getMainWindow);
   const settingsService = createSettingsService(router, getMainWindow);
   const skinService = createSkinService(router, kit, yggdrasilGateway, authService.session);
-  const clientsService = createClientsService(router);
   const instancesService = createInstancesService(router, kit);
   const catalogService = createCatalogService(router, {
     listClients: getClients,
@@ -140,8 +136,17 @@ const start = async (): Promise<void> => {
     consoleHub,
     openConsole,
     getStoredAccount,
+    resolveBundleRepairFilter,
+    (key) => catalogService.catalog.resolveBuildByKey(key),
   );
-  const bundleService = createBundleService(router, getMainWindow, kit, clientOperationLocks);
+  const bundleService = createBundleService(
+    router,
+    getMainWindow,
+    kit,
+    clientOperationLocks,
+    { resolveContext: (slug) => minecraftService.manager.resolveHealTarget(slug) },
+    getClient,
+  );
   // Wire bundle sync into the launch flow — runs after install, before launch.
   // No-op for clients without a bundleSlug (handled inside syncForLaunch).
   minecraftService.manager.attachLaunchHook((slug, signal) =>
@@ -150,21 +155,29 @@ const start = async (): Promise<void> => {
   const consoleService = createConsoleService(router, consoleHub, openConsole);
   const updaterService = createUpdaterService(router, getMainWindow);
 
-  await appService.init();
-  await authService.init();
-  await systemService.init();
-  await settingsService.init();
-  await skinService.init();
-  await clientsService.init();
-  await instancesService.init();
-  await catalogService.init();
-  await serversService.init();
-  await historyService.init();
-  await mediaService.init();
-  await minecraftService.init();
-  await bundleService.init();
-  await consoleService.init();
-  await updaterService.init();
+  // One ordered registry drives both startup (sequential, in this order) and
+  // teardown (concurrent). The init order matters (instances -> catalog, etc.);
+  // dispose order does not because teardown is independent.
+  const services = [
+    appService,
+    authService,
+    systemService,
+    settingsService,
+    skinService,
+    instancesService,
+    catalogService,
+    serversService,
+    historyService,
+    mediaService,
+    minecraftService,
+    bundleService,
+    consoleService,
+    updaterService,
+  ];
+
+  for (const service of services) {
+    await service.init();
+  }
 
   await seedLauncherSettings();
   void sweepOrphanClientOverrides();
@@ -175,16 +188,6 @@ const start = async (): Promise<void> => {
     }
   });
 
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      // Recreate the window and re-point the holder + notifier at it; the
-      // window-dependent services read it through getMainWindow, so they follow
-      // the new window without rewiring.
-      mainWindow = createMainWindow();
-      attachNotifier(mainWindow);
-    }
-  });
-
   let disposed = false;
   const drain = async (): Promise<void> => {
     clientOperationLocks.cancelAll();
@@ -192,23 +195,7 @@ const start = async (): Promise<void> => {
     // releases its own listeners/timers/children), so order doesn't matter and
     // a slow one can't block the rest. cancelAll above already stopped in-flight
     // work; the database is closed last, after this settles.
-    await Promise.allSettled([
-      updaterService.dispose(),
-      consoleService.dispose(),
-      bundleService.dispose(),
-      minecraftService.dispose(),
-      mediaService.dispose(),
-      historyService.dispose(),
-      serversService.dispose(),
-      catalogService.dispose(),
-      instancesService.dispose(),
-      clientsService.dispose(),
-      skinService.dispose(),
-      settingsService.dispose(),
-      systemService.dispose(),
-      authService.dispose(),
-      appService.dispose(),
-    ]);
+    await Promise.allSettled(services.map((service) => service.dispose()));
     router.dispose();
     closeDatabase();
     logger.info('Launcher disposed');

@@ -41,9 +41,13 @@ export const useCatalog = (): UseCatalogResult => {
   };
 };
 
-const useCatalogMutation = <TInput, TResult>(mutationFn: (input: TInput) => Promise<TResult>) => {
+const useCatalogMutation = <TInput, TResult>(
+  mutationFn: (input: TInput) => Promise<TResult>,
+  meta?: Record<string, unknown>,
+) => {
   const queryClient = useQueryClient();
   return useMutation({
+    ...(meta ? { meta } : {}),
     mutationFn,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: [QUERY_KEY_ROOTS.catalog] });
@@ -51,7 +55,10 @@ const useCatalogMutation = <TInput, TResult>(mutationFn: (input: TInput) => Prom
   });
 };
 
-export const useCreateBuild = () => useCatalogMutation(api.createBuild);
+// The build editor surfaces creation failures inline in its form, so the global
+// toast would double-surface them.
+export const useCreateBuild = () =>
+  useCatalogMutation(api.createBuild, { skipGlobalErrorToast: true });
 export const useUpdateBuild = () => useCatalogMutation(api.updateBuild);
 export const useDeleteBuild = () => useCatalogMutation(api.deleteBuild);
 

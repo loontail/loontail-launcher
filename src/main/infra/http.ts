@@ -1,15 +1,19 @@
 import { mainConfig } from '@main/config';
+import { HTTP_FORBIDDEN, HTTP_UNAUTHORIZED } from '@main/constants/http';
 import { scopedLogger } from '@main/infra/logger';
 import { API_PATH_PREFIX } from '@shared/constants';
 import type { ZodTypeAny, z } from 'zod';
 
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
-export type AuthMode =
-  // Static `API_TOKEN` from env; for catalogue/manifest/skin routes that need no per-user identity.
-  | 'apiToken'
-  // No Authorization header. The Yggdrasil access token is NOT a valid bearer for the Strapi
-  // content API, so user-scoped calls go directly through YggdrasilClient, not this helper.
+type AuthMode =
+  // The live Loontail session token is attached as `Authorization: Bearer`.
+  // This is the universal API bearer: catalogue, bundle manifest, and texture
+  // routes all now require a session. A 401/403 triggers a single
+  // refresh-and-retry before the call is allowed to fail.
+  | 'session'
+  // No Authorization header. For the auth endpoints themselves, which either
+  // take credentials in the body (login/register) or carry their own bearer.
   | 'none';
 
 type RequestOptions = {
@@ -34,27 +38,47 @@ export class HttpError extends Error {
   }
 }
 
-export const buildAuthHeader = (token: string): Record<string, string> => ({
-  Authorization: `Bearer ${token}`,
-});
+// The auth service owns the session token and the refresh flow, so it registers
+// these accessors at init. http.ts stays decoupled from the auth/store modules
+// (avoiding an import cycle) while still being able to attach the live bearer
+// and recover from a 401/403 by rotating the session once.
+export type SessionAuthPort = {
+  // Current session token, or null when no session is stored.
+  getToken: () => string | null;
+  // Refresh the stored session (POST /api/auth/refresh) and return the rotated
+  // token, or null if refresh failed (the user must re-authenticate).
+  refresh: () => Promise<string | null>;
+};
+
+let sessionPort: SessionAuthPort | null = null;
+
+export const registerSessionAuthPort = (port: SessionAuthPort): void => {
+  sessionPort = port;
+};
+
+const requireSessionPort = (): SessionAuthPort => {
+  if (!sessionPort) {
+    throw new Error('Session auth port is not registered');
+  }
+  return sessionPort;
+};
 
 const buildHeaders = (token: string | undefined): Record<string, string> => ({
   'Content-Type': 'application/json',
-  ...(token ? buildAuthHeader(token) : {}),
+  ...(token ? { Authorization: `Bearer ${token}` } : {}),
 });
-
-const resolveBearer = (auth: AuthMode): string | undefined => {
-  if (auth === 'none') return undefined;
-  return mainConfig.apiToken;
-};
 
 const buildUrl = (path: string): string => `${mainConfig.apiUrl}${API_PATH_PREFIX}${path}`;
 
-export const httpRequest = (url: string, options: RequestOptions): Promise<Response> => {
-  const { method = 'GET', payload, signal, auth } = options;
+const rawFetch = (
+  url: string,
+  method: HttpMethod,
+  payload: unknown,
+  token: string | undefined,
+  signal: AbortSignal | undefined,
+): Promise<Response> => {
   const hasBody = payload !== undefined && method !== 'GET';
-  const token = resolveBearer(auth);
-  return fetch(buildUrl(url), {
+  return fetch(url, {
     method,
     headers: buildHeaders(token),
     ...(hasBody ? { body: JSON.stringify(payload) } : {}),
@@ -62,8 +86,38 @@ export const httpRequest = (url: string, options: RequestOptions): Promise<Respo
   });
 };
 
+const isSessionRejection = (response: Response): boolean =>
+  response.status === HTTP_UNAUTHORIZED || response.status === HTTP_FORBIDDEN;
+
+export const httpRequest = async (url: string, options: RequestOptions): Promise<Response> => {
+  const { method = 'GET', payload, signal, auth } = options;
+  const fullUrl = buildUrl(url);
+  if (auth === 'none') {
+    return rawFetch(fullUrl, method, payload, undefined, signal);
+  }
+  const port = requireSessionPort();
+  const response = await rawFetch(fullUrl, method, payload, port.getToken() ?? undefined, signal);
+  if (!isSessionRejection(response)) return response;
+  // 401/403: the session may have expired. Rotate it once and retry; if refresh
+  // fails the original rejection stands and the caller surfaces a re-login.
+  logger.warn(`${method} ${url} rejected (${response.status}); attempting session refresh`);
+  const rotated = await port.refresh();
+  if (!rotated) return response;
+  return rawFetch(fullUrl, method, payload, rotated, signal);
+};
+
 export const buildMediaUrl = (path: string): string =>
   path.startsWith('http') ? path : `${mainConfig.apiUrl}${path}`;
+
+// Authorization header for the raw-fetch paths (bundle file download, media
+// cache) that bypass `httpRequest`. Bundle `/files` and CMS/textures media
+// now require a session, so the live bearer must ride along. Returns an empty
+// object when no session is stored — the request proceeds unauthenticated and
+// the server decides (public assets still resolve; gated ones 401).
+export const sessionAuthHeader = (): Record<string, string> => {
+  const token = sessionPort?.getToken() ?? null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+};
 
 const readBodyPreview = async (response: Response): Promise<string | undefined> => {
   try {
@@ -98,60 +152,4 @@ export const httpGet = async <TSchema extends ZodTypeAny>(
   if (!response.ok) await throwHttpError(path, 'GET', response);
   const raw: unknown = await response.json();
   return schema.parse(raw);
-};
-
-export const httpPost = async <TSchema extends ZodTypeAny>(
-  path: string,
-  schema: TSchema,
-  options: SchemaCallOptions & { payload: unknown },
-): Promise<z.infer<TSchema>> => {
-  const response = await httpRequest(path, { method: 'POST', ...options });
-  if (!response.ok) await throwHttpError(path, 'POST', response);
-  const raw: unknown = await response.json();
-  return schema.parse(raw);
-};
-
-export const httpPutVoid = async (
-  path: string,
-  payload: unknown,
-  options: SchemaCallOptions,
-): Promise<void> => {
-  const response = await httpRequest(path, { method: 'PUT', payload, ...options });
-  if (!response.ok) await throwHttpError(path, 'PUT', response);
-};
-
-export const httpPostMultipart = async <TSchema extends ZodTypeAny>(
-  path: string,
-  schema: TSchema,
-  formData: FormData,
-  options: SchemaCallOptions,
-): Promise<z.infer<TSchema>> => {
-  const token = resolveBearer(options.auth);
-  const response = await fetch(buildUrl(path), {
-    method: 'POST',
-    body: formData,
-    ...(token ? { headers: buildAuthHeader(token) } : {}),
-    ...(options.signal ? { signal: options.signal } : {}),
-  });
-  if (!response.ok) await throwHttpError(path, 'POST', response);
-  const raw: unknown = await response.json();
-  return schema.parse(raw);
-};
-
-// For binary downloads. Takes a raw url (absolute or media path); skips the
-// API_PATH_PREFIX since callers typically already hold an absolute media URL.
-// No auth header — media URLs in Strapi are publicly reachable and Mojang
-// texture URLs (textures.minecraft.net) are public too.
-export const httpGetBinary = async (
-  absoluteUrl: string,
-  options: { signal?: AbortSignal } = {},
-): Promise<Buffer> => {
-  const response = await fetch(absoluteUrl, options.signal ? { signal: options.signal } : {});
-  if (!response.ok) {
-    const bodyPreview = await readBodyPreview(response);
-    logger.warn(`GET ${absoluteUrl} failed: ${response.status} ${response.statusText}`);
-    throw new HttpError(response.status, response.statusText, bodyPreview);
-  }
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
 };

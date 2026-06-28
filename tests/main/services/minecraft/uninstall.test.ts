@@ -1,6 +1,37 @@
+import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
-import { isUnderClientsRoot } from '@main/services/minecraft/uninstall';
-import { describe, expect, it } from 'vitest';
+import { SIDECAR_DIR } from '@main/constants/paths';
+import type { ManagerEnv } from '@main/services/minecraft/env';
+import { isUnderClientsRoot, runUninstall } from '@main/services/minecraft/uninstall';
+import { asCatalogKey } from '@shared/contracts/ids';
+import { InstallStatuses } from '@shared/contracts/minecraft';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@main/infra/logger', () => ({
+  scopedLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
+}));
+
+// Reject the recursive wipe of the client folder itself so runUninstall takes
+// its residual-failure branch; everything else (unlink for the sidecars,
+// readdir for the marker scan) delegates to the real fs.
+const realFs = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+const rmReject = vi.hoisted(() => ({ paths: new Set<string>() }));
+vi.mock('node:fs/promises', async () => {
+  const actual = await vi.importActual<typeof import('node:fs/promises')>('node:fs/promises');
+  return {
+    ...actual,
+    default: {
+      ...actual,
+      rm: vi.fn((target: string, options?: Parameters<typeof actual.rm>[1]) => {
+        if (typeof target === 'string' && rmReject.paths.has(target)) {
+          return Promise.reject(new Error('EBUSY: resource busy or locked'));
+        }
+        return actual.rm(target, options);
+      }),
+    },
+  };
+});
 
 // isUnderClientsRoot is the only guard before `fs.rm(folder, { recursive: true })`
 // in runUninstall, so a regression here would be a P0 user-data-loss bug.
@@ -74,5 +105,44 @@ describe('isUnderClientsRoot', () => {
       const grand = path.join(root, 'survival', 'versions');
       expect(isUnderClientsRoot(grand, root)).toBe(true);
     });
+  });
+});
+
+describe('runUninstall residual-failure path', () => {
+  const SLUG = asCatalogKey('official:residual');
+  let clientsRoot: string;
+  let folder: string;
+  let sidecar: string;
+
+  const makeEnv = (statuses: string[]): ManagerEnv =>
+    ({
+      ops: { set: vi.fn(), delete: vi.fn() },
+      forgeProcessorCache: { clear: vi.fn() },
+      logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      emitStatus: (payload: { status: string }) => statuses.push(payload.status),
+      emitError: vi.fn(),
+      clearRuntimeOverride: vi.fn(),
+    }) as unknown as ManagerEnv;
+
+  beforeEach(async () => {
+    clientsRoot = await realFs.mkdtemp(path.join(os.tmpdir(), 'uninstall-residual-'));
+    folder = path.join(clientsRoot, 'residual');
+    sidecar = path.join(folder, SIDECAR_DIR, 'bundle.json');
+    await realFs.mkdir(path.dirname(sidecar), { recursive: true });
+    await realFs.writeFile(sidecar, '{"bundleSlug":"x"}', 'utf8');
+    rmReject.paths.add(folder);
+  });
+
+  afterEach(async () => {
+    rmReject.paths.clear();
+    await realFs.rm(clientsRoot, { recursive: true, force: true });
+  });
+
+  it('clears the stale bundle sidecar when the folder wipe fails but markers are gone', async () => {
+    const statuses: string[] = [];
+    await runUninstall(makeEnv(statuses), SLUG, folder, clientsRoot);
+
+    await expect(fs.access(sidecar)).rejects.toThrow();
+    expect(statuses).toContain(InstallStatuses.NOT_INSTALLED);
   });
 });

@@ -4,6 +4,7 @@ import { IPC_CHANNELS, IPC_EVENTS } from '@shared/ipc';
 import type { TFunction } from 'i18next';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { create } from 'zustand';
 import { useUpdaterStore } from './store';
 
 // 30 min background poll. Squirrel.Windows can't push pings, so the renderer
@@ -14,18 +15,43 @@ const BACKGROUND_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 // burst focus events from spamming update.electronjs.org. User-clicked checks
 // bypass this — they go through `triggerUpdaterCheck` directly.
 const AUTO_CHECK_DEDUPE_MS = 5_000;
-let lastAutoCheckAt = 0;
 
-// Shared between markUserInitiatedCheck (called from the settings button) and
-// triggerAutoCheck; module scope is intentional so both reach the same flag.
-let userInitiatedCheck = false;
+// Mirrors the literal the main-side watchdog broadcasts on a stalled check
+// (updater/index.ts). A timeout ERROR is the renderer's signal that the
+// user's pending success confirmation is now stale and must be dropped.
+const UPDATER_TIMEOUT_MESSAGE = 'Update check timed out';
+
+type CheckTrackingStore = {
+  lastAutoCheckAt: number;
+  userInitiatedCheck: boolean;
+  markUserInitiated: () => void;
+  clearUserInitiated: () => void;
+  // Records the attempt and reports whether the dedupe window allows it. Kept
+  // in the store (not module scope) so it survives no instance and resets
+  // cleanly between mounts.
+  claimAutoCheck: (now: number) => boolean;
+  reset: () => void;
+};
+
+export const useUpdaterCheckTracking = create<CheckTrackingStore>((set, get) => ({
+  lastAutoCheckAt: Number.NEGATIVE_INFINITY,
+  userInitiatedCheck: false,
+  markUserInitiated: () => set({ userInitiatedCheck: true }),
+  clearUserInitiated: () => set({ userInitiatedCheck: false }),
+  claimAutoCheck: (now) => {
+    if (now - get().lastAutoCheckAt < AUTO_CHECK_DEDUPE_MS) return false;
+    set({ lastAutoCheckAt: now });
+    return true;
+  },
+  reset: () => set({ lastAutoCheckAt: Number.NEGATIVE_INFINITY, userInitiatedCheck: false }),
+}));
 
 // Per-session toast-dedup so the same news isn't re-toasted on every background
 // poll, but is fresh again in a new launcher session.
 type ToastDedup = { state: string | null; errorMessage: string | null };
 
 export const markUserInitiatedCheck = (): void => {
-  userInitiatedCheck = true;
+  useUpdaterCheckTracking.getState().markUserInitiated();
 };
 
 export const triggerUpdaterCheck = (): void => {
@@ -37,19 +63,16 @@ export const triggerUpdaterCheck = (): void => {
 // recently. The main process has its own in-flight guard too — this just
 // avoids the IPC roundtrip in the common case.
 const triggerAutoCheck = (): void => {
-  const now = Date.now();
-  if (now - lastAutoCheckAt < AUTO_CHECK_DEDUPE_MS) return;
   const current = useUpdaterStore.getState().value;
   if (
     current &&
     (current.state === UpdaterStates.CHECKING ||
       current.state === UpdaterStates.AVAILABLE ||
-      current.state === UpdaterStates.DOWNLOADING ||
       current.state === UpdaterStates.READY)
   ) {
     return;
   }
-  lastAutoCheckAt = now;
+  if (!useUpdaterCheckTracking.getState().claimAutoCheck(Date.now())) return;
   triggerUpdaterCheck();
 };
 
@@ -57,6 +80,9 @@ const isFinalState = (state: string): boolean =>
   state === UpdaterStates.NOT_AVAILABLE ||
   state === UpdaterStates.READY ||
   state === UpdaterStates.ERROR;
+
+const isWatchdogTimeout = (status: UpdaterStatusEvent): boolean =>
+  status.state === UpdaterStates.ERROR && status.message === UPDATER_TIMEOUT_MESSAGE;
 
 const toastFor = (
   status: UpdaterStatusEvent,
@@ -67,9 +93,6 @@ const toastFor = (
   switch (status.state) {
     case UpdaterStates.CHECKING:
       // Button shows a spinner — an extra toast would just be noise.
-      return false;
-    case UpdaterStates.DOWNLOADING:
-      // Squirrel.Windows doesn't surface progress; nothing useful to toast.
       return false;
     case UpdaterStates.AVAILABLE:
       if (dedup.state === status.state) return false;
@@ -105,6 +128,23 @@ const toastFor = (
   }
 };
 
+export const handleUpdaterStatus = (
+  status: UpdaterStatusEvent,
+  t: TFunction,
+  dedup: ToastDedup,
+): void => {
+  const tracking = useUpdaterCheckTracking.getState();
+  const wasUserInitiated = tracking.userInitiatedCheck;
+  const didToast = toastFor(status, wasUserInitiated, t, dedup);
+  if (didToast) dedup.state = status.state;
+  // A timeout ERROR is a terminal state, so the second clause is redundant for
+  // correctness; it documents the alignment with the main-side watchdog and
+  // keeps the intent explicit if isFinalState ever narrows.
+  if (isFinalState(status.state) || isWatchdogTimeout(status)) {
+    tracking.clearUserInitiated();
+  }
+};
+
 export const UpdaterEventsListener = (): null => {
   const { t } = useTranslation();
   const dedupRef = useRef<ToastDedup>({ state: null, errorMessage: null });
@@ -113,10 +153,7 @@ export const UpdaterEventsListener = (): null => {
     const dedup = dedupRef.current;
     return window.api.on(IPC_EVENTS.updaterStatus, (status) => {
       setStatus(status);
-      const wasUserInitiated = userInitiatedCheck;
-      const didToast = toastFor(status, wasUserInitiated, t, dedup);
-      if (didToast) dedup.state = status.state;
-      if (isFinalState(status.state)) userInitiatedCheck = false;
+      handleUpdaterStatus(status, t, dedup);
     });
   }, [t]);
   return null;

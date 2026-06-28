@@ -6,18 +6,18 @@ import {
 } from '@main/services/clientOperationLocks';
 import type { Broadcaster } from '@main/services/minecraft/broadcast';
 import type { Context } from '@main/services/minecraft/context';
-import { asClientSlug } from '@shared/contracts/ids';
-import { type LauncherSettings, LoaderChoices } from '@shared/contracts/settings';
+import { asCatalogKey } from '@shared/contracts/ids';
+import { InstallStatuses } from '@shared/contracts/minecraft';
+import { LoaderChoices } from '@shared/contracts/settings';
 import { type MockInstance, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const orchestrationMocks = vi.hoisted(() => {
-  process.env.API_URL ??= 'http://test.invalid';
-  process.env.API_TOKEN ??= 'test-token';
   return {
     buildContext: vi.fn(),
     getSettings: vi.fn(),
     runRepair: vi.fn(),
     setClientOverride: vi.fn(),
+    resolveClientInstallPresence: vi.fn(),
     logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
   };
 });
@@ -31,7 +31,7 @@ vi.mock('@main/services/minecraft/context', () => ({
 }));
 
 vi.mock('@main/services/minecraft/readinessPolicy', () => ({
-  resolveClientInstallPresence: vi.fn(),
+  resolveClientInstallPresence: orchestrationMocks.resolveClientInstallPresence,
 }));
 
 vi.mock('@main/services/settings/settings', () => ({
@@ -44,18 +44,21 @@ vi.mock('@main/services/minecraft/repair', () => ({
 }));
 
 import { MinecraftManager } from '@main/services/minecraft/manager';
-import { stubAccountProvider, stubConsolePort, stubOpenConsole } from './managerStubs';
+import { OP_TO_STATUS, OpKinds } from '@main/services/minecraft/ops';
+import { makeLauncherSettings, makeMinecraftBroadcaster } from '../../../helpers/fixtures';
+import {
+  stubAccountProvider,
+  stubConsolePort,
+  stubOpenConsole,
+  stubResolveBuild,
+  stubResolveBundleRepairFilter,
+} from './managerStubs';
 
-const SLUG = asClientSlug('test-client');
+const SLUG = asCatalogKey('official:test-client');
 const CLIENT_FOLDER = 'Z:/clients/test-client';
 const CLIENTS_FOLDER = 'Z:/clients';
 
-const launcherSettings = (): LauncherSettings => ({
-  memory: { allocatedRamMb: 0 },
-  storage: { clientsFolder: CLIENTS_FOLDER },
-  launch: { console: false, fullscreen: false },
-  clients: {},
-});
+const launcherSettings = () => makeLauncherSettings({ storage: { clientsFolder: CLIENTS_FOLDER } });
 
 const context = (): Context =>
   ({
@@ -70,14 +73,6 @@ const context = (): Context =>
     },
   }) as unknown as Context;
 
-const makeBroadcaster = (): Broadcaster =>
-  ({
-    status: vi.fn(),
-    progress: vi.fn(),
-    log: vi.fn(),
-    error: vi.fn(),
-  }) as unknown as Broadcaster;
-
 const makeManager = (
   broadcaster: Broadcaster,
   operationLocks: ClientOperationLocks,
@@ -89,6 +84,8 @@ const makeManager = (
     stubConsolePort(),
     stubOpenConsole(),
     stubAccountProvider(),
+    stubResolveBundleRepairFilter(),
+    stubResolveBuild(),
   );
 
 const trackRepairReleases = (locks: ClientOperationLocks): MockInstance[] => {
@@ -108,6 +105,9 @@ beforeEach(() => {
   orchestrationMocks.buildContext.mockReset().mockResolvedValue(context());
   orchestrationMocks.getSettings.mockReset().mockReturnValue(launcherSettings());
   orchestrationMocks.runRepair.mockReset().mockResolvedValue(true);
+  orchestrationMocks.resolveClientInstallPresence
+    .mockReset()
+    .mockResolvedValue(InstallStatuses.INSTALLED);
   orchestrationMocks.logger.warn.mockReset();
   orchestrationMocks.logger.error.mockReset();
 });
@@ -115,19 +115,19 @@ beforeEach(() => {
 describe('MinecraftManager.startRepair', () => {
   it('runs the bundle sync hook after a successful repair', async () => {
     orchestrationMocks.runRepair.mockResolvedValue(true);
-    const manager = makeManager(makeBroadcaster(), createClientOperationLocks());
+    const manager = makeManager(makeMinecraftBroadcaster(), createClientOperationLocks());
     const hook = vi.fn().mockResolvedValue(undefined);
     manager.attachLaunchHook(hook);
 
     await manager.startRepair(SLUG);
     await vi.waitFor(() => {
-      expect(hook).toHaveBeenCalledWith(SLUG);
+      expect(hook).toHaveBeenCalledWith(SLUG, expect.any(AbortSignal));
     });
   });
 
   it('skips the bundle sync hook when the repair reports no work (repaired === false)', async () => {
     orchestrationMocks.runRepair.mockResolvedValue(false);
-    const manager = makeManager(makeBroadcaster(), createClientOperationLocks());
+    const manager = makeManager(makeMinecraftBroadcaster(), createClientOperationLocks());
     const hook = vi.fn().mockResolvedValue(undefined);
     manager.attachLaunchHook(hook);
 
@@ -141,7 +141,7 @@ describe('MinecraftManager.startRepair', () => {
 
   it('skips the bundle sync hook when the repair throws', async () => {
     orchestrationMocks.runRepair.mockRejectedValue(new Error('repair boom'));
-    const manager = makeManager(makeBroadcaster(), createClientOperationLocks());
+    const manager = makeManager(makeMinecraftBroadcaster(), createClientOperationLocks());
     const hook = vi.fn().mockResolvedValue(undefined);
     manager.attachLaunchHook(hook);
 
@@ -155,7 +155,7 @@ describe('MinecraftManager.startRepair', () => {
 
   it('swallows a hook rejection: logs a warn and startRepair still resolves', async () => {
     orchestrationMocks.runRepair.mockResolvedValue(true);
-    const manager = makeManager(makeBroadcaster(), createClientOperationLocks());
+    const manager = makeManager(makeMinecraftBroadcaster(), createClientOperationLocks());
     const hook = vi.fn().mockRejectedValue(new Error('bundle boom'));
     manager.attachLaunchHook(hook);
 
@@ -171,7 +171,7 @@ describe('MinecraftManager.startRepair', () => {
     orchestrationMocks.runRepair.mockResolvedValue(true);
     const operationLocks = createClientOperationLocks();
     const releases = trackRepairReleases(operationLocks);
-    const manager = makeManager(makeBroadcaster(), operationLocks);
+    const manager = makeManager(makeMinecraftBroadcaster(), operationLocks);
 
     let releasedBeforeHook = false;
     const hook = vi.fn(async () => {
@@ -183,11 +183,74 @@ describe('MinecraftManager.startRepair', () => {
 
     await manager.startRepair(SLUG);
     await vi.waitFor(() => {
-      expect(hook).toHaveBeenCalledWith(SLUG);
+      expect(hook).toHaveBeenCalledWith(SLUG, expect.any(AbortSignal));
     });
 
     expect(releasedBeforeHook).toBe(true);
     expect(releases).toHaveLength(1);
     expect(releases[0]).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('MinecraftManager.startRepair — post-repair BUNDLE_SYNCING op', () => {
+  it('reports the BUNDLE_SYNCING status while the hook is pending, then falls back to presence once it resolves', async () => {
+    orchestrationMocks.runRepair.mockResolvedValue(true);
+    const manager = makeManager(makeMinecraftBroadcaster(), createClientOperationLocks());
+    let resolveHook: () => void = () => undefined;
+    const hook = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveHook = resolve;
+        }),
+    );
+    manager.attachLaunchHook(hook);
+
+    await manager.startRepair(SLUG);
+    await vi.waitFor(() => {
+      expect(hook).toHaveBeenCalledWith(SLUG, expect.any(AbortSignal));
+    });
+
+    expect(await manager.getStatus(SLUG)).toEqual({
+      status: OP_TO_STATUS[OpKinds.BUNDLE_SYNCING],
+      paused: false,
+    });
+
+    resolveHook();
+    await vi.waitFor(async () => {
+      expect(await manager.getStatus(SLUG)).toEqual({
+        status: InstallStatuses.INSTALLED,
+        paused: false,
+      });
+    });
+  });
+
+  it('aborts the hook signal on cancel(slug) and settles to presence without logging an error', async () => {
+    orchestrationMocks.runRepair.mockResolvedValue(true);
+    const manager = makeManager(makeMinecraftBroadcaster(), createClientOperationLocks());
+    let capturedSignal: AbortSignal | undefined;
+    const hook = vi.fn(
+      (_slug, signal?: AbortSignal) =>
+        new Promise<void>((_resolve, reject) => {
+          capturedSignal = signal;
+          signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        }),
+    );
+    manager.attachLaunchHook(hook);
+
+    await manager.startRepair(SLUG);
+    await vi.waitFor(() => {
+      expect(hook).toHaveBeenCalledWith(SLUG, expect.any(AbortSignal));
+    });
+
+    manager.cancel(SLUG);
+    expect(capturedSignal?.aborted).toBe(true);
+
+    await vi.waitFor(async () => {
+      expect(await manager.getStatus(SLUG)).toEqual({
+        status: InstallStatuses.INSTALLED,
+        paused: false,
+      });
+    });
+    expect(orchestrationMocks.logger.error).not.toHaveBeenCalled();
   });
 });

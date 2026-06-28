@@ -1,5 +1,5 @@
 import { cn } from '@renderer/shared/lib/cn';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import { Pause } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +14,7 @@ type ProgressBodyProps = {
   active: InstallStep;
   paused: boolean;
   controls: ProgressControlsKind;
-  slug: ClientSlug;
+  slug: CatalogKey;
 };
 
 // A transfer is "stalled" when bytes haven't advanced for a few seconds while

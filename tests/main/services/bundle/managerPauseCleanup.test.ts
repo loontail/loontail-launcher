@@ -1,4 +1,3 @@
-import type { ClientRequest } from 'node:http';
 import {
   EventTypes,
   type ProgressEvent,
@@ -8,8 +7,6 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const managerMocks = vi.hoisted(() => {
-  process.env.API_URL ??= 'http://test.invalid';
-  process.env.API_TOKEN ??= 'test-token';
   return {
     buildPlan: vi.fn(),
     clearLocalManifest: vi.fn(),
@@ -28,15 +25,16 @@ import { BundleError } from '@main/services/bundle/errors';
 import type { Healer } from '@main/services/bundle/healer';
 import { BundleManager } from '@main/services/bundle/manager';
 import type { SyncPlan } from '@main/services/bundle/plan';
-import type { SyncTask } from '@main/services/bundle/runner';
+import type { SyncPhasesResult, SyncTask } from '@main/services/bundle/runner';
+import { type ActiveSync, SyncStateStore, seedActiveSync } from '@main/services/bundle/syncState';
 import {
   ClientOperationDomains,
   ClientOperationResources,
   createClientOperationLocks,
 } from '@main/services/clientOperationLocks';
 import { BundleErrorCodes, BundleSyncStatuses } from '@shared/contracts/bundle';
-import type { ClientSlug } from '@shared/contracts/ids';
-import type { LauncherSettings } from '@shared/contracts/settings';
+import { type BundleSlug, type CatalogKey, asCatalogKey } from '@shared/contracts/ids';
+import { makeBroadcaster, makeHealer, makeLauncherSettings } from '../../../helpers/fixtures';
 
 vi.mock('@main/infra/logger', () => ({
   scopedLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
@@ -74,23 +72,19 @@ vi.mock('@main/services/bundle/runner', async (importOriginal) => {
 
 type Awaiter = { resolve: () => void; reject: (err: Error) => void };
 
-type ActiveSyncShape = {
-  task: SyncTask;
-  lock: { release: () => void };
-  lastProgress: null;
-  remoteManifestHash: string;
-  remoteManifest: Record<string, never>;
-  bundleSlug: string;
-  forLaunch: boolean;
-  awaiters: Awaiter[];
-  pauseIdleTimer: NodeJS.Timeout | null;
-  whenDropped: Promise<void>;
-  signalDropped: () => void;
-};
-
-const SLUG = 'test-client' as ClientSlug;
+const SLUG = asCatalogKey('official:test-client');
 const BUNDLE_SLUG = 'bundle-x';
 const CLIENT_FOLDER = '/tmp/client';
+
+const syncResult = (
+  outcome: SyncPhasesResult['outcome'],
+  deletedAny: boolean,
+): SyncPhasesResult => ({
+  outcome,
+  deletedAny,
+  paused: outcome === 'paused',
+  cancelled: outcome === 'cancelled',
+});
 
 const EMPTY_PLAN: SyncPlan = {
   toDownload: [],
@@ -119,78 +113,32 @@ const DOWNLOAD_PLAN: SyncPlan = {
   bytesTotal: DOWNLOAD_ENTRY.size,
 };
 
-const launcherSettings = (): LauncherSettings => ({
-  memory: { allocatedRamMb: 0 },
-  storage: { clientsFolder: '/tmp/clients' },
-  launch: { console: false, fullscreen: false },
-  clients: {
-    [SLUG]: { storage: { clientFolder: CLIENT_FOLDER } },
-  },
-});
-
-const makeBroadcaster = (): BundleBroadcaster => ({
-  status: vi.fn(),
-  progress: vi.fn(),
-  error: vi.fn(),
-});
-
-const makeHealer = (): Healer =>
-  ({
-    healAfterDeletes: vi.fn(async () => {}),
-  }) as unknown as Healer;
+const launcherSettings = () =>
+  makeLauncherSettings({ clients: { [SLUG]: { storage: { clientFolder: CLIENT_FOLDER } } } });
 
 const seedPausedActive = (
   manager: BundleManager,
+  activeSyncs: SyncStateStore,
   awaiter: Awaiter,
-): { activeSyncs: Map<ClientSlug, ActiveSyncShape> } => {
-  const task: SyncTask = {
+): ActiveSync => {
+  const active = seedActiveSync(activeSyncs, {
     slug: SLUG,
     clientFolder: CLIENT_FOLDER,
-    plan: {
-      toDownload: [],
-      toUpdate: [],
-      toDelete: [],
-      toSkip: [],
-      bundleOwnedRelativePaths: new Set(),
-      bytesTotal: 0,
-    },
-    abort: new AbortController(),
-    currentRequests: new Set<ClientRequest>(),
-    paused: true,
-    cancelled: false,
-    bytesDownloaded: 0,
-    speedWindowStart: 0,
-    speedWindowBytes: 0,
-    processedFiles: 0,
-    totalFiles: 0,
-    lastEmittedAt: 0,
-    pendingDownloads: [],
-    pendingDeletes: [],
-  };
-  let signalDropped: () => void = () => {};
-  const whenDropped = new Promise<void>((resolve) => {
-    signalDropped = resolve;
-  });
-  const active: ActiveSyncShape = {
-    task,
-    lock: { release: vi.fn() },
-    lastProgress: null,
-    remoteManifestHash: '',
-    remoteManifest: {},
-    bundleSlug: BUNDLE_SLUG,
+    bundleSlug: BUNDLE_SLUG as BundleSlug,
     forLaunch: true,
-    awaiters: [awaiter],
-    pauseIdleTimer: null,
-    whenDropped,
-    signalDropped,
-  };
-  const internals = manager as unknown as {
-    activeSyncs: Map<ClientSlug, ActiveSyncShape>;
-    armPauseIdleTimer: (slug: ClientSlug, active: ActiveSyncShape) => void;
-  };
-  internals.activeSyncs.set(SLUG, active);
-  internals.armPauseIdleTimer.call(manager, SLUG, active);
-  return { activeSyncs: internals.activeSyncs };
+    paused: true,
+  });
+  active.awaiters.push(awaiter);
+  // why: a real paused sync arms the idle auto-cancel timer inside pauseSync,
+  // which the seeded snapshot reconstructs directly. Reaching the private method
+  // (not the activeSyncs field) keeps the seam test-visible without re-exposing
+  // the store internals.
+  (
+    manager as unknown as {
+      armPauseIdleTimer: (slug: CatalogKey, active: ActiveSync) => void;
+    }
+  ).armPauseIdleTimer(SLUG, active);
+  return active;
 };
 
 const resetManagerMocks = (): void => {
@@ -212,7 +160,7 @@ const resetManagerMocks = (): void => {
   managerMocks.getClient.mockResolvedValue(null);
   managerMocks.getSettings.mockReturnValue(launcherSettings());
   managerMocks.loadLocalManifest.mockResolvedValue(null);
-  managerMocks.runSyncPhases.mockResolvedValue({ deletedAny: false });
+  managerMocks.runSyncPhases.mockResolvedValue(syncResult('completed', false));
   managerMocks.saveLocalManifest.mockResolvedValue(undefined);
 };
 
@@ -244,7 +192,13 @@ describe('BundleManager pause cleanup', () => {
 
   it('cancel after pause rejects awaiters and frees the slot', async () => {
     const broadcaster = makeBroadcaster();
-    const manager = new BundleManager(broadcaster, makeHealer(), createClientOperationLocks());
+    const activeSyncs = new SyncStateStore();
+    const manager = new BundleManager(
+      broadcaster,
+      makeHealer(),
+      createClientOperationLocks(),
+      activeSyncs,
+    );
     const rejected: Error[] = [];
     const awaiter: Awaiter = {
       resolve: () => {
@@ -253,7 +207,7 @@ describe('BundleManager pause cleanup', () => {
       reject: (err) => rejected.push(err),
     };
 
-    const { activeSyncs } = seedPausedActive(manager, awaiter);
+    seedPausedActive(manager, activeSyncs, awaiter);
     expect(activeSyncs.has(SLUG)).toBe(true);
 
     manager.cancelSync(SLUG);
@@ -293,28 +247,37 @@ describe('BundleManager pause cleanup', () => {
   it('cancelAll aborts every active sync and frees all slots', async () => {
     vi.useRealTimers();
     const broadcaster = makeBroadcaster();
-    const manager = new BundleManager(broadcaster, makeHealer(), createClientOperationLocks());
+    const activeSyncs = new SyncStateStore();
+    const manager = new BundleManager(
+      broadcaster,
+      makeHealer(),
+      createClientOperationLocks(),
+      activeSyncs,
+    );
     const rejected: Error[] = [];
-    seedPausedActive(manager, {
+    seedPausedActive(manager, activeSyncs, {
       resolve: () => {
         throw new Error('should not resolve');
       },
       reject: (err) => rejected.push(err),
     });
-    const internals = manager as unknown as {
-      activeSyncs: Map<ClientSlug, ActiveSyncShape>;
-    };
-    expect(internals.activeSyncs.size).toBe(1);
+    expect(activeSyncs.size).toBe(1);
 
     await manager.cancelAll(0);
 
-    expect(internals.activeSyncs.size).toBe(0);
+    expect(activeSyncs.size).toBe(0);
     expect(rejected).toHaveLength(1);
   });
 
   it('idle timeout drops paused entry and rejects awaiters', async () => {
     const broadcaster = makeBroadcaster();
-    const manager = new BundleManager(broadcaster, makeHealer(), createClientOperationLocks());
+    const activeSyncs = new SyncStateStore();
+    const manager = new BundleManager(
+      broadcaster,
+      makeHealer(),
+      createClientOperationLocks(),
+      activeSyncs,
+    );
     const rejected: Error[] = [];
     const awaiter: Awaiter = {
       resolve: () => {
@@ -323,7 +286,7 @@ describe('BundleManager pause cleanup', () => {
       reject: (err) => rejected.push(err),
     };
 
-    const { activeSyncs } = seedPausedActive(manager, awaiter);
+    seedPausedActive(manager, activeSyncs, awaiter);
     expect(activeSyncs.has(SLUG)).toBe(true);
 
     vi.advanceTimersByTime(BUNDLE_PAUSED_SYNC_MAX_IDLE_MS + 1);
@@ -359,13 +322,15 @@ describe('BundleManager pause cleanup', () => {
     ]);
 
     const resumeBroadcaster = makeBroadcaster();
+    const activeSyncs = new SyncStateStore();
     const resumeManager = new BundleManager(
       resumeBroadcaster,
       makeHealer(),
       createClientOperationLocks(),
+      activeSyncs,
     );
     const resolved: string[] = [];
-    const { activeSyncs } = seedPausedActive(resumeManager, {
+    seedPausedActive(resumeManager, activeSyncs, {
       resolve: () => resolved.push('resolved'),
       reject: (err) => {
         throw err;
@@ -378,8 +343,15 @@ describe('BundleManager pause cleanup', () => {
       expect(activeSyncs.has(SLUG)).toBe(false);
     });
 
+    // The seeded paused sync carries an empty remote-manifest hash (the
+    // pause-during-fetch sentinel), so resume refetches the manifest instead of
+    // planning against {} — matching the fresh sync's status sequence exactly.
     const resumeStatuses = statusEvents(resumeBroadcaster);
-    expect(resumeStatuses).toEqual([BundleSyncStatuses.PLANNING, BundleSyncStatuses.UP_TO_DATE]);
+    expect(resumeStatuses).toEqual([
+      BundleSyncStatuses.FETCHING_MANIFEST,
+      BundleSyncStatuses.PLANNING,
+      BundleSyncStatuses.UP_TO_DATE,
+    ]);
     expect(resumeStatuses.at(-1)).toBe(freshStatuses.at(-1));
     expect(resolved).toEqual(['resolved']);
   });
@@ -394,19 +366,22 @@ describe('BundleManager pause cleanup', () => {
     managerMocks.runSyncPhases.mockImplementationOnce(async (task: SyncTask) => {
       task.paused = true;
       task.pendingDeletes = ['mods/old.jar'];
-      return { deletedAny: true };
+      return syncResult('paused', true);
     });
 
     const broadcaster = makeBroadcaster();
     const healer = makeHealer();
-    const manager = new BundleManager(broadcaster, healer, createClientOperationLocks());
+    const activeSyncs = new SyncStateStore();
+    const manager = new BundleManager(
+      broadcaster,
+      healer,
+      createClientOperationLocks(),
+      activeSyncs,
+    );
 
     await manager.startSync({ slug: SLUG });
 
-    const internals = manager as unknown as {
-      activeSyncs: Map<ClientSlug, ActiveSyncShape>;
-    };
-    expect(internals.activeSyncs.has(SLUG)).toBe(true);
+    expect(activeSyncs.has(SLUG)).toBe(true);
     expect(managerMocks.saveLocalManifest).not.toHaveBeenCalled();
     expect(healer.healAfterDeletes).not.toHaveBeenCalled();
     expect(statusEvents(broadcaster)).toEqual([
@@ -423,7 +398,7 @@ describe('BundleManager pause cleanup', () => {
       toDelete: ['mods/old.jar'],
       bundleOwnedRelativePaths: new Set(['mods/old.jar']),
     });
-    managerMocks.runSyncPhases.mockResolvedValueOnce({ deletedAny: true });
+    managerMocks.runSyncPhases.mockResolvedValueOnce(syncResult('completed', true));
     const healer: Healer = {
       healAfterDeletes: vi.fn(async (_slug, _bundleOwnedPaths, options) => {
         const event = {

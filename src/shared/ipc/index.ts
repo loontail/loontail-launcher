@@ -9,3 +9,4 @@ export type {
 } from './contract';
 export { IPC_ERROR_SENTINEL, isIpcError, tryUnwrapIpcError } from './errors';
 export type { IpcError } from './errors';
+export { emit } from './emit';

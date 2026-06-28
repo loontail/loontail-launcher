@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const authSessionMocks = vi.hoisted(() => ({
   current: vi.fn(),
+  sessionToken: vi.fn(),
   updateMojangProfile: vi.fn(),
 }));
 
@@ -52,7 +53,7 @@ vi.mock('@loontail/minecraft-kit', () => ({
 const kitStub = {} as unknown as MinecraftKit;
 
 const gateway = {
-  client: yggClientMocks,
+  texturesClient: yggClientMocks,
   fetchTextures: fetchTexturesMock,
 } as unknown as YggdrasilGateway;
 
@@ -71,6 +72,7 @@ const skinPayload = () => ({ type: SkinKinds.SKIN, buffer: new ArrayBuffer(8) })
 
 beforeEach(() => {
   vi.clearAllMocks();
+  authSessionMocks.sessionToken.mockReturnValue('sess-token');
   fetchTexturesMock.mockResolvedValue({ skin: null, cape: null });
   yggClientMocks.uploadSkin.mockResolvedValue(undefined);
   yggClientMocks.uploadCape.mockResolvedValue(undefined);
@@ -103,6 +105,23 @@ describe('uploadSkin (yggdrasil)', () => {
       'https://skins/new',
       expect.any(Buffer),
     );
+    // The upload must carry the universal SESSION token, not the Yggdrasil
+    // in-game access token ('access') — the textures API authenticates via the
+    // session bearer.
+    expect(yggClientMocks.uploadSkin).toHaveBeenCalledWith(
+      expect.objectContaining({ accessToken: 'sess-token' }),
+    );
+  });
+
+  it('fails fast when no session token is available', async () => {
+    authSessionMocks.current.mockReturnValue(yggdrasilSession());
+    authSessionMocks.sessionToken.mockReturnValue(null);
+
+    const { uploadSkin } = makeSkinHandlers();
+    await expect(uploadSkin(skinPayload())).rejects.toMatchObject({
+      code: SkinErrorCodes.NOT_AUTHENTICATED,
+    });
+    expect(yggClientMocks.uploadSkin).not.toHaveBeenCalled();
   });
 
   it('throws when the texture never appears after the retries', async () => {

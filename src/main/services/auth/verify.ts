@@ -1,16 +1,23 @@
-import { scopedLogger } from '@main/infra/logger';
-import { clearStoredAuth, getStoredAuth, setStoredAuth } from '@main/infra/store';
+import {
+  clearStoredAuth,
+  getStoredAuth,
+  getStoredSessionToken,
+  setStoredAuth,
+} from '@main/infra/store';
 import { type Account, accountFromSession } from '@shared/contracts/account';
 import type { YggdrasilSession } from '@shared/contracts/auth';
+import type { LoontailAuth } from './loontailAuth';
 import type { MojangAuth } from './mojangAuth';
-import type { YggdrasilAuth } from './yggdrasilAuth';
 import type { FetchTextures } from './yggdrasilClient';
+
+import { scopedLogger } from '@main/infra/logger';
 
 const logger = scopedLogger('auth.verify');
 
 // After the skins-registry → yggdrasil-plugin merge both URLs come from
-// GET /api/yggdrasil/textures/:uuid, so no static Strapi token is needed.
-// `email` is not part of the Yggdrasil protocol and stays null for these accounts.
+// GET /api/yggdrasil/textures/:uuid (now session-gated like every other API
+// read). `email` comes from the login/refresh response, so a bare session keeps
+// it null until the next successful authentication.
 export const enrichYggdrasilAccount = async (
   session: YggdrasilSession,
   fallback: Account,
@@ -33,11 +40,11 @@ export const enrichYggdrasilAccount = async (
 // `null` if no session is stored or the server invalidated it, and the
 // cached account if the network is unavailable (offline fallback).
 //
-// Each provider's verify helper distinguishes "definitely expired"
-// (403/401-equivalent) from "couldn't reach the server" — only the former
-// clears the stored session.
+// Yggdrasil verification rotates the session via POST /api/auth/refresh: a
+// success persists the new tokens and enriches the account; an `expired` result
+// clears the session; an `offline` result keeps the cached account.
 export const verifySession = async (
-  yggdrasilAuth: YggdrasilAuth,
+  loontailAuth: LoontailAuth,
   mojangAuth: MojangAuth,
   fetchTextures: FetchTextures,
 ): Promise<Account | null> => {
@@ -45,29 +52,25 @@ export const verifySession = async (
   if (session === null) return null;
 
   if (session.provider === 'yggdrasil') {
-    const result = await yggdrasilAuth.verifySession(session);
+    const sessionToken = getStoredSessionToken();
+    if (!sessionToken) {
+      // No API bearer for a Yggdrasil session: unusable, force a re-login.
+      clearStoredAuth();
+      return null;
+    }
+    const result = await loontailAuth.refresh(sessionToken);
     if (result.kind === 'expired') {
       clearStoredAuth();
       return null;
     }
     if (result.kind === 'offline') {
       // Offline fallback must be instant: enrichment hits the same unreachable
-      // server, so reuse the skin/cape persisted from the last successful verify.
+      // server, so reuse the bare account derived from the stored session.
       return accountFromSession(session);
     }
-    if (result.kind === 'server-error') {
-      // The server answered but faulted, so validity is undetermined. Keep the
-      // cached session rather than clearing it on a transient 5xx, but log
-      // distinctly from the offline path so the failure stays actionable.
-      logger.warn('Yggdrasil verify hit a server error — reusing cached session');
-      return accountFromSession(session);
-    }
-    setStoredAuth(result.session);
-    return enrichYggdrasilAccount(
-      result.session,
-      accountFromSession(result.session),
-      fetchTextures,
-    );
+    const { identity } = result;
+    setStoredAuth(identity.session, identity.sessionToken);
+    return enrichYggdrasilAccount(identity.session, identity.account, fetchTextures);
   }
 
   const result = await mojangAuth.verifyMojangSession(session);

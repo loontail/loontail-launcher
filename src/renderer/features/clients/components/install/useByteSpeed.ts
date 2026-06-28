@@ -6,8 +6,9 @@ import { rollingSpeed } from './progressFormat';
 const WINDOW_MS = 4000;
 
 // Smoothed bytes/sec derived from successive `bytes` snapshots over a rolling
-// window. Used when the producing runner doesn't already report throughput (the
-// install kit emits cumulative byte counts but no rate).
+// window. Used for the repair path, whose adapter reports per-stage bytes but no
+// rate; the install and bundle paths report their own throughput (the selector
+// prefers `speedBytesPerSec` and falls back here only when it is absent).
 //
 // A backwards jump (resume after pause, or replanning) resets the window so
 // the rate doesn't dip negative and recover slowly.

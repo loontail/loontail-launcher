@@ -3,11 +3,6 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.hoisted(() => {
-  process.env.API_URL ??= 'http://test.invalid';
-  process.env.API_TOKEN ??= 'test-token';
-});
-
 import {
   DownloadCategories,
   EventTypes,
@@ -29,18 +24,19 @@ import {
   VerifyFileCategories,
   VerifyFileStatuses,
 } from '@loontail/minecraft-kit';
+import { resolveBundleRepairFilter } from '@main/services/bundle/ownership';
 import { bundleManifestPath } from '@main/services/bundle/paths';
 import type { Context } from '@main/services/minecraft/context';
 import type { ManagerEnv } from '@main/services/minecraft/env';
 import { createForgeProcessorCache } from '@main/services/minecraft/forgeProcessorHealing';
 import { type Op, OpKinds, type RepairOp } from '@main/services/minecraft/ops';
 import { runRepair } from '@main/services/minecraft/repair';
-import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
+import { type CatalogKey, asCatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes, ProgressStages } from '@shared/contracts/minecraft';
 import { LoaderChoices } from '@shared/contracts/settings';
 import { stubConsolePort, stubOpenConsole } from './managerStubs';
 
-const SLUG = asClientSlug('test-client');
+const SLUG = asCatalogKey('official:test-client');
 const CLIENT_FOLDER = 'Z:/missing-client-folder';
 // Real temp dir: the SQLite-backed store opens launcher.db here when the repair
 // readiness check resolves settings, so the directory must exist on disk.
@@ -114,7 +110,7 @@ const makeContext = (): Context =>
     },
   }) as unknown as Context;
 
-const makeEnv = (kit: MinecraftKit, ops: Map<ClientSlug, Op>): ManagerEnv => {
+const makeEnv = (kit: MinecraftKit, ops: Map<CatalogKey, Op>): ManagerEnv => {
   const broadcaster = {
     status: vi.fn(),
     progress: vi.fn(),
@@ -133,6 +129,7 @@ const makeEnv = (kit: MinecraftKit, ops: Map<ClientSlug, Op>): ManagerEnv => {
     emitError: vi.fn(),
     persistRuntime: vi.fn(),
     clearRuntimeOverride: vi.fn(),
+    resolveBundleRepairFilter: vi.fn(async () => null),
   };
 };
 
@@ -162,7 +159,7 @@ describe('runRepair', () => {
         }),
       },
     } as unknown as MinecraftKit;
-    const ops = new Map<ClientSlug, Op>([[SLUG, op]]);
+    const ops = new Map<CatalogKey, Op>([[SLUG, op]]);
     const env = makeEnv(kit, ops);
 
     await runRepair(env, SLUG, makeContext(), op);
@@ -252,7 +249,7 @@ describe('runRepair', () => {
         }),
       },
     } as unknown as MinecraftKit;
-    const ops = new Map<ClientSlug, Op>([[SLUG, op]]);
+    const ops = new Map<CatalogKey, Op>([[SLUG, op]]);
     const env = makeEnv(kit, ops);
     const context = {
       ...makeContext(),
@@ -312,7 +309,7 @@ describe('runRepair', () => {
           }),
         },
       } as unknown as MinecraftKit;
-      const ops = new Map<ClientSlug, Op>([[SLUG, op]]);
+      const ops = new Map<CatalogKey, Op>([[SLUG, op]]);
       const env = makeEnv(kit, ops);
 
       await runRepair(env, SLUG, makeContext(), op);
@@ -406,8 +403,8 @@ describe('runRepair', () => {
           }),
         },
       } as unknown as MinecraftKit;
-      const ops = new Map<ClientSlug, Op>([[SLUG, op]]);
-      const env = makeEnv(kit, ops);
+      const ops = new Map<CatalogKey, Op>([[SLUG, op]]);
+      const env: ManagerEnv = { ...makeEnv(kit, ops), resolveBundleRepairFilter };
       const [bundleIssue, vanillaIssue] = minecraftVerification.issues;
       if (bundleIssue === undefined || vanillaIssue === undefined) {
         throw new Error('Expected bundle and vanilla repair issues');
@@ -467,7 +464,7 @@ describe('runRepair', () => {
         },
       },
     } as unknown as MinecraftKit;
-    const ops = new Map<ClientSlug, Op>([[SLUG, op]]);
+    const ops = new Map<CatalogKey, Op>([[SLUG, op]]);
     const env = makeEnv(kit, ops);
 
     await runRepair(env, SLUG, makeContext(), op);
@@ -504,7 +501,7 @@ describe('runRepair', () => {
         },
       },
     } as unknown as MinecraftKit;
-    const ops = new Map<ClientSlug, Op>([[SLUG, op]]);
+    const ops = new Map<CatalogKey, Op>([[SLUG, op]]);
     const env = makeEnv(kit, ops);
 
     await runRepair(env, SLUG, makeContext(), op);

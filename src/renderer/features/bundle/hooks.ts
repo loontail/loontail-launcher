@@ -1,11 +1,18 @@
-import type { ClientSlug } from '@shared/contracts/ids';
+import { i18n } from '@renderer/i18n';
+import type { CatalogKey } from '@shared/contracts/ids';
+import type { IpcError } from '@shared/ipc';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import * as api from './api';
+import { localizeBundleError } from './errorCopy';
 import { statusSeeder } from './statusSeeder';
 import { type BundleRuntimeState, selectBundle, useBundleStore } from './store';
 
-export const useBundleStatus = (slug: ClientSlug | null | undefined): BundleRuntimeState => {
+const bundleMutationMeta = {
+  errorLocalizer: (error: IpcError) => localizeBundleError(error.code, error.message, i18n.t),
+};
+
+export const useBundleStatus = (slug: CatalogKey | null | undefined): BundleRuntimeState => {
   const state = useBundleStore(selectBundle(slug));
 
   useEffect(() => {
@@ -33,11 +40,12 @@ export const useBundleStatus = (slug: ClientSlug | null | undefined): BundleRunt
 
 export const useStartBundle = () =>
   useMutation({
-    mutationFn: ({ slug, force }: { slug: ClientSlug; force?: boolean }) => api.start(slug, force),
+    meta: bundleMutationMeta,
+    mutationFn: ({ slug, force }: { slug: CatalogKey; force?: boolean }) => api.start(slug, force),
   });
 
-const useSlugMutation = <T>(fn: (slug: ClientSlug) => Promise<T>) =>
-  useMutation({ mutationFn: fn });
+const useSlugMutation = <T>(fn: (slug: CatalogKey) => Promise<T>) =>
+  useMutation({ meta: bundleMutationMeta, mutationFn: fn });
 
 export const usePauseBundle = () => useSlugMutation(api.pause);
 export const useResumeBundle = () => useSlugMutation(api.resume);

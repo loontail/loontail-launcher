@@ -1,3 +1,4 @@
+import { type IpcEventPayloads, emit } from '@shared/ipc';
 import type { BrowserWindow } from 'electron';
 
 export class ConsoleWindowSink {
@@ -23,13 +24,7 @@ export class ConsoleWindowSink {
     return this.window;
   }
 
-  send(channel: string, payload: unknown): void {
-    const window = this.getWindow();
-    if (!window) return;
-    try {
-      window.webContents.send(channel, payload);
-    } catch {
-      /* renderer torn down between checks - drop the push */
-    }
+  send<E extends keyof IpcEventPayloads>(channel: E, payload: IpcEventPayloads[E]): void {
+    emit(this.window, channel, payload);
   }
 }

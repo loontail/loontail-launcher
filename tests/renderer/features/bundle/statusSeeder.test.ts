@@ -1,6 +1,6 @@
-import { createStatusSeeder } from '@renderer/features/bundle/statusSeeder';
+import { createStatusSeeder } from '@renderer/shared/lib/statusSeeder';
 import type { BundleInstallState } from '@shared/contracts/bundle';
-import { asClientSlug } from '@shared/contracts/ids';
+import { asCatalogKey } from '@shared/contracts/ids';
 import { describe, expect, it, vi } from 'vitest';
 
 const RESULT: BundleInstallState = {
@@ -43,7 +43,7 @@ describe('createStatusSeeder', () => {
   it('returns the same in-flight promise for a repeated slug', () => {
     const checkStatus = vi.fn(async () => RESULT);
     const seeder = createStatusSeeder(checkStatus);
-    const slug = asClientSlug('alpha');
+    const slug = asCatalogKey('official:alpha');
 
     const first = seeder.seedStatus(slug);
     const second = seeder.seedStatus(slug);
@@ -58,7 +58,7 @@ describe('createStatusSeeder', () => {
     const seeder = createStatusSeeder(spy, MAX_CONCURRENCY);
 
     for (let index = 0; index < 5; index += 1) {
-      void seeder.seedStatus(asClientSlug(`client-${index}`));
+      void seeder.seedStatus(asCatalogKey(`official:client-${index}`));
     }
 
     expect(spy).toHaveBeenCalledTimes(MAX_CONCURRENCY);
@@ -70,7 +70,7 @@ describe('createStatusSeeder', () => {
     const seeder = createStatusSeeder(spy, MAX_CONCURRENCY);
 
     for (let index = 0; index < 4; index += 1) {
-      void seeder.seedStatus(asClientSlug(`client-${index}`));
+      void seeder.seedStatus(asCatalogKey(`official:client-${index}`));
     }
     expect(spy).toHaveBeenCalledTimes(MAX_CONCURRENCY);
 
@@ -84,7 +84,7 @@ describe('createStatusSeeder', () => {
     const { checkStatus } = pendingChecks();
     const spy = vi.fn(checkStatus);
     const seeder = createStatusSeeder(spy);
-    const slug = asClientSlug('alpha');
+    const slug = asCatalogKey('official:alpha');
 
     void seeder.seedStatus(slug);
     seeder.reset();

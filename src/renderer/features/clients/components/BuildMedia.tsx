@@ -1,7 +1,7 @@
 import { type CatalogItem, isOfficial } from '@shared/contracts/catalog';
 import { type ReactNode, useState } from 'react';
 import { BuildVisualFallback } from './BuildVisualFallback';
-import { StrapiMedia } from './StrapiMedia';
+import { RemoteMedia } from './RemoteMedia';
 import { localBackgroundFor } from './localBackgrounds';
 
 type MediaSlot = 'poster' | 'background' | 'titleImage';
@@ -27,10 +27,10 @@ const renderFallback = (
     <BuildVisualFallback item={item} showInitial={false} className={className} />
   ) : null;
 
-// Renders a build's media regardless of source: official builds keep the rich
-// Strapi pipeline (format selection + cached protocol) via their raw Client;
-// local builds render their on-disk media URL. A missing or broken image
-// degrades to the configured fallback instead of a blank/collapsed box.
+// Renders a build's media regardless of source: official builds render their
+// API media (cached protocol) via their raw Client; local builds render their
+// on-disk media URL. A missing or broken image degrades to the configured
+// fallback instead of a blank/collapsed box.
 export const BuildMedia = ({ item, slot, className, fallback = 'visual' }: BuildMediaProps) => {
   const [failed, setFailed] = useState(false);
   if (failed) return renderFallback(item, fallback, className);
@@ -38,7 +38,7 @@ export const BuildMedia = ({ item, slot, className, fallback = 'visual' }: Build
   if (isOfficial(item)) {
     const media = item.raw[slot];
     if (!media) return renderFallback(item, fallback, className);
-    return <StrapiMedia media={media} className={className} onError={() => setFailed(true)} />;
+    return <RemoteMedia media={media} className={className} onError={() => setFailed(true)} />;
   }
 
   const ref = item.presentation.media[slot];
@@ -75,7 +75,7 @@ export const BuildScreenshot = ({ item, index, className }: BuildScreenshotProps
   if (isOfficial(item)) {
     const media = item.raw.screenshots[index];
     if (!media) return null;
-    return <StrapiMedia media={media} className={className} onError={() => setFailed(true)} />;
+    return <RemoteMedia media={media} className={className} onError={() => setFailed(true)} />;
   }
 
   const ref = item.presentation.media.screenshots[index];

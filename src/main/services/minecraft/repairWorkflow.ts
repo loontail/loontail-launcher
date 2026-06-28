@@ -6,10 +6,8 @@ import {
   resolveLaunchVersion,
 } from '@loontail/minecraft-kit';
 import { errorMessage } from '@main/infra/errorMessage';
-import { loadLocalManifest } from '@main/services/bundle/manifestRepo';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
-import { createBundleRepairIssueFilter } from './bundleHealing';
 import type { Context } from './context';
 import type { ManagerEnv } from './env';
 import { classifyError } from './errors';
@@ -30,17 +28,9 @@ type ForgeProcessorHealOptions = {
 
 export type RepairFailureFinalizationInput = {
   readonly env: ManagerEnv;
-  readonly slug: ClientSlug;
+  readonly slug: CatalogKey;
   readonly error: unknown;
   readonly signal: AbortSignal;
-};
-
-const loadBundleOwnedPaths = async (ctx: Context): Promise<ReadonlySet<string> | null> => {
-  const bundleSlug = ctx.item.spec.bundleSlug ?? null;
-  if (bundleSlug === null) return null;
-  const manifest = await loadLocalManifest(ctx.clientFolder);
-  if (manifest?.bundleSlug !== bundleSlug) return null;
-  return new Set(Object.keys(manifest.files));
 };
 
 // After a repair cancel/failure, report whatever the offline presence check says
@@ -50,7 +40,7 @@ const loadBundleOwnedPaths = async (ctx: Context): Promise<ReadonlySet<string> |
 // not-ready status rather than claiming INSTALLED.
 const emitPostOpStatus = async (
   env: ManagerEnv,
-  slug: ClientSlug,
+  slug: CatalogKey,
   notReadyStatus: typeof InstallStatuses.ERROR | typeof InstallStatuses.NOT_INSTALLED,
 ): Promise<void> => {
   const presence = await resolveClientInstallPresence(slug);
@@ -60,18 +50,20 @@ const emitPostOpStatus = async (
 
 export const verifyAndRepairBase = async (
   env: ManagerEnv,
-  slug: ClientSlug,
+  slug: CatalogKey,
   ctx: Context,
   options: RepairOptions,
 ): Promise<RepairAllReport> => {
-  const bundleOwnedPaths = await loadBundleOwnedPaths(ctx);
+  // The bundle-owned filter is injected (env.resolveBundleRepairFilter) so the
+  // minecraft repair path never imports the bundle service: the heal coupling
+  // now flows one way through the composition root.
+  const bundleSlug = ctx.item.spec.bundleSlug ?? null;
+  const shouldRepairIssue =
+    bundleSlug === null ? null : await env.resolveBundleRepairFilter(ctx.clientFolder, bundleSlug);
   const report =
-    bundleOwnedPaths === null
+    shouldRepairIssue === null
       ? await env.kit.repair.all(ctx.target, options)
-      : await env.kit.repair.all(ctx.target, {
-          ...options,
-          shouldRepairIssue: createBundleRepairIssueFilter(ctx.clientFolder, bundleOwnedPaths),
-        });
+      : await env.kit.repair.all(ctx.target, { ...options, shouldRepairIssue });
   const broken = [...report.repairs.keys()];
   env.logger.info(
     broken.length === 0
@@ -104,7 +96,7 @@ const launchVersionResolvable = async (ctx: Context): Promise<boolean> =>
 // surfaced as a real repair failure instead of a silently broken "success".
 export const ensureLaunchable = async (
   env: ManagerEnv,
-  slug: ClientSlug,
+  slug: CatalogKey,
   ctx: Context,
   options: EnsureLaunchableOptions,
 ): Promise<void> => {
@@ -118,7 +110,7 @@ export const ensureLaunchable = async (
 
 export const healForgeProcessors = async (
   env: ManagerEnv,
-  slug: ClientSlug,
+  slug: CatalogKey,
   ctx: Context,
   options: ForgeProcessorHealOptions,
 ): Promise<void> => {
@@ -139,7 +131,7 @@ export const healForgeProcessors = async (
 
 export const finalizeRepairSuccess = async (
   env: ManagerEnv,
-  slug: ClientSlug,
+  slug: CatalogKey,
   ctx: Context,
 ): Promise<void> => {
   env.persistRuntime(slug, {
@@ -152,7 +144,7 @@ export const finalizeRepairSuccess = async (
 
 export const finalizeRepairCancellation = async (
   env: ManagerEnv,
-  slug: ClientSlug,
+  slug: CatalogKey,
 ): Promise<void> => {
   env.logger.info(`[${slug}] repair: cancelled`);
   await emitPostOpStatus(env, slug, InstallStatuses.NOT_INSTALLED);

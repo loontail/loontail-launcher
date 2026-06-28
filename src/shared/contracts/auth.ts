@@ -83,11 +83,10 @@ export type YggdrasilProfile = z.infer<typeof YggdrasilProfileSchema>;
 
 // Stored session shapes - discriminated by `provider`.
 //
-// `YggdrasilSession` carries only what the Yggdrasil protocol provides:
-// the access/client token pair and the selected profile. Anything that lives
-// outside the protocol (Strapi numeric user id, email, current skin/cape URLs)
-// is fetched separately via the launcher's static API_TOKEN, not via the
-// Yggdrasil session.
+// `YggdrasilSession` carries the in-game online-mode handshake pair
+// (`accessToken`/`clientToken`) plus the selected profile. The pair is fed only
+// to the game (authlib-injector → Yggdrasil authserver); the universal API
+// bearer is the separate Loontail session token, persisted alongside it.
 export const YggdrasilSessionSchema = z.object({
   provider: z.literal('yggdrasil'),
   accessToken: NonEmptyStringSchema,
@@ -116,12 +115,43 @@ export const AuthSessionSchema = z.discriminatedUnion('provider', [
 
 export type AuthSession = z.infer<typeof AuthSessionSchema>;
 
-// Login (Yggdrasil authserver). Mojang has its own IPC flow.
+// Login (Loontail unified auth API). Mojang has its own IPC flow.
 export const LoginPayloadSchema = z.object({
   identifier: NonEmptyStringSchema,
   password: NonEmptyStringSchema,
 });
 export type LoginPayload = z.infer<typeof LoginPayloadSchema>;
+
+// Register (Loontail unified auth API). `email` is mandatory at sign-up; the
+// renderer reuses the same login error codes for the result.
+export const RegisterPayloadSchema = z.object({
+  username: NonEmptyStringSchema,
+  email: z.string().email(),
+  password: NonEmptyStringSchema,
+});
+export type RegisterPayload = z.infer<typeof RegisterPayloadSchema>;
+
+// Shape returned by POST /api/auth/{login,register,refresh}. The `session.token`
+// is the universal API bearer; the `minecraft` pair is the in-game Yggdrasil
+// handshake material; `profile` is the renderer-facing identity.
+export const LoontailAuthResponseSchema = z.object({
+  session: z.object({
+    token: NonEmptyStringSchema,
+    expiresAt: z.union([z.string(), z.number()]).nullable().optional(),
+  }),
+  minecraft: z.object({
+    accessToken: NonEmptyStringSchema,
+    clientToken: NonEmptyStringSchema,
+  }),
+  profile: z.object({
+    id: z.union([z.string(), z.number()]),
+    username: NonEmptyStringSchema,
+    email: z.string().nullable().optional(),
+    uuid: z.string().refine(isUuidUndashed, 'profile uuid must be 32-char undashed hex'),
+    isAdmin: z.boolean().optional(),
+  }),
+});
+export type LoontailAuthResponse = z.infer<typeof LoontailAuthResponseSchema>;
 
 export const LOGIN_ERROR_CODE = {
   NetworkError: 'NETWORK_ERROR',

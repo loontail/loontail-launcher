@@ -6,6 +6,7 @@ import {
   LoaderChoices,
 } from '@shared/contracts/settings';
 import { defaultLauncherSettings } from './settingsDefaults';
+import { migrateClientOverrideKey } from './settingsMigration';
 
 // MemorySettingsSchema is `z.number().int().nonnegative()`, so the normalizer
 // must reject floats, negatives, and NaN/Infinity — otherwise it can emit a
@@ -78,7 +79,9 @@ export const normalizeLauncherSettings = (value: unknown): LauncherSettings => {
   const clients: Record<string, ClientSettingsOverride> = {};
   for (const [slug, override] of Object.entries(rawClients)) {
     if (slug && slug !== 'undefined' && slug !== 'null') {
-      clients[slug] = normalizeClientOverride(override);
+      // Lift a pre-CatalogKey bare slug/uuid key onto the source-namespaced
+      // form so an upgrade does not orphan existing per-client overrides.
+      clients[migrateClientOverrideKey(slug)] = normalizeClientOverride(override);
     }
   }
 

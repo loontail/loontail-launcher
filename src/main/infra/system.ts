@@ -2,6 +2,7 @@ import type { Dirent } from 'node:fs';
 import { mkdir, readdir, realpath, stat } from 'node:fs/promises';
 import { totalmem } from 'node:os';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
+import { createLimiter } from '@main/infra/concurrency';
 import { scopedLogger } from '@main/infra/logger';
 import { RAM_MIN_MB, RAM_STEP_MB } from '@shared/constants';
 import type { DiskInfo, FolderSize, PickedFolder } from '@shared/contracts/system';
@@ -69,30 +70,6 @@ export const getDiskSpace = async (path: string): Promise<DiskInfo> => {
 // once and starve other main-process fs/dns work behind a busy thread pool.
 const WALK_CONCURRENCY = 16;
 
-const createLimiter = (max: number) => {
-  let active = 0;
-  const queue: Array<() => void> = [];
-  const next = (): void => {
-    if (active >= max) return;
-    const task = queue.shift();
-    if (!task) return;
-    active += 1;
-    task();
-  };
-  return <T>(fn: () => Promise<T>): Promise<T> =>
-    new Promise<T>((resolve, reject) => {
-      queue.push(() => {
-        fn()
-          .then(resolve, reject)
-          .finally(() => {
-            active -= 1;
-            next();
-          });
-      });
-      next();
-    });
-};
-
 const walkDirectorySize = async (root: string): Promise<number> => {
   let total = 0;
   const limit = createLimiter(WALK_CONCURRENCY);
@@ -141,6 +118,7 @@ export const pickFolderWithSuffix = async (
   window: BrowserWindow,
   suffix: string | null,
 ): Promise<PickedFolder | null> => {
+  if (window.isDestroyed()) return null;
   const result = await dialog.showOpenDialog(window, { properties: ['openDirectory'] });
   if (result.canceled) return null;
   const candidatePath = result.filePaths[0];

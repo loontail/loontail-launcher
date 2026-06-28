@@ -1,13 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-// Registrars transitively import @main/config, which reads required env vars at
-// module-eval time. Seed them before any import resolves (mirrors auth.test.ts).
-vi.hoisted(() => {
-  process.env.API_URL ??= 'http://test.invalid';
-  process.env.API_TOKEN ??= 'test-token';
-  process.env.MOJANG_CLIENT_ID ??= '00000000-0000-0000-0000-000000000000';
-});
-
 const appMock = vi.hoisted(() => ({
   isPackaged: false,
   getVersion: () => '0.0.0-test',
@@ -38,15 +30,14 @@ import type { MinecraftKit } from '@loontail/minecraft-kit';
 import type { ConsoleHub } from '@main/infra/consoleHub';
 import type { Router } from '@main/ipc/router';
 import { registerAppRoutes } from '@main/services/app/routes';
+import type { LoontailAuth } from '@main/services/auth/loontailAuth';
 import type { MojangAuth } from '@main/services/auth/mojangAuth';
 import { registerAuthRoutes } from '@main/services/auth/routes';
-import type { YggdrasilAuth } from '@main/services/auth/yggdrasilAuth';
 import type { FetchTextures } from '@main/services/auth/yggdrasilClient';
 import type { BundleManager } from '@main/services/bundle/manager';
 import { registerBundleRoutes } from '@main/services/bundle/routes';
 import type { CatalogService } from '@main/services/catalog/catalog';
 import { registerCatalogRoutes } from '@main/services/catalog/routes';
-import { registerClientsRoutes } from '@main/services/clients/routes';
 import { createConsoleService } from '@main/services/console';
 import { registerHistoryRoutes } from '@main/services/history/routes';
 import { registerInstanceRoutes } from '@main/services/instances/routes';
@@ -91,12 +82,11 @@ describe('IpcContract handler coverage', () => {
     const { router, registered } = recordingRouter();
 
     registerAppRoutes(router);
-    registerAuthRoutes(router, stub<YggdrasilAuth>(), stub<MojangAuth>(), stub<FetchTextures>());
+    registerAuthRoutes(router, stub<LoontailAuth>(), stub<MojangAuth>(), stub<FetchTextures>());
     registerSettingsRoutes(router, fakeWindow);
     registerSystemRoutes(router, fakeWindow);
     registerMediaRoutes(router);
     registerSkinRoutes(router, stub<SkinHandlers>());
-    registerClientsRoutes(router);
     registerCatalogRoutes(router, stub<CatalogService>());
     registerInstanceRoutes(router, stub<MinecraftKit>());
     registerServersRoutes(router);

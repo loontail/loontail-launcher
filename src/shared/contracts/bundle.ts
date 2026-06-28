@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { enumFromConst } from './enum';
-import { BundleSlugSchema, ClientSlugSchema } from './ids';
+import { BundleSlugSchema, CatalogKeySchema } from './ids';
 
 // Stable string constants for the lifecycle of a bundle sync. The renderer
 // reads these to decide what affordance to show (Download / Pause / Resume /
@@ -90,14 +90,14 @@ export const LocalManifestSchema = z.object({
 export type LocalManifest = z.infer<typeof LocalManifestSchema>;
 
 export const BundleStatusEventSchema = z.object({
-  slug: ClientSlugSchema,
+  slug: CatalogKeySchema,
   status: BundleSyncStatusSchema,
 });
 
 export type BundleStatusEvent = z.infer<typeof BundleStatusEventSchema>;
 
 export const BundleProgressEventSchema = z.object({
-  slug: ClientSlugSchema,
+  slug: CatalogKeySchema,
   status: BundleSyncStatusSchema,
   processedFiles: z.number().int().nonnegative(),
   totalFiles: z.number().int().nonnegative(),
@@ -114,7 +114,7 @@ export const BundleProgressEventSchema = z.object({
 export type BundleProgressEvent = z.infer<typeof BundleProgressEventSchema>;
 
 export const BundleErrorEventSchema = z.object({
-  slug: ClientSlugSchema,
+  slug: CatalogKeySchema,
   code: BundleErrorCodeSchema,
   message: z.string(),
 });
@@ -134,7 +134,7 @@ export type BundleInstallState = {
 };
 
 export const BundleStartRequestSchema = z.object({
-  slug: ClientSlugSchema,
+  slug: CatalogKeySchema,
   force: z.boolean().optional(),
 });
 

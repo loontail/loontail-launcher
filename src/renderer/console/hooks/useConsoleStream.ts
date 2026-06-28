@@ -4,12 +4,12 @@ import {
   type ConsoleProcessState,
   ConsoleStatuses,
 } from '@shared/contracts/console';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { clear as clearConsole, getInitial, onBufferReset, onLines, onState } from '../api';
 
 const INITIAL_STATE: ConsoleProcessState = {
-  slug: '' as ClientSlug,
+  slug: '' as CatalogKey,
   status: ConsoleStatuses.IDLE,
 };
 const RECONCILE_INTERVAL_MS = 1000;

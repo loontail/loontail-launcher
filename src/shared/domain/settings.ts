@@ -1,4 +1,9 @@
 export { defaultLauncherSettings, joinClientFolder } from './settingsDefaults';
+export {
+  migrateClientOverrideKey,
+  migrateClientOverrides,
+  migrateLastPlayedKeys,
+} from './settingsMigration';
 export { normalizeLauncherSettings } from './settingsNormalization';
 export {
   clearClientOverrides,

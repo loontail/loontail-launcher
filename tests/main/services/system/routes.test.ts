@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { LauncherSettings } from '@shared/contracts/settings';
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
+import type { BrowserWindow } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const electronMocks = vi.hoisted(() => ({
@@ -47,31 +47,10 @@ vi.mock('@main/services/settings/settings', () => ({
   getSettings: settingsMock.getSettings,
 }));
 
-import type { Router } from '@main/ipc/router';
 import { registerSystemRoutes } from '@main/services/system/routes';
 import { asClientSlug } from '@shared/contracts/ids';
-import { IPC_CHANNELS, type IpcArgs, type IpcContract, type IpcResult } from '@shared/ipc';
-
-type StoredHandler = (rawArgs: unknown) => Promise<unknown> | unknown;
-
-const fakeEvent = (): IpcMainInvokeEvent => ({}) as unknown as IpcMainInvokeEvent;
-
-const createTestRouter = (): { router: Router; handlers: Map<string, StoredHandler> } => {
-  const handlers = new Map<string, StoredHandler>();
-  const router: Router = {
-    handle<TChannel extends keyof IpcContract>(
-      channel: TChannel,
-      handler: (
-        args: IpcArgs<TChannel>,
-        event: IpcMainInvokeEvent,
-      ) => Promise<IpcResult<TChannel>> | IpcResult<TChannel>,
-    ): void {
-      handlers.set(channel, (rawArgs) => handler(rawArgs as IpcArgs<TChannel>, fakeEvent()));
-    },
-    dispose: () => undefined,
-  };
-  return { router, handlers };
-};
+import { IPC_CHANNELS } from '@shared/ipc';
+import { type StoredHandler, createTestRouter } from '../../../helpers/router';
 
 const getOpenPathHandler = (handlers: Map<string, StoredHandler>): StoredHandler => {
   const handler = handlers.get(IPC_CHANNELS.systemOpenPath);

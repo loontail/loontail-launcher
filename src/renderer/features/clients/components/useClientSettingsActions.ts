@@ -5,11 +5,11 @@ import {
   useRamPending,
   useSetClientOverride,
 } from '@renderer/features/settings';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import type { LoaderChoice, ResolvedClientSettings } from '@shared/contracts/settings';
 
 type UseClientSettingsActionsArgs = {
-  slug: ClientSlug;
+  slug: CatalogKey;
   resolved: ResolvedClientSettings;
   // Reset identity for the pending RAM value (modal toggle / client switch).
   resetKey: unknown;

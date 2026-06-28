@@ -15,22 +15,27 @@ import {
   BundleSyncStatuses,
   type RemoteManifestEntry,
 } from '@shared/contracts/bundle';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import { downloadEntry } from './download';
 import { BundleError } from './errors';
 import { isAncestor, resolveSafeEntryPath } from './paths';
 import type { SyncPlan } from './plan';
+import type { SyncPhase } from './syncState';
 
 const logger = scopedLogger('bundle.runner');
 
 export type SyncTask = {
-  slug: ClientSlug;
+  slug: CatalogKey;
   clientFolder: string;
   plan: SyncPlan;
   abort: AbortController;
   // Set of in-flight HTTP requests for synchronous cancellation.
   currentRequests: Set<ClientRequest>;
-  // Cooperative pause/cancel flags. Workers check between file boundaries.
+  // Cooperative lifecycle phase. Workers check it between file boundaries, not mid-chunk.
+  phase: SyncPhase;
+  // Backward-compatible views over `phase`; the setters route through the
+  // transition guards (cancel overrides pause). Kept until W5-T5 collapses the
+  // manager catch-decode onto the discriminated outcome.
   paused: boolean;
   cancelled: boolean;
   bytesDownloaded: number;
@@ -45,7 +50,7 @@ export type SyncTask = {
 };
 
 export type EmitProgress = (
-  slug: ClientSlug,
+  slug: CatalogKey,
   status: BundleSyncStatus,
   patch?: Partial<BundleProgressEvent>,
 ) => void;
@@ -53,6 +58,26 @@ export type EmitProgress = (
 export type PhaseResult = {
   deletedAny: boolean;
 };
+
+// Discriminated outcome of a full sync run. The `paused`/`cancelled` fields are
+// a backward-compatible view of `outcome` so manager.ts can keep destructuring
+// the legacy shape until W5-T5 threads the union through its catch-decode.
+export type SyncPhasesResult = {
+  outcome: 'completed' | 'paused' | 'cancelled';
+  deletedAny: boolean;
+  paused: boolean;
+  cancelled: boolean;
+};
+
+const syncPhasesResult = (
+  outcome: SyncPhasesResult['outcome'],
+  deletedAny: boolean,
+): SyncPhasesResult => ({
+  outcome,
+  deletedAny,
+  paused: outcome === 'paused',
+  cancelled: outcome === 'cancelled',
+});
 
 // Coalesce progress emissions to one every BUNDLE_DOWNLOAD_PROGRESS_THROTTLE_MS,
 // otherwise we'd flood the renderer with hundreds of IPC pushes per second.
@@ -75,14 +100,6 @@ const maybeEmit = (
     task.speedWindowBytes = 0;
   }
   emit(task.slug, status, {
-    processedFiles: task.processedFiles,
-    totalFiles: task.totalFiles,
-    toDownload: task.plan.toDownload.length + task.plan.toUpdate.length,
-    toUpdate: task.plan.toUpdate.length,
-    toDelete: task.plan.toDelete.length,
-    toSkip: task.plan.toSkip.length,
-    bytesDownloaded: task.bytesDownloaded,
-    bytesTotal: task.plan.bytesTotal,
     speedBytesPerSec: Math.max(0, Math.round(speed)),
     ...(task.currentFile ? { currentFile: task.currentFile } : {}),
   });
@@ -119,7 +136,14 @@ const runDownloadPhase = async (task: SyncTask, emit: EmitProgress): Promise<voi
   for (let i = 0; i < concurrency; i++) {
     workers.push(
       runDownloadWorker(task, emit).catch((err: unknown) => {
-        if (!firstError) firstError = err;
+        if (firstError) {
+          // Only the first failure is reported; log the rest so a discarded
+          // secondary cause is still traceable (the abort below makes siblings
+          // reject with the same propagated signal error).
+          logger.debug(`[${task.slug}] secondary download worker error discarded`, err);
+        } else {
+          firstError = err;
+        }
         // Drain queue so other workers exit promptly, and abort to cancel any
         // sibling download already mid-flight instead of letting it run to
         // completion.
@@ -196,8 +220,12 @@ const runDeletePhase = async (task: SyncTask, emit: EmitProgress): Promise<Phase
         // File already gone — still flag deletedAny so the heal pass runs. The
         // bundle no longer owns this path, so any vanilla file it was
         // overriding must be reconciled even when the delete itself was a no-op.
+        // A missing target is still a processed unit of work, so count it toward
+        // processedFiles like a real delete; otherwise the progress bar stalls.
         deletedAny = true;
         completedDeletes += 1;
+        task.processedFiles += 1;
+        maybeEmit(task, BundleSyncStatuses.DELETING, emit);
         continue;
       }
       throw new BundleError(
@@ -217,17 +245,20 @@ const runDeletePhase = async (task: SyncTask, emit: EmitProgress): Promise<Phase
   return { deletedAny };
 };
 
-export const runSyncPhases = async (task: SyncTask, emit: EmitProgress): Promise<PhaseResult> => {
+export const runSyncPhases = async (
+  task: SyncTask,
+  emit: EmitProgress,
+): Promise<SyncPhasesResult> => {
   await runDownloadPhase(task, emit);
-  if (task.cancelled || task.paused) {
-    if (task.cancelled) throw new BundleError(BundleErrorCodes.ABORTED, 'Sync cancelled');
-    // Paused: leave deletes for resume.
-    return { deletedAny: false };
+  // why: cancel still throws ABORTED (manager.ts decodes the thrown error until
+  // W5-T5 consumes the discriminated outcome); the cancelled variant is reserved
+  // for that closeout.
+  if (task.cancelled) throw new BundleError(BundleErrorCodes.ABORTED, 'Sync cancelled');
+  if (task.paused) {
+    // Leave deletes for resume.
+    return syncPhasesResult('paused', false);
   }
   const deleteResult = await runDeletePhase(task, emit);
-  if (task.cancelled || task.paused) {
-    if (task.cancelled) throw new BundleError(BundleErrorCodes.ABORTED, 'Sync cancelled');
-    return deleteResult;
-  }
-  return deleteResult;
+  if (task.cancelled) throw new BundleError(BundleErrorCodes.ABORTED, 'Sync cancelled');
+  return syncPhasesResult(task.paused ? 'paused' : 'completed', deleteResult.deletedAny);
 };

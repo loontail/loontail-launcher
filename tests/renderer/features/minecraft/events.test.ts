@@ -1,4 +1,4 @@
-import { asClientSlug } from '@shared/contracts/ids';
+import { asCatalogKey } from '@shared/contracts/ids';
 import { MinecraftErrorCodes } from '@shared/contracts/minecraft';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -19,7 +19,7 @@ import {
   buildMinecraftErrorToast,
 } from '@renderer/features/minecraft/events';
 
-const SLUG = asClientSlug('test-client');
+const SLUG = asCatalogKey('official:test-client');
 
 describe('buildMinecraftErrorToast', () => {
   beforeEach(() => {

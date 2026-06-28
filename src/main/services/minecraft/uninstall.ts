@@ -1,7 +1,8 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { errorMessage } from '@main/infra/errorMessage';
-import type { ClientSlug } from '@shared/contracts/ids';
+import { clearLocalManifest } from '@main/services/bundle/manifestRepo';
+import type { CatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraft';
 import type { ManagerEnv } from './env';
 import { ManagerError } from './errors';
@@ -22,7 +23,7 @@ export const isUnderClientsRoot = (folder: string, clientsRoot: string): boolean
 
 export const runUninstall = async (
   env: ManagerEnv,
-  slug: ClientSlug,
+  slug: CatalogKey,
   folder: string,
   clientsRoot: string,
 ): Promise<void> => {
@@ -46,6 +47,7 @@ export const runUninstall = async (
       fs.rm(path.join(folder, 'versions'), { recursive: true, force: true }),
       fs.rm(path.join(folder, 'runtime'), { recursive: true, force: true }),
       clearTargetInstallManifest(folder),
+      clearLocalManifest(folder),
     ]);
     if (!(await isAnythingInstalled(folder))) {
       env.logger.warn(`[${slug}] uninstall: residual files remain but markers are gone`);

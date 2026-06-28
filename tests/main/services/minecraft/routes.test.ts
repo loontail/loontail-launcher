@@ -5,14 +5,13 @@ const appMock = vi.hoisted(() => ({ isPackaged: false }));
 
 vi.mock('electron', () => ({ app: appMock }));
 
-import type { Router } from '@main/ipc/router';
 import { ManagerError } from '@main/services/minecraft/errors';
 import type { MinecraftManager } from '@main/services/minecraft/manager';
 import { registerMinecraftRoutes } from '@main/services/minecraft/routes';
 import { ERROR_CODES } from '@shared/constants';
 import { MinecraftErrorCodes } from '@shared/contracts/minecraft';
-import { IPC_CHANNELS, type IpcArgs, type IpcContract, type IpcResult } from '@shared/ipc';
-import type { IpcMainInvokeEvent } from 'electron';
+import { IPC_CHANNELS } from '@shared/ipc';
+import { type StoredHandler, captureThrow, createTestRouter } from '../../../helpers/router';
 
 beforeEach(() => {
   appMock.isPackaged = false;
@@ -21,27 +20,6 @@ beforeEach(() => {
 afterEach(() => {
   appMock.isPackaged = false;
 });
-
-type StoredHandler = (rawArgs: unknown) => Promise<unknown> | unknown;
-
-const fakeEvent = (): IpcMainInvokeEvent => ({}) as unknown as IpcMainInvokeEvent;
-
-const createTestRouter = (): { router: Router; handlers: Map<string, StoredHandler> } => {
-  const handlers = new Map<string, StoredHandler>();
-  const router: Router = {
-    handle<TChannel extends keyof IpcContract>(
-      channel: TChannel,
-      handler: (
-        args: IpcArgs<TChannel>,
-        event: IpcMainInvokeEvent,
-      ) => Promise<IpcResult<TChannel>> | IpcResult<TChannel>,
-    ): void {
-      handlers.set(channel, (rawArgs) => handler(rawArgs as IpcArgs<TChannel>, fakeEvent()));
-    },
-    dispose: () => undefined,
-  };
-  return { router, handlers };
-};
 
 const handlerFor = (channel: string, fail: (slug: string) => Promise<void>): StoredHandler => {
   const manager = {
@@ -57,9 +35,9 @@ const handlerFor = (channel: string, fail: (slug: string) => Promise<void>): Sto
 };
 
 const ENTRY_POINTS: Array<[string, unknown]> = [
-  [IPC_CHANNELS.minecraftInstall, { slug: 'vanilla' }],
-  [IPC_CHANNELS.minecraftRepair, 'vanilla'],
-  [IPC_CHANNELS.minecraftLaunch, 'vanilla'],
+  [IPC_CHANNELS.minecraftInstall, { slug: 'official:vanilla' }],
+  [IPC_CHANNELS.minecraftRepair, 'official:vanilla'],
+  [IPC_CHANNELS.minecraftLaunch, 'official:vanilla'],
 ];
 
 describe('registerMinecraftRoutes error reclassification', () => {
@@ -78,13 +56,13 @@ describe('registerMinecraftRoutes error reclassification', () => {
   it('passes an already-coded ManagerError through unchanged', async () => {
     const original = new ManagerError(MinecraftErrorCodes.NO_ACCOUNT, 'no account');
     const handler = handlerFor(IPC_CHANNELS.minecraftRepair, () => Promise.reject(original));
-    await expect(handler('vanilla')).rejects.toBe(original);
+    await expect(handler('official:vanilla')).rejects.toBe(original);
   });
 
   it('leaves a non-kit error untouched so the IPC boundary handles it', async () => {
     const original = new Error('generic boom');
     const handler = handlerFor(IPC_CHANNELS.minecraftLaunch, () => Promise.reject(original));
-    await expect(handler('vanilla')).rejects.toBe(original);
+    await expect(handler('official:vanilla')).rejects.toBe(original);
   });
 });
 
@@ -107,19 +85,6 @@ const registerWith = (manager: MinecraftManager) => {
   return handlers;
 };
 
-// Several routes (pause/resume/cancel/stop) register synchronous handlers, so a
-// failed parseIpcArgs throws synchronously rather than producing a rejected
-// promise. The real router wraps every handler in an async fn that normalises
-// this; the fake test router does not, so capture both throw shapes here.
-const captureThrow = async (run: () => unknown): Promise<unknown> => {
-  try {
-    await run();
-  } catch (error) {
-    return error;
-  }
-  throw new Error('expected the handler to throw');
-};
-
 describe('registerMinecraftRoutes arg routing', () => {
   const SLUG_ONLY: Array<[string, keyof MinecraftManager]> = [
     [IPC_CHANNELS.minecraftGetStatus, 'getStatus'],
@@ -132,15 +97,24 @@ describe('registerMinecraftRoutes arg routing', () => {
     [IPC_CHANNELS.minecraftStop, 'stop'],
   ];
 
+  const LOCAL_KEY = 'local:550e8400-e29b-41d4-a716-446655440000';
+
   for (const [channel, method] of SLUG_ONLY) {
-    it(`${channel} forwards a valid slug to manager.${String(method)}`, async () => {
+    it(`${channel} forwards a valid CatalogKey to manager.${String(method)}`, async () => {
       const manager = fullManager();
       const handlers = registerWith(manager);
-      await handlers.get(channel)?.('vanilla');
-      expect(manager[method]).toHaveBeenCalledWith('vanilla');
+      await handlers.get(channel)?.('official:vanilla');
+      expect(manager[method]).toHaveBeenCalledWith('official:vanilla');
     });
 
-    it(`${channel} rejects a non-string slug with IPC_INVALID_ARGS and skips the manager`, async () => {
+    it(`${channel} forwards a local CatalogKey unchanged`, async () => {
+      const manager = fullManager();
+      const handlers = registerWith(manager);
+      await handlers.get(channel)?.(LOCAL_KEY);
+      expect(manager[method]).toHaveBeenCalledWith(LOCAL_KEY);
+    });
+
+    it(`${channel} rejects a non-string key with IPC_INVALID_ARGS and skips the manager`, async () => {
       const manager = fullManager();
       const handlers = registerWith(manager);
       const thrown = await captureThrow(() => handlers.get(channel)?.(42));
@@ -148,7 +122,15 @@ describe('registerMinecraftRoutes arg routing', () => {
       expect(manager[method]).not.toHaveBeenCalled();
     });
 
-    it(`${channel} rejects an empty-string slug`, async () => {
+    it(`${channel} rejects a bare (non-namespaced) id`, async () => {
+      const manager = fullManager();
+      const handlers = registerWith(manager);
+      const thrown = await captureThrow(() => handlers.get(channel)?.('vanilla'));
+      expect(thrown).toMatchObject({ code: ERROR_CODES.IpcInvalidArgs });
+      expect(manager[method]).not.toHaveBeenCalled();
+    });
+
+    it(`${channel} rejects an empty-string key`, async () => {
       const manager = fullManager();
       const handlers = registerWith(manager);
       const thrown = await captureThrow(() => handlers.get(channel)?.(''));
@@ -157,11 +139,25 @@ describe('registerMinecraftRoutes arg routing', () => {
     });
   }
 
-  it('minecraft.install forwards the parsed slug and loader', async () => {
+  it('minecraft.install forwards the parsed CatalogKey and loader', async () => {
     const manager = fullManager();
     const handlers = registerWith(manager);
-    await handlers.get(IPC_CHANNELS.minecraftInstall)?.({ slug: 'vanilla', loader: 'fabric' });
-    expect(manager.startInstall).toHaveBeenCalledWith('vanilla', 'fabric');
+    await handlers.get(IPC_CHANNELS.minecraftInstall)?.({
+      slug: 'official:vanilla',
+      loader: 'fabric',
+    });
+    expect(manager.startInstall).toHaveBeenCalledWith('official:vanilla', 'fabric');
+  });
+
+  it('minecraft.install rejects a bare slug without calling the manager', async () => {
+    const manager = fullManager();
+    const handlers = registerWith(manager);
+    await expect(
+      handlers.get(IPC_CHANNELS.minecraftInstall)?.({ slug: 'vanilla', loader: 'fabric' }),
+    ).rejects.toMatchObject({
+      code: ERROR_CODES.IpcInvalidArgs,
+    });
+    expect(manager.startInstall).not.toHaveBeenCalled();
   });
 
   it('minecraft.install rejects a missing slug without calling the manager', async () => {

@@ -8,7 +8,7 @@ import {
   type ConsoleSource,
   ConsoleSources,
 } from '@shared/contracts/console';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import { IPC_EVENTS, type IpcEventPayloads } from '@shared/ipc';
 import type { BrowserWindow } from 'electron';
 import { ConsoleBuffer, type ConsoleLineInput } from './consoleBuffer';
@@ -52,7 +52,7 @@ export const buildLineInput = (args: {
   level: ConsoleLevel;
   source: ConsoleSource;
   message: string;
-  slug?: ClientSlug | undefined;
+  slug?: CatalogKey | undefined;
   code?: string | undefined;
   args?: ConsoleLineArgs | undefined;
 }): ConsoleLineInput => {
@@ -70,7 +70,7 @@ export const buildLineInput = (args: {
 };
 
 export type SessionInfo = {
-  slug: ClientSlug;
+  slug: CatalogKey;
   clientTitle: string;
   state: ConsoleProcessState;
 };
@@ -116,7 +116,7 @@ export class ConsoleHub {
   }
 
   recordMinecraft(
-    slug: ClientSlug,
+    slug: CatalogKey,
     stream: typeof ConsoleSources.STDOUT | typeof ConsoleSources.STDERR,
     text: string,
   ): void {
@@ -131,7 +131,7 @@ export class ConsoleHub {
 
   private ingestLog4jEvent(
     source: typeof ConsoleSources.STDOUT | typeof ConsoleSources.STDERR,
-    slug: ClientSlug,
+    slug: CatalogKey,
     event: Log4jEvent,
   ): void {
     const level = LEVEL_FROM_LOG4J[mapLog4jLevel(event.level)];
@@ -151,7 +151,7 @@ export class ConsoleHub {
 
   recordSystem(
     message: string,
-    options?: { code?: string; args?: ConsoleLineArgs; slug?: ClientSlug },
+    options?: { code?: string; args?: ConsoleLineArgs; slug?: CatalogKey },
   ): void {
     this.ingest({
       source: ConsoleSources.SYSTEM,
@@ -177,12 +177,12 @@ export class ConsoleHub {
   // the parser buffer until the next session reset — i.e. discarded. Called by
   // the launch flow before emitting the EXITED/CRASHED state so the last event
   // (the most useful for triage) reaches the console.
-  endSession(slug: ClientSlug): void {
+  endSession(slug: CatalogKey): void {
     this.drainLog4j(slug);
     this.log4j.reset();
   }
 
-  private drainLog4j(slug: ClientSlug): void {
+  private drainLog4j(slug: CatalogKey): void {
     for (const stream of [ConsoleSources.STDOUT, ConsoleSources.STDERR] as const) {
       for (const chunk of this.log4j.flush(stream)) {
         if (chunk.kind === 'text' && chunk.text.length > 0) {
@@ -217,7 +217,7 @@ export class ConsoleHub {
     source: ConsoleSource;
     raw: string;
     forcedLevel?: ConsoleLevel | undefined;
-    slug?: ClientSlug | undefined;
+    slug?: CatalogKey | undefined;
     code?: string | undefined;
     args?: ConsoleLineArgs | undefined;
   }): void {

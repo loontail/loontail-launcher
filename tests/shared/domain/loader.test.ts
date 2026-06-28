@@ -1,5 +1,10 @@
 import { LoaderChoices } from '@shared/contracts/settings';
-import { isLoaderAvailable, resolveLoader } from '@shared/domain/loader';
+import {
+  canChooseLoader,
+  isLoaderAmbiguous,
+  isLoaderAvailable,
+  resolveLoader,
+} from '@shared/domain/loader';
 import { describe, expect, it } from 'vitest';
 
 describe('isLoaderAvailable', () => {
@@ -58,5 +63,32 @@ describe('resolveLoader', () => {
 
   it('falls back to vanilla when no loader is available', () => {
     expect(resolveLoader({}, null)).toEqual({ kind: 'resolved', loader: LoaderChoices.VANILLA });
+  });
+});
+
+describe('isLoaderAmbiguous', () => {
+  it('is true for forge+fabric with no override', () => {
+    expect(isLoaderAmbiguous({ forgeVersion: 'x', fabricVersion: 'y' }, null)).toBe(true);
+  });
+
+  it('is false once a valid override applies', () => {
+    expect(isLoaderAmbiguous({ forgeVersion: 'x', fabricVersion: 'y' }, LoaderChoices.FORGE)).toBe(
+      false,
+    );
+  });
+
+  it('is false for a single-loader build', () => {
+    expect(isLoaderAmbiguous({ forgeVersion: 'x' }, null)).toBe(false);
+    expect(isLoaderAmbiguous({ fabricVersion: 'y' }, null)).toBe(false);
+    expect(isLoaderAmbiguous({}, null)).toBe(false);
+  });
+});
+
+describe('canChooseLoader', () => {
+  it('requires more than one non-vanilla loader', () => {
+    expect(canChooseLoader({ forgeVersion: 'x', fabricVersion: 'y' })).toBe(true);
+    expect(canChooseLoader({ forgeVersion: 'x' })).toBe(false);
+    expect(canChooseLoader({ fabricVersion: 'y' })).toBe(false);
+    expect(canChooseLoader({})).toBe(false);
   });
 });

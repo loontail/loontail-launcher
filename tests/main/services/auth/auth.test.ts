@@ -1,26 +1,25 @@
-import type { Router } from '@main/ipc/router';
-import type { IpcMainInvokeEvent } from 'electron';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-
-vi.hoisted(() => {
-  process.env.API_URL ??= 'http://test.invalid';
-  process.env.API_TOKEN ??= 'test-token';
-  process.env.MOJANG_CLIENT_ID ??= '00000000-0000-0000-0000-000000000000';
-});
+import { createTestRouter } from '../../../helpers/router';
 
 const storeMocks = vi.hoisted(() => {
   let session: unknown = null;
+  let sessionToken: string | null = null;
   return {
     setSession: (next: unknown) => {
       session = next;
     },
+    setToken: (next: string | null) => {
+      sessionToken = next;
+    },
     getSession: () => session,
     getStoredAuth: vi.fn(() => session),
+    getStoredSessionToken: vi.fn(() => sessionToken),
     setStoredAuth: vi.fn((next: unknown) => {
       session = next;
     }),
     clearStoredAuth: vi.fn(() => {
       session = null;
+      sessionToken = null;
     }),
   };
 });
@@ -38,6 +37,7 @@ vi.mock('@main/infra/logger', () => ({
 
 vi.mock('@main/infra/store', () => ({
   getStoredAuth: storeMocks.getStoredAuth,
+  getStoredSessionToken: storeMocks.getStoredSessionToken,
   setStoredAuth: storeMocks.setStoredAuth,
   clearStoredAuth: storeMocks.clearStoredAuth,
 }));
@@ -48,37 +48,16 @@ vi.mock('@main/services/auth/verify', () => ({
 }));
 
 import { logout } from '@main/services/auth/auth';
+import type { LoontailAuth } from '@main/services/auth/loontailAuth';
 import { type MojangAuth, MojangBrowserOpenError } from '@main/services/auth/mojangAuth';
 import { registerAuthRoutes } from '@main/services/auth/routes';
 import { enrichYggdrasilAccount } from '@main/services/auth/verify';
-import type { YggdrasilAuth } from '@main/services/auth/yggdrasilAuth';
 import {
   LOGIN_ERROR_CODE,
   type MojangSession,
   type YggdrasilSession,
 } from '@shared/contracts/auth';
-import { IPC_CHANNELS, type IpcArgs, type IpcContract, type IpcResult } from '@shared/ipc';
-
-type StoredHandler = (rawArgs: unknown) => Promise<unknown> | unknown;
-
-const fakeEvent = (): IpcMainInvokeEvent => ({}) as unknown as IpcMainInvokeEvent;
-
-const createTestRouter = (): { router: Router; handlers: Map<string, StoredHandler> } => {
-  const handlers = new Map<string, StoredHandler>();
-  const router: Router = {
-    handle<TChannel extends keyof IpcContract>(
-      channel: TChannel,
-      handler: (
-        args: IpcArgs<TChannel>,
-        event: IpcMainInvokeEvent,
-      ) => Promise<IpcResult<TChannel>> | IpcResult<TChannel>,
-    ): void {
-      handlers.set(channel, (rawArgs) => handler(rawArgs as IpcArgs<TChannel>, fakeEvent()));
-    },
-    dispose: () => undefined,
-  };
-  return { router, handlers };
-};
+import { IPC_CHANNELS } from '@shared/ipc';
 
 const yggdrasilSession = (): YggdrasilSession => ({
   provider: 'yggdrasil',
@@ -104,9 +83,10 @@ const mojangSessionWithSkin = (): MojangSession =>
     },
   }) as unknown as MojangSession;
 
-const yggdrasilAuth = (signOut: YggdrasilAuth['signOut']): YggdrasilAuth => ({
+const loontailAuth = (signOut: LoontailAuth['signOut']): LoontailAuth => ({
   signIn: vi.fn(),
-  verifySession: vi.fn(),
+  register: vi.fn(),
+  refresh: vi.fn(),
   signOut,
 });
 
@@ -120,33 +100,31 @@ const mojangAuth = (overrides: Partial<MojangAuth> = {}): MojangAuth => ({
 beforeEach(() => {
   vi.clearAllMocks();
   storeMocks.setSession(null);
+  storeMocks.setToken(null);
 });
 
 describe('logout', () => {
-  it('clears local auth without waiting for a hung Yggdrasil invalidate', async () => {
-    const session = yggdrasilSession();
+  it('clears local auth without waiting for a hung Loontail sign-out', async () => {
+    storeMocks.setSession(yggdrasilSession());
+    storeMocks.setToken('session-token');
     const signOut = vi.fn(() => new Promise<void>(() => undefined));
-    storeMocks.setSession(session);
 
-    await expect(logout(yggdrasilAuth(signOut))).resolves.toBeUndefined();
+    await expect(logout(loontailAuth(signOut))).resolves.toBeUndefined();
 
     expect(storeMocks.clearStoredAuth).toHaveBeenCalledTimes(1);
     expect(storeMocks.getSession()).toBeNull();
-    expect(signOut).toHaveBeenCalledWith(session);
+    expect(signOut).toHaveBeenCalledWith('session-token');
   });
 
-  it('logs a warning when the best-effort sign-out rejects late', async () => {
-    const error = new Error('network down');
-    const signOut = vi.fn().mockRejectedValue(error);
+  it('skips the server sign-out when no session token is stored', async () => {
     storeMocks.setSession(yggdrasilSession());
+    storeMocks.setToken(null);
+    const signOut = vi.fn();
 
-    await logout(yggdrasilAuth(signOut));
-    await Promise.resolve();
+    await logout(loontailAuth(signOut));
 
-    expect(loggerMocks.warn).toHaveBeenCalledWith(
-      'Yggdrasil sign-out cleanup failed after local logout',
-      error,
-    );
+    expect(storeMocks.clearStoredAuth).toHaveBeenCalledTimes(1);
+    expect(signOut).not.toHaveBeenCalled();
   });
 });
 
@@ -157,7 +135,7 @@ describe('registerAuthRoutes', () => {
       .fn()
       .mockRejectedValue(new MojangBrowserOpenError('Failed to open browser'));
 
-    registerAuthRoutes(router, yggdrasilAuth(vi.fn()), mojangAuth({ signInWithMojang }), vi.fn());
+    registerAuthRoutes(router, loontailAuth(vi.fn()), mojangAuth({ signInWithMojang }), vi.fn());
 
     const handler = handlers.get(IPC_CHANNELS.authMojangSignIn);
     if (!handler) throw new Error('auth.mojangSignIn handler was not registered');
@@ -174,7 +152,7 @@ describe('registerAuthRoutes', () => {
     const session = mojangSessionWithSkin();
     const signInWithMojang = vi.fn().mockResolvedValue(session);
 
-    registerAuthRoutes(router, yggdrasilAuth(vi.fn()), mojangAuth({ signInWithMojang }), vi.fn());
+    registerAuthRoutes(router, loontailAuth(vi.fn()), mojangAuth({ signInWithMojang }), vi.fn());
 
     const handler = handlers.get(IPC_CHANNELS.authMojangSignIn);
     if (!handler) throw new Error('auth.mojangSignIn handler was not registered');

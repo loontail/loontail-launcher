@@ -38,8 +38,7 @@ export const LauncherSection = () => {
   const isReady = updateStatus?.state === UpdaterStates.READY;
   const isBusy =
     updateStatus?.state === UpdaterStates.CHECKING ||
-    updateStatus?.state === UpdaterStates.AVAILABLE ||
-    updateStatus?.state === UpdaterStates.DOWNLOADING;
+    updateStatus?.state === UpdaterStates.AVAILABLE;
 
   const handleClearCache = () => clearLauncherCache(queryClient, clearMediaCache, t);
 

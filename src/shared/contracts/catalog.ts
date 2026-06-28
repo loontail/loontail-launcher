@@ -1,10 +1,10 @@
 import type { Client } from './client';
 import type { BundleSlug, CatalogKey, ClientSlug, InstanceId } from './ids';
 import type { InstanceManifest } from './instance';
-import type { Server } from './strapi';
+import type { Server } from './media';
 
 // The build sources feeding the unified catalog. Local is the primary,
-// network-free source of truth; official is the curated Strapi/CMS source.
+// network-free source of truth; official is the curated API/CMS source.
 export const SourceKinds = {
   OFFICIAL: 'official',
   LOCAL: 'local',
@@ -24,6 +24,10 @@ export const localKey = (id: InstanceId): CatalogKey => `local:${id}` as Catalog
 export const catalogKeyFor = (ref: CatalogRef): CatalogKey =>
   ref.source === SourceKinds.OFFICIAL ? officialKey(ref.slug) : localKey(ref.id);
 
+// The bare, source-native ref value for a resolved ref (slug or uuid).
+export const refValue = (ref: CatalogRef): string =>
+  ref.source === SourceKinds.OFFICIAL ? ref.slug : ref.id;
+
 // Recover a ref from a stored key (settings/event routing). Returns null for a
 // malformed key so callers fail closed rather than mis-route an operation.
 export const parseCatalogKey = (key: CatalogKey): CatalogRef | null => {
@@ -42,6 +46,17 @@ export const parseCatalogKey = (key: CatalogKey): CatalogRef | null => {
   return null;
 };
 
+// The bare, source-native ref value carried by a CatalogKey: the official slug
+// for an official key, the instance UUID for a local key. This is what reaches
+// the kit (`targetId`), the disk (folder names — `:` is an illegal Windows
+// filename char), and the official client fetch. Returns null for a malformed
+// key so callers fail closed.
+export const catalogKeyToRefValue = (key: CatalogKey): string | null => {
+  const ref = parseCatalogKey(key);
+  if (!ref) return null;
+  return refValue(ref);
+};
+
 // The exact build inputs the kit bridge (`buildSpecToTargetInput`) consumes,
 // sourced uniformly from either build kind.
 export type BuildSpec = {
@@ -57,7 +72,7 @@ export type BuildSpec = {
 export type MediaRef = { readonly url: string };
 
 // Presentation surface the UI binds to, projected from each source so the
-// renderer never branches on Strapi vs local shapes.
+// renderer never branches on official vs local shapes.
 export type CatalogPresentation = {
   readonly title: string;
   readonly shortDescription: string;
@@ -83,7 +98,7 @@ export type OfficialCatalogItem = {
   readonly ref: { readonly source: typeof SourceKinds.OFFICIAL; readonly slug: ClientSlug };
   readonly spec: BuildSpec;
   readonly presentation: CatalogPresentation;
-  // The normalized Strapi client, retained for legacy paths during migration.
+  // The normalized API client, retained for legacy paths during migration.
   readonly raw: Client;
 };
 

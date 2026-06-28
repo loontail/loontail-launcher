@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const managerMocks = vi.hoisted(() => {
-  process.env.API_URL ??= 'http://test.invalid';
-  process.env.API_TOKEN ??= 'test-token';
   return {
     buildPlan: vi.fn(),
     fetchRemoteManifest: vi.fn(),
@@ -15,8 +13,6 @@ const managerMocks = vi.hoisted(() => {
   };
 });
 
-import type { BundleBroadcaster } from '@main/services/bundle/broadcast';
-import type { Healer } from '@main/services/bundle/healer';
 import { BundleManager } from '@main/services/bundle/manager';
 import {
   ClientOperationDomains,
@@ -24,8 +20,8 @@ import {
   createClientOperationLocks,
 } from '@main/services/clientOperationLocks';
 import { BundleSyncStatuses } from '@shared/contracts/bundle';
-import type { ClientSlug } from '@shared/contracts/ids';
-import type { LauncherSettings } from '@shared/contracts/settings';
+import { asCatalogKey } from '@shared/contracts/ids';
+import { makeBroadcaster, makeHealer, makeLauncherSettings } from '../../../helpers/fixtures';
 
 vi.mock('@main/infra/logger', () => ({
   scopedLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
@@ -71,16 +67,12 @@ const { createSyncTask: realCreateSyncTask } = await vi.importActual<
   typeof import('@main/services/bundle/syncState')
 >('@main/services/bundle/syncState');
 
-const SLUG = 'test-client' as ClientSlug;
+const SLUG = asCatalogKey('official:test-client');
 const BUNDLE_SLUG = 'bundle-x';
 const CLIENT_FOLDER = '/tmp/client';
 
-const launcherSettings = (): LauncherSettings => ({
-  memory: { allocatedRamMb: 0 },
-  storage: { clientsFolder: '/tmp/clients' },
-  launch: { console: false, fullscreen: false },
-  clients: { [SLUG]: { storage: { clientFolder: CLIENT_FOLDER } } },
-});
+const launcherSettings = () =>
+  makeLauncherSettings({ clients: { [SLUG]: { storage: { clientFolder: CLIENT_FOLDER } } } });
 
 const EMPTY_PLAN = {
   toDownload: [],
@@ -90,14 +82,6 @@ const EMPTY_PLAN = {
   bundleOwnedRelativePaths: new Set<string>(),
   bytesTotal: 0,
 };
-
-const makeBroadcaster = (): BundleBroadcaster => ({
-  status: vi.fn(),
-  progress: vi.fn(),
-  error: vi.fn(),
-});
-
-const makeHealer = (): Healer => ({ healAfterDeletes: vi.fn(async () => {}) }) as unknown as Healer;
 
 const isBundleLockFree = (locks: ReturnType<typeof createClientOperationLocks>): boolean => {
   const probe = locks.acquire({

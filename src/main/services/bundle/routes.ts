@@ -1,7 +1,7 @@
-import { SLUG_REQUIRED_MSG, parseIpcArgs } from '@main/ipc/parseArgs';
+import { KEY_REQUIRED_MSG, parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
 import { BundleStartRequestSchema } from '@shared/contracts/bundle';
-import { ClientSlugSchema } from '@shared/contracts/ids';
+import { CatalogKeySchema } from '@shared/contracts/ids';
 import { IPC_CHANNELS } from '@shared/ipc';
 import type { BundleManager } from './manager';
 
@@ -12,22 +12,22 @@ export const registerBundleRoutes = (router: Router, manager: BundleManager): vo
   });
 
   router.handle(IPC_CHANNELS.bundlePause, (rawArgs) => {
-    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED_MSG);
-    manager.pauseSync(slug);
+    const key = parseIpcArgs(CatalogKeySchema, rawArgs, KEY_REQUIRED_MSG);
+    manager.pauseSync(key);
   });
 
   router.handle(IPC_CHANNELS.bundleResume, async (rawArgs) => {
-    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED_MSG);
-    await manager.resumeSync(slug);
+    const key = parseIpcArgs(CatalogKeySchema, rawArgs, KEY_REQUIRED_MSG);
+    await manager.resumeSync(key);
   });
 
   router.handle(IPC_CHANNELS.bundleCancel, (rawArgs) => {
-    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED_MSG);
-    manager.cancelSync(slug);
+    const key = parseIpcArgs(CatalogKeySchema, rawArgs, KEY_REQUIRED_MSG);
+    manager.cancelSync(key);
   });
 
   router.handle(IPC_CHANNELS.bundleCheckStatus, async (rawArgs) => {
-    const slug = parseIpcArgs(ClientSlugSchema, rawArgs, SLUG_REQUIRED_MSG);
-    return manager.getInstallState(slug);
+    const key = parseIpcArgs(CatalogKeySchema, rawArgs, KEY_REQUIRED_MSG);
+    return manager.getInstallState(key);
   });
 };

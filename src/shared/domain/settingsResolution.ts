@@ -1,4 +1,4 @@
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import type {
   ClientSettingsOverride,
   LauncherSettings,
@@ -8,17 +8,17 @@ import { joinClientFolder } from './settingsDefaults';
 
 export const resolveClientSettings = (
   settings: LauncherSettings,
-  slug: ClientSlug | null | undefined,
+  key: CatalogKey | null | undefined,
 ): ResolvedClientSettings => {
   const override: ClientSettingsOverride =
-    slug && settings.clients[slug] ? settings.clients[slug] : {};
+    key && settings.clients[key] ? settings.clients[key] : {};
 
   const ram =
     typeof override.memory?.allocatedRamMb === 'number'
       ? override.memory.allocatedRamMb
       : settings.memory.allocatedRamMb;
 
-  const defaultClientFolder = slug ? joinClientFolder(settings.storage.clientsFolder, slug) : '';
+  const defaultClientFolder = key ? joinClientFolder(settings.storage.clientsFolder, key) : '';
   const clientFolder = override.storage?.clientFolder ?? defaultClientFolder;
 
   const consoleVal =

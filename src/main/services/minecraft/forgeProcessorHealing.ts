@@ -11,7 +11,7 @@ import {
   type Target,
 } from '@loontail/minecraft-kit';
 import { scopedLogger } from '@main/infra/logger';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 
 const logger = scopedLogger('forge.processors');
 
@@ -139,7 +139,7 @@ const brokenProcessorIndices = async (
 // No-op for non-Forge targets.
 export const repairMissingForgeProcessorOutputs = async (
   kit: MinecraftKit,
-  slug: ClientSlug,
+  slug: CatalogKey,
   target: Target,
   cache: ForgeProcessorCache,
   options: ProcessorHealOptions = {},

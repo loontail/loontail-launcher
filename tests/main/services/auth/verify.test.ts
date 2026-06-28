@@ -1,10 +1,15 @@
+import type {
+  AuthenticatedIdentity,
+  LoontailAuth,
+  RefreshResult,
+} from '@main/services/auth/loontailAuth';
 import type { MojangAuth, VerifyMojangResult } from '@main/services/auth/mojangAuth';
-import type { VerifyYggdrasilResult, YggdrasilAuth } from '@main/services/auth/yggdrasilAuth';
 import type { MojangSession, YggdrasilSession } from '@shared/contracts/auth';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const storeMocks = vi.hoisted(() => ({
   getStoredAuth: vi.fn(),
+  getStoredSessionToken: vi.fn(),
   setStoredAuth: vi.fn(),
   clearStoredAuth: vi.fn(),
 }));
@@ -20,6 +25,7 @@ const loggerMocks = vi.hoisted(() => ({
 
 vi.mock('@main/infra/store', () => ({
   getStoredAuth: storeMocks.getStoredAuth,
+  getStoredSessionToken: storeMocks.getStoredSessionToken,
   setStoredAuth: storeMocks.setStoredAuth,
   clearStoredAuth: storeMocks.clearStoredAuth,
 }));
@@ -37,6 +43,21 @@ const yggdrasilSession = (token = 'access'): YggdrasilSession => ({
   profile: { uuid: '0123456789abcdef0123456789abcdef', name: 'someone' },
 });
 
+const identity = (
+  token = 'rotated-access',
+  sessionToken = 'rotated-session',
+): AuthenticatedIdentity => ({
+  session: yggdrasilSession(token),
+  sessionToken,
+  account: {
+    provider: 'yggdrasil',
+    username: 'someone',
+    email: 'who@example.com',
+    skin: null,
+    cape: null,
+  },
+});
+
 const mojangSession = (username = 'player'): MojangSession =>
   ({
     provider: 'mojang',
@@ -48,10 +69,10 @@ const mojangSession = (username = 'player'): MojangSession =>
     profile: { uuid: 'uuid', username, skins: [] },
   }) as unknown as MojangSession;
 
-const yggAuth = (result?: VerifyYggdrasilResult): YggdrasilAuth =>
+const loontailAuth = (result?: RefreshResult): LoontailAuth =>
   ({
-    verifySession: vi.fn().mockResolvedValue(result),
-  }) as unknown as YggdrasilAuth;
+    refresh: vi.fn().mockResolvedValue(result),
+  }) as unknown as LoontailAuth;
 
 const mojangAuth = (result?: VerifyMojangResult): MojangAuth =>
   ({
@@ -60,8 +81,10 @@ const mojangAuth = (result?: VerifyMojangResult): MojangAuth =>
 
 beforeEach(() => {
   storeMocks.getStoredAuth.mockReset();
+  storeMocks.getStoredSessionToken.mockReset();
   storeMocks.setStoredAuth.mockReset();
   storeMocks.clearStoredAuth.mockReset();
+  storeMocks.getStoredSessionToken.mockReturnValue('session-token');
   fetchTexturesMock.mockReset();
   fetchTexturesMock.mockResolvedValue({ skin: null, cape: null });
 });
@@ -73,17 +96,27 @@ afterEach(() => {
 describe('verifySession', () => {
   it('returns null without touching a provider when no session is stored', async () => {
     storeMocks.getStoredAuth.mockReturnValue(null);
-    const ygg = yggAuth();
+    const ygg = loontailAuth();
 
     expect(await verifySession(ygg, mojangAuth(), fetchTexturesMock)).toBeNull();
-    expect(ygg.verifySession).not.toHaveBeenCalled();
+    expect(ygg.refresh).not.toHaveBeenCalled();
   });
 
-  it('clears the session and returns null when yggdrasil reports expired', async () => {
+  it('clears the session and returns null when no API bearer is stored', async () => {
+    storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
+    storeMocks.getStoredSessionToken.mockReturnValue(null);
+    const ygg = loontailAuth();
+
+    expect(await verifySession(ygg, mojangAuth(), fetchTexturesMock)).toBeNull();
+    expect(storeMocks.clearStoredAuth).toHaveBeenCalledTimes(1);
+    expect(ygg.refresh).not.toHaveBeenCalled();
+  });
+
+  it('clears the session and returns null when refresh reports expired', async () => {
     storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
 
     expect(
-      await verifySession(yggAuth({ kind: 'expired' }), mojangAuth(), fetchTexturesMock),
+      await verifySession(loontailAuth({ kind: 'expired' }), mojangAuth(), fetchTexturesMock),
     ).toBeNull();
     expect(storeMocks.clearStoredAuth).toHaveBeenCalledTimes(1);
     expect(storeMocks.setStoredAuth).not.toHaveBeenCalled();
@@ -93,7 +126,7 @@ describe('verifySession', () => {
     storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
 
     const account = await verifySession(
-      yggAuth({ kind: 'offline' }),
+      loontailAuth({ kind: 'offline' }),
       mojangAuth(),
       fetchTexturesMock,
     );
@@ -110,32 +143,15 @@ describe('verifySession', () => {
     expect(storeMocks.clearStoredAuth).not.toHaveBeenCalled();
   });
 
-  it('keeps the cached yggdrasil account and warns on a server error', async () => {
-    storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
-
-    const account = await verifySession(
-      yggAuth({ kind: 'server-error' }),
-      mojangAuth(),
-      fetchTexturesMock,
-    );
-
-    expect(account).toMatchObject({ provider: 'yggdrasil', username: 'someone' });
-    expect(fetchTexturesMock).not.toHaveBeenCalled();
-    expect(storeMocks.setStoredAuth).not.toHaveBeenCalled();
-    expect(storeMocks.clearStoredAuth).not.toHaveBeenCalled();
-    expect(loggerMocks.warn).toHaveBeenCalledWith(expect.stringContaining('server error'));
-  });
-
   it('enriches the rotated yggdrasil account with textures on success', async () => {
     storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
-    const rotated = yggdrasilSession('rotated-access');
     fetchTexturesMock.mockResolvedValue({
       skin: { url: 'https://skins/s' },
       cape: { url: 'https://capes/c' },
     });
 
     const account = await verifySession(
-      yggAuth({ kind: 'ok', session: rotated }),
+      loontailAuth({ kind: 'ok', identity: identity() }),
       mojangAuth(),
       fetchTexturesMock,
     );
@@ -143,40 +159,32 @@ describe('verifySession', () => {
     expect(account).toEqual({
       provider: 'yggdrasil',
       username: 'someone',
-      email: null,
+      email: 'who@example.com',
       skin: 'https://skins/s',
       cape: 'https://capes/c',
     });
     expect(fetchTexturesMock).toHaveBeenCalledWith('0123456789abcdef0123456789abcdef');
   });
 
-  it('persists the rotated yggdrasil session on success', async () => {
+  it('persists the rotated yggdrasil session and token on success', async () => {
     storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
-    const rotated = yggdrasilSession('rotated-access');
+    const rotated = identity();
 
-    const account = await verifySession(
-      yggAuth({ kind: 'ok', session: rotated }),
+    await verifySession(
+      loontailAuth({ kind: 'ok', identity: rotated }),
       mojangAuth(),
       fetchTexturesMock,
     );
 
-    expect(storeMocks.setStoredAuth).toHaveBeenCalledWith(rotated);
-    expect(account).toEqual({
-      provider: 'yggdrasil',
-      username: 'someone',
-      email: null,
-      skin: null,
-      cape: null,
-    });
+    expect(storeMocks.setStoredAuth).toHaveBeenCalledWith(rotated.session, rotated.sessionToken);
   });
 
-  it('falls back to the bare profile when success-path texture enrichment fails', async () => {
+  it('falls back to the bare account when success-path texture enrichment fails', async () => {
     storeMocks.getStoredAuth.mockReturnValue(yggdrasilSession());
-    const rotated = yggdrasilSession('rotated-access');
     fetchTexturesMock.mockRejectedValue(new Error('textures down'));
 
     const account = await verifySession(
-      yggAuth({ kind: 'ok', session: rotated }),
+      loontailAuth({ kind: 'ok', identity: identity() }),
       mojangAuth(),
       fetchTexturesMock,
     );
@@ -189,7 +197,7 @@ describe('verifySession', () => {
     storeMocks.getStoredAuth.mockReturnValue(mojangSession());
 
     expect(
-      await verifySession(yggAuth(), mojangAuth({ kind: 'expired' }), fetchTexturesMock),
+      await verifySession(loontailAuth(), mojangAuth({ kind: 'expired' }), fetchTexturesMock),
     ).toBeNull();
     expect(storeMocks.clearStoredAuth).toHaveBeenCalledTimes(1);
   });
@@ -198,7 +206,7 @@ describe('verifySession', () => {
     storeMocks.getStoredAuth.mockReturnValue(mojangSession());
 
     const account = await verifySession(
-      yggAuth(),
+      loontailAuth(),
       mojangAuth({ kind: 'offline' }),
       fetchTexturesMock,
     );
@@ -213,7 +221,7 @@ describe('verifySession', () => {
     const rotated = mojangSession('rotated-player');
 
     const account = await verifySession(
-      yggAuth(),
+      loontailAuth(),
       mojangAuth({ kind: 'ok', session: rotated }),
       fetchTexturesMock,
     );

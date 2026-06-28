@@ -11,6 +11,7 @@ import {
 } from '@main/constants/bundle';
 import { atomicReplace } from '@main/infra/atomicFile';
 import { errorMessage } from '@main/infra/errorMessage';
+import { sessionAuthHeader } from '@main/infra/http';
 import { scopedLogger } from '@main/infra/logger';
 import { BundleErrorCodes, type RemoteManifestEntry } from '@shared/contracts/bundle';
 import { BundleError } from './errors';
@@ -47,6 +48,11 @@ const requestOnce = (url: string, options: DownloadOptions): Promise<IncomingMes
         port: parsed.port || undefined,
         path: `${parsed.pathname}${parsed.search}`,
         method: 'GET',
+        // Bundle `/files` and manifests are now session-gated. Attach the live
+        // bearer so the downloader is authorised; a CDN redirect that points
+        // off-host still works because the header is dropped on cross-origin
+        // hops by the server, and the policy validator already constrains hosts.
+        headers: sessionAuthHeader(),
         timeout: BUNDLE_DOWNLOAD_REQUEST_TIMEOUT_MS,
       },
       (res) => {
@@ -133,6 +139,10 @@ export const downloadEntry = async (
 
   await new Promise<void>((resolve, reject) => {
     const writeStream = fs.createWriteStream(tmpPath);
+    // Inline write-time hash, intentionally not routed through bundle/hash.ts
+    // (which hashes by reading a file back): we digest the stream as it lands
+    // to avoid a second read pass. Must use the same algorithm as hash.ts
+    // (sha256) so verification stays consistent across both paths.
     const hash = createHash('sha256');
     const signal = options.signal;
     let settled = false;

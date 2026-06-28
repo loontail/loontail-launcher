@@ -12,5 +12,11 @@ export default defineConfig({
   },
   test: {
     include: ['tests/**/*.test.ts'],
+    setupFiles: ['./tests/setup/env.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'html'],
+      include: ['src/main/services/**', 'src/shared/**'],
+    },
   },
 });

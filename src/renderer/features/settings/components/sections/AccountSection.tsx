@@ -24,17 +24,19 @@ export const AccountSection = () => {
       label:
         provider === 'mojang'
           ? t('settings.account.providerMojang')
-          : t('settings.account.providerStrapi'),
+          : t('settings.account.providerLoontail'),
     };
   }
 
   const skinSpec =
     provider === 'mojang'
       ? t('settings.account.specSkinMojang')
-      : t('settings.account.specSkinStrapi');
-  const capeSpec = showCape ? t('settings.account.specCapeStrapi') : null;
+      : t('settings.account.specSkinLoontail');
+  const capeSpec = showCape ? t('settings.account.specCapeLoontail') : null;
   const helper =
-    provider === 'mojang' ? t('settings.account.helperMojang') : t('settings.account.helperStrapi');
+    provider === 'mojang'
+      ? t('settings.account.helperMojang')
+      : t('settings.account.helperLoontail');
   const handleLogout = () => void logout();
   const handleReset = () => void editor.resetAll();
   const handleSave = () => void editor.saveAll();

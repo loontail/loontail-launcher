@@ -1,4 +1,4 @@
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import { useTranslation } from 'react-i18next';
 import { InstallStepper } from './InstallStepper';
 import { ProgressBody } from './ProgressBody';
@@ -6,7 +6,7 @@ import type { InstallProgressView } from './installSteps';
 import { HEADER_KEY_BY_MODE } from './progressLabels';
 
 export type InstallProgressProps = {
-  slug: ClientSlug;
+  slug: CatalogKey;
   view: InstallProgressView;
 };
 

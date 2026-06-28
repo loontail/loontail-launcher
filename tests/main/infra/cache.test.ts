@@ -5,9 +5,6 @@ const tmpUserData = vi.hoisted(() => {
   const { mkdtempSync } = require('node:fs') as typeof import('node:fs');
   const { tmpdir } = require('node:os') as typeof import('node:os');
   const { join } = require('node:path') as typeof import('node:path');
-  // `@main/infra/http` pulls in `@main/config`, which asserts these at import.
-  process.env.API_URL ??= 'http://test.invalid';
-  process.env.API_TOKEN ??= 'test-token';
   return mkdtempSync(join(tmpdir(), 'mc-launcher-cache-test-'));
 });
 

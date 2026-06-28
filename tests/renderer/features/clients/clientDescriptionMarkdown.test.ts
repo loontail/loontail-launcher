@@ -3,7 +3,7 @@ import { BuildAbout } from '@renderer/features/clients/components/BuildAbout';
 import { type CatalogItem, officialKey } from '@shared/contracts/catalog';
 import type { Client } from '@shared/contracts/client';
 import { asClientId, asClientSlug } from '@shared/contracts/ids';
-import type { StrapiMedia } from '@shared/contracts/strapi';
+import type { Media } from '@shared/contracts/media';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -20,28 +20,14 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-const makeMedia = (id: number): StrapiMedia => ({
-  id,
-  documentId: `media-${id}`,
-  createdAt: '2026-05-29T00:00:00.000Z',
-  updatedAt: '2026-05-29T00:00:00.000Z',
-  publishedAt: '2026-05-29T00:00:00.000Z',
+const makeMedia = (id: number): Media => ({
   url: `https://api.loontail.tld/uploads/media-${id}.webp`,
-  ext: '.webp',
   width: 1280,
   height: 720,
-  size: 24,
-  name: `media-${id}.webp`,
-  hash: `media-${id}`,
-  formats: {},
 });
 
 const makeClient = (description: string): Client => ({
-  id: asClientId(1),
-  documentId: 'client-1',
-  createdAt: '2026-05-29T00:00:00.000Z',
-  updatedAt: '2026-05-29T00:00:00.000Z',
-  publishedAt: '2026-05-29T00:00:00.000Z',
+  id: asClientId('client-1'),
   slug: asClientSlug('loontail'),
   title: 'Loontail',
   description,
@@ -56,6 +42,7 @@ const makeClient = (description: string): Client => ({
   screenshots: [],
   background: makeMedia(1),
   poster: makeMedia(2),
+  titleImage: null,
   keywords: [],
 });
 
@@ -78,14 +65,14 @@ const makeItem = (description: string): CatalogItem => {
       description,
       available: true,
       media: {
-        poster: { url: client.poster.url },
-        background: { url: client.background.url },
+        poster: client.poster ? { url: client.poster.url } : null,
+        background: client.background ? { url: client.background.url } : null,
         titleImage: null,
         screenshots: [],
       },
       servers: [],
-      createdAt: client.createdAt,
-      updatedAt: client.updatedAt,
+      createdAt: '',
+      updatedAt: '',
     },
     raw: client,
   };

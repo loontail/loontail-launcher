@@ -1,7 +1,7 @@
 import { EventTypes, type ProgressListener } from '@loontail/minecraft-kit';
 import { createThrottledEmitter } from '@main/infra/throttledEmitter';
 import { BundleSyncStatuses } from '@shared/contracts/bundle';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import type { EmitProgress } from './runner';
 
 export type HealProgressListener = {
@@ -17,7 +17,7 @@ type HealProgress = {
 };
 
 export const createHealProgressListener = (
-  slug: ClientSlug,
+  slug: CatalogKey,
   emit: EmitProgress,
 ): HealProgressListener => {
   let verifiedFiles = 0;
@@ -26,11 +26,14 @@ export const createHealProgressListener = (
   let currentFile: string | undefined;
 
   const emitter = createThrottledEmitter<HealProgress>((value) => {
+    // Patch bytes explicitly even when no heal download is in flight (0/0).
+    // makeProgressEvent's defaults pull task.bytesDownloaded / task.plan.bytesTotal
+    // from the just-finished download phase, so omitting them here would leak
+    // those stale totals into HEALING events.
     emit(slug, BundleSyncStatuses.HEALING, {
       processedFiles: value.verifiedFiles,
-      ...(value.totalBytes > 0
-        ? { bytesDownloaded: value.bytesDownloaded, bytesTotal: value.totalBytes }
-        : {}),
+      bytesDownloaded: value.bytesDownloaded,
+      bytesTotal: value.totalBytes,
       ...(value.currentFile !== undefined ? { currentFile: value.currentFile } : {}),
     });
   });

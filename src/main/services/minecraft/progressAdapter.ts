@@ -11,7 +11,7 @@ import {
   createInstallProgressTracker,
 } from '@loontail/minecraft-kit';
 import { createThrottledEmitter } from '@main/infra/throttledEmitter';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import {
   type MinecraftProgressEvent,
   type ProgressStage,
@@ -33,25 +33,75 @@ export type MinecraftProgressAdapter = {
 
 export type PlannedInstallProgressRunner = (plan: InstallPlan) => Promise<void>;
 
-const emitSnapshot = (env: ManagerEnv, slug: ClientSlug, snapshot: ProgressSnapshot): void => {
-  env.broadcaster.progress({
-    slug,
-    stage: snapshot.stage,
-    stagePercent: snapshot.stagePercent,
-    overallPercent: snapshot.overallPercent,
-    bytesDownloaded: snapshot.bytesDownloaded,
-    totalBytes: snapshot.totalBytes,
-    ...(snapshot.currentFile !== undefined ? { currentFile: snapshot.currentFile } : {}),
-  });
+// 4s rolling window, mirroring the renderer's former useByteSpeed: wide enough
+// to smooth the kit's per-second jitter, short enough to react to a slowdown.
+const SPEED_WINDOW_MS = 4000;
+
+// Bytes/sec averaged over the first→last sample already pruned to the window.
+// A whole-window average (rather than the last delta) keeps the readout steady
+// against the kit's per-second jitter. `samples` are `[ms, bytes]` ascending.
+const windowSpeed = (samples: ReadonlyArray<readonly [number, number]>): number => {
+  const first = samples[0];
+  const last = samples[samples.length - 1];
+  if (!first || !last) return 0;
+  const dt = (last[0] - first[0]) / 1000;
+  if (dt <= 0) return 0;
+  const rate = (last[1] - first[1]) / dt;
+  return rate > 0 ? rate : 0;
+};
+
+// The kit reports `bytesDownloaded` install-wide but `totalBytes` per stage, so
+// the two are mixed-scale. Reconstruct per-stage bytes from stagePercent so the
+// emitted "X / Y" line is self-consistent, and sample throughput over those
+// reconstructed bytes — resetting at each stage boundary so the rate (and ETA)
+// don't dip negative when the next stage restarts at 0%.
+const createSnapshotEmitter = (env: ManagerEnv, slug: CatalogKey) => {
+  let stage: ProgressStage | null = null;
+  let samples: Array<[number, number]> = [];
+
+  return (snapshot: ProgressSnapshot): void => {
+    const stageTotal = snapshot.totalBytes;
+    const fraction = Math.min(100, Math.max(0, snapshot.stagePercent)) / 100;
+    const stageDone = stageTotal > 0 ? Math.round(fraction * stageTotal) : 0;
+
+    if (snapshot.stage !== stage) {
+      stage = snapshot.stage;
+      samples = [];
+    }
+    const now = Date.now();
+    const prev = samples[samples.length - 1];
+    if (prev && stageDone < prev[1]) {
+      samples = [[now, stageDone]];
+    } else {
+      samples.push([now, stageDone]);
+      while (samples.length > 0) {
+        const head = samples[0];
+        if (!head || now - head[0] <= SPEED_WINDOW_MS) break;
+        samples.shift();
+      }
+    }
+    const speedBytesPerSec = Math.max(0, Math.round(windowSpeed(samples)));
+
+    env.broadcaster.progress({
+      slug,
+      stage: snapshot.stage,
+      stagePercent: snapshot.stagePercent,
+      overallPercent: snapshot.overallPercent,
+      bytesDownloaded: stageDone,
+      totalBytes: stageTotal,
+      speedBytesPerSec,
+      ...(snapshot.currentFile !== undefined ? { currentFile: snapshot.currentFile } : {}),
+    });
+  };
 };
 
 export const createPlannedProgressAdapter = (
   env: ManagerEnv,
-  slug: ClientSlug,
+  slug: CatalogKey,
   plan: Pick<InstallPlan, 'actions'>,
 ): MinecraftProgressAdapter => {
   const tracker = createInstallProgressTracker(plan);
-  const unsubscribe = tracker.subscribe((snapshot) => emitSnapshot(env, slug, snapshot));
+  const unsubscribe = tracker.subscribe(createSnapshotEmitter(env, slug));
 
   return {
     onEvent: tracker.onEvent,
@@ -111,7 +161,7 @@ type ThrottledProgress = {
 
 export const createRepairProgressAdapter = (
   env: ManagerEnv,
-  slug: ClientSlug,
+  slug: CatalogKey,
 ): MinecraftProgressAdapter => {
   const emitter = createThrottledEmitter<ThrottledProgress>((progress) => {
     const { stage, bytesDownloaded, totalBytes, currentFile } = progress;

@@ -5,7 +5,7 @@ import { type LoaderChoice, LoaderChoices } from '@shared/contracts/settings';
 export { resolveLoader, type LoaderResolution } from '@shared/domain/loader';
 
 // Maps a source-agnostic BuildSpec (official or local) onto the kit's target
-// input. `targetId` is the build's source-native identity — the Strapi slug for
+// input. `targetId` is the build's source-native identity — the official slug for
 // official builds, the instance UUID for local — kept stable so an existing
 // install manifest's `targetId` keeps matching after the catalog migration.
 export const buildSpecToTargetInput = (input: {

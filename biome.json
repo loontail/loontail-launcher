@@ -6,7 +6,7 @@
     "useIgnoreFile": true
   },
   "files": {
-    "ignore": ["out/**", "dist/**", "node_modules/**", "build/**"]
+    "ignore": ["out/**", "dist/**", "node_modules/**", "build/**", "coverage/**"]
   },
   "formatter": {
     "enabled": true,

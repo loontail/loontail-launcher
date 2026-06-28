@@ -16,6 +16,7 @@ export type {
 } from './console';
 export {
   BundleSlugSchema,
+  CatalogKeySchema,
   ClientIdSchema,
   ClientSlugSchema,
   InstanceIdSchema,
@@ -30,11 +31,13 @@ export {
 export type { BundleSlug, CatalogKey, ClientId, ClientSlug, InstanceId, UserId } from './ids';
 export {
   catalogKeyFor,
+  catalogKeyToRefValue,
   isLocal,
   isOfficial,
   localKey,
   officialKey,
   parseCatalogKey,
+  refValue,
   SourceKinds,
 } from './catalog';
 export type {
@@ -77,7 +80,12 @@ export type {
   MinecraftVersionOption,
   UpdateInstancePayload,
 } from './instance';
-export { AUTH_PROVIDERS, LOGIN_ERROR_CODE, LoginPayloadSchema } from './auth';
+export {
+  AUTH_PROVIDERS,
+  LOGIN_ERROR_CODE,
+  LoginPayloadSchema,
+  RegisterPayloadSchema,
+} from './auth';
 export type {
   AuthProvider,
   AuthSession,
@@ -87,6 +95,7 @@ export type {
   MojangAssetState,
   MojangProfile,
   MojangSession,
+  RegisterPayload,
   SkinVariant,
   YggdrasilProfile,
   YggdrasilSession,
@@ -120,7 +129,7 @@ export { UpdaterStates } from './updater';
 export type { UpdaterState, UpdaterStatusEvent } from './updater';
 export { SKIN_KINDS, SkinKindSchema, UploadSkinPayloadSchema } from './skin';
 export type { SkinKind, UploadSkinPayload, UploadSkinResult } from './skin';
-export { ClientResponseSchema, KeywordSchema } from './client';
+export { ClientListResponseSchema, ClientResponseSchema, KeywordSchema } from './client';
 export type { Client, ClientResponse, Keyword } from './client';
 export {
   BUSY_BUNDLE_STATUSES,
@@ -150,17 +159,5 @@ export type {
 } from './bundle';
 export { ServerStatusSchema } from './serverStatus';
 export type { ServerStatus } from './serverStatus';
-export {
-  ServerSchema,
-  StrapiEntitySchema,
-  StrapiImageFormatSchema,
-  StrapiListSchema,
-  StrapiMediaSchema,
-} from './strapi';
-export type {
-  Server,
-  StrapiEntity,
-  StrapiImageFormat,
-  StrapiList,
-  StrapiMedia,
-} from './strapi';
+export { MediaSchema, ServerSchema } from './media';
+export type { Media, Server } from './media';

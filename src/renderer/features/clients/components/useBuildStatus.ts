@@ -2,15 +2,14 @@ import { operationalId } from '@renderer/features/catalog';
 import { useClientStatus } from '@renderer/features/minecraft';
 import type { CatalogItem } from '@shared/contracts/catalog';
 import type { InstallStatus } from '@shared/contracts/minecraft';
-import { type BuildStatusGlyph, type BuildStatusTone, describeBuildStatus } from './buildStatus';
+import { type BuildStatusGlyph, describeBuildStatus } from './buildStatus';
 
-export type { BuildStatusGlyph, BuildStatusTone } from './buildStatus';
+export type { BuildStatusGlyph } from './buildStatus';
 export { describeBuildStatus } from './buildStatus';
 
 export type BuildStatusView = {
   status: InstallStatus;
   labelKey: string;
-  tone: BuildStatusTone;
   glyph: BuildStatusGlyph;
 };
 

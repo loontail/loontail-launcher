@@ -1,4 +1,4 @@
-import type { ClientSlug } from './ids';
+import type { CatalogKey } from './ids';
 
 export type ConsoleSource = 'stdout' | 'stderr' | 'system';
 
@@ -25,7 +25,7 @@ export type ConsoleLine = {
   timestamp: number;
   level: ConsoleLevel;
   source: ConsoleSource;
-  slug?: ClientSlug;
+  slug?: CatalogKey;
   message: string;
   code?: string;
   args?: ConsoleLineArgs;
@@ -49,7 +49,7 @@ export const ConsoleStatuses = {
 } as const satisfies Record<string, ConsoleProcessStatus>;
 
 export type ConsoleProcessState = {
-  slug: ClientSlug;
+  slug: CatalogKey;
   status: ConsoleProcessStatus;
   clientTitle?: string;
   exitCode?: number | null;
@@ -58,7 +58,7 @@ export type ConsoleProcessState = {
 
 export type ConsoleInitialPayload = {
   activeSession: {
-    slug: ClientSlug;
+    slug: CatalogKey;
     clientTitle: string;
     state: ConsoleProcessState;
   } | null;

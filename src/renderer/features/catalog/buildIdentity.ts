@@ -1,10 +1,8 @@
 import type { CatalogItem } from '@shared/contracts/catalog';
-import { SourceKinds } from '@shared/contracts/catalog';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 
-// The opaque operational id that flows through the slug-keyed install / launch /
-// repair / settings chain: the Strapi slug for official builds, the instance
-// UUID for local builds. Typed as ClientSlug because every downstream IPC and
-// store is keyed by it; the two id keyspaces never overlap.
-export const operationalId = (item: CatalogItem): ClientSlug =>
-  (item.ref.source === SourceKinds.OFFICIAL ? item.ref.slug : item.ref.id) as unknown as ClientSlug;
+// The cross-kind operational id that flows through the install / launch /
+// repair / settings / bundle chain over IPC: the CatalogKey (`official:<slug>`
+// or `local:<uuid>`). Every downstream channel, store, and settings record is
+// keyed by it, so the renderer never down-casts to a bare slug/uuid.
+export const operationalId = (item: CatalogItem): CatalogKey => item.key;

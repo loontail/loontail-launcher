@@ -16,7 +16,11 @@ import {
   InstanceRegistrySchema,
 } from '@shared/contracts/instance';
 import { type LauncherSettings, LauncherSettingsSchema } from '@shared/contracts/settings';
-import { defaultLauncherSettings, normalizeLauncherSettings } from '@shared/domain/settings';
+import {
+  defaultLauncherSettings,
+  migrateLastPlayedKeys,
+  normalizeLauncherSettings,
+} from '@shared/domain/settings';
 import { app, safeStorage } from 'electron';
 import { z } from 'zod';
 import { type Db, getDb } from './db/connection';
@@ -38,7 +42,10 @@ import {
 export { closeDatabase } from './db/connection';
 
 const logger = scopedLogger('store');
-const AUTH_SECRET_STORAGE_VERSION = 1;
+// Bumped to 2 when the Loontail session token joined the Yggdrasil secret blob.
+// A version-1 blob (no session token) fails validation and forces a fresh
+// sign-in, which is correct: a pre-unification session has no API bearer.
+const AUTH_SECRET_STORAGE_VERSION = 2;
 type LinuxSecretBackend = ReturnType<typeof safeStorage.getSelectedStorageBackend>;
 
 const SUPPORTED_LINUX_SECRET_BACKENDS = new Set<LinuxSecretBackend>([
@@ -73,6 +80,9 @@ const YggdrasilAuthSecretSchema = z.object({
   provider: z.literal('yggdrasil'),
   accessToken: z.string().min(1),
   clientToken: z.string().min(1),
+  // The universal Loontail API bearer. Stored encrypted next to the in-game
+  // Yggdrasil pair so a single decrypt yields everything a session needs.
+  sessionToken: z.string().min(1),
 });
 
 const MojangAuthSecretSchema = z.object({
@@ -211,13 +221,19 @@ const metadataFromSession = (session: AuthSession): StoredAuthMetadata => {
   };
 };
 
-const secretFromSession = (session: AuthSession): AuthSecret => {
+const secretFromSession = (session: AuthSession, sessionToken: string | undefined): AuthSecret => {
   if (session.provider === 'yggdrasil') {
+    if (!sessionToken) {
+      // A Yggdrasil session without its API bearer is unusable — every backend
+      // call would 401. Refuse to persist it rather than store a half-session.
+      throw new Error('Yggdrasil session requires a Loontail session token');
+    }
     return {
       version: AUTH_SECRET_STORAGE_VERSION,
       provider: 'yggdrasil',
       accessToken: session.accessToken,
       clientToken: session.clientToken,
+      sessionToken,
     };
   }
   return {
@@ -257,6 +273,9 @@ const decryptAuthSecret = (blob: Buffer | null): AuthSecret => {
   return parsed.data;
 };
 
+// Only Mojang legacy sessions can be migrated in place: a legacy Yggdrasil
+// session predates the unified session token and `setStoredAuth` rejects it, so
+// it falls through to a clean re-login (correct — it has no API bearer).
 const migrateLegacyAuthSession = (session: AuthSession): AuthSession | null => {
   try {
     setStoredAuth(session);
@@ -344,18 +363,42 @@ export const runAuthStoreMigrationIfNeeded = (): void => {
   getStoredAuth();
 };
 
-export const setStoredAuth = (session: AuthSession | null): void => {
+// `sessionToken` is the Loontail API bearer; it is mandatory for Yggdrasil
+// sessions and ignored for Mojang (which has no Loontail session). Callers that
+// only rewrite Mojang profile data omit it.
+export const setStoredAuth = (session: AuthSession | null, sessionToken?: string): void => {
   if (session === null) {
     clearStoredAuth();
     return;
   }
   try {
     assertSecureStorageAvailable();
-    const encrypted = safeStorage.encryptString(JSON.stringify(secretFromSession(session)));
+    const encrypted = safeStorage.encryptString(
+      JSON.stringify(secretFromSession(session, sessionToken)),
+    );
     writeAuthRow(getDb(), JSON.stringify(metadataFromSession(session)), encrypted);
   } catch (error) {
     clearStoredAuth();
     throw new Error('Failed to persist auth session securely', { cause: error });
+  }
+};
+
+// The live Loontail API bearer for the stored session, or null when no
+// Yggdrasil session is stored (Mojang sessions have no Loontail token). Reading
+// goes through the same decrypt path as `getStoredAuth`; a decrypt/validation
+// failure surfaces as null so callers fall back to a re-login.
+export const getStoredSessionToken = (): string | null => {
+  const row = readAuthRow(getDb());
+  if (!row) return null;
+  const raw = parseStoredMetadata(row.metadata);
+  if (raw === null) return null;
+  const metadata = StoredAuthMetadataSchema.safeParse(raw);
+  if (!metadata.success || metadata.data.provider !== 'yggdrasil') return null;
+  try {
+    const secret = decryptAuthSecret(row.secret);
+    return secret.provider === 'yggdrasil' ? secret.sessionToken : null;
+  } catch {
+    return null;
   }
 };
 
@@ -410,4 +453,8 @@ export const recordPlayed = (key: string): void => {
   upsertLastPlayed(getDb(), key, Date.now());
 };
 
-export const getLastPlayed = (): Record<string, number> => readLastPlayed(getDb());
+// Rehydrate any legacy bare-keyed entries to the CatalogKey form on read so the
+// Home recents (which match by `item.key`) still line up after an upgrade. New
+// writes already stamp by CatalogKey, so this is a defensive lift.
+export const getLastPlayed = (): Record<string, number> =>
+  migrateLastPlayedKeys(readLastPlayed(getDb()));

@@ -13,7 +13,7 @@
     "url": "git+https://github.com/loontail/loontail-launcher.git"
   },
   "engines": {
-    "node": ">=22.12"
+    "node": ">=24"
   },
   "scripts": {
     "dev": "electron-vite dev",
@@ -27,7 +27,6 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "lint:i18n": "node scripts/lintI18n.mjs",
-    "lint:strapi": "node scripts/diffStrapiSchemas.mjs",
     "shots": "electron-vite build && node scripts/screenshot.mjs",
     "shots:run": "node scripts/screenshot.mjs",
     "test": "vitest run",
@@ -65,10 +64,11 @@
     "@electron/rebuild": "^3.7.2",
     "@tailwindcss/vite": "^4.0.0",
     "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^22.0.0",
+    "@types/node": "^24",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.7.0",
+    "@vitest/coverage-v8": "^2.1.9",
     "electron": "^38.8.6",
     "electron-builder": "^26.0.0",
     "electron-vite": "^2.3.0",

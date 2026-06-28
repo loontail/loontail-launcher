@@ -19,8 +19,11 @@ const KEY_BY_CODE: Record<MinecraftErrorCode, string> = {
   [MinecraftErrorCodes.UNKNOWN]: 'clients.error.unknown',
 };
 
-export const localizeMinecraftError = (
-  code: MinecraftErrorCode,
-  message: string,
-  t: TFunction,
-): string => t(KEY_BY_CODE[code], { message });
+const isMinecraftErrorCode = (code: string): code is MinecraftErrorCode => code in KEY_BY_CODE;
+
+// Accepts an IpcError code (arrives as a plain string over the bridge); unknown
+// codes fall back to the generic key, which still surfaces the raw message.
+export const localizeMinecraftError = (code: string, message: string, t: TFunction): string =>
+  t(isMinecraftErrorCode(code) ? KEY_BY_CODE[code] : KEY_BY_CODE[MinecraftErrorCodes.UNKNOWN], {
+    message,
+  });

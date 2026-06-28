@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import { PauseController } from '@loontail/minecraft-kit';
 import { errorMessage } from '@main/infra/errorMessage';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
 import type { Context } from './context';
 import type { ManagerEnv } from './env';
@@ -15,17 +15,19 @@ import { isUnderClientsRoot } from './uninstall';
 
 export const beginInstall = (
   env: ManagerEnv,
-  slug: ClientSlug,
+  slug: CatalogKey,
   ctx: Context,
-  options: { fresh: boolean },
+  options: { abort?: AbortController },
 ): InstallOp => {
+  // Carry the placeholder's abort controller forward when startInstall passes
+  // one, so a Stop issued during the buildContext window stays armed: the
+  // controller may already be aborted, and runInstall's signal honors it.
   const op: InstallOp = {
     kind: OpKinds.INSTALL,
     pauseController: new PauseController(),
-    abort: new AbortController(),
+    abort: options.abort ?? new AbortController(),
     paused: false,
     cancelled: false,
-    fresh: options.fresh,
   };
   env.ops.set(slug, op);
   env.emitStatus({
@@ -34,13 +36,13 @@ export const beginInstall = (
     paused: false,
     loader: ctx.loader,
   });
-  env.logger.info(`[${slug}] install: started (loader=${ctx.loader}, fresh=${options.fresh})`);
+  env.logger.info(`[${slug}] install: started (loader=${ctx.loader})`);
   return op;
 };
 
 const emitPostInstallStatus = async (
   env: ManagerEnv,
-  slug: ClientSlug,
+  slug: CatalogKey,
   clientFolder: string,
 ): Promise<void> => {
   const installed = await isAnythingInstalled(clientFolder);
@@ -53,19 +55,17 @@ const emitPostInstallStatus = async (
 
 const handleInstallFailure = async (
   env: ManagerEnv,
-  slug: ClientSlug,
+  slug: CatalogKey,
   ctx: Context,
   op: InstallOp,
   error: unknown,
 ): Promise<void> => {
   if (op.abort.signal.aborted && op.cancelled) {
-    if (op.fresh && isUnderClientsRoot(ctx.clientFolder, ctx.resolved.storage.clientsFolder)) {
+    if (isUnderClientsRoot(ctx.clientFolder, ctx.resolved.storage.clientsFolder)) {
       env.logger.info(`[${slug}] install: cancelled, cleaning client folder`);
       await fs.rm(ctx.clientFolder, { recursive: true, force: true }).catch((err) => {
         env.logger.warn('Failed to clean up client folder after cancel', err);
       });
-    } else {
-      env.logger.info(`[${slug}] install: cancelled, keeping existing folder`);
     }
     await emitPostInstallStatus(env, slug, ctx.clientFolder);
     return;
@@ -79,7 +79,7 @@ const handleInstallFailure = async (
 
 const tryInstall = async (
   env: ManagerEnv,
-  slug: ClientSlug,
+  slug: CatalogKey,
   ctx: Context,
   op: InstallOp,
 ): Promise<void> => {
@@ -99,7 +99,7 @@ const tryInstall = async (
 
 export const runInstall = async (
   env: ManagerEnv,
-  slug: ClientSlug,
+  slug: CatalogKey,
   ctx: Context,
   op: InstallOp,
 ): Promise<void> => {

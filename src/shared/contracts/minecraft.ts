@@ -1,7 +1,7 @@
 import type { ProgressStage } from '@loontail/minecraft-kit';
 import { z } from 'zod';
 import { enumFromConst } from './enum';
-import { ClientSlugSchema } from './ids';
+import { CatalogKeySchema } from './ids';
 import { LoaderChoiceSchema } from './settings';
 
 export type { ProgressStage } from '@loontail/minecraft-kit';
@@ -56,7 +56,7 @@ export type MinecraftErrorCode = (typeof MinecraftErrorCodes)[keyof typeof Minec
 export const MinecraftErrorCodeSchema = enumFromConst(MinecraftErrorCodes);
 
 export const MinecraftStatusEventSchema = z.object({
-  slug: ClientSlugSchema,
+  slug: CatalogKeySchema,
   status: InstallStatusSchema,
   paused: z.boolean().optional(),
   loader: LoaderChoiceSchema.optional(),
@@ -65,19 +65,22 @@ export const MinecraftStatusEventSchema = z.object({
 export type MinecraftStatusEvent = z.infer<typeof MinecraftStatusEventSchema>;
 
 export const MinecraftProgressEventSchema = z.object({
-  slug: ClientSlugSchema,
+  slug: CatalogKeySchema,
   stage: ProgressStageSchema,
   stagePercent: z.number().min(0).max(100),
   overallPercent: z.number().min(0).max(100),
-  bytesDownloaded: z.number().int().nonnegative(),
-  totalBytes: z.number().int().nonnegative(),
+  // Per-stage reconstructed bytes (stagePercent × stage total): the adapter
+  // rounds before IPC, so these are non-negative reals, not strict ints.
+  bytesDownloaded: z.number().nonnegative(),
+  totalBytes: z.number().nonnegative(),
+  speedBytesPerSec: z.number().nonnegative().optional(),
   currentFile: z.string().optional(),
 });
 
 export type MinecraftProgressEvent = z.infer<typeof MinecraftProgressEventSchema>;
 
 export const MinecraftErrorEventSchema = z.object({
-  slug: ClientSlugSchema,
+  slug: CatalogKeySchema,
   code: MinecraftErrorCodeSchema,
   message: z.string(),
 });
@@ -85,7 +88,7 @@ export const MinecraftErrorEventSchema = z.object({
 export type MinecraftErrorEvent = z.infer<typeof MinecraftErrorEventSchema>;
 
 export const InstallRequestSchema = z.object({
-  slug: ClientSlugSchema,
+  slug: CatalogKeySchema,
   loader: LoaderChoiceSchema.optional(),
 });
 

@@ -1,4 +1,4 @@
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import {
   type InstallStatus,
   InstallStatuses,
@@ -15,6 +15,7 @@ export type ClientRuntimeState = {
   overallPercent?: number | undefined;
   bytesDownloaded?: number | undefined;
   totalBytes?: number | undefined;
+  speedBytesPerSec?: number | undefined;
   currentFile?: string | undefined;
   error?: { code: MinecraftErrorCode; message: string } | undefined;
 };
@@ -26,7 +27,7 @@ export const DEFAULT_STATE: ClientRuntimeState = {
 
 type Store = {
   entries: Record<string, ClientRuntimeState>;
-  patch: (slug: ClientSlug, change: Partial<ClientRuntimeState>) => void;
+  patch: (slug: CatalogKey, change: Partial<ClientRuntimeState>) => void;
 };
 
 const STATUSES_WITHOUT_PROGRESS: ReadonlySet<InstallStatus> = new Set([
@@ -56,6 +57,7 @@ export const useMinecraftStore = create<Store>((set) => ({
         merged.overallPercent = undefined;
         merged.bytesDownloaded = undefined;
         merged.totalBytes = undefined;
+        merged.speedBytesPerSec = undefined;
         merged.currentFile = undefined;
       }
       if (change.status && STATUSES_CLEAR_ERROR.has(change.status)) {
@@ -66,6 +68,6 @@ export const useMinecraftStore = create<Store>((set) => ({
 }));
 
 export const selectClient =
-  (slug: ClientSlug | null | undefined) =>
+  (slug: CatalogKey | null | undefined) =>
   (state: Store): ClientRuntimeState =>
     (slug && state.entries[slug]) || DEFAULT_STATE;

@@ -1,13 +1,8 @@
-import {
-  createCatalog,
-  resolveBuildByOpaqueId,
-  setActiveCatalog,
-} from '@main/services/catalog/catalog';
+import { createCatalog } from '@main/services/catalog/catalog';
+import { createOfficialCatalogSource } from '@main/services/catalog/officialSource';
 import type { CatalogSource } from '@main/services/catalog/source';
-import { createStrapiCatalogSource } from '@main/services/catalog/strapiSource';
 import type { CatalogItem } from '@shared/contracts/catalog';
 import type { Client } from '@shared/contracts/client';
-import type { StrapiList } from '@shared/contracts/strapi';
 import { describe, expect, it, vi } from 'vitest';
 
 const officialItem = (slug: string, createdAt: string): CatalogItem =>
@@ -92,8 +87,8 @@ describe('createCatalog.resolve', () => {
   });
 });
 
-describe('resolveBuildByOpaqueId', () => {
-  it('resolves a local build offline even when the official source rejects', async () => {
+describe('createCatalog.resolveBuildByKey', () => {
+  it('resolves a local key offline even when the official source rejects', async () => {
     const local = source('local', {
       getItem: async (ref) =>
         ref.source === 'local' && ref.id === 'uuid'
@@ -105,52 +100,55 @@ describe('resolveBuildByOpaqueId', () => {
         throw new Error('CMS down');
       },
     });
-    setActiveCatalog(createCatalog([local, official]));
-    const item = await resolveBuildByOpaqueId('uuid' as never);
+    const item = await createCatalog([local, official]).resolveBuildByKey('local:uuid' as never);
     expect(item?.kind).toBe('local');
   });
 
-  it('falls through to the official source for a non-local id', async () => {
+  it('resolves an official key from the official source', async () => {
     const local = source('local', { getItem: async () => null });
     const official = source('official', {
       getItem: async (ref) =>
         ref.source === 'official' ? officialItem('survival', '2026-01-01T00:00:00.000Z') : null,
     });
-    setActiveCatalog(createCatalog([local, official]));
-    const item = await resolveBuildByOpaqueId('survival' as never);
+    const item = await createCatalog([local, official]).resolveBuildByKey(
+      'official:survival' as never,
+    );
     expect(item?.kind).toBe('official');
+  });
+
+  it('resolves null for a malformed key without touching a source', async () => {
+    const getLocal = vi.fn(async () => null);
+    const catalog = createCatalog([source('local', { getItem: getLocal })]);
+    expect(await catalog.resolveBuildByKey('garbage' as never)).toBeNull();
+    expect(getLocal).not.toHaveBeenCalled();
   });
 });
 
-const clientList = (clients: Partial<Client>[]): StrapiList<Client> =>
+const fakeClient = (slug: string): Client =>
   ({
-    data: clients,
-    meta: { pagination: { page: 1, pageSize: 25, pageCount: 1, total: 1 } },
-  }) as StrapiList<Client>;
+    id: slug,
+    slug,
+    title: slug,
+    shortDescription: '',
+    description: '',
+    available: true,
+    minecraftVersion: '1.21.4',
+    forgeVersion: null,
+    fabricVersion: null,
+    runtimeVersion: null,
+    bundleSlug: null,
+    poster: { url: 'cache://poster', width: null, height: null },
+    background: { url: 'cache://bg', width: null, height: null },
+    titleImage: null,
+    screenshots: [],
+    keywords: [],
+    servers: [],
+  }) as unknown as Client;
 
-const fakeClient = (slug: string): Partial<Client> => ({
-  slug: slug as Client['slug'],
-  title: slug,
-  shortDescription: '',
-  description: '',
-  available: true,
-  minecraftVersion: '1.21.4',
-  forgeVersion: null,
-  fabricVersion: null,
-  runtimeVersion: null,
-  bundleSlug: null,
-  poster: { url: 'cache://poster' } as Client['poster'],
-  background: { url: 'cache://bg' } as Client['background'],
-  screenshots: [],
-  servers: [],
-  createdAt: '2026-01-01T00:00:00.000Z',
-  updatedAt: '2026-01-01T00:00:00.000Z',
-});
-
-describe('StrapiCatalogSource', () => {
+describe('OfficialCatalogSource', () => {
   it('maps clients to official catalog items', async () => {
-    const src = createStrapiCatalogSource({
-      listClients: async () => clientList([fakeClient('survival')]),
+    const src = createOfficialCatalogSource({
+      listClients: async () => [fakeClient('survival')],
     });
     const items = await src.listItems();
     expect(items).toHaveLength(1);
@@ -160,8 +158,8 @@ describe('StrapiCatalogSource', () => {
   });
 
   it('getItem finds an official build by slug and returns null when absent', async () => {
-    const src = createStrapiCatalogSource({
-      listClients: async () => clientList([fakeClient('survival')]),
+    const src = createOfficialCatalogSource({
+      listClients: async () => [fakeClient('survival')],
     });
     expect(await src.getItem({ source: 'official', slug: 'survival' as never })).not.toBeNull();
     expect(await src.getItem({ source: 'official', slug: 'missing' as never })).toBeNull();
@@ -169,7 +167,7 @@ describe('StrapiCatalogSource', () => {
   });
 
   it('propagates a fetch rejection so the aggregator can mark it degraded', async () => {
-    const src = createStrapiCatalogSource({
+    const src = createOfficialCatalogSource({
       listClients: async () => {
         throw new Error('offline');
       },

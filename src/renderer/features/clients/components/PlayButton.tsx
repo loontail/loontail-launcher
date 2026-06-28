@@ -16,7 +16,7 @@ import {
 import type { CatalogItem } from '@shared/contracts/catalog';
 import { type InstallStatus, InstallStatuses } from '@shared/contracts/minecraft';
 import type { LoaderChoice } from '@shared/contracts/settings';
-import { isLoaderAvailable } from '@shared/domain/loader';
+import { isLoaderAmbiguous, isLoaderAvailable } from '@shared/domain/loader';
 import { Download, Loader2, Play, RefreshCw, RotateCcw, Square, X } from 'lucide-react';
 import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -167,8 +167,7 @@ export const PlayButton = ({ item }: PlayButtonProps) => {
   // launcher would skip the picker and try to install a loader the build lacks.
   const persistedLoader =
     rawPersistedLoader && isLoaderAvailable(spec, rawPersistedLoader) ? rawPersistedLoader : null;
-  const needsLoaderChoice =
-    Boolean(spec.forgeVersion) && Boolean(spec.fabricVersion) && !persistedLoader;
+  const needsLoaderChoice = isLoaderAmbiguous(spec, persistedLoader);
 
   const beginInstall = (loader?: LoaderChoice): Promise<void> =>
     install.mutateAsync({ slug, ...(loader ? { loader } : {}) });

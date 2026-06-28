@@ -1,4 +1,4 @@
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import type { ClientSettingsOverride, LauncherSettings } from '@shared/contracts/settings';
 import { joinClientFolder } from './settingsDefaults';
 
@@ -30,10 +30,10 @@ const compactOverride = (override: ClientSettingsOverride): ClientSettingsOverri
 
 export const setClientOverride = (
   settings: LauncherSettings,
-  slug: ClientSlug,
+  key: CatalogKey,
   patch: ClientSettingsOverride,
 ): LauncherSettings => {
-  const existing = settings.clients[slug] ?? {};
+  const existing = settings.clients[key] ?? {};
   const merged: ClientSettingsOverride = {
     memory: { ...existing.memory, ...patch.memory },
     storage: { ...existing.storage, ...patch.storage },
@@ -51,7 +51,7 @@ export const setClientOverride = (
   }
 
   if (merged.storage && typeof merged.storage.clientFolder === 'string') {
-    const defaultClientFolder = joinClientFolder(settings.storage.clientsFolder, slug);
+    const defaultClientFolder = joinClientFolder(settings.storage.clientsFolder, key);
     if (merged.storage.clientFolder === defaultClientFolder) {
       delete merged.storage.clientFolder;
     }
@@ -76,36 +76,36 @@ export const setClientOverride = (
   const compact = compactOverride(merged);
   const clients = { ...settings.clients };
   if (hasClientOverrides(compact)) {
-    clients[slug] = compact;
+    clients[key] = compact;
   } else {
-    delete clients[slug];
+    delete clients[key];
   }
   return { ...settings, clients };
 };
 
 export const clearClientOverrides = (
   settings: LauncherSettings,
-  slug: ClientSlug,
+  key: CatalogKey,
 ): LauncherSettings => {
-  const existing = settings.clients[slug];
+  const existing = settings.clients[key];
   if (!existing) return settings;
   const clients = { ...settings.clients };
   if (existing.runtime) {
-    clients[slug] = { runtime: existing.runtime };
+    clients[key] = { runtime: existing.runtime };
   } else {
-    delete clients[slug];
+    delete clients[key];
   }
   return { ...settings, clients };
 };
 
 export const clearStaleClientRuntimeRef = (
   settings: LauncherSettings,
-  slug: ClientSlug,
+  key: CatalogKey,
   runtimeComponent: string,
 ): LauncherSettings => {
-  const runtime = settings.clients[slug]?.runtime;
+  const runtime = settings.clients[key]?.runtime;
   if (!runtime || runtime.component === runtimeComponent) return settings;
-  return setClientOverride(settings, slug, { runtime: undefined });
+  return setClientOverride(settings, key, { runtime: undefined });
 };
 
 export const pruneClientOverrides = (

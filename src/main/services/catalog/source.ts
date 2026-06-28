@@ -22,7 +22,7 @@ export type CatalogSource = {
 const mediaRef = (media: { url: string } | null | undefined): MediaRef | null =>
   media ? { url: media.url } : null;
 
-// Project a normalized Strapi Client into the source-agnostic catalog shape the
+// Project a normalized API Client into the source-agnostic catalog shape the
 // UI and the kit bridge consume. Keeps the raw Client for legacy read paths.
 export const clientToCatalogItem = (client: Client): OfficialCatalogItem => ({
   kind: SourceKinds.OFFICIAL,
@@ -47,8 +47,10 @@ export const clientToCatalogItem = (client: Client): OfficialCatalogItem => ({
       screenshots: (client.screenshots ?? []).map((media): MediaRef => ({ url: media.url })),
     },
     servers: client.servers ?? [],
-    createdAt: client.createdAt,
-    updatedAt: client.updatedAt,
+    // The native contract drops record timestamps; official ordering falls back
+    // to the source-provided sequence (stable sort) via the empty sentinel.
+    createdAt: '',
+    updatedAt: '',
   },
   raw: client,
 });

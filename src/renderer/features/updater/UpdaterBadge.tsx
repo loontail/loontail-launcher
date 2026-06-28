@@ -1,6 +1,6 @@
 import { cn } from '@renderer/shared/lib/cn';
 import { UpdaterStates } from '@shared/contracts/updater';
-import { ArrowDownToLine, Loader2, RotateCw } from 'lucide-react';
+import { ArrowDownToLine, RotateCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { triggerInstall } from './api';
 import { useUpdaterStatus } from './store';
@@ -17,13 +17,9 @@ export const UpdaterBadge = () => {
     case UpdaterStates.AVAILABLE:
       return (
         <Badge icon={<ArrowDownToLine className="size-3" />}>
-          {t('updater.badge.available', { version: status.version })}
-        </Badge>
-      );
-    case UpdaterStates.DOWNLOADING:
-      return (
-        <Badge icon={<Loader2 className="size-3 animate-spin" />}>
-          {t('updater.badge.downloading', { percent: Math.round(status.percent) })}
+          {status.version
+            ? t('updater.badge.available', { version: status.version })
+            : t('updater.badge.availableNoVersion')}
         </Badge>
       );
     case UpdaterStates.READY:

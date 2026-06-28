@@ -4,8 +4,6 @@ const tmpUserData = vi.hoisted(() => {
   const { mkdtempSync } = require('node:fs') as typeof import('node:fs');
   const { tmpdir } = require('node:os') as typeof import('node:os');
   const { join } = require('node:path') as typeof import('node:path');
-  process.env.API_URL ??= 'http://test.invalid';
-  process.env.API_TOKEN ??= 'test-token';
   return mkdtempSync(join(tmpdir(), 'mc-launcher-store-test-'));
 });
 
@@ -58,6 +56,8 @@ const yggMetadata = {
   provider: 'yggdrasil' as const,
   profile: { uuid: '0123456789abcdef0123456789abcdef', name: 'someone' },
 };
+
+const YGG_SESSION_TOKEN = 'session-token';
 
 // Seed the legacy electron-store layout so initStore's one-time import runs.
 const writeLegacyStore = (payload: Record<string, unknown>): void => {
@@ -119,20 +119,28 @@ afterAll(() => {
 describe('getStoredAuth', () => {
   it('round-trips a persisted session through metadata and the secret blob', () => {
     store.initStore();
-    store.setStoredAuth({ ...yggMetadata, accessToken: 'access', clientToken: 'client' });
+    store.setStoredAuth(
+      { ...yggMetadata, accessToken: 'access', clientToken: 'client' },
+      YGG_SESSION_TOKEN,
+    );
 
     const session = store.getStoredAuth();
     expect(session).toMatchObject({ provider: 'yggdrasil', accessToken: 'access' });
     expect(authRow()?.metadata).not.toContain('accessToken');
+    expect(authRow()?.metadata).not.toContain(YGG_SESSION_TOKEN);
     expect(authRow()?.secret).toBeInstanceOf(Buffer);
+    // The session token rides inside the encrypted secret and is readable back.
+    expect(store.getStoredSessionToken()).toBe(YGG_SESSION_TOKEN);
     expect(loggerMocks.warn).not.toHaveBeenCalled();
   });
 
-  it('imports and reads a persisted session from the legacy store plus secret file', () => {
+  it('drops a legacy version-1 secret (no session token) and forces a fresh sign-in', () => {
     writeLegacyStore({
       [STORE_KEY_AUTH]: yggMetadata,
       [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
     });
+    // A pre-unification secret has no `sessionToken`, so it now fails validation
+    // and the user must re-authenticate to obtain an API bearer.
     writeLegacyAuthSecret({
       version: 1,
       provider: 'yggdrasil',
@@ -141,26 +149,21 @@ describe('getStoredAuth', () => {
     });
     store.initStore();
 
-    expect(store.getStoredAuth()).toMatchObject({ provider: 'yggdrasil', accessToken: 'access' });
-    expect(loggerMocks.warn).not.toHaveBeenCalled();
+    expect(store.getStoredAuth()).toBeNull();
+    expect(store.getStoredSessionToken()).toBeNull();
   });
 
-  it('migrates a legacy plaintext session into metadata plus the secret blob', () => {
+  it('migrates a legacy plaintext Yggdrasil session by forcing a fresh sign-in', () => {
+    // A legacy plaintext Yggdrasil session predates the session token, so it
+    // cannot be migrated in place and is dropped.
     writeLegacyStore({
       [STORE_KEY_AUTH]: { ...yggMetadata, accessToken: 'access', clientToken: 'client' },
       [STORE_KEY_SCHEMA_VERSION]: CURRENT_SCHEMA_VERSION,
     });
     store.initStore();
 
-    const session = store.getStoredAuth();
-    expect(session).toMatchObject({ provider: 'yggdrasil', accessToken: 'access' });
-    expect(authRow()?.secret).toBeInstanceOf(Buffer);
-    const metadata = authRow()?.metadata ?? '';
-    expect(metadata).not.toContain('accessToken');
-    expect(metadata).not.toContain('clientToken');
-    expect(loggerMocks.info).toHaveBeenCalledWith(
-      'Migrated auth session secrets to secure storage',
-    );
+    expect(store.getStoredAuth()).toBeNull();
+    expect(loggerMocks.warn).toHaveBeenCalled();
   });
 
   it('migrates a legacy plaintext Mojang session into the secret blob', () => {
@@ -251,7 +254,10 @@ describe('getStoredAuth', () => {
 
   it('clears the local session when secure storage is unavailable', () => {
     store.initStore();
-    store.setStoredAuth({ ...yggMetadata, accessToken: 'access', clientToken: 'client' });
+    store.setStoredAuth(
+      { ...yggMetadata, accessToken: 'access', clientToken: 'client' },
+      YGG_SESSION_TOKEN,
+    );
     safeStorageMocks.isEncryptionAvailable.mockReturnValue(false);
 
     expect(store.getStoredAuth()).toBeNull();
@@ -262,7 +268,10 @@ describe('getStoredAuth', () => {
 describe('clearStoredAuth', () => {
   it('removes the account metadata and secret blob', () => {
     store.initStore();
-    store.setStoredAuth({ ...yggMetadata, accessToken: 'access', clientToken: 'client' });
+    store.setStoredAuth(
+      { ...yggMetadata, accessToken: 'access', clientToken: 'client' },
+      YGG_SESSION_TOKEN,
+    );
     expect(authRow()).toBeDefined();
 
     store.clearStoredAuth();
@@ -430,5 +439,46 @@ describe('getStoredLauncherSettings', () => {
     expect(settings.memory.allocatedRamMb).toBe(4096);
     expect(settings.storage.clientsFolder).toBe('/tmp/clients');
     expect(loggerMocks.warn).not.toHaveBeenCalled();
+  });
+
+  it('rehydrates a legacy bare-slug client override under official:<slug> on read', () => {
+    store.initStore();
+    // Simulate a pre-CatalogKey store: an override row keyed by the bare slug.
+    getDb()
+      .prepare('INSERT INTO client_overrides (slug, data) VALUES (?, ?)')
+      .run('survival', JSON.stringify({ memory: { allocatedRamMb: 4096 } }));
+
+    const settings = store.getStoredLauncherSettings();
+    expect(settings.clients['official:survival']).toEqual({ memory: { allocatedRamMb: 4096 } });
+    expect(settings.clients.survival).toBeUndefined();
+  });
+
+  it('rehydrates a legacy bare-uuid client override under local:<uuid> on read', () => {
+    store.initStore();
+    const uuid = 'aaaaaaaa-1111-2222-3333-444444444444';
+    getDb()
+      .prepare('INSERT INTO client_overrides (slug, data) VALUES (?, ?)')
+      .run(uuid, JSON.stringify({ loader: 'forge' }));
+
+    const settings = store.getStoredLauncherSettings();
+    expect(settings.clients[`local:${uuid}`]).toEqual({ loader: 'forge' });
+    expect(settings.clients[uuid]).toBeUndefined();
+  });
+});
+
+describe('getLastPlayed migration', () => {
+  it('rehydrates a legacy bare-keyed last-played entry to the CatalogKey form', () => {
+    store.initStore();
+    getDb()
+      .prepare('INSERT INTO last_played (catalog_key, played_at) VALUES (?, ?)')
+      .run('survival', 1700000000000);
+
+    expect(store.getLastPlayed()).toEqual({ 'official:survival': 1700000000000 });
+  });
+
+  it('passes an already-namespaced last-played key through unchanged', () => {
+    store.initStore();
+    store.recordPlayed('local:abc');
+    expect(store.getLastPlayed()).toEqual({ 'local:abc': expect.any(Number) });
   });
 });

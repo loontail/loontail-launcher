@@ -14,14 +14,12 @@ import {
 import type { Broadcaster } from '@main/services/minecraft/broadcast';
 import type { Context } from '@main/services/minecraft/context';
 import type { Account } from '@shared/contracts/account';
-import { asClientSlug } from '@shared/contracts/ids';
+import { asCatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
 import { LoaderChoices } from '@shared/contracts/settings';
 import { describe, expect, it, vi } from 'vitest';
 
 const readinessMocks = vi.hoisted(() => {
-  process.env.API_URL ??= 'http://test.invalid';
-  process.env.API_TOKEN ??= 'test-token';
   return {
     buildContext: vi.fn(),
     getSettings: vi.fn(),
@@ -56,9 +54,15 @@ vi.mock('@main/services/minecraft/launch', async (importOriginal) => {
 
 import { createClientOperationLocks } from '@main/services/clientOperationLocks';
 import { MinecraftManager } from '@main/services/minecraft/manager';
-import { stubConsolePort, stubOpenConsole } from './managerStubs';
+import { OpKinds, OpRegistry } from '@main/services/minecraft/ops';
+import {
+  stubConsolePort,
+  stubOpenConsole,
+  stubResolveBuild,
+  stubResolveBundleRepairFilter,
+} from './managerStubs';
 
-const SLUG = asClientSlug('vanilla-client');
+const SLUG = asCatalogKey('official:vanilla-client');
 const CLIENT_FOLDER = 'Z:/clients/vanilla-client';
 const MC_VERSION = asMinecraftVersionId('1.20.1');
 
@@ -210,6 +214,8 @@ describe('MinecraftManager readiness integration', () => {
         stubConsolePort(),
         stubOpenConsole(),
         () => account(),
+        stubResolveBundleRepairFilter(),
+        stubResolveBuild(),
       ).getStatus(SLUG),
     ).resolves.toEqual({
       status: InstallStatuses.NOT_INSTALLED,
@@ -245,6 +251,8 @@ describe('MinecraftManager readiness integration', () => {
         stubConsolePort(),
         stubOpenConsole(),
         () => account(),
+        stubResolveBundleRepairFilter(),
+        stubResolveBuild(),
       ).getStatus(SLUG),
     ).resolves.toEqual({
       status: InstallStatuses.NOT_INSTALLED,
@@ -264,6 +272,8 @@ describe('MinecraftManager readiness integration', () => {
       stubConsolePort(),
       stubOpenConsole(),
       () => currentAccount,
+      stubResolveBundleRepairFilter(),
+      stubResolveBuild(),
     ).startLaunch(SLUG);
 
     expect(readinessMocks.runInstall).not.toHaveBeenCalled();
@@ -273,5 +283,65 @@ describe('MinecraftManager readiness integration', () => {
       context(resolvedTarget),
       account(),
     );
+  });
+});
+
+// Drives the full install -> post-install bundle sync -> launch lifecycle through
+// the public API against a REAL OpRegistry (W0 seam) and asserts the registry
+// never holds more than one op per slug across the transitions: each phase
+// replaces the prior op rather than stacking, and every phase clears itself.
+describe('MinecraftManager install -> launch op-per-slug invariant (real OpRegistry)', () => {
+  it('keeps exactly one op per slug across install, bundle sync, and launch', async () => {
+    const resolvedTarget = target();
+    resetMocks(resolvedTarget);
+
+    const ops = new OpRegistry();
+    const sizeOf = (registry: OpRegistry): number => [...registry.keys()].length;
+
+    const installHookKinds: Array<string | undefined> = [];
+    const launchHookKinds: Array<string | undefined> = [];
+    let phase: 'install' | 'launch' = 'install';
+    const hook = vi.fn(async () => {
+      // While a bundle sync is in flight the registry must carry the single
+      // BUNDLE_SYNCING op for the slug — never a second stacked op.
+      const recorded = phase === 'install' ? installHookKinds : launchHookKinds;
+      recorded.push(ops.get(SLUG)?.kind);
+      expect(sizeOf(ops)).toBe(1);
+    });
+
+    const manager = new MinecraftManager(
+      broadcaster(),
+      kit(),
+      createClientOperationLocks(),
+      stubConsolePort(),
+      stubOpenConsole(),
+      () => account(),
+      stubResolveBundleRepairFilter(),
+      stubResolveBuild(),
+      ops,
+    );
+    manager.attachLaunchHook(hook);
+
+    await manager.startInstall(SLUG);
+    await vi.waitFor(() => {
+      expect(installHookKinds).toHaveLength(1);
+    });
+    // The post-install bundle sync ran under a BUNDLE_SYNCING op and then cleared
+    // it, so the slug is idle and a follow-up launch passes requireIdle.
+    expect(installHookKinds).toEqual([OpKinds.BUNDLE_SYNCING]);
+    await vi.waitFor(() => {
+      expect(sizeOf(ops)).toBe(0);
+    });
+
+    phase = 'launch';
+    await manager.startLaunch(SLUG);
+    await vi.waitFor(() => {
+      expect(launchHookKinds).toHaveLength(1);
+    });
+    // The pre-launch bundle sync ran under its own single BUNDLE_SYNCING op and
+    // handed off to runLaunch, which leaves no op behind in this mocked launch.
+    expect(launchHookKinds).toEqual([OpKinds.BUNDLE_SYNCING]);
+    expect(readinessMocks.runLaunch).toHaveBeenCalledTimes(1);
+    expect(sizeOf(ops)).toBe(0);
   });
 });

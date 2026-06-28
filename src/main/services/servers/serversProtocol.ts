@@ -1,6 +1,6 @@
 import type { ServerStatus } from '@shared/contracts/serverStatus';
 
-export const writeVarInt = (value: number): Buffer => {
+const writeVarInt = (value: number): Buffer => {
   let remaining = value >>> 0;
   const bytes: number[] = [];
   while (true) {
@@ -13,10 +13,7 @@ export const writeVarInt = (value: number): Buffer => {
   }
 };
 
-export const readVarInt = (
-  buffer: Buffer,
-  offset: number,
-): { value: number; offset: number } | null => {
+const readVarInt = (buffer: Buffer, offset: number): { value: number; offset: number } | null => {
   let value = 0;
   let position = 0;
   let cursor = offset;
@@ -32,7 +29,7 @@ export const readVarInt = (
   return null;
 };
 
-export const componentToString = (component: unknown): string => {
+const componentToString = (component: unknown): string => {
   if (typeof component === 'string') return component;
   if (Array.isArray(component)) return component.map(componentToString).join('');
   if (component && typeof component === 'object') {
@@ -44,7 +41,7 @@ export const componentToString = (component: unknown): string => {
   return '';
 };
 
-export const motdToCleanLines = (description: unknown): string[] =>
+const motdToCleanLines = (description: unknown): string[] =>
   componentToString(description)
     .replace(/§./g, '')
     .split('\n')

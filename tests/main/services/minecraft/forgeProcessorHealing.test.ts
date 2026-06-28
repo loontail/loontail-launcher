@@ -15,10 +15,10 @@ import {
   createForgeProcessorCache,
   repairMissingForgeProcessorOutputs,
 } from '@main/services/minecraft/forgeProcessorHealing';
-import { asClientSlug } from '@shared/contracts/ids';
+import { asCatalogKey } from '@shared/contracts/ids';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const SLUG = asClientSlug('forge-client');
+const SLUG = asCatalogKey('official:forge-client');
 const OUTPUT_CONTENT = 'processor-output';
 
 let tempRoot = '';

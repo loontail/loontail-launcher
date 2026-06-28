@@ -5,10 +5,10 @@ import type { SyncPlan } from '@main/services/bundle/plan';
 import { type EmitProgress, runSyncPhases } from '@main/services/bundle/runner';
 import { createSyncTask } from '@main/services/bundle/syncState';
 import { BundleSyncStatuses } from '@shared/contracts/bundle';
-import type { ClientSlug } from '@shared/contracts/ids';
+import { asCatalogKey } from '@shared/contracts/ids';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-const SLUG = 'delete-client' as ClientSlug;
+const SLUG = asCatalogKey('official:delete-client');
 const OLD_ONE_PATH = 'mods/old-one.jar';
 const OLD_TWO_PATH = 'mods/old-two.jar';
 
@@ -64,7 +64,10 @@ describe('runSyncPhases delete pause handling', () => {
     };
 
     await expect(runSyncPhases(task, pauseAfterFirstDelete)).resolves.toEqual({
+      outcome: 'paused',
       deletedAny: true,
+      paused: true,
+      cancelled: false,
     });
 
     expect(task.pendingDeletes).toEqual([OLD_TWO_PATH]);
@@ -74,7 +77,12 @@ describe('runSyncPhases delete pause handling', () => {
 
     task.paused = false;
 
-    await expect(runSyncPhases(task, noopEmit)).resolves.toEqual({ deletedAny: true });
+    await expect(runSyncPhases(task, noopEmit)).resolves.toEqual({
+      outcome: 'completed',
+      deletedAny: true,
+      paused: false,
+      cancelled: false,
+    });
 
     expect(task.pendingDeletes).toEqual([]);
     expect(task.processedFiles).toBe(2);
@@ -90,7 +98,31 @@ describe('runSyncPhases delete pause handling', () => {
     task.pendingDeletes = [...task.plan.toDelete];
     task.totalFiles = task.pendingDeletes.length;
 
-    await expect(runSyncPhases(task, noopEmit)).resolves.toEqual({ deletedAny: true });
+    await expect(runSyncPhases(task, noopEmit)).resolves.toEqual({
+      outcome: 'completed',
+      deletedAny: true,
+      paused: false,
+      cancelled: false,
+    });
     expect(task.pendingDeletes).toEqual([]);
+    expect(task.processedFiles).toBe(2);
+  });
+
+  it('counts processedFiles for a mix of one existing and one missing target', async () => {
+    await fs.rm(path.join(clientFolder, OLD_TWO_PATH));
+
+    const task = createSyncTask(SLUG, clientFolder);
+    task.plan = deleteOnlyPlan([OLD_ONE_PATH, OLD_TWO_PATH]);
+    task.pendingDeletes = [...task.plan.toDelete];
+    task.totalFiles = task.pendingDeletes.length;
+
+    await expect(runSyncPhases(task, noopEmit)).resolves.toEqual({
+      outcome: 'completed',
+      deletedAny: true,
+      paused: false,
+      cancelled: false,
+    });
+    expect(task.processedFiles).toBe(2);
+    expect(await exists(path.join(clientFolder, OLD_ONE_PATH))).toBe(false);
   });
 });

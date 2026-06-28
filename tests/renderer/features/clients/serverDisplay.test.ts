@@ -1,6 +1,6 @@
 import { resolveServerDisplayEntry } from '@renderer/features/clients/components/serverDisplay';
+import type { Server } from '@shared/contracts/media';
 import type { ServerStatus } from '@shared/contracts/serverStatus';
-import type { Server } from '@shared/contracts/strapi';
 import { describe, expect, it } from 'vitest';
 
 const server = (overrides: Partial<Server> = {}): Server =>

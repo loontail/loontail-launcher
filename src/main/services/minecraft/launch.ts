@@ -22,11 +22,11 @@ import { dashUuid } from '@loontail/yggdrasil-core';
 import { mainConfig } from '@main/config';
 import { errorMessage } from '@main/infra/errorMessage';
 import { scopedLogger } from '@main/infra/logger';
-import { getStoredAuth, recordPlayed } from '@main/infra/store';
+import { getStoredAuth, getStoredSessionToken, recordPlayed } from '@main/infra/store';
 import type { Account } from '@shared/contracts/account';
 import type { AuthSession } from '@shared/contracts/auth';
 import { ConsoleSources, ConsoleStatuses } from '@shared/contracts/console';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraft';
 import { app } from 'electron';
 import type { Context } from './context';
@@ -106,7 +106,7 @@ const resolveNetworkAgentJar = (): string =>
 // attached (older/unknown Java, or the bundled jar is missing). A wrong Java or a
 // missing jar must never block the launch — the overlay is strictly best-effort.
 const buildNetworkAgentJvmArgs = async (
-  slug: ClientSlug,
+  slug: CatalogKey,
   javaMajor: number | undefined,
 ): Promise<readonly string[]> => {
   if (javaMajor === undefined || javaMajor < NETWORK_AGENT_MIN_JAVA) {
@@ -121,6 +121,12 @@ const buildNetworkAgentJvmArgs = async (
     const args = [`-javaagent:${jarPath}`];
     if (mainConfig.networkServiceUrl) {
       args.push(`-Dloontail.network.serviceUrl=${mainConfig.networkServiceUrl}`);
+    }
+    // Hand the in-game agent the same session token the launcher uses as its API
+    // bearer, so it authenticates against the network service as this user.
+    const sessionToken = getStoredSessionToken();
+    if (sessionToken) {
+      args.push(`-Dloontail.network.serviceToken=${sessionToken}`);
     }
     return args;
   } catch (error) {
@@ -188,7 +194,7 @@ const launchExitCode = (error: unknown): number | null => {
 
 export const endLaunch = (
   env: ManagerEnv,
-  slug: ClientSlug,
+  slug: CatalogKey,
   error?: unknown,
   exit?: LaunchExit,
 ): void => {
@@ -285,14 +291,16 @@ export const resolveLaunchAuth = (
 
 export const runLaunch = async (
   env: ManagerEnv,
-  slug: ClientSlug,
+  slug: CatalogKey,
   ctx: Context,
   account: Account,
+  // The caller (startLaunch) already claimed a LAUNCH_STARTING op before the
+  // buildContext await, so a Stop issued during that window aborts this exact
+  // controller. Reuse it instead of minting a fresh one — otherwise the cancel
+  // is dropped and the game spawns anyway (A4). Defaults to a fresh op for the
+  // bundle path, which deletes the caller's op before reaching here.
+  startupOp: LaunchStartingOp = { kind: OpKinds.LAUNCH_STARTING, abort: new AbortController() },
 ): Promise<void> => {
-  const startupOp: LaunchStartingOp = {
-    kind: OpKinds.LAUNCH_STARTING,
-    abort: new AbortController(),
-  };
   const startupSignal = startupOp.abort.signal;
   const restoreInstalled = (): void => {
     env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });

@@ -1,5 +1,5 @@
 import type { Account } from '@shared/contracts/account';
-import type { LoginPayload, LoginResult } from '@shared/contracts/auth';
+import type { LoginPayload, LoginResult, RegisterPayload } from '@shared/contracts/auth';
 import type {
   BundleErrorEvent,
   BundleInstallState,
@@ -8,13 +8,12 @@ import type {
   BundleStatusEvent,
 } from '@shared/contracts/bundle';
 import type { CatalogItem, CatalogListResult } from '@shared/contracts/catalog';
-import type { Client } from '@shared/contracts/client';
 import type {
   ConsoleInitialPayload,
   ConsoleLine,
   ConsoleProcessState,
 } from '@shared/contracts/console';
-import type { ClientSlug, InstanceId } from '@shared/contracts/ids';
+import type { CatalogKey, InstanceId } from '@shared/contracts/ids';
 import type {
   CreateInstancePayload,
   ListLoaderVersionsArgs,
@@ -37,7 +36,6 @@ import type {
   SetClientOverridePayload,
 } from '@shared/contracts/settings';
 import type { UploadSkinPayload, UploadSkinResult } from '@shared/contracts/skin';
-import type { StrapiList } from '@shared/contracts/strapi';
 import type { DiskInfo, FolderSize, PickedFolder } from '@shared/contracts/system';
 import type { UpdaterStatusEvent } from '@shared/contracts/updater';
 
@@ -46,6 +44,7 @@ export type { UpdaterStatusEvent } from '@shared/contracts/updater';
 export type IpcContract = {
   'app.getVersion': { args: undefined; result: string };
   'auth.login': { args: LoginPayload; result: LoginResult };
+  'auth.register': { args: RegisterPayload; result: LoginResult };
   'auth.me': { args: undefined; result: Account | null };
   'auth.logout': { args: undefined; result: void };
   'auth.mojang.signIn': { args: undefined; result: LoginResult };
@@ -53,9 +52,9 @@ export type IpcContract = {
   'settings.get': { args: undefined; result: LauncherSettings };
   'settings.setLauncher': { args: PatchLauncherSettings; result: LauncherSettings };
   'settings.setClientOverride': { args: SetClientOverridePayload; result: LauncherSettings };
-  'settings.clearClientOverrides': { args: ClientSlug; result: LauncherSettings };
+  'settings.clearClientOverrides': { args: CatalogKey; result: LauncherSettings };
   'settings.chooseClientFolder': {
-    args: ClientSlug;
+    args: CatalogKey;
     result: { settings: LauncherSettings; installed: boolean } | null;
   };
   'system.getRamRange': { args: undefined; result: number[] };
@@ -69,7 +68,6 @@ export type IpcContract = {
   'media.clearSkin': { args: undefined; result: void };
   'media.clearCache': { args: undefined; result: void };
   'media.getCacheSize': { args: undefined; result: number };
-  'clients.list': { args: { locale?: string } | undefined; result: StrapiList<Client> };
   'catalog.list': { args: { locale?: string } | undefined; result: CatalogListResult };
   'builds.create': { args: CreateInstancePayload; result: CatalogItem };
   'builds.update': { args: UpdateInstancePayload; result: CatalogItem };
@@ -79,22 +77,22 @@ export type IpcContract = {
   'servers.getStatuses': { args: string[]; result: ServerStatus[] };
   'history.lastPlayed': { args: undefined; result: Record<string, number> };
   'minecraft.getStatus': {
-    args: ClientSlug;
+    args: CatalogKey;
     result: { status: InstallStatus; paused: boolean };
   };
   'minecraft.install': { args: InstallRequest; result: void };
-  'minecraft.pause': { args: ClientSlug; result: void };
-  'minecraft.resume': { args: ClientSlug; result: void };
-  'minecraft.cancel': { args: ClientSlug; result: void };
-  'minecraft.repair': { args: ClientSlug; result: void };
-  'minecraft.uninstall': { args: ClientSlug; result: void };
-  'minecraft.launch': { args: ClientSlug; result: void };
-  'minecraft.stop': { args: ClientSlug; result: void };
+  'minecraft.pause': { args: CatalogKey; result: void };
+  'minecraft.resume': { args: CatalogKey; result: void };
+  'minecraft.cancel': { args: CatalogKey; result: void };
+  'minecraft.repair': { args: CatalogKey; result: void };
+  'minecraft.uninstall': { args: CatalogKey; result: void };
+  'minecraft.launch': { args: CatalogKey; result: void };
+  'minecraft.stop': { args: CatalogKey; result: void };
   'bundle.start': { args: BundleStartRequest; result: void };
-  'bundle.pause': { args: ClientSlug; result: void };
-  'bundle.resume': { args: ClientSlug; result: void };
-  'bundle.cancel': { args: ClientSlug; result: void };
-  'bundle.checkStatus': { args: ClientSlug; result: BundleInstallState };
+  'bundle.pause': { args: CatalogKey; result: void };
+  'bundle.resume': { args: CatalogKey; result: void };
+  'bundle.cancel': { args: CatalogKey; result: void };
+  'bundle.checkStatus': { args: CatalogKey; result: BundleInstallState };
   'console.open': { args: undefined; result: void };
   'console.getInitial': { args: undefined; result: ConsoleInitialPayload };
   'console.clear': { args: undefined; result: void };

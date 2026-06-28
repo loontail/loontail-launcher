@@ -4,33 +4,11 @@ const appMock = vi.hoisted(() => ({ isPackaged: false }));
 
 vi.mock('electron', () => ({ app: appMock }));
 
-import type { Router } from '@main/ipc/router';
 import type { BundleManager } from '@main/services/bundle/manager';
 import { registerBundleRoutes } from '@main/services/bundle/routes';
 import { ERROR_CODES } from '@shared/constants';
-import { IPC_CHANNELS, type IpcArgs, type IpcContract, type IpcResult } from '@shared/ipc';
-import type { IpcMainInvokeEvent } from 'electron';
-
-type StoredHandler = (rawArgs: unknown) => Promise<unknown> | unknown;
-
-const fakeEvent = (): IpcMainInvokeEvent => ({}) as unknown as IpcMainInvokeEvent;
-
-const createTestRouter = (): { router: Router; handlers: Map<string, StoredHandler> } => {
-  const handlers = new Map<string, StoredHandler>();
-  const router: Router = {
-    handle<TChannel extends keyof IpcContract>(
-      channel: TChannel,
-      handler: (
-        args: IpcArgs<TChannel>,
-        event: IpcMainInvokeEvent,
-      ) => Promise<IpcResult<TChannel>> | IpcResult<TChannel>,
-    ): void {
-      handlers.set(channel, (rawArgs) => handler(rawArgs as IpcArgs<TChannel>, fakeEvent()));
-    },
-    dispose: () => undefined,
-  };
-  return { router, handlers };
-};
+import { IPC_CHANNELS } from '@shared/ipc';
+import { captureThrow, createTestRouter } from '../../../helpers/router';
 
 const fakeManager = () =>
   ({
@@ -51,19 +29,6 @@ const registerWith = (manager: BundleManager) => {
   return handlers;
 };
 
-// bundle.pause / bundle.cancel register synchronous handlers, so a failed
-// parseIpcArgs throws synchronously instead of rejecting a promise. The fake
-// test router does not wrap handlers the way the real router does, so capture
-// both throw shapes.
-const captureThrow = async (run: () => unknown): Promise<unknown> => {
-  try {
-    await run();
-  } catch (error) {
-    return error;
-  }
-  throw new Error('expected the handler to throw');
-};
-
 beforeEach(() => {
   appMock.isPackaged = false;
 });
@@ -81,22 +46,32 @@ describe('registerBundleRoutes', () => {
   ];
 
   for (const [channel, method] of SLUG_ONLY) {
-    it(`${channel} forwards a valid slug to manager.${String(method)}`, async () => {
+    it(`${channel} forwards a valid CatalogKey to manager.${String(method)}`, async () => {
       const manager = fakeManager();
       const handlers = registerWith(manager);
-      await handlers.get(channel)?.('vanilla');
-      expect(manager[method]).toHaveBeenCalledWith('vanilla');
+      await handlers.get(channel)?.('official:vanilla');
+      expect(manager[method]).toHaveBeenCalledWith('official:vanilla');
     });
 
-    it(`${channel} rejects a non-string slug with IPC_INVALID_ARGS and skips the manager`, async () => {
+    it(`${channel} rejects a non-string key with IPC_INVALID_ARGS and skips the manager`, async () => {
       const manager = fakeManager();
       const handlers = registerWith(manager);
-      const thrown = await captureThrow(() => handlers.get(channel)?.({ slug: 'vanilla' }));
+      const thrown = await captureThrow(() =>
+        handlers.get(channel)?.({ slug: 'official:vanilla' }),
+      );
       expect(thrown).toMatchObject({ code: ERROR_CODES.IpcInvalidArgs });
       expect(manager[method]).not.toHaveBeenCalled();
     });
 
-    it(`${channel} rejects an empty-string slug`, async () => {
+    it(`${channel} rejects a bare (non-namespaced) id`, async () => {
+      const manager = fakeManager();
+      const handlers = registerWith(manager);
+      const thrown = await captureThrow(() => handlers.get(channel)?.('vanilla'));
+      expect(thrown).toMatchObject({ code: ERROR_CODES.IpcInvalidArgs });
+      expect(manager[method]).not.toHaveBeenCalled();
+    });
+
+    it(`${channel} rejects an empty-string key`, async () => {
       const manager = fakeManager();
       const handlers = registerWith(manager);
       const thrown = await captureThrow(() => handlers.get(channel)?.(''));
@@ -108,7 +83,9 @@ describe('registerBundleRoutes', () => {
   it('bundle.checkStatus returns the manager install state', async () => {
     const manager = fakeManager();
     const handlers = registerWith(manager);
-    await expect(handlers.get(IPC_CHANNELS.bundleCheckStatus)?.('vanilla')).resolves.toEqual({
+    await expect(
+      handlers.get(IPC_CHANNELS.bundleCheckStatus)?.('official:vanilla'),
+    ).resolves.toEqual({
       installed: true,
       signatureMatches: true,
       progress: null,
@@ -118,15 +95,25 @@ describe('registerBundleRoutes', () => {
   it('bundle.start forwards a parsed request with the optional force flag', async () => {
     const manager = fakeManager();
     const handlers = registerWith(manager);
-    await handlers.get(IPC_CHANNELS.bundleStart)?.({ slug: 'vanilla', force: true });
-    expect(manager.startSync).toHaveBeenCalledWith({ slug: 'vanilla', force: true });
+    await handlers.get(IPC_CHANNELS.bundleStart)?.({ slug: 'official:vanilla', force: true });
+    expect(manager.startSync).toHaveBeenCalledWith({ slug: 'official:vanilla', force: true });
   });
 
   it('bundle.start accepts a request without force', async () => {
     const manager = fakeManager();
     const handlers = registerWith(manager);
-    await handlers.get(IPC_CHANNELS.bundleStart)?.({ slug: 'vanilla' });
-    expect(manager.startSync).toHaveBeenCalledWith({ slug: 'vanilla' });
+    await handlers.get(IPC_CHANNELS.bundleStart)?.({ slug: 'official:vanilla' });
+    expect(manager.startSync).toHaveBeenCalledWith({ slug: 'official:vanilla' });
+  });
+
+  it('bundle.start rejects a bare slug without calling the manager', async () => {
+    const manager = fakeManager();
+    const handlers = registerWith(manager);
+    const thrown = await captureThrow(() =>
+      handlers.get(IPC_CHANNELS.bundleStart)?.({ slug: 'vanilla' }),
+    );
+    expect(thrown).toMatchObject({ code: ERROR_CODES.IpcInvalidArgs });
+    expect(manager.startSync).not.toHaveBeenCalled();
   });
 
   it('bundle.start rejects a missing slug without calling the manager', async () => {
@@ -143,7 +130,7 @@ describe('registerBundleRoutes', () => {
     const manager = fakeManager();
     const handlers = registerWith(manager);
     const thrown = await captureThrow(() =>
-      handlers.get(IPC_CHANNELS.bundleStart)?.({ slug: 'vanilla', force: 'yes' }),
+      handlers.get(IPC_CHANNELS.bundleStart)?.({ slug: 'official:vanilla', force: 'yes' }),
     );
     expect(thrown).toMatchObject({ code: ERROR_CODES.IpcInvalidArgs });
     expect(manager.startSync).not.toHaveBeenCalled();

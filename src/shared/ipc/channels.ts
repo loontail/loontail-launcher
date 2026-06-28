@@ -3,6 +3,7 @@ import type { IpcContract, IpcEventPayloads } from './contract';
 export const IPC_CHANNELS = {
   appGetVersion: 'app.getVersion',
   authLogin: 'auth.login',
+  authRegister: 'auth.register',
   authMe: 'auth.me',
   authLogout: 'auth.logout',
   authMojangSignIn: 'auth.mojang.signIn',
@@ -23,7 +24,6 @@ export const IPC_CHANNELS = {
   mediaClearSkin: 'media.clearSkin',
   mediaClearCache: 'media.clearCache',
   mediaGetCacheSize: 'media.getCacheSize',
-  clientsList: 'clients.list',
   catalogList: 'catalog.list',
   buildsCreate: 'builds.create',
   buildsUpdate: 'builds.update',

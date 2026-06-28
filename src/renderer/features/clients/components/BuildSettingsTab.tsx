@@ -11,7 +11,7 @@ import {
 } from '@renderer/features/settings';
 import { Button } from '@renderer/shared/ui/Button';
 import { type CatalogItem, type LocalCatalogItem, SourceKinds } from '@shared/contracts/catalog';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
 import type { LauncherSettings, ResolvedClientSettings } from '@shared/contracts/settings';
 import { Trash2 } from 'lucide-react';
@@ -52,7 +52,7 @@ export const BuildSettingsTab = ({ item, onBuildDeleted }: BuildSettingsTabProps
 
 type ContentProps = {
   item: CatalogItem;
-  slug: ClientSlug;
+  slug: CatalogKey;
   resolved: ResolvedClientSettings;
   settings: LauncherSettings;
   settingsPending: boolean;

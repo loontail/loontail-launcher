@@ -6,7 +6,7 @@ import {
 } from '@renderer/features/clients/components/install/installSteps';
 import type { ClientRuntimeState } from '@renderer/features/minecraft';
 import { type BundleProgressEvent, BundleSyncStatuses } from '@shared/contracts/bundle';
-import { asClientSlug } from '@shared/contracts/ids';
+import { asCatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses, ProgressStages } from '@shared/contracts/minecraft';
 import { describe, expect, it } from 'vitest';
 
@@ -78,7 +78,7 @@ describe('selectInstallProgress', () => {
 
   it('shows the bundle progress card once bundle files are downloading', () => {
     const progress: BundleProgressEvent = {
-      slug: asClientSlug('demo'),
+      slug: asCatalogKey('official:demo'),
       status: BundleSyncStatuses.DOWNLOADING,
       processedFiles: 2,
       totalFiles: 10,
@@ -98,6 +98,34 @@ describe('selectInstallProgress', () => {
     );
 
     expect(view).toMatchObject({ mode: 'bundle', activeStep: InstallStepKeys.BUNDLE });
+  });
+
+  it('reads the adapter-emitted per-stage bytes and speed directly', () => {
+    const client: ClientRuntimeState = {
+      status: InstallStatuses.INSTALLING,
+      paused: false,
+      stage: ProgressStages.MINECRAFT,
+      stagePercent: 30,
+      overallPercent: 30,
+      // Deliberately not equal to stagePercent/100 * totalBytes — proves the
+      // selector passes the emitted bytes through rather than reconstructing.
+      bytesDownloaded: 411,
+      totalBytes: 1_000,
+      speedBytesPerSec: 2_048,
+    };
+
+    const view = selectInstallProgress(client, idleBundle(), {
+      hasBundle: false,
+      hasLoader: false,
+    });
+
+    const minecraft = view?.steps.find((step) => step.key === InstallStepKeys.MINECRAFT);
+    expect(minecraft).toMatchObject({
+      state: StepStates.ACTIVE,
+      bytesDownloaded: 411,
+      bytesTotal: 1_000,
+      speedBytesPerSec: 2_048,
+    });
   });
 
   it('keeps repair verification out of the download progress card', () => {

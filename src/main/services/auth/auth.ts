@@ -1,18 +1,20 @@
-import { scopedLogger } from '@main/infra/logger';
-import { clearStoredAuth, getStoredAuth, setStoredAuth } from '@main/infra/store';
+import {
+  clearStoredAuth,
+  getStoredAuth,
+  getStoredSessionToken,
+  setStoredAuth,
+} from '@main/infra/store';
 import { type Account, accountFromSession } from '@shared/contracts/account';
 import type {
   AuthSession,
   LoginPayload,
   LoginResult,
-  YggdrasilSession,
+  RegisterPayload,
 } from '@shared/contracts/auth';
+import type { AuthenticatedIdentity, LoontailAuth, LoontailAuthResult } from './loontailAuth';
 import type { MojangAuth } from './mojangAuth';
 import { enrichYggdrasilAccount, verifySession } from './verify';
-import type { YggdrasilAuth } from './yggdrasilAuth';
 import type { FetchTextures } from './yggdrasilClient';
-
-const logger = scopedLogger('auth');
 
 // Single visible point where a freshly authenticated session becomes the
 // renderer-facing account. Yggdrasil textures live behind a separate endpoint
@@ -29,40 +31,52 @@ export const buildLoginResult = async (
   return { ok: true, user: account };
 };
 
-export const login = async (
-  yggdrasilAuth: YggdrasilAuth,
-  payload: LoginPayload,
+// Persist the authenticated identity (Yggdrasil session + API bearer) and return
+// the renderer-facing account, enriching it with the live texture URLs. The
+// account from the login response already carries the email; only skin/cape need
+// a textures fetch.
+const completeAuthentication = async (
+  identity: AuthenticatedIdentity,
   fetchTextures: FetchTextures,
 ): Promise<LoginResult> => {
-  const result = await yggdrasilAuth.signIn(payload);
-  if (!result.ok) return result;
-  setStoredAuth(result.session);
-  return buildLoginResult(result.session, fetchTextures);
+  setStoredAuth(identity.session, identity.sessionToken);
+  const enriched = await enrichYggdrasilAccount(identity.session, identity.account, fetchTextures);
+  return { ok: true, user: enriched };
 };
+
+const handleAuthResult = (
+  result: LoontailAuthResult,
+  fetchTextures: FetchTextures,
+): Promise<LoginResult> => {
+  if (!result.ok) return Promise.resolve(result);
+  return completeAuthentication(result.identity, fetchTextures);
+};
+
+export const login = async (
+  loontailAuth: LoontailAuth,
+  payload: LoginPayload,
+  fetchTextures: FetchTextures,
+): Promise<LoginResult> => handleAuthResult(await loontailAuth.signIn(payload), fetchTextures);
+
+export const register = async (
+  loontailAuth: LoontailAuth,
+  payload: RegisterPayload,
+  fetchTextures: FetchTextures,
+): Promise<LoginResult> => handleAuthResult(await loontailAuth.register(payload), fetchTextures);
 
 export const fetchCurrentUser = (
-  yggdrasilAuth: YggdrasilAuth,
+  loontailAuth: LoontailAuth,
   mojangAuth: MojangAuth,
   fetchTextures: FetchTextures,
-): Promise<Account | null> => verifySession(yggdrasilAuth, mojangAuth, fetchTextures);
+): Promise<Account | null> => verifySession(loontailAuth, mojangAuth, fetchTextures);
 
-const invalidateYggdrasilSession = (
-  yggdrasilAuth: YggdrasilAuth,
-  session: YggdrasilSession,
-): void => {
-  // Server invalidation is best-effort; local sign-out has already completed.
-  void yggdrasilAuth
-    .signOut(session)
-    .catch((error: unknown) =>
-      logger.warn('Yggdrasil sign-out cleanup failed after local logout', error),
-    );
-};
-
-export const logout = (yggdrasilAuth: YggdrasilAuth): Promise<void> => {
+export const logout = (loontailAuth: LoontailAuth): Promise<void> => {
   const session = getStoredAuth();
+  const sessionToken = getStoredSessionToken();
   clearStoredAuth();
-  if (session?.provider === 'yggdrasil') {
-    invalidateYggdrasilSession(yggdrasilAuth, session);
+  if (session?.provider === 'yggdrasil' && sessionToken) {
+    // Server invalidation is best-effort; local sign-out has already completed.
+    void loontailAuth.signOut(sessionToken);
   }
   return Promise.resolve();
 };

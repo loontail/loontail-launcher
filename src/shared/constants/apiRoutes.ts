@@ -4,18 +4,8 @@ export const API_PATH_PREFIX = '/api';
 
 export const API_ROUTES = {
   clients: {
-    list: (params: { locale?: string } = {}) => {
-      const populate = [
-        'populate[screenshots]=true',
-        'populate[background]=true',
-        'populate[poster]=true',
-        'populate[titleImage]=true',
-        'populate[keywords]=true',
-        'populate[servers]=true',
-      ].join('&');
-      const localeParam = params.locale ? `&locale=${params.locale}` : '';
-      return `/clients?${populate}${localeParam}`;
-    },
+    list: (params: { locale?: string } = {}) =>
+      params.locale ? `/clients?locale=${params.locale}` : '/clients',
   },
   bundleRegistry: {
     // Plugin route is content-api scoped; `httpRequest` prepends the shared

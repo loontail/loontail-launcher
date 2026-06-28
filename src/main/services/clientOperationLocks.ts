@@ -1,4 +1,4 @@
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 
 export const ClientOperationDomains = {
   MINECRAFT: 'minecraft',
@@ -20,14 +20,14 @@ export type ClientOperationResource =
 export type ClientOperationCancel = () => void;
 
 export type ClientOperationDescriptor = {
-  readonly slug: ClientSlug;
+  readonly slug: CatalogKey;
   readonly domain: ClientOperationDomain;
   readonly resources: readonly ClientOperationResource[];
   readonly cancel?: ClientOperationCancel;
 };
 
 export type ClientOperationLease = {
-  readonly slug: ClientSlug;
+  readonly slug: CatalogKey;
   readonly domain: ClientOperationDomain;
   readonly resources: readonly ClientOperationResource[];
   setCancel: (cancel: ClientOperationCancel | null) => void;
@@ -43,7 +43,7 @@ export type ClientOperationAcquireResult =
     };
 
 export type ClientOperationSnapshot = {
-  readonly slug: ClientSlug;
+  readonly slug: CatalogKey;
   readonly domain: ClientOperationDomain;
   readonly resources: readonly ClientOperationResource[];
 };
@@ -55,7 +55,7 @@ export type ClientOperationLocks = {
 };
 
 type LockEntry = {
-  readonly slug: ClientSlug;
+  readonly slug: CatalogKey;
   readonly domain: ClientOperationDomain;
   readonly resources: readonly ClientOperationResource[];
   readonly token: symbol;
@@ -74,7 +74,7 @@ const CANCEL_DOMAIN_ORDER: Record<ClientOperationDomain, number> = {
   [ClientOperationDomains.MINECRAFT]: 1,
 };
 
-const resourceKey = (slug: ClientSlug, resource: ClientOperationResource): string =>
+const resourceKey = (slug: CatalogKey, resource: ClientOperationResource): string =>
   `${slug}\u0000${resource}`;
 
 const dedupeResources = (

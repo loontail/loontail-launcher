@@ -4,9 +4,9 @@ import type { AuthProvider, AuthSession } from './auth';
 // the launch path consume this; the rich provider-specific data lives behind
 // `AuthSession`.
 //
-// For Yggdrasil sessions, `email`/`skin`/`cape` are filled by the auth
-// service via a separate API_TOKEN-backed Strapi user lookup; the
-// `accountFromSession` helper alone returns them as `null`.
+// For Yggdrasil sessions, `email` comes from the login response and `skin`/`cape`
+// are enriched from the textures endpoint; the `accountFromSession` helper alone
+// returns them as `null`.
 export type Account = {
   provider: AuthProvider;
   username: string;

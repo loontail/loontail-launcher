@@ -6,7 +6,7 @@ import {
   ToastVariants,
 } from '@renderer/shared/ui/Toast/toast';
 import { QUERY_KEYS } from '@shared/constants';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import {
   InstallStatuses,
   type MinecraftErrorCode,
@@ -40,7 +40,7 @@ export type MinecraftErrorToast = {
 // error toast carrying the localized error message.
 export const buildMinecraftErrorToast = (
   code: MinecraftErrorCode,
-  slug: ClientSlug,
+  slug: CatalogKey,
   message: string,
 ): MinecraftErrorToast => {
   if (REPAIRABLE_ERROR_CODES.has(code)) {

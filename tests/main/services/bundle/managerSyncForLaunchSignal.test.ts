@@ -1,17 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => {
-  process.env.API_URL ??= 'http://test.invalid';
-  process.env.API_TOKEN ??= 'test-token';
   return { getClient: vi.fn() };
 });
 
-import type { BundleBroadcaster } from '@main/services/bundle/broadcast';
-import type { Healer } from '@main/services/bundle/healer';
 import { BundleManager } from '@main/services/bundle/manager';
 import { createClientOperationLocks } from '@main/services/clientOperationLocks';
 import { BundleErrorCodes } from '@shared/contracts/bundle';
-import type { ClientSlug } from '@shared/contracts/ids';
+import { asCatalogKey } from '@shared/contracts/ids';
+import { makeBroadcaster, makeHealer } from '../../../helpers/fixtures';
 
 vi.mock('@main/infra/logger', () => ({
   scopedLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
@@ -24,18 +21,7 @@ vi.mock('@main/services/clients', () => ({
   getClient: mocks.getClient,
 }));
 
-const SLUG = 'test-client' as ClientSlug;
-
-const makeBroadcaster = (): BundleBroadcaster => ({
-  status: vi.fn(),
-  progress: vi.fn(),
-  error: vi.fn(),
-});
-
-const makeHealer = (): Healer =>
-  ({
-    healAfterDeletes: vi.fn(async () => {}),
-  }) as unknown as Healer;
+const SLUG = asCatalogKey('official:test-client');
 
 describe('BundleManager.syncForLaunch external signal', () => {
   it('throws ABORTED before touching client lookup when signal is already aborted', async () => {

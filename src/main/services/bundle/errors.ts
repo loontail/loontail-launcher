@@ -11,7 +11,7 @@ export class BundleError extends Error {
 }
 
 export const classifyBundleError = (error: unknown, signal?: AbortSignal): BundleErrorCode => {
-  if (signal?.aborted) return BundleErrorCodes.ABORTED;
   if (error instanceof BundleError) return error.code;
+  if (signal?.aborted) return BundleErrorCodes.ABORTED;
   return BundleErrorCodes.UNKNOWN;
 };

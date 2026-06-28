@@ -5,7 +5,7 @@ import {
   type BundleSyncStatus,
   BundleSyncStatuses,
 } from '@shared/contracts/bundle';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import { create } from 'zustand';
 
 export type BundleRuntimeState = {
@@ -25,8 +25,8 @@ export const DEFAULT_BUNDLE_STATE: BundleRuntimeState = {
 
 type Store = {
   entries: Record<string, BundleRuntimeState>;
-  patch: (slug: ClientSlug, change: Partial<BundleRuntimeState>) => void;
-  reset: (slug: ClientSlug) => void;
+  patch: (slug: CatalogKey, change: Partial<BundleRuntimeState>) => void;
+  reset: (slug: CatalogKey) => void;
 };
 
 const TERMINAL_STATUSES: ReadonlySet<BundleSyncStatus> = new Set([
@@ -64,7 +64,7 @@ export const useBundleStore = create<Store>((set) => ({
 }));
 
 export const selectBundle =
-  (slug: ClientSlug | null | undefined) =>
+  (slug: CatalogKey | null | undefined) =>
   (state: Store): BundleRuntimeState =>
     (slug && state.entries[slug]) || DEFAULT_BUNDLE_STATE;
 

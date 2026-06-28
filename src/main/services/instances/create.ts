@@ -3,7 +3,8 @@ import type { MinecraftKit } from '@loontail/minecraft-kit';
 import { MinecraftChannels } from '@loontail/minecraft-kit';
 import { getSettings as defaultGetSettings } from '@main/services/settings/settings';
 import type { LocalCatalogItem } from '@shared/contracts/catalog';
-import type { ClientSlug, InstanceId } from '@shared/contracts/ids';
+import { localKey } from '@shared/contracts/catalog';
+import type { InstanceId } from '@shared/contracts/ids';
 import { asInstanceId } from '@shared/contracts/ids';
 import {
   type CreateInstancePayload,
@@ -38,8 +39,10 @@ export type InstanceMutationDeps = {
 export class InstanceError extends Error {}
 
 const resolveInstanceDir = (getSettings: typeof defaultGetSettings, id: InstanceId): string => {
-  const folder = resolveClientSettings(getSettings(), id as unknown as ClientSlug).storage
-    .clientFolder;
+  // Resolve settings by the build's CatalogKey (`local:<uuid>`); the folder-naming
+  // decouple in joinClientFolder strips the prefix so the on-disk default stays
+  // `<clientsFolder>/<uuid>`, never `<clientsFolder>/local:<uuid>`.
+  const folder = resolveClientSettings(getSettings(), localKey(id)).storage.clientFolder;
   if (!folder) {
     throw new InstanceError('Set the launcher install folder in System settings first');
   }

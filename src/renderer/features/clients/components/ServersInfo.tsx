@@ -1,6 +1,6 @@
 import { cn } from '@renderer/shared/lib/cn';
 import { Skeleton } from '@renderer/shared/ui/Skeleton';
-import type { Server } from '@shared/contracts/strapi';
+import type { Server } from '@shared/contracts/media';
 import { useTranslation } from 'react-i18next';
 import { useServerStatuses } from '../hooks';
 import { resolveServerDisplayEntry } from './serverDisplay';

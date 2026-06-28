@@ -7,11 +7,12 @@ import {
   type LoginErrorCode,
   LoginPayloadSchema,
   type LoginResult,
+  RegisterPayloadSchema,
 } from '@shared/contracts/auth';
 import { IPC_CHANNELS } from '@shared/ipc';
-import { buildLoginResult, fetchCurrentUser, login, logout } from './auth';
+import { buildLoginResult, fetchCurrentUser, login, logout, register } from './auth';
+import type { LoontailAuth } from './loontailAuth';
 import { type MojangAuth, MojangBrowserOpenError } from './mojangAuth';
-import type { YggdrasilAuth } from './yggdrasilAuth';
 import type { FetchTextures } from './yggdrasilClient';
 
 // Map a kit-side sign-in failure to the renderer's `LoginErrorCode`. The
@@ -28,23 +29,28 @@ const mojangFailureCode = (error: unknown): LoginErrorCode => {
 
 export const registerAuthRoutes = (
   router: Router,
-  yggdrasilAuth: YggdrasilAuth,
+  loontailAuth: LoontailAuth,
   mojangAuth: MojangAuth,
   fetchTextures: FetchTextures,
 ): void => {
   router.handle(IPC_CHANNELS.authLogin, async (rawArgs) => {
     const payload = parseIpcArgs(LoginPayloadSchema, rawArgs, 'Invalid login payload');
-    return login(yggdrasilAuth, payload, fetchTextures);
+    return login(loontailAuth, payload, fetchTextures);
+  });
+
+  router.handle(IPC_CHANNELS.authRegister, async (rawArgs) => {
+    const payload = parseIpcArgs(RegisterPayloadSchema, rawArgs, 'Invalid register payload');
+    return register(loontailAuth, payload, fetchTextures);
   });
 
   router.handle(IPC_CHANNELS.authMe, (rawArgs) => {
     assertNoIpcArgs(rawArgs, 'auth.me takes no arguments');
-    return fetchCurrentUser(yggdrasilAuth, mojangAuth, fetchTextures);
+    return fetchCurrentUser(loontailAuth, mojangAuth, fetchTextures);
   });
 
   router.handle(IPC_CHANNELS.authLogout, (rawArgs) => {
     assertNoIpcArgs(rawArgs, 'auth.logout takes no arguments');
-    return logout(yggdrasilAuth);
+    return logout(loontailAuth);
   });
 
   router.handle(IPC_CHANNELS.authMojangSignIn, async (rawArgs): Promise<LoginResult> => {

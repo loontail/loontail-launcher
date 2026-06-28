@@ -4,15 +4,31 @@ import path from 'node:path';
 import { Loaders, type Target, assertNever } from '@loontail/minecraft-kit';
 import { SIDECAR_DIR } from '@main/constants/paths';
 import { scopedLogger } from '@main/infra/logger';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import { z } from 'zod';
 
 const TARGET_INSTALL_MANIFEST_FILE = 'manifest.json';
 const TARGET_INSTALL_MANIFEST_VERSION = 1;
-const UNKNOWN_KIT_VERSION = 'unknown';
 
 const logger = scopedLogger('minecraft.installManifest');
-const requirePackage = createRequire(import.meta.url);
+
+// Inlined by electron-vite's `define` (electron.vite.config.ts) from the resolved
+// kit package.json. Declared module-locally (not as a global .d.ts) so the test
+// project, which does not include src/main, still type-checks this module.
+declare const __MINECRAFT_KIT_VERSION__: string;
+
+// Reading the kit version from the build-time constant keeps the packaged bundle
+// from recording `kitVersion: 'unknown'` when node_modules is absent (DLI-71).
+// The require branch only runs under the test runner (no define); Vite
+// dead-code-eliminates it from the production bundle once the literal substitutes.
+const MINECRAFT_KIT_VERSION =
+  typeof __MINECRAFT_KIT_VERSION__ !== 'undefined'
+    ? __MINECRAFT_KIT_VERSION__
+    : (
+        createRequire(import.meta.url)('@loontail/minecraft-kit/package.json') as {
+          version: string;
+        }
+      ).version;
 
 const loaderTypeSchema = z.enum([Loaders.VANILLA, Loaders.FABRIC, Loaders.FORGE]);
 
@@ -35,17 +51,6 @@ const TargetInstallManifestSchema = z.object({
 });
 
 export type TargetInstallManifest = z.infer<typeof TargetInstallManifestSchema>;
-
-const parsePackageVersion = (metadata: unknown): string => {
-  if (metadata && typeof metadata === 'object' && 'version' in metadata) {
-    const version = (metadata as { readonly version?: unknown }).version;
-    if (typeof version === 'string' && version.length > 0) return version;
-  }
-  return UNKNOWN_KIT_VERSION;
-};
-
-const minecraftKitPackage: unknown = requirePackage('@loontail/minecraft-kit/package.json');
-const MINECRAFT_KIT_VERSION = parsePackageVersion(minecraftKitPackage);
 
 const loaderVersionFor = (target: Target): string | null => {
   switch (target.loader.type) {
@@ -136,7 +141,7 @@ export const saveCurrentTargetInstallManifest = async (
 // install/repair, so it warns and swallows. `logPrefix` tags the operation that
 // triggered the write ('install' / 'repair').
 export const persistTargetInstallManifest = async (
-  slug: ClientSlug,
+  slug: CatalogKey,
   clientFolder: string,
   target: Target,
   logPrefix: string,

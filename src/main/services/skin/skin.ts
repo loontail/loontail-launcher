@@ -115,16 +115,18 @@ const fetchUploadedTextureUrl = async (
   return null;
 };
 
-// Yggdrasil flow: the launcher-side session already carries the access token
-// the merged Yggdrasil plugin needs to authorise the upload. The server
-// identifies the owner from the token; we only have to push the PNG and
-// later fetch the new URL for media-cache pre-warming.
+// Yggdrasil flow: the texture endpoints authenticate with the universal Loontail
+// session bearer (the unified API's `AuthUser`), which identifies the owner —
+// NOT the Yggdrasil in-game `accessToken` (that only feeds the game's
+// authlib-injector handshake). We push the PNG with the session token and later
+// fetch the new URL for media-cache pre-warming.
 const uploadSkinYggdrasil = async (
   session: YggdrasilSession,
   payload: UploadSkinPayload,
   gateway: YggdrasilGateway,
+  sessionToken: string,
 ): Promise<UploadSkinResult> => {
-  const { client, fetchTextures } = gateway;
+  const { texturesClient, fetchTextures } = gateway;
   const buffer = Buffer.from(payload.buffer);
 
   // Capture the previous URL before the upload so we can invalidate the
@@ -136,13 +138,13 @@ const uploadSkinYggdrasil = async (
   try {
     if (payload.type === SkinKinds.SKIN) {
       const variant = detectSkinVariant(new Uint8Array(payload.buffer));
-      await client.uploadSkin({
-        accessToken: session.accessToken,
+      await texturesClient.uploadSkin({
+        accessToken: sessionToken,
         file: buffer,
         variant,
       });
     } else {
-      await client.uploadCape({ accessToken: session.accessToken, file: buffer });
+      await texturesClient.uploadCape({ accessToken: sessionToken, file: buffer });
     }
   } catch (error) {
     logger.error('Yggdrasil texture upload failed', { kind: payload.type, error });
@@ -227,20 +229,30 @@ export const createSkinHandlers = (
       throw new SkinError(SkinErrorCodes.INVALID_IMAGE, verdict.reason);
     }
     const session = requireSession(authSession);
-    if (session.provider === 'yggdrasil') return uploadSkinYggdrasil(session, payload, gateway);
+    if (session.provider === 'yggdrasil') {
+      const sessionToken = authSession.sessionToken();
+      if (!sessionToken) {
+        throw new SkinError(SkinErrorCodes.NOT_AUTHENTICATED, 'No active session');
+      }
+      return uploadSkinYggdrasil(session, payload, gateway, sessionToken);
+    }
     return uploadSkinMojang(session, payload);
   };
 
   const clearSkin = async (): Promise<void> => {
     const session = requireSession(authSession);
     if (session.provider === 'yggdrasil') {
-      const { client, fetchTextures } = gateway;
+      const sessionToken = authSession.sessionToken();
+      if (!sessionToken) {
+        throw new SkinError(SkinErrorCodes.NOT_AUTHENTICATED, 'No active session');
+      }
+      const { texturesClient, fetchTextures } = gateway;
       // Snapshot the URLs before deleting so we can invalidate the cache.
       const before = await fetchTextures(session.profile.uuid).catch(() => null);
       try {
         await Promise.all([
-          client.deleteSkin({ accessToken: session.accessToken }),
-          client.deleteCape({ accessToken: session.accessToken }),
+          texturesClient.deleteSkin({ accessToken: sessionToken }),
+          texturesClient.deleteCape({ accessToken: sessionToken }),
         ]);
       } catch (error) {
         logger.error('Failed to clear textures on Yggdrasil server', error);

@@ -1,7 +1,7 @@
 import { i18n } from '@renderer/i18n';
 import { toast } from '@renderer/shared/ui/Toast';
 import { QUERY_KEYS } from '@shared/constants';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import type { ClientSettingsOverride, LauncherSettings } from '@shared/contracts/settings';
 import { resolveClientSettings } from '@shared/domain/settings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -50,7 +50,7 @@ export const useSetLauncher = () => useLauncherSettingsMutation(setLauncher);
 
 export const useSetClientOverride = () =>
   useLauncherSettingsMutation(
-    ({ slug, patch }: { slug: ClientSlug; patch: ClientSettingsOverride }) =>
+    ({ slug, patch }: { slug: CatalogKey; patch: ClientSettingsOverride }) =>
       setClientOverride(slug, patch),
   );
 
@@ -140,9 +140,9 @@ export const useFolderSize = (path: string | undefined | null) =>
     fetch: getFolderSize,
   });
 
-export const useResolveFor = (slug: ClientSlug | null | undefined) => {
+export const useResolveFor = (key: CatalogKey | null | undefined) => {
   const { settings } = useLauncherSettings();
-  return settings ? resolveClientSettings(settings, slug) : null;
+  return settings ? resolveClientSettings(settings, key) : null;
 };
 
 const MEDIA_CACHE_SIZE_STALE_TIME_MS = 30_000;

@@ -14,9 +14,9 @@ import type { SyncPlan } from '@main/services/bundle/plan';
 import { type EmitProgress, runSyncPhases } from '@main/services/bundle/runner';
 import { createSyncTask } from '@main/services/bundle/syncState';
 import { BundleErrorCodes } from '@shared/contracts/bundle';
-import type { ClientSlug } from '@shared/contracts/ids';
+import { asCatalogKey } from '@shared/contracts/ids';
 
-const SLUG = 'abort-client' as ClientSlug;
+const SLUG = asCatalogKey('official:abort-client');
 const noopEmit: EmitProgress = () => undefined;
 
 const downloadPlan = (count: number): SyncPlan => ({

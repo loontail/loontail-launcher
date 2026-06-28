@@ -3,8 +3,8 @@ import type { Router } from '@main/ipc/router';
 import type { ClientOperationLocks } from '@main/services/clientOperationLocks';
 import type { BrowserWindow } from 'electron';
 import { createBundleBroadcaster } from './broadcast';
-import { createHealer } from './healer';
-import { BundleManager } from './manager';
+import { type CreateHealerDeps, createHealer } from './healer';
+import { BundleManager, type GetClient } from './manager';
 import { registerBundleRoutes } from './routes';
 
 export type BundleService = {
@@ -19,10 +19,12 @@ export const createBundleService = (
   getMainWindow: () => BrowserWindow,
   kit: MinecraftKit,
   operationLocks: ClientOperationLocks,
+  healDeps: CreateHealerDeps,
+  getClient: GetClient,
 ): BundleService => {
   const broadcaster = createBundleBroadcaster(getMainWindow);
-  const healer = createHealer(kit);
-  const manager = new BundleManager(broadcaster, healer, operationLocks);
+  const healer = createHealer(kit, healDeps);
+  const manager = new BundleManager(broadcaster, healer, operationLocks, undefined, getClient);
   return {
     init: async () => {
       registerBundleRoutes(router, manager);

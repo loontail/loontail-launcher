@@ -1,4 +1,4 @@
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import type {
   ClientSettingsOverride,
   LauncherSettings,
@@ -13,15 +13,15 @@ export const setLauncher = (patch: PatchLauncherSettings): Promise<LauncherSetti
   window.api.invoke(IPC_CHANNELS.settingsSetLauncher, patch);
 
 export const setClientOverride = (
-  slug: ClientSlug,
+  key: CatalogKey,
   patch: ClientSettingsOverride,
 ): Promise<LauncherSettings> =>
-  window.api.invoke(IPC_CHANNELS.settingsSetClientOverride, { slug, patch });
+  window.api.invoke(IPC_CHANNELS.settingsSetClientOverride, { slug: key, patch });
 
-export const clearClientOverrides = (slug: ClientSlug): Promise<LauncherSettings> =>
-  window.api.invoke(IPC_CHANNELS.settingsClearClientOverrides, slug);
+export const clearClientOverrides = (key: CatalogKey): Promise<LauncherSettings> =>
+  window.api.invoke(IPC_CHANNELS.settingsClearClientOverrides, key);
 
 export const chooseClientFolder = (
-  slug: ClientSlug,
+  key: CatalogKey,
 ): Promise<{ settings: LauncherSettings; installed: boolean } | null> =>
-  window.api.invoke(IPC_CHANNELS.settingsChooseClientFolder, slug);
+  window.api.invoke(IPC_CHANNELS.settingsChooseClientFolder, key);

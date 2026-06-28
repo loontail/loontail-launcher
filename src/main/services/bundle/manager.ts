@@ -1,4 +1,8 @@
-import { BUNDLE_PAUSED_SYNC_MAX_IDLE_MS } from '@main/constants/bundle';
+import {
+  BUNDLE_PAUSED_SYNC_MAX_IDLE_MS,
+  MANIFEST_DRIFT_FETCH_TIMEOUT_MS,
+  MANIFEST_DRIFT_TTL_MS,
+} from '@main/constants/bundle';
 import { errorMessage } from '@main/infra/errorMessage';
 import { scopedLogger } from '@main/infra/logger';
 import {
@@ -7,7 +11,7 @@ import {
   type ClientOperationLocks,
   ClientOperationResources,
 } from '@main/services/clientOperationLocks';
-import { getClient } from '@main/services/clients';
+import { getClient as defaultGetClient } from '@main/services/clients';
 import { getSettings } from '@main/services/settings/settings';
 import {
   type BundleErrorCode,
@@ -20,18 +24,26 @@ import {
   type LocalManifest,
   type RemoteManifest,
 } from '@shared/contracts/bundle';
-import type { ClientSlug } from '@shared/contracts/ids';
+import { SourceKinds, parseCatalogKey } from '@shared/contracts/catalog';
+import type { Client } from '@shared/contracts/client';
+import type { BundleSlug, CatalogKey, ClientSlug } from '@shared/contracts/ids';
 import { resolveClientSettings } from '@shared/domain/settings';
 import { fetchRemoteManifest } from './api';
 import type { BundleBroadcaster } from './broadcast';
 import { BundleError, classifyBundleError } from './errors';
 import { createHealProgressListener } from './healProgress';
 import type { Healer } from './healer';
-import { clearLocalManifest, loadLocalManifest, saveLocalManifest } from './manifestRepo';
+import { loadLocalManifest, saveLocalManifest } from './manifestRepo';
 import { flattenRemote } from './manifestSnapshot';
 import { type SyncPlan, buildPlan } from './plan';
 import { type EmitProgress, type SyncTask, runSyncPhases } from './runner';
-import { type ActiveSync, createActiveSync, createSyncTask, resetTaskForResume } from './syncState';
+import {
+  type ActiveSync,
+  SyncStateStore,
+  createActiveSync,
+  createSyncTask,
+  resetTaskForResume,
+} from './syncState';
 
 const logger = scopedLogger('bundle.manager');
 const BUNDLE_WRITE_RESOURCES = [
@@ -41,8 +53,9 @@ const BUNDLE_WRITE_RESOURCES = [
 
 type PreparedPlanSource = {
   force: boolean;
-  loadRemoteManifest: () => RemoteManifest | Promise<RemoteManifest>;
 };
+
+export type GetClient = (slug: ClientSlug) => Promise<Client>;
 
 // getClient throws this exact message when the slug is absent from a
 // successfully fetched list; any other error means the fetch itself failed.
@@ -51,7 +64,7 @@ const isClientNotFound = (err: unknown, slug: ClientSlug): boolean =>
 
 const makeProgressEvent = (
   task: SyncTask,
-  slug: ClientSlug,
+  slug: CatalogKey,
   status: BundleSyncStatus,
   patch?: Partial<BundleProgressEvent>,
 ): BundleProgressEvent => ({
@@ -82,12 +95,18 @@ const createEmit = (
 };
 
 export class BundleManager {
-  private readonly activeSyncs = new Map<ClientSlug, ActiveSync>();
+  // Short-lived cache of the REMOTE manifest hash, keyed by the bare BundleSlug.
+  // Only getInstallState reads it (to bound its per-IPC network round-trip); the
+  // local manifest is still read fresh and compared every call, and the sync
+  // path never consults it (always fetches fresh).
+  private readonly manifestHashCache = new Map<BundleSlug, { hash: string; fetchedAt: number }>();
 
   constructor(
     private readonly broadcaster: BundleBroadcaster,
     private readonly healer: Healer,
     private readonly operationLocks: ClientOperationLocks,
+    private readonly activeSyncs: SyncStateStore = new SyncStateStore(),
+    private readonly getClient: GetClient = defaultGetClient,
   ) {}
 
   async startSync(req: BundleStartRequest): Promise<void> {
@@ -97,7 +116,7 @@ export class BundleManager {
   // Awaits the sync to a terminal status before launch; resolves immediately
   // when the client has no bundle. Errors propagate — the caller aborts launch
   // on failure.
-  async syncForLaunch(slug: ClientSlug, externalSignal?: AbortSignal): Promise<void> {
+  async syncForLaunch(slug: CatalogKey, externalSignal?: AbortSignal): Promise<void> {
     if (externalSignal?.aborted) {
       throw new BundleError(BundleErrorCodes.ABORTED, 'Sync aborted before start');
     }
@@ -117,7 +136,7 @@ export class BundleManager {
     }
   }
 
-  pauseSync(slug: ClientSlug): void {
+  pauseSync(slug: CatalogKey): void {
     const active = this.activeSyncs.get(slug);
     if (!active) return;
     if (active.task.cancelled) return;
@@ -125,14 +144,15 @@ export class BundleManager {
     // expiry window) or re-emit PAUSED.
     if (active.task.paused) return;
     active.task.paused = true;
-    // Abort current downloads — workers will see the BundleError, swallow it
-    // because task.paused === true, and exit cleanly leaving partial state.
+    // Abort current downloads — the runner rethrows ABORTED for the now-paused
+    // task, which executePreparedSync's catch decodes (ABORTED + task.paused) by
+    // returning without dropping the active sync, parking the partial state for resume.
     active.task.abort.abort();
     this.emitStatus(slug, BundleSyncStatuses.PAUSED);
     this.armPauseIdleTimer(slug, active);
   }
 
-  async resumeSync(slug: ClientSlug): Promise<void> {
+  async resumeSync(slug: CatalogKey): Promise<void> {
     const active = this.activeSyncs.get(slug);
     if (!active) {
       // Nothing pending — caller probably wants a fresh sync. Await it so a
@@ -153,7 +173,7 @@ export class BundleManager {
     });
   }
 
-  cancelSync(slug: ClientSlug): void {
+  cancelSync(slug: CatalogKey): void {
     const active = this.activeSyncs.get(slug);
     if (!active) return;
     this.clearPauseIdleTimer(active);
@@ -178,7 +198,7 @@ export class BundleManager {
     }
   }
 
-  async getInstallState(slug: ClientSlug): Promise<BundleInstallState> {
+  async getInstallState(slug: CatalogKey): Promise<BundleInstallState> {
     const active = this.activeSyncs.get(slug);
     if (active) {
       return {
@@ -201,22 +221,52 @@ export class BundleManager {
     }
     // Best-effort drift check. If the network is down, we don't want to gate
     // the UI on it — return signatureMatches=true and let the next sync sort
-    // it out.
-    let signatureMatches = true;
+    // it out. The remote hash is cached for a short TTL to bound the per-IPC
+    // round-trip; the local hash above is always read fresh.
+    const remoteHash = await this.remoteHashForDriftCheck(slug, client.bundleSlug);
+    if (remoteHash === null) {
+      return { installed: true, signatureMatches: true, progress: null };
+    }
+    return { installed: true, signatureMatches: remoteHash === local.manifestHash, progress: null };
+  }
+
+  // Returns the remote manifest hash for getInstallState's drift check, reusing a
+  // cached value within MANIFEST_DRIFT_TTL_MS. A fetch is bounded by
+  // MANIFEST_DRIFT_FETCH_TIMEOUT_MS so a dead network degrades to null (caller
+  // treats null as signatureMatches:true). Never caches the computed match.
+  private async remoteHashForDriftCheck(
+    slug: CatalogKey,
+    bundleSlug: BundleSlug,
+  ): Promise<string | null> {
+    const cached = this.manifestHashCache.get(bundleSlug);
+    if (cached && Date.now() - cached.fetchedAt < MANIFEST_DRIFT_TTL_MS) {
+      return cached.hash;
+    }
     try {
-      const { manifestHash } = await fetchRemoteManifest(client.bundleSlug);
-      signatureMatches = manifestHash === local.manifestHash;
+      const { manifestHash } = await fetchRemoteManifest(
+        bundleSlug,
+        AbortSignal.timeout(MANIFEST_DRIFT_FETCH_TIMEOUT_MS),
+      );
+      this.cacheRemoteHash(bundleSlug, manifestHash);
+      return manifestHash;
     } catch (err) {
       logger.warn(`[${slug}] checkStatus: manifest fetch failed, assuming up-to-date`, err);
+      return null;
     }
-    return { installed: true, signatureMatches, progress: null };
+  }
+
+  // Seeds/refreshes the remote-hash cache. Called on every real fetch — both the
+  // getInstallState drift check and the sync path's manifest fetch — so a sync
+  // primes the cache and the immediately following status probe reuses it.
+  private cacheRemoteHash(bundleSlug: BundleSlug, hash: string): void {
+    this.manifestHashCache.set(bundleSlug, { hash, fetchedAt: Date.now() });
   }
 
   private async runSync(req: BundleStartRequest, options: { forLaunch: boolean }): Promise<void> {
     const { slug } = req;
     // The write lock (acquireWriteLock below) is the single source of truth for
     // in-flight dedup — it throws OP_IN_FLIGHT when another sync holds the lease.
-    // A fetch failure (Strapi offline) surfaces as MANIFEST_FETCH_FAILED, not
+    // A fetch failure (CMS offline) surfaces as MANIFEST_FETCH_FAILED, not
     // the opaque UNKNOWN "client not found" path.
     const client = await this.fetchClient(slug);
     if (!client) {
@@ -252,19 +302,7 @@ export class BundleManager {
     const launchWait = active.forLaunch ? this.createAwaiter(active) : null;
     lock.setCancel(() => this.cancelSync(slug));
     try {
-      await this.executePreparedSync(active, task, {
-        force: req.force === true,
-        loadRemoteManifest: async () => {
-          this.emitStatus(slug, BundleSyncStatuses.FETCHING_MANIFEST);
-          const { manifest, manifestHash } = await fetchRemoteManifest(
-            bundleSlug,
-            task.abort.signal,
-          );
-          active.remoteManifest = manifest;
-          active.remoteManifestHash = manifestHash;
-          return manifest;
-        },
-      });
+      await this.executePreparedSync(active, task, { force: req.force === true });
       await launchWait;
     } catch (err) {
       this.dropActiveSync(slug);
@@ -279,10 +317,7 @@ export class BundleManager {
       // skipped via the sha256 fast-path.
       resetTaskForResume(task);
 
-      await this.executePreparedSync(active, task, {
-        force: false,
-        loadRemoteManifest: () => active.remoteManifest,
-      });
+      await this.executePreparedSync(active, task, { force: false });
     } catch (err) {
       // executePreparedSync drops the active sync on its own exit paths. Reaching
       // here means resume threw before/around it (and resumeSync swallows the
@@ -303,27 +338,33 @@ export class BundleManager {
     });
 
     try {
-      const remoteManifest = await planSource.loadRemoteManifest();
+      const remoteManifest = await this.ensureRemoteManifest(active);
       this.emitStatus(task.slug, BundleSyncStatuses.PLANNING);
       const local = await loadLocalManifest(task.clientFolder);
       const plan = await buildPlan(remoteManifest, local, task.clientFolder, {
         force: planSource.force,
+        signal: task.abort.signal,
       });
       task.plan = plan;
       task.pendingDownloads = [...plan.toDownload, ...plan.toUpdate];
       task.pendingDeletes = [...plan.toDelete];
       task.totalFiles = task.pendingDownloads.length + task.pendingDeletes.length;
 
+      // why: a cancel landing after buildPlan resolves but before the empty-plan
+      // shortcut must surface CANCELLED to forLaunch awaiters, not UP_TO_DATE.
+      if (task.cancelled)
+        throw new BundleError(BundleErrorCodes.ABORTED, 'cancelled during planning');
+
       if (task.totalFiles === 0) {
         await this.completePreparedSync(active, BundleSyncStatuses.UP_TO_DATE);
         return;
       }
 
-      const { deletedAny } = await runSyncPhases(task, emit);
-      if (task.paused) {
+      const result = await runSyncPhases(task, emit);
+      if (result.outcome === 'paused') {
         return;
       }
-      if (deletedAny) {
+      if (result.deletedAny) {
         this.emitStatus(task.slug, BundleSyncStatuses.HEALING);
         const progress = createHealProgressListener(task.slug, emit);
         try {
@@ -335,11 +376,17 @@ export class BundleManager {
           progress.dispose();
         }
       }
+      // A pause can still land mid-heal; the heal call observes task.abort but
+      // returns rather than throwing, so re-check before settling COMPLETED.
       if (task.paused) {
         return;
       }
       await this.completePreparedSync(active, BundleSyncStatuses.COMPLETED);
     } catch (err) {
+      // The resolved path discriminates pause/complete via runSyncPhases' outcome;
+      // this catch only decodes the ABORTED that the runner still throws when a
+      // cancel lands (terminal → emit CANCELLED) or a worker rejects mid-pause
+      // (cooperative stop → swallow, leaving the parked sync for resume).
       const code = classifyBundleError(err, task.abort.signal);
       if (code === BundleErrorCodes.ABORTED && task.cancelled) {
         this.emitStatus(task.slug, BundleSyncStatuses.CANCELLED);
@@ -360,6 +407,27 @@ export class BundleManager {
     }
   }
 
+  // Fetches the remote manifest the first time (empty hash sentinel), caching it
+  // on the ActiveSync; a resume after a pause-during-fetch sees the empty hash
+  // and refetches instead of planning against the empty {} (which would mark the
+  // whole bundle for deletion). FETCHING_MANIFEST is emitted only on a real fetch.
+  private async ensureRemoteManifest(active: ActiveSync): Promise<RemoteManifest> {
+    if (active.remoteManifestHash !== '') {
+      return active.remoteManifest;
+    }
+    this.emitStatus(active.task.slug, BundleSyncStatuses.FETCHING_MANIFEST);
+    const { manifest, manifestHash } = await fetchRemoteManifest(
+      active.bundleSlug,
+      active.task.abort.signal,
+    );
+    active.remoteManifest = manifest;
+    active.remoteManifestHash = manifestHash;
+    // Prime the drift-check cache so a status probe right after a sync skips its
+    // own network round-trip. Seed only — the sync path never reads this cache.
+    this.cacheRemoteHash(active.bundleSlug, manifestHash);
+    return manifest;
+  }
+
   private async completePreparedSync(active: ActiveSync, status: BundleSyncStatus): Promise<void> {
     // A trailing manifest-write failure must never demote a finished sync to a
     // hung state: settle the status and any forLaunch awaiter in finally so the
@@ -373,6 +441,15 @@ export class BundleManager {
   }
 
   private async persistLocalManifest(active: ActiveSync, clientFolder: string): Promise<void> {
+    // The empty-string hash sentinel means no real manifest was ever fetched; a
+    // real hash is 64-char hex. Writing it would persist a manifest with an empty
+    // signature that the next drift check could never match.
+    if (active.remoteManifestHash === '') {
+      logger.warn(
+        `[${active.task.slug}] refusing to persist local manifest with empty remote hash`,
+      );
+      return;
+    }
     const flat = flattenRemote(active.remoteManifest);
     const manifest: LocalManifest = {
       bundleSlug: active.bundleSlug,
@@ -387,22 +464,34 @@ export class BundleManager {
     }
   }
 
+  // Bundles only exist on official builds, so the CatalogKey reaching the sync
+  // path is always `official:<slug>`; recover the bare slug that getClient
+  // expects. A non-official key (defensive) yields null → "no such client".
+  private officialSlugFor(key: CatalogKey): ClientSlug | null {
+    const ref = parseCatalogKey(key);
+    return ref && ref.source === SourceKinds.OFFICIAL ? ref.slug : null;
+  }
+
   // getInstallState's best-effort probe — a fetch failure must not gate the UI,
   // so any error collapses to null (treated as "no client record").
-  private async tryGetClient(slug: ClientSlug) {
+  private async tryGetClient(key: CatalogKey) {
+    const slug = this.officialSlugFor(key);
+    if (!slug) return null;
     try {
-      return await getClient(slug);
+      return await this.getClient(slug);
     } catch {
       return null;
     }
   }
 
   // Sync path: distinguish a genuine "no such client" (null) from a fetch
-  // failure (network/Strapi down) so the renderer sees MANIFEST_FETCH_FAILED
+  // failure (network/CMS down) so the renderer sees MANIFEST_FETCH_FAILED
   // rather than an undifferentiated UNKNOWN.
-  private async fetchClient(slug: ClientSlug) {
+  private async fetchClient(key: CatalogKey) {
+    const slug = this.officialSlugFor(key);
+    if (!slug) return null;
     try {
-      return await getClient(slug);
+      return await this.getClient(slug);
     } catch (err) {
       if (isClientNotFound(err, slug)) return null;
       throw new BundleError(
@@ -412,12 +501,12 @@ export class BundleManager {
     }
   }
 
-  private resolveClientFolder(slug: ClientSlug): string | null {
+  private resolveClientFolder(slug: CatalogKey): string | null {
     const resolved = resolveClientSettings(getSettings(), slug);
     return resolved.storage.clientFolder || null;
   }
 
-  private acquireWriteLock(slug: ClientSlug): ClientOperationLease {
+  private acquireWriteLock(slug: CatalogKey): ClientOperationLease {
     const result = this.operationLocks.acquire({
       slug,
       domain: ClientOperationDomains.BUNDLE,
@@ -430,7 +519,7 @@ export class BundleManager {
     );
   }
 
-  private dropActiveSync(slug: ClientSlug): void {
+  private dropActiveSync(slug: CatalogKey): void {
     const active = this.activeSyncs.get(slug);
     if (!active) return;
     this.activeSyncs.delete(slug);
@@ -438,11 +527,11 @@ export class BundleManager {
     active.signalDropped();
   }
 
-  private emitStatus(slug: ClientSlug, status: BundleSyncStatus): void {
+  private emitStatus(slug: CatalogKey, status: BundleSyncStatus): void {
     this.broadcaster.status({ slug, status });
   }
 
-  private emitError(slug: ClientSlug, code: BundleErrorCode, message: string): void {
+  private emitError(slug: CatalogKey, code: BundleErrorCode, message: string): void {
     this.broadcaster.error({ slug, code, message });
   }
 
@@ -462,7 +551,7 @@ export class BundleManager {
     for (const waiter of waiters) waiter.reject(err);
   }
 
-  private armPauseIdleTimer(slug: ClientSlug, active: ActiveSync): void {
+  private armPauseIdleTimer(slug: CatalogKey, active: ActiveSync): void {
     this.clearPauseIdleTimer(active);
     const timer = setTimeout(() => {
       this.expirePausedSync(slug);
@@ -479,7 +568,7 @@ export class BundleManager {
     }
   }
 
-  private expirePausedSync(slug: ClientSlug): void {
+  private expirePausedSync(slug: CatalogKey): void {
     const active = this.activeSyncs.get(slug);
     if (!active || !active.task.paused) return;
     logger.info(`[${slug}] paused sync idle timeout reached — auto-cancelling`);
@@ -518,14 +607,6 @@ export class BundleManager {
     });
     await Promise.race([settled, timeout]);
     if (timer) clearTimeout(timer);
-  }
-
-  // Called by MinecraftManager.uninstall to wipe the local manifest sidecar
-  // file when the client folder isn't fully removed.
-  async resetForUninstall(slug: ClientSlug): Promise<void> {
-    const clientFolder = this.resolveClientFolder(slug);
-    if (!clientFolder) return;
-    await clearLocalManifest(clientFolder);
   }
 }
 

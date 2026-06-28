@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, renameSync } from 'node:fs';
 import path from 'node:path';
+import { errorMessage } from '@main/infra/errorMessage';
 import { scopedLogger } from '@main/infra/logger';
 import {
   STORE_KEY_AUTH,
@@ -25,9 +26,7 @@ const logger = scopedLogger('store');
 export const LEGACY_STORE_FILE = 'launcher.json';
 export const LEGACY_AUTH_SECRET_FILE = 'auth-session.bin';
 
-const errorMeta = (error: unknown): { message: string } => ({
-  message: error instanceof Error ? error.message : String(error),
-});
+const errorMeta = (error: unknown): { message: string } => ({ message: errorMessage(error) });
 
 // One-time migration from the previous electron-store layout. Returns true when
 // a legacy `launcher.json` was found (and therefore handled), false on a fresh

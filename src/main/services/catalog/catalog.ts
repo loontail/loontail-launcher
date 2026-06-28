@@ -5,8 +5,8 @@ import type {
   CatalogRef,
   SourceStatus,
 } from '@shared/contracts/catalog';
-import { SourceKinds } from '@shared/contracts/catalog';
-import type { ClientSlug, InstanceId } from '@shared/contracts/ids';
+import { SourceKinds, parseCatalogKey } from '@shared/contracts/catalog';
+import type { CatalogKey } from '@shared/contracts/ids';
 import type { CatalogSource } from './source';
 
 const logger = scopedLogger('catalog');
@@ -32,6 +32,11 @@ const sortCatalogItems = (items: CatalogItem[]): CatalogItem[] =>
 export type CatalogService = {
   list: (locale?: string) => Promise<CatalogListResult>;
   resolve: (ref: CatalogRef) => Promise<CatalogItem | null>;
+  // Resolve a build from its CatalogKey (`official:<slug>` / `local:<uuid>`),
+  // the cross-kind operational id that flows over IPC. The key names its source,
+  // so resolution dispatches straight to that source — a local build resolves
+  // network-free, an official build hits the CMS. A malformed key resolves null.
+  resolveBuildByKey: (key: CatalogKey) => Promise<CatalogItem | null>;
 };
 
 export const createCatalog = (sources: readonly CatalogSource[]): CatalogService => {
@@ -61,33 +66,11 @@ export const createCatalog = (sources: readonly CatalogSource[]): CatalogService
     return source.getItem(ref);
   };
 
-  return { list, resolve };
-};
+  const resolveBuildByKey = async (key: CatalogKey): Promise<CatalogItem | null> => {
+    const ref = parseCatalogKey(key);
+    if (!ref) return null;
+    return resolve(ref);
+  };
 
-// Bootstrap installs the live catalog so module-level consumers (the minecraft
-// buildContext and the bundle healer) can resolve a build by ref without
-// threading the service through every call — mirroring the existing
-// module-level clients accessors (getClient/getClients).
-let activeCatalog: CatalogService | null = null;
-
-export const setActiveCatalog = (catalog: CatalogService): void => {
-  activeCatalog = catalog;
-};
-
-export const resolveBuild = (ref: CatalogRef): Promise<CatalogItem | null> => {
-  if (!activeCatalog) {
-    return Promise.reject(new Error('Catalog has not been initialized'));
-  }
-  return activeCatalog.resolve(ref);
-};
-
-// Resolve a build from the opaque operational id that flows through the
-// slug-keyed install/launch chain. Local ids (UUIDs) are tried first and never
-// touch the network, so a local build resolves with the CMS unreachable; only a
-// non-local id falls through to the official (Strapi) source. The id keyspaces
-// do not overlap (UUID vs human slug), so this is unambiguous.
-export const resolveBuildByOpaqueId = async (id: ClientSlug): Promise<CatalogItem | null> => {
-  const local = await resolveBuild({ source: SourceKinds.LOCAL, id: id as unknown as InstanceId });
-  if (local) return local;
-  return resolveBuild({ source: SourceKinds.OFFICIAL, slug: id });
+  return { list, resolve, resolveBuildByKey };
 };

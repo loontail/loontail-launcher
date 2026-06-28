@@ -1,4 +1,4 @@
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import type { Context } from './context';
 import type { ManagerEnv } from './env';
 import type { RepairOp } from './ops';
@@ -19,7 +19,7 @@ import {
 
 export const runRepair = async (
   env: ManagerEnv,
-  slug: ClientSlug,
+  slug: CatalogKey,
   ctx: Context,
   op: RepairOp,
 ): Promise<boolean> => {

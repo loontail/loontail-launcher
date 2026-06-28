@@ -15,6 +15,11 @@ const FEED_BASE = 'https://update.electronjs.org';
 const REPO_OWNER = 'loontail';
 const REPO_NAME = 'minecraft-launcher';
 
+// Squirrel can stall between `checking-for-update` and any terminal event (or
+// `update-available`), wedging `inFlight` permanently and short-circuiting all
+// future checks. Bound the check phase so a stall recovers on its own.
+const CHECK_TIMEOUT_MS = 60_000;
+
 export type UpdaterService = {
   init: () => Promise<void>;
   dispose: () => Promise<void>;
@@ -38,30 +43,56 @@ export const createUpdaterService = (
   // through download completion (READY) or terminal NOT_AVAILABLE / ERROR.
   let inFlight = false;
   let registered = false;
+  let watchdog: ReturnType<typeof setTimeout> | null = null;
+
+  const disarmWatchdog = (): void => {
+    if (watchdog === null) return;
+    clearTimeout(watchdog);
+    watchdog = null;
+  };
+  const armWatchdog = (): void => {
+    disarmWatchdog();
+    watchdog = setTimeout(() => {
+      watchdog = null;
+      if (!inFlight) return;
+      logger.warn('autoUpdater check timed out; resetting in-flight state');
+      inFlight = false;
+      broadcast({ state: UpdaterStates.ERROR, message: 'Update check timed out' });
+    }, CHECK_TIMEOUT_MS);
+    watchdog.unref();
+  };
 
   const onCheckingForUpdate = (): void => {
     inFlight = true;
     broadcast({ state: UpdaterStates.CHECKING });
   };
   const onUpdateNotAvailable = (): void => {
+    disarmWatchdog();
     inFlight = false;
     broadcast({ state: UpdaterStates.NOT_AVAILABLE });
   };
-  // Squirrel's autoUpdater doesn't surface a separate progress event; the
-  // download is opaque until `update-downloaded` fires. Emit AVAILABLE so the
-  // UI can show "downloading…" while Squirrel pulls the .nupkg in the
-  // background. Stay in-flight until READY (or ERROR).
-  const onUpdateAvailable = (): void => broadcast({ state: UpdaterStates.AVAILABLE, version: '' });
+  // Squirrel's autoUpdater doesn't surface a separate progress event nor a
+  // version on `update-available`; the download is opaque until
+  // `update-downloaded` fires. Emit AVAILABLE (no version) so the UI can show
+  // "downloading…" while Squirrel pulls the .nupkg in the background. Disarm the
+  // watchdog: the download phase intentionally stays in-flight until READY (or
+  // ERROR), and the fixed check timer would false-fire mid-download.
+  const onUpdateAvailable = (): void => {
+    disarmWatchdog();
+    broadcast({ state: UpdaterStates.AVAILABLE });
+  };
   const onUpdateDownloaded = (
     _event: unknown,
     _releaseNotes: string,
     releaseName: string,
   ): void => {
+    disarmWatchdog();
     inFlight = false;
     broadcast({ state: UpdaterStates.READY, version: releaseName || app.getVersion() });
   };
   const onError = (error: Error): void => {
     logger.error('autoUpdater error', error);
+    disarmWatchdog();
     inFlight = false;
     broadcast({ state: UpdaterStates.ERROR, message: error.message });
   };
@@ -93,7 +124,10 @@ export const createUpdaterService = (
 
       router.handle(IPC_CHANNELS.updaterCheck, async (rawArgs) => {
         assertNoIpcArgs(rawArgs, 'updater.check takes no arguments');
-        if (!isSquirrelEnabled()) {
+        // Gate on `registered`, not just `isSquirrelEnabled()`: setFeedURL can
+        // throw on a packaged build, leaving listeners unattached. Acknowledge
+        // the click with a terminal event instead of silently dropping it.
+        if (!registered) {
           broadcast({ state: UpdaterStates.NOT_AVAILABLE });
           return;
         }
@@ -103,16 +137,19 @@ export const createUpdaterService = (
         }
         try {
           logger.info('updaterCheck: invoking autoUpdater.checkForUpdates()');
+          armWatchdog();
           autoUpdater.checkForUpdates();
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
           logger.error('autoUpdater check failed', err);
+          disarmWatchdog();
           inFlight = false;
           broadcast({ state: UpdaterStates.ERROR, message: err.message });
         }
       });
     },
     dispose: async () => {
+      disarmWatchdog();
       if (!registered) return;
       autoUpdater.removeListener('checking-for-update', onCheckingForUpdate);
       autoUpdater.removeListener('update-not-available', onUpdateNotAvailable);

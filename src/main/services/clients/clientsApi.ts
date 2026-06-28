@@ -4,20 +4,15 @@ import { API_ROUTES } from '@shared/constants';
 import {
   type BundleSlug,
   type Client,
+  ClientListResponseSchema,
   type ClientResponse,
-  ClientResponseSchema,
-  type StrapiImageFormat,
-  type StrapiList,
-  StrapiListSchema,
-  type StrapiMedia,
+  type Media,
   asBundleSlug,
   asClientId,
   asClientSlug,
 } from '@shared/contracts';
 
 const logger = scopedLogger('clients');
-
-const ClientListResponseSchema = StrapiListSchema(ClientResponseSchema);
 
 const coerceVersionString = (input: unknown): string | null => {
   if (typeof input === 'string') return input;
@@ -29,31 +24,18 @@ const coerceVersionString = (input: unknown): string | null => {
   return null;
 };
 
-// Strapi rich-text fields may be string, null, or a blocks structure; collapse
-// anything non-string to '' (renderer feeds this to marked.parse).
+// Rich-text fields may be string or null; collapse anything non-string to ''
+// (renderer feeds this to marked.parse).
 const coerceDescriptionString = (input: unknown): string =>
   typeof input === 'string' ? input : '';
 
-const absolutizeFormat = (format: StrapiImageFormat): StrapiImageFormat => ({
-  ...format,
-  url: buildMediaUrl(format.url),
-});
-
-const absolutizeFormats = (formats: StrapiMedia['formats']): StrapiMedia['formats'] => ({
-  ...(formats?.thumbnail ? { thumbnail: absolutizeFormat(formats.thumbnail) } : {}),
-  ...(formats?.small ? { small: absolutizeFormat(formats.small) } : {}),
-  ...(formats?.medium ? { medium: absolutizeFormat(formats.medium) } : {}),
-  ...(formats?.large ? { large: absolutizeFormat(formats.large) } : {}),
-});
-
-const absolutizeMedia = (media: StrapiMedia): StrapiMedia => ({
+const absolutizeMedia = (media: Media): Media => ({
   ...media,
   url: buildMediaUrl(media.url),
-  formats: absolutizeFormats(media.formats),
 });
 
-// Strapi may return an empty string for an unset bundleSlug customField; collapse
-// it (and other empty/falsy forms) to null so the manager treats it uniformly.
+// The API may return an empty string for an unset bundleSlug; collapse it (and
+// other empty/falsy forms) to null so the manager treats it uniformly.
 const coerceBundleSlug = (input: unknown): BundleSlug | null => {
   if (typeof input !== 'string') return null;
   const trimmed = input.trim();
@@ -63,12 +45,9 @@ const coerceBundleSlug = (input: unknown): BundleSlug | null => {
 const normalizeClient = (client: ClientResponse): Client | null => {
   if (!client.slug) {
     // No slug — launcher cannot identify (settings key, folder, IPC). Drop.
-    logger.warn(
-      `Strapi client id=${client.id} (documentId=${client.documentId}) has no slug; skipping`,
-    );
+    logger.warn(`Client id=${client.id} has no slug; skipping`);
     return null;
   }
-  const titleImage = client.titleImage ? absolutizeMedia(client.titleImage) : undefined;
   return {
     ...client,
     id: asClientId(client.id),
@@ -80,9 +59,9 @@ const normalizeClient = (client: ClientResponse): Client | null => {
     fabricVersion: coerceVersionString(client.fabricVersion),
     runtimeVersion: coerceVersionString(client.runtimeVersion),
     bundleSlug: coerceBundleSlug(client.bundleSlug),
-    background: absolutizeMedia(client.background),
-    poster: absolutizeMedia(client.poster),
-    ...(titleImage ? { titleImage } : {}),
+    background: client.background ? absolutizeMedia(client.background) : null,
+    poster: client.poster ? absolutizeMedia(client.poster) : null,
+    titleImage: client.titleImage ? absolutizeMedia(client.titleImage) : null,
     screenshots: (client.screenshots ?? []).map((media) => absolutizeMedia(media)),
   };
 };
@@ -92,21 +71,15 @@ export type FetchClientsOptions = {
   signal?: AbortSignal;
 };
 
-export const fetchClients = async (
-  options: FetchClientsOptions = {},
-): Promise<StrapiList<Client>> => {
+export const fetchClients = async (options: FetchClientsOptions = {}): Promise<Client[]> => {
   const { locale, signal } = options;
   const parsed = await httpGet(
     API_ROUTES.clients.list(locale ? { locale } : {}),
     ClientListResponseSchema,
     {
-      auth: 'apiToken',
+      auth: 'session',
       ...(signal ? { signal } : {}),
     },
   );
-  const normalized = parsed.data.map(normalizeClient).filter((c): c is Client => c !== null);
-  return {
-    ...parsed,
-    data: normalized,
-  };
+  return parsed.clients.map(normalizeClient).filter((c): c is Client => c !== null);
 };

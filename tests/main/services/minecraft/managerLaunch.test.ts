@@ -5,24 +5,22 @@ import {
   ClientOperationResources,
   createClientOperationLocks,
 } from '@main/services/clientOperationLocks';
-import type { Broadcaster } from '@main/services/minecraft/broadcast';
 import type { Context } from '@main/services/minecraft/context';
 import { ManagerError } from '@main/services/minecraft/errors';
 import { OpKinds } from '@main/services/minecraft/ops';
 import type { Account } from '@shared/contracts/account';
-import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
+import { type CatalogKey, asCatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraft';
-import { type LauncherSettings, LoaderChoices } from '@shared/contracts/settings';
+import { LoaderChoices } from '@shared/contracts/settings';
 import { describe, expect, it, vi } from 'vitest';
 
 const orchestrationMocks = vi.hoisted(() => {
-  process.env.API_URL ??= 'http://test.invalid';
-  process.env.API_TOKEN ??= 'test-token';
   return {
     buildContext: vi.fn(),
     getSettings: vi.fn(),
     hasCurrentTargetInstallManifest: vi.fn(),
     isAnythingInstalled: vi.fn(),
+    resolveClientInstallPresence: vi.fn(),
     runInstall: vi.fn(),
     runLaunch: vi.fn(),
     runRepair: vi.fn(),
@@ -47,7 +45,7 @@ vi.mock('@main/services/minecraft/installManifest', () => ({
 }));
 
 vi.mock('@main/services/minecraft/readinessPolicy', () => ({
-  resolveClientInstallPresence: vi.fn(),
+  resolveClientInstallPresence: orchestrationMocks.resolveClientInstallPresence,
 }));
 
 vi.mock('@main/services/settings/settings', () => ({
@@ -70,18 +68,19 @@ vi.mock('@main/services/minecraft/repair', () => ({
 }));
 
 import { MinecraftManager } from '@main/services/minecraft/manager';
-import { stubConsolePort, stubOpenConsole } from './managerStubs';
+import { makeLauncherSettings, makeMinecraftBroadcaster } from '../../../helpers/fixtures';
+import {
+  stubConsolePort,
+  stubOpenConsole,
+  stubResolveBuild,
+  stubResolveBundleRepairFilter,
+} from './managerStubs';
 
-const SLUG = asClientSlug('test-client');
+const SLUG = asCatalogKey('official:test-client');
 const CLIENT_FOLDER = 'Z:/clients/test-client';
 const CLIENTS_FOLDER = 'Z:/clients';
 
-const launcherSettings = (): LauncherSettings => ({
-  memory: { allocatedRamMb: 0 },
-  storage: { clientsFolder: CLIENTS_FOLDER },
-  launch: { console: false, fullscreen: false },
-  clients: {},
-});
+const launcherSettings = () => makeLauncherSettings({ storage: { clientsFolder: CLIENTS_FOLDER } });
 
 const account = (): Account => ({
   provider: 'yggdrasil',
@@ -104,16 +103,8 @@ const context = (): Context =>
     },
   }) as unknown as Context;
 
-const makeBroadcaster = (): Broadcaster =>
-  ({
-    status: vi.fn(),
-    progress: vi.fn(),
-    log: vi.fn(),
-    error: vi.fn(),
-  }) as unknown as Broadcaster;
-
 const makeManager = (
-  broadcaster = makeBroadcaster(),
+  broadcaster = makeMinecraftBroadcaster(),
   operationLocks: ClientOperationLocks = createClientOperationLocks(),
   accountProvider: () => Account | null = () => account(),
 ): MinecraftManager =>
@@ -126,6 +117,8 @@ const makeManager = (
     stubConsolePort(),
     stubOpenConsole(),
     accountProvider,
+    stubResolveBundleRepairFilter(),
+    stubResolveBuild(),
   );
 
 const resetMocks = (): void => {
@@ -133,6 +126,7 @@ const resetMocks = (): void => {
   orchestrationMocks.getSettings.mockReset();
   orchestrationMocks.hasCurrentTargetInstallManifest.mockReset();
   orchestrationMocks.isAnythingInstalled.mockReset();
+  orchestrationMocks.resolveClientInstallPresence.mockReset();
   orchestrationMocks.runInstall.mockReset();
   orchestrationMocks.runLaunch.mockReset();
   orchestrationMocks.runRepair.mockReset();
@@ -142,6 +136,7 @@ const resetMocks = (): void => {
   orchestrationMocks.getSettings.mockReturnValue(launcherSettings());
   orchestrationMocks.hasCurrentTargetInstallManifest.mockResolvedValue(true);
   orchestrationMocks.isAnythingInstalled.mockResolvedValue(false);
+  orchestrationMocks.resolveClientInstallPresence.mockResolvedValue(InstallStatuses.INSTALLED);
   orchestrationMocks.runInstall.mockResolvedValue(undefined);
   orchestrationMocks.runLaunch.mockResolvedValue(undefined);
   orchestrationMocks.runRepair.mockResolvedValue(true);
@@ -180,24 +175,25 @@ describe('MinecraftManager.startLaunch', () => {
   it('does not start the game when the launch hook fails', async () => {
     resetMocks();
     const manager = makeManager();
-    const hookError = new Error('bundle sync failed');
-    manager.attachLaunchHook(vi.fn().mockRejectedValue(hookError));
+    manager.attachLaunchHook(vi.fn().mockRejectedValue(new Error('bundle sync failed')));
 
-    await expect(manager.startLaunch(SLUG)).rejects.toBe(hookError);
+    await expect(manager.startLaunch(SLUG)).resolves.toBeUndefined();
 
     expect(orchestrationMocks.runLaunch).not.toHaveBeenCalled();
   });
 
-  it('settles status to INSTALLED when a non-aborted bundle sync fails', async () => {
+  it('settles INSTALLED and does not rethrow when a non-aborted bundle sync fails', async () => {
     resetMocks();
-    const broadcaster = makeBroadcaster();
+    const broadcaster = makeMinecraftBroadcaster();
     const manager = makeManager(broadcaster);
-    const hookError = new Error('bundle manifest fetch failed');
-    manager.attachLaunchHook(vi.fn().mockRejectedValue(hookError));
+    manager.attachLaunchHook(vi.fn().mockRejectedValue(new Error('bundle manifest fetch failed')));
 
-    await expect(manager.startLaunch(SLUG)).rejects.toBe(hookError);
+    // The bundle error already reached the renderer via the bundle error channel,
+    // so startLaunch swallows it instead of rethrowing (which would double-toast
+    // as the launch IPC rejection). The base game is still installed, so status
+    // must not stay stuck on LAUNCHING.
+    await expect(manager.startLaunch(SLUG)).resolves.toBeUndefined();
 
-    // The base game is still installed: status must not stay stuck on LAUNCHING.
     expect(orchestrationMocks.runLaunch).not.toHaveBeenCalled();
     expect(broadcaster.status).toHaveBeenLastCalledWith({
       slug: SLUG,
@@ -208,7 +204,7 @@ describe('MinecraftManager.startLaunch', () => {
 
   it('aborts an in-flight launch hook and restores installed status', async () => {
     resetMocks();
-    const broadcaster = makeBroadcaster();
+    const broadcaster = makeMinecraftBroadcaster();
     const manager = makeManager(broadcaster);
     let hookSignal: AbortSignal | undefined;
     let resolveHookStarted: () => void = () => undefined;
@@ -217,7 +213,7 @@ describe('MinecraftManager.startLaunch', () => {
     });
     manager.attachLaunchHook(
       vi.fn(
-        (_slug: ClientSlug, signal?: AbortSignal) =>
+        (_slug: CatalogKey, signal?: AbortSignal) =>
           new Promise<void>((_resolve, reject) => {
             hookSignal = signal;
             resolveHookStarted();
@@ -242,6 +238,38 @@ describe('MinecraftManager.startLaunch', () => {
     });
   });
 
+  it('honors a cancel issued during the buildContext window and never launches', async () => {
+    resetMocks();
+    const broadcaster = makeMinecraftBroadcaster();
+    const manager = makeManager(broadcaster);
+    let resolveContext: (ctx: Context) => void = () => undefined;
+    orchestrationMocks.buildContext.mockReturnValue(
+      new Promise<Context>((resolve) => {
+        resolveContext = resolve;
+      }),
+    );
+
+    const launchPromise = manager.startLaunch(SLUG);
+    // The LAUNCH_STARTING op is claimed before the await, so a Stop here aborts
+    // it; buildContext then resolves (the catch never runs) and the after-await
+    // guard must drop the op and settle to presence instead of launching.
+    manager.cancel(SLUG);
+    resolveContext(context());
+
+    await expect(launchPromise).resolves.toBeUndefined();
+    expect(orchestrationMocks.runLaunch).not.toHaveBeenCalled();
+    expect(broadcaster.status).toHaveBeenLastCalledWith({
+      slug: SLUG,
+      status: InstallStatuses.INSTALLED,
+      paused: false,
+    });
+    // The op was removed; a follow-up launch must pass requireIdle.
+    expect(await manager.getStatus(SLUG)).toEqual({
+      status: InstallStatuses.INSTALLED,
+      paused: false,
+    });
+  });
+
   it('rejects repair while a bundle writer lock is held for the same client', async () => {
     resetMocks();
     const operationLocks = createClientOperationLocks();
@@ -254,7 +282,7 @@ describe('MinecraftManager.startLaunch', () => {
 
     try {
       await expect(
-        makeManager(makeBroadcaster(), operationLocks).startRepair(SLUG),
+        makeManager(makeMinecraftBroadcaster(), operationLocks).startRepair(SLUG),
       ).rejects.toMatchObject({
         code: MinecraftErrorCodes.OP_IN_FLIGHT,
       });
@@ -267,7 +295,7 @@ describe('MinecraftManager.startLaunch', () => {
   it('refreshes bundle state after a successful manual repair', async () => {
     resetMocks();
     const operationLocks = createClientOperationLocks();
-    const broadcaster = makeBroadcaster();
+    const broadcaster = makeMinecraftBroadcaster();
     const manager = makeManager(broadcaster, operationLocks);
     const ctx = context();
     orchestrationMocks.buildContext.mockResolvedValue(ctx);
@@ -288,7 +316,7 @@ describe('MinecraftManager.startLaunch', () => {
     await manager.startRepair(SLUG);
 
     await vi.waitFor(() => {
-      expect(hook).toHaveBeenCalledWith(SLUG);
+      expect(hook).toHaveBeenCalledWith(SLUG, expect.any(AbortSignal));
     });
     expect(bundleLockAcquired).toBe(true);
     expect(orchestrationMocks.runRepair).toHaveBeenCalledWith(
@@ -306,7 +334,7 @@ describe('MinecraftManager.startLaunch', () => {
 
   it('runs repair from any on-disk state once the context builds (no install gate)', async () => {
     resetMocks();
-    const manager = makeManager(makeBroadcaster());
+    const manager = makeManager(makeMinecraftBroadcaster());
     // buildContext resolves the target; repair must run and let kit.repair.all
     // rebuild whatever is missing, even with no version JSON / empty folder.
     orchestrationMocks.buildContext.mockResolvedValue(context());
@@ -318,7 +346,7 @@ describe('MinecraftManager.startLaunch', () => {
 
   it('surfaces a missing install folder from buildContext instead of repairing', async () => {
     resetMocks();
-    const manager = makeManager(makeBroadcaster());
+    const manager = makeManager(makeMinecraftBroadcaster());
     orchestrationMocks.buildContext.mockRejectedValue(
       new ManagerError(MinecraftErrorCodes.NO_CLIENT_FOLDER, 'no folder'),
     );
@@ -331,7 +359,7 @@ describe('MinecraftManager.startLaunch', () => {
 
   it('registers the repair op before buildContext resolves so a concurrent repair trips OP_IN_FLIGHT', async () => {
     resetMocks();
-    const broadcaster = makeBroadcaster();
+    const broadcaster = makeMinecraftBroadcaster();
     const manager = makeManager(broadcaster);
     let resolveContext: (ctx: Context) => void = () => undefined;
     orchestrationMocks.buildContext.mockReturnValue(

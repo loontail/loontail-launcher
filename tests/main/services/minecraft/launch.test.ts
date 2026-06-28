@@ -20,22 +20,21 @@ import type { Context } from '@main/services/minecraft/context';
 import type { ManagerEnv } from '@main/services/minecraft/env';
 import { createForgeProcessorCache } from '@main/services/minecraft/forgeProcessorHealing';
 import { endLaunch, resolveLaunchAuth, runLaunch } from '@main/services/minecraft/launch';
-import { type Op, OpKinds } from '@main/services/minecraft/ops';
+import { type LaunchStartingOp, type Op, OpKinds } from '@main/services/minecraft/ops';
 import type { Account } from '@shared/contracts/account';
 import type { AuthSession, MojangSession, YggdrasilSession } from '@shared/contracts/auth';
 import { ConsoleStatuses } from '@shared/contracts/console';
-import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
+import { type CatalogKey, asCatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraft';
 import { LoaderChoices } from '@shared/contracts/settings';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const launchMocks = vi.hoisted(() => {
-  process.env.API_URL ??= 'http://test.invalid';
-  process.env.API_TOKEN ??= 'test-token';
   return {
     appGetVersion: vi.fn(() => '0.0.0-test'),
     appGetAppPath: vi.fn(() => ''),
     getStoredAuth: vi.fn<() => AuthSession | null>(() => null),
+    getStoredSessionToken: vi.fn<() => string | null>(() => null),
     recordPlayed: vi.fn<(key: string) => void>(),
     openConsoleWindow: vi.fn(),
     consoleHub: {
@@ -75,10 +74,11 @@ vi.mock('@main/infra/logger', () => ({
 
 vi.mock('@main/infra/store', () => ({
   getStoredAuth: launchMocks.getStoredAuth,
+  getStoredSessionToken: launchMocks.getStoredSessionToken,
   recordPlayed: launchMocks.recordPlayed,
 }));
 
-const SLUG = asClientSlug('test-client');
+const SLUG = asCatalogKey('official:test-client');
 const CLIENT_FOLDER = 'Z:/clients/test-client';
 const VERSION_ID = asMinecraftVersionId('1.20.1');
 const TEST_MAIN_CLASS = 'net.minecraft.client.main.Main';
@@ -233,7 +233,7 @@ const logger = () => ({
   warn: vi.fn(),
 });
 
-const env = (kit: MinecraftKit, ops: Map<ClientSlug, Op>): ManagerEnv => {
+const env = (kit: MinecraftKit, ops: Map<CatalogKey, Op>): ManagerEnv => {
   const broadcaster = {
     status: vi.fn(),
     progress: vi.fn(),
@@ -253,6 +253,7 @@ const env = (kit: MinecraftKit, ops: Map<ClientSlug, Op>): ManagerEnv => {
     emitError: vi.fn(),
     persistRuntime: vi.fn(),
     clearRuntimeOverride: vi.fn(),
+    resolveBundleRepairFilter: vi.fn(async () => null),
   };
 };
 
@@ -260,6 +261,7 @@ describe('runLaunch', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     launchMocks.getStoredAuth.mockReturnValue(null);
+    launchMocks.getStoredSessionToken.mockReturnValue(null);
   });
 
   afterEach(async () => {
@@ -285,19 +287,19 @@ describe('runLaunch', () => {
     );
     const run = vi.fn();
     const kit = { launch: { compose, run } } as unknown as MinecraftKit;
-    const ops = new Map<ClientSlug, Op>();
+    const ops = new Map<CatalogKey, Op>();
     const managerEnv = env(kit, ops);
+    const startupOp: LaunchStartingOp = {
+      kind: OpKinds.LAUNCH_STARTING,
+      abort: new AbortController(),
+    };
 
-    const launchPromise = runLaunch(managerEnv, SLUG, context(), account());
+    const launchPromise = runLaunch(managerEnv, SLUG, context(), account(), startupOp);
     await composeStarted;
 
-    const op = ops.get(SLUG);
-    expect(op).toEqual(expect.objectContaining({ kind: OpKinds.LAUNCH_STARTING }));
-    if (op?.kind !== OpKinds.LAUNCH_STARTING) {
-      throw new Error('Expected launch startup operation');
-    }
+    expect(ops.get(SLUG)).toBe(startupOp);
 
-    op.abort.abort();
+    startupOp.abort.abort();
     resolveCompose(composition());
 
     await expect(launchPromise).resolves.toBeUndefined();
@@ -316,6 +318,66 @@ describe('runLaunch', () => {
     });
   });
 
+  it('honors a cancel issued during the buildContext window (op already aborted before run)', async () => {
+    const fixture = await createLaunchFixture();
+    const compose = vi.fn(async () => fixture.composition);
+    const run = vi.fn(() => session());
+    const kit = { launch: { compose, run } } as unknown as MinecraftKit;
+    const ops = new Map<CatalogKey, Op>();
+    const managerEnv = env(kit, ops);
+    // The caller aborts the startup op during its buildContext await; runLaunch
+    // must observe the abort after re-registering the op and bail before run.
+    const startupOp: LaunchStartingOp = {
+      kind: OpKinds.LAUNCH_STARTING,
+      abort: new AbortController(),
+    };
+    startupOp.abort.abort();
+
+    await expect(
+      runLaunch(managerEnv, SLUG, fixture.ctx, account(), startupOp),
+    ).resolves.toBeUndefined();
+
+    expect(run).not.toHaveBeenCalled();
+    expect(ops.has(SLUG)).toBe(false);
+    expect(managerEnv.emitError).not.toHaveBeenCalled();
+    expect(managerEnv.broadcaster.status).toHaveBeenLastCalledWith({
+      slug: SLUG,
+      status: InstallStatuses.INSTALLED,
+      paused: false,
+    });
+  });
+
+  it('spawns the game session with the caller-supplied startup op when not cancelled', async () => {
+    let runOptions: LaunchRunOptions | undefined;
+    const fixture = await createLaunchFixture();
+    const activeSession = session();
+    const compose = vi.fn(async () => fixture.composition);
+    const run = vi.fn((_composition: LaunchComposition, options?: LaunchRunOptions) => {
+      runOptions = options;
+      return activeSession;
+    });
+    const kit = { launch: { compose, run } } as unknown as MinecraftKit;
+    const ops = new Map<CatalogKey, Op>();
+    const managerEnv = env(kit, ops);
+    const startupOp: LaunchStartingOp = {
+      kind: OpKinds.LAUNCH_STARTING,
+      abort: new AbortController(),
+    };
+
+    await runLaunch(managerEnv, SLUG, fixture.ctx, account(), startupOp);
+
+    expect(run).toHaveBeenCalledTimes(1);
+    // The kit session is observed against the caller's controller, so a Stop in
+    // the spawn window still reaches the same signal the caller can abort.
+    expect(runOptions?.signal).toBe(startupOp.abort.signal);
+    expect(ops.get(SLUG)).toEqual({ kind: OpKinds.LAUNCH, session: activeSession });
+    expect(managerEnv.broadcaster.status).toHaveBeenLastCalledWith({
+      slug: SLUG,
+      status: InstallStatuses.RUNNING,
+      paused: false,
+    });
+  });
+
   it('passes the startup abort signal to kit launch run', async () => {
     let runOptions: LaunchRunOptions | undefined;
     const fixture = await createLaunchFixture();
@@ -326,7 +388,7 @@ describe('runLaunch', () => {
       return activeSession;
     });
     const kit = { launch: { compose, run } } as unknown as MinecraftKit;
-    const ops = new Map<ClientSlug, Op>();
+    const ops = new Map<CatalogKey, Op>();
 
     await runLaunch(env(kit, ops), SLUG, fixture.ctx, account());
 
@@ -353,7 +415,7 @@ describe('runLaunch', () => {
     const compose = vi.fn(async () => fixture.composition);
     const run = vi.fn();
     const kit = { launch: { compose, run } } as unknown as MinecraftKit;
-    const ops = new Map<ClientSlug, Op>();
+    const ops = new Map<CatalogKey, Op>();
     const managerEnv = env(kit, ops);
 
     await expect(runLaunch(managerEnv, SLUG, fixture.ctx, account())).resolves.toBeUndefined();
@@ -393,7 +455,7 @@ describe('runLaunch', () => {
     const compose = vi.fn(async () => launchComposition);
     const run = vi.fn();
     const kit = { launch: { compose, run } } as unknown as MinecraftKit;
-    const ops = new Map<ClientSlug, Op>();
+    const ops = new Map<CatalogKey, Op>();
     const managerEnv = env(kit, ops);
 
     await expect(runLaunch(managerEnv, SLUG, fixture.ctx, account())).resolves.toBeUndefined();
@@ -421,7 +483,7 @@ describe('runLaunch', () => {
     const compose = vi.fn(async () => launchComposition);
     const run = vi.fn();
     const kit = { launch: { compose, run } } as unknown as MinecraftKit;
-    const ops = new Map<ClientSlug, Op>();
+    const ops = new Map<CatalogKey, Op>();
     const managerEnv = env(kit, ops);
 
     await expect(runLaunch(managerEnv, SLUG, fixture.ctx, account())).resolves.toBeUndefined();
@@ -449,7 +511,7 @@ describe('runLaunch', () => {
     const compose = vi.fn(async () => launchComposition);
     const run = vi.fn();
     const kit = { launch: { compose, run } } as unknown as MinecraftKit;
-    const ops = new Map<ClientSlug, Op>();
+    const ops = new Map<CatalogKey, Op>();
     const managerEnv = env(kit, ops);
 
     await expect(runLaunch(managerEnv, SLUG, fixture.ctx, account())).resolves.toBeUndefined();
@@ -478,7 +540,7 @@ describe('runLaunch', () => {
     });
     const run = vi.fn();
     const kit = { launch: { compose, run } } as unknown as MinecraftKit;
-    const ops = new Map<ClientSlug, Op>();
+    const ops = new Map<CatalogKey, Op>();
     const managerEnv = env(kit, ops);
 
     await expect(runLaunch(managerEnv, SLUG, fixture.ctx, account())).resolves.toBeUndefined();
@@ -509,7 +571,7 @@ describe('runLaunch', () => {
     });
     const run = vi.fn();
     const kit = { launch: { compose, run } } as unknown as MinecraftKit;
-    const ops = new Map<ClientSlug, Op>();
+    const ops = new Map<CatalogKey, Op>();
     const managerEnv = env(kit, ops);
 
     await expect(runLaunch(managerEnv, SLUG, fixture.ctx, account())).resolves.toBeUndefined();
@@ -528,7 +590,7 @@ describe('runLaunch', () => {
     const compose = vi.fn(async (_target: Target, _options: unknown) => fixture.composition);
     const run = vi.fn(() => session());
     const kit = { launch: { compose, run } } as unknown as MinecraftKit;
-    const ops = new Map<ClientSlug, Op>();
+    const ops = new Map<CatalogKey, Op>();
 
     await runLaunch(env(kit, ops), SLUG, fixture.ctx, account());
 
@@ -565,12 +627,41 @@ describe('runLaunch', () => {
     const run = vi.fn(() => session());
     const kit = { launch: { compose, run } } as unknown as MinecraftKit;
 
-    await runLaunch(env(kit, new Map<ClientSlug, Op>()), SLUG, ctx, account());
+    await runLaunch(env(kit, new Map<CatalogKey, Op>()), SLUG, ctx, account());
 
     const options = compose.mock.calls[0]?.[1] as
       | { readonly extraJvmArgs?: readonly string[] }
       | undefined;
     expect(options?.extraJvmArgs).toEqual(expect.arrayContaining([`-javaagent:${agentJar}`]));
+  });
+
+  it('hands the session token to the in-game agent via -Dloontail.network.serviceToken', async () => {
+    launchMocks.getStoredSessionToken.mockReturnValue('handoff-session-token');
+    const fixture = await createLaunchFixture();
+    const appPath = fixture.ctx.target.directory;
+    launchMocks.appGetAppPath.mockReturnValue(appPath);
+    const agentJar = path.join(appPath, 'resources', 'agent', 'loontail-network-agent.jar');
+    await fs.mkdir(path.dirname(agentJar), { recursive: true });
+    await fs.writeFile(agentJar, 'agent');
+    const ctx = {
+      ...fixture.ctx,
+      target: {
+        ...fixture.ctx.target,
+        runtime: { ...fixture.ctx.target.runtime, majorVersion: 21 },
+      },
+    } as Context;
+    const compose = vi.fn(async (_target: Target, _options: unknown) => fixture.composition);
+    const run = vi.fn(() => session());
+    const kit = { launch: { compose, run } } as unknown as MinecraftKit;
+
+    await runLaunch(env(kit, new Map<CatalogKey, Op>()), SLUG, ctx, account());
+
+    const options = compose.mock.calls[0]?.[1] as
+      | { readonly extraJvmArgs?: readonly string[] }
+      | undefined;
+    expect(options?.extraJvmArgs).toEqual(
+      expect.arrayContaining(['-Dloontail.network.serviceToken=handoff-session-token']),
+    );
   });
 
   it('does not attach the network agent on older Java (would abort JVM startup)', async () => {
@@ -580,7 +671,7 @@ describe('runLaunch', () => {
     const run = vi.fn(() => session());
     const kit = { launch: { compose, run } } as unknown as MinecraftKit;
 
-    await runLaunch(env(kit, new Map<ClientSlug, Op>()), SLUG, fixture.ctx, account());
+    await runLaunch(env(kit, new Map<CatalogKey, Op>()), SLUG, fixture.ctx, account());
 
     const options = compose.mock.calls[0]?.[1] as
       | { readonly extraJvmArgs?: readonly string[] }
@@ -597,7 +688,7 @@ describe('endLaunch', () => {
   });
 
   it('surfaces the OS exit code from a crash on the console state', () => {
-    const ops = new Map<ClientSlug, Op>();
+    const ops = new Map<CatalogKey, Op>();
     const managerEnv = env({} as unknown as MinecraftKit, ops);
     const crash = new MinecraftKitError(
       MinecraftKitErrorCodes.LAUNCH_PROCESS_FAILED,
@@ -616,7 +707,7 @@ describe('endLaunch', () => {
   });
 
   it('reports a clean exit with the resolved exit code', () => {
-    const ops = new Map<ClientSlug, Op>();
+    const ops = new Map<CatalogKey, Op>();
     const managerEnv = env({} as unknown as MinecraftKit, ops);
 
     endLaunch(managerEnv, SLUG, undefined, { code: 0, signal: null, aborted: false });
@@ -630,7 +721,7 @@ describe('endLaunch', () => {
   });
 
   it('reports a user stop (aborted exit) with a null exit code and no error', () => {
-    const ops = new Map<ClientSlug, Op>();
+    const ops = new Map<CatalogKey, Op>();
     const managerEnv = env({} as unknown as MinecraftKit, ops);
 
     endLaunch(managerEnv, SLUG, undefined, { code: null, signal: 'SIGTERM', aborted: true });

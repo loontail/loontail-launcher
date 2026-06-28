@@ -1,15 +1,22 @@
+import { i18n } from '@renderer/i18n';
 import { createStatusSeeder } from '@renderer/shared/lib/statusSeeder';
 import { QUERY_KEYS } from '@shared/constants';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import type { LoaderChoice } from '@shared/contracts/settings';
+import type { IpcError } from '@shared/ipc';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import * as api from './api';
+import { localizeMinecraftError } from './errorCopy';
 import { type ClientRuntimeState, selectClient, useMinecraftStore } from './store';
 
 const statusSeeder = createStatusSeeder(api.getStatus);
 
-export const useClientStatus = (slug: ClientSlug | null | undefined): ClientRuntimeState => {
+const minecraftMutationMeta = {
+  errorLocalizer: (error: IpcError) => localizeMinecraftError(error.code, error.message, i18n.t),
+};
+
+export const useClientStatus = (slug: CatalogKey | null | undefined): ClientRuntimeState => {
   const state = useMinecraftStore(selectClient(slug));
   const queryClient = useQueryClient();
 
@@ -38,12 +45,13 @@ export const useClientStatus = (slug: ClientSlug | null | undefined): ClientRunt
 
 export const useInstallClient = () =>
   useMutation({
-    mutationFn: ({ slug, loader }: { slug: ClientSlug; loader?: LoaderChoice }) =>
+    meta: minecraftMutationMeta,
+    mutationFn: ({ slug, loader }: { slug: CatalogKey; loader?: LoaderChoice }) =>
       api.install(slug, loader),
   });
 
-const useSlugMutation = <T>(fn: (slug: ClientSlug) => Promise<T>) =>
-  useMutation({ mutationFn: fn });
+const useSlugMutation = <T>(fn: (slug: CatalogKey) => Promise<T>) =>
+  useMutation({ meta: minecraftMutationMeta, mutationFn: fn });
 
 export const usePauseInstall = () => useSlugMutation(api.pauseInstall);
 export const useResumeInstall = () => useSlugMutation(api.resumeInstall);

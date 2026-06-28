@@ -1,4 +1,4 @@
-// `process.env.API_URL` / `process.env.API_TOKEN` / `process.env.MOJANG_CLIENT_ID`
+// `process.env.API_URL` / `process.env.MOJANG_CLIENT_ID`
 // / `process.env.YGGDRASIL_API_ROOT` are inlined at build time by
 // `electron-vite.config.ts` (the `define` block). Vite only substitutes literal
 // property accesses, so each read must use `process.env.<NAME>` directly — a
@@ -19,7 +19,6 @@ const yggdrasilApiRoot = optionalEnv(process.env.YGGDRASIL_API_ROOT) ?? `${apiUr
 
 export const mainConfig = {
   apiUrl,
-  apiToken: requireEnv('API_TOKEN', process.env.API_TOKEN),
   mojangClientId: optionalEnv(process.env.MOJANG_CLIENT_ID),
   yggdrasilApiRoot,
   // Base URL of the Loontail in-game network service the embedded agent connects to.

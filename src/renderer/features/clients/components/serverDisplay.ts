@@ -1,5 +1,5 @@
+import type { Server } from '@shared/contracts/media';
 import type { ServerStatus } from '@shared/contracts/serverStatus';
-import type { Server } from '@shared/contracts/strapi';
 
 export type ServerDisplayEntry = {
   displayName: string;

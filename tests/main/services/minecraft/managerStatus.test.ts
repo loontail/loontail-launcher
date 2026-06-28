@@ -2,8 +2,6 @@ import { type MinecraftKit, PauseController } from '@loontail/minecraft-kit';
 import { describe, expect, it, vi } from 'vitest';
 
 const statusMocks = vi.hoisted(() => {
-  process.env.API_URL ??= 'http://test.invalid';
-  process.env.API_TOKEN ??= 'test-token';
   return {
     buildContext: vi.fn(),
     getSettings: vi.fn(),
@@ -40,34 +38,26 @@ vi.mock('@main/services/settings/settings', () => ({
 }));
 
 import { createClientOperationLocks } from '@main/services/clientOperationLocks';
-import type { Broadcaster } from '@main/services/minecraft/broadcast';
 import { MinecraftManager } from '@main/services/minecraft/manager';
-import { type InstallOp, OpKinds } from '@main/services/minecraft/ops';
-import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
+import { type InstallOp, OpKinds, OpRegistry, seedOp } from '@main/services/minecraft/ops';
+import { asCatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
-import type { LauncherSettings } from '@shared/contracts/settings';
-import { stubAccountProvider, stubConsolePort, stubOpenConsole } from './managerStubs';
+import { makeLauncherSettings, makeMinecraftBroadcaster } from '../../../helpers/fixtures';
+import {
+  stubAccountProvider,
+  stubConsolePort,
+  stubOpenConsole,
+  stubResolveBuild,
+  stubResolveBundleRepairFilter,
+} from './managerStubs';
 
-const SLUG = asClientSlug('test-client');
+const SLUG = asCatalogKey('official:test-client');
 
-const launcherSettings = (): LauncherSettings => ({
-  memory: { allocatedRamMb: 0 },
-  storage: { clientsFolder: '/tmp/clients' },
-  launch: { console: false, fullscreen: false },
-  clients: {},
-});
+const launcherSettings = () => makeLauncherSettings();
 
-const makeBroadcaster = (): Broadcaster =>
-  ({
-    status: vi.fn(),
-    progress: vi.fn(),
-    log: vi.fn(),
-    error: vi.fn(),
-  }) as unknown as Broadcaster;
-
-const makeManager = (): MinecraftManager =>
+const makeManager = (ops?: OpRegistry): MinecraftManager =>
   new MinecraftManager(
-    makeBroadcaster(),
+    makeMinecraftBroadcaster(),
     {
       targets: { resolve: vi.fn() },
     } as unknown as MinecraftKit,
@@ -75,6 +65,9 @@ const makeManager = (): MinecraftManager =>
     stubConsolePort(),
     stubOpenConsole(),
     stubAccountProvider(),
+    stubResolveBundleRepairFilter(),
+    stubResolveBuild(),
+    ops ?? new OpRegistry(),
   );
 
 const resetStatusMocks = (): void => {
@@ -125,17 +118,16 @@ describe('MinecraftManager.getStatus', () => {
 
   it('reports an in-flight install op as installing with its paused flag', async () => {
     resetStatusMocks();
-    const manager = makeManager();
+    const ops = new OpRegistry();
+    const manager = makeManager(ops);
     const op: InstallOp = {
       kind: OpKinds.INSTALL,
       pauseController: new PauseController(),
       abort: new AbortController(),
       paused: true,
       cancelled: false,
-      fresh: false,
     };
-    const internals = manager as unknown as { ops: Map<ClientSlug, InstallOp> };
-    internals.ops.set(SLUG, op);
+    seedOp(ops, SLUG, op);
 
     await expect(manager.getStatus(SLUG)).resolves.toEqual({
       status: InstallStatuses.INSTALLING,

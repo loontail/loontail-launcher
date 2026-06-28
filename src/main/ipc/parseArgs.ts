@@ -4,6 +4,7 @@ import { app } from 'electron';
 import type { infer as ZodInfer, ZodTypeAny } from 'zod';
 
 export const SLUG_REQUIRED_MSG = 'slug must be a non-empty string';
+export const KEY_REQUIRED_MSG = 'key must be a source-namespaced catalog key';
 
 export const parseIpcArgs = <Schema extends ZodTypeAny>(
   schema: Schema,

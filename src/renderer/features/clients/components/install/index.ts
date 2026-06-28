@@ -12,6 +12,5 @@ export type {
   StepState,
 } from './installSteps';
 export { InstallStepKeys, StepStates } from './installSteps';
-export { useByteSpeed } from './useByteSpeed';
 export { useInstallProgress } from './useInstallProgress';
 export type { ClientInstallProgress } from './useInstallProgress';

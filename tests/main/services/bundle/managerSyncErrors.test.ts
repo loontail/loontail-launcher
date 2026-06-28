@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const managerMocks = vi.hoisted(() => {
-  process.env.API_URL ??= 'http://test.invalid';
-  process.env.API_TOKEN ??= 'test-token';
   return {
     buildPlan: vi.fn(),
     fetchRemoteManifest: vi.fn(),
@@ -16,13 +14,13 @@ const managerMocks = vi.hoisted(() => {
 });
 
 import type { BundleBroadcaster } from '@main/services/bundle/broadcast';
-import { BundleError } from '@main/services/bundle/errors';
-import type { Healer } from '@main/services/bundle/healer';
-import { BundleManager } from '@main/services/bundle/manager';
+import { BundleError, classifyBundleError } from '@main/services/bundle/errors';
+import { BundleManager, type GetClient } from '@main/services/bundle/manager';
+import { SyncStateStore } from '@main/services/bundle/syncState';
 import { createClientOperationLocks } from '@main/services/clientOperationLocks';
-import { BundleErrorCodes } from '@shared/contracts/bundle';
-import type { ClientSlug } from '@shared/contracts/ids';
-import type { LauncherSettings } from '@shared/contracts/settings';
+import { BundleErrorCodes, BundleSyncStatuses } from '@shared/contracts/bundle';
+import { asCatalogKey } from '@shared/contracts/ids';
+import { makeBroadcaster, makeHealer, makeLauncherSettings } from '../../../helpers/fixtures';
 
 vi.mock('@main/infra/logger', () => ({
   scopedLogger: () => ({
@@ -33,7 +31,6 @@ vi.mock('@main/infra/logger', () => ({
   }),
 }));
 
-vi.mock('@main/services/clients', () => ({ getClient: managerMocks.getClient }));
 vi.mock('@main/services/settings/settings', () => ({ getSettings: managerMocks.getSettings }));
 vi.mock('@main/services/bundle/api', () => ({
   fetchRemoteManifest: managerMocks.fetchRemoteManifest,
@@ -49,9 +46,11 @@ vi.mock('@main/services/bundle/runner', async (importOriginal) => {
   return { ...actual, runSyncPhases: managerMocks.runSyncPhases };
 });
 
-const SLUG = 'test-client' as ClientSlug;
+const SLUG = asCatalogKey('official:test-client');
 const BUNDLE_SLUG = 'bundle-x';
 const CLIENT_FOLDER = '/tmp/client';
+
+const fakeGetClient = managerMocks.getClient as unknown as GetClient;
 
 const EMPTY_PLAN = {
   toDownload: [],
@@ -76,21 +75,12 @@ const DOWNLOAD_PLAN = {
   ],
 };
 
-const launcherSettings = (clientFolder: string | null): LauncherSettings => ({
-  memory: { allocatedRamMb: 0 },
-  // Empty clientsFolder so an absent per-client override resolves to no folder.
-  storage: { clientsFolder: clientFolder ? '/tmp/clients' : '' },
-  launch: { console: false, fullscreen: false },
-  clients: clientFolder ? { [SLUG]: { storage: { clientFolder } } } : {},
-});
-
-const makeBroadcaster = (): BundleBroadcaster => ({
-  status: vi.fn(),
-  progress: vi.fn(),
-  error: vi.fn(),
-});
-
-const makeHealer = (): Healer => ({ healAfterDeletes: vi.fn(async () => {}) }) as unknown as Healer;
+const launcherSettings = (clientFolder: string | null) =>
+  makeLauncherSettings({
+    // Empty clientsFolder so an absent per-client override resolves to no folder.
+    storage: { clientsFolder: clientFolder ? '/tmp/clients' : '' },
+    clients: clientFolder ? { [SLUG]: { storage: { clientFolder } } } : {},
+  });
 
 const errorCodes = (broadcaster: BundleBroadcaster) =>
   vi.mocked(broadcaster.error).mock.calls.map(([event]) => event.code);
@@ -108,6 +98,34 @@ beforeEach(() => {
   managerMocks.logError.mockReset();
 });
 
+describe('classifyBundleError', () => {
+  // DL-1: a BundleError code wins over an aborted signal so the sibling-abort
+  // pattern (worker aborts the shared signal, then re-throws the real failure)
+  // surfaces the genuine code instead of being masked as ABORTED.
+  it('returns the BundleError code even when the signal is aborted', () => {
+    const controller = new AbortController();
+    controller.abort();
+    expect(
+      classifyBundleError(
+        new BundleError(BundleErrorCodes.DOWNLOAD_FAILED, 'boom'),
+        controller.signal,
+      ),
+    ).toBe(BundleErrorCodes.DOWNLOAD_FAILED);
+  });
+
+  it('returns ABORTED for a non-BundleError thrown against an aborted signal', () => {
+    const controller = new AbortController();
+    controller.abort();
+    expect(classifyBundleError(new Error('plain'), controller.signal)).toBe(
+      BundleErrorCodes.ABORTED,
+    );
+  });
+
+  it('returns UNKNOWN for a non-BundleError with no aborted signal', () => {
+    expect(classifyBundleError(new Error('plain'))).toBe(BundleErrorCodes.UNKNOWN);
+  });
+});
+
 describe('BundleManager sync error surfacing', () => {
   // DLI-40
   it('maps a client fetch failure to MANIFEST_FETCH_FAILED, not UNKNOWN', async () => {
@@ -116,6 +134,8 @@ describe('BundleManager sync error surfacing', () => {
       makeBroadcaster(),
       makeHealer(),
       createClientOperationLocks(),
+      new SyncStateStore(),
+      fakeGetClient,
     );
 
     await expect(manager.startSync({ slug: SLUG })).rejects.toMatchObject({
@@ -125,11 +145,15 @@ describe('BundleManager sync error surfacing', () => {
 
   // DLI-40
   it('treats a genuine not-found client as UNKNOWN client-not-found', async () => {
-    managerMocks.getClient.mockRejectedValue(new Error(`Client "${SLUG}" not found`));
+    // getClient receives the bare official slug (officialSlugFor parses the CatalogKey),
+    // so the not-found message the manager matches uses that bare slug, not the key.
+    managerMocks.getClient.mockRejectedValue(new Error('Client "test-client" not found'));
     const manager = new BundleManager(
       makeBroadcaster(),
       makeHealer(),
       createClientOperationLocks(),
+      new SyncStateStore(),
+      fakeGetClient,
     );
 
     await expect(manager.startSync({ slug: SLUG })).rejects.toMatchObject({
@@ -144,7 +168,13 @@ describe('BundleManager sync error surfacing', () => {
       new BundleError(BundleErrorCodes.DOWNLOAD_FAILED, 'boom'),
     );
     const broadcaster = makeBroadcaster();
-    const manager = new BundleManager(broadcaster, makeHealer(), createClientOperationLocks());
+    const manager = new BundleManager(
+      broadcaster,
+      makeHealer(),
+      createClientOperationLocks(),
+      new SyncStateStore(),
+      fakeGetClient,
+    );
 
     await manager.startSync({ slug: SLUG });
 
@@ -155,6 +185,32 @@ describe('BundleManager sync error surfacing', () => {
     );
   });
 
+  // DL-1: the sibling-abort pattern (worker aborts the shared signal, then the
+  // phase re-throws the real BundleError) must surface the genuine code/status,
+  // not be swallowed as ABORTED.
+  it('surfaces a download integrity failure even when the abort signal already fired', async () => {
+    managerMocks.buildPlan.mockResolvedValueOnce(DOWNLOAD_PLAN);
+    managerMocks.runSyncPhases.mockImplementationOnce(async (task: { abort: AbortController }) => {
+      task.abort.abort();
+      throw new BundleError(BundleErrorCodes.DOWNLOAD_INTEGRITY_FAILED, 'sha256 mismatch');
+    });
+    const broadcaster = makeBroadcaster();
+    const manager = new BundleManager(
+      broadcaster,
+      makeHealer(),
+      createClientOperationLocks(),
+      new SyncStateStore(),
+      fakeGetClient,
+    );
+
+    await manager.startSync({ slug: SLUG });
+
+    expect(errorCodes(broadcaster)).toContain(BundleErrorCodes.DOWNLOAD_INTEGRITY_FAILED);
+    expect(vi.mocked(broadcaster.status).mock.calls.map(([event]) => event.status)).toContain(
+      BundleSyncStatuses.ERROR,
+    );
+  });
+
   // DLI-43
   it('propagates a fresh-sync failure from resumeSync when no paused sync exists', async () => {
     managerMocks.getSettings.mockReturnValue(launcherSettings(null));
@@ -162,6 +218,8 @@ describe('BundleManager sync error surfacing', () => {
       makeBroadcaster(),
       makeHealer(),
       createClientOperationLocks(),
+      new SyncStateStore(),
+      fakeGetClient,
     );
 
     await expect(manager.resumeSync(SLUG)).rejects.toMatchObject({
@@ -184,8 +242,14 @@ describe('BundleManager sync error surfacing', () => {
     });
 
     const broadcaster = makeBroadcaster();
-    const manager = new BundleManager(broadcaster, makeHealer(), createClientOperationLocks());
-    const internals = manager as unknown as { activeSyncs: Map<ClientSlug, unknown> };
+    const activeSyncs = new SyncStateStore();
+    const manager = new BundleManager(
+      broadcaster,
+      makeHealer(),
+      createClientOperationLocks(),
+      activeSyncs,
+      fakeGetClient,
+    );
 
     void manager.startSync({ slug: SLUG });
     await vi.waitFor(() => expect(managerMocks.runSyncPhases).toHaveBeenCalledTimes(1));
@@ -193,7 +257,7 @@ describe('BundleManager sync error surfacing', () => {
     let cancelAllResolved = false;
     const cancelAll = manager.cancelAll(10_000).then(() => {
       cancelAllResolved = true;
-      droppedDuringPhase = internals.activeSyncs.size === 0;
+      droppedDuringPhase = activeSyncs.size === 0;
     });
 
     await Promise.resolve();
@@ -219,6 +283,8 @@ describe('BundleManager sync error surfacing', () => {
       makeBroadcaster(),
       makeHealer(),
       createClientOperationLocks(),
+      new SyncStateStore(),
+      fakeGetClient,
     );
     void manager.startSync({ slug: SLUG });
     await vi.waitFor(() => expect(managerMocks.runSyncPhases).toHaveBeenCalledTimes(1));

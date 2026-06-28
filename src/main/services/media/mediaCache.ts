@@ -7,11 +7,12 @@ import {
   readBuffer,
   writeBuffer,
 } from '@main/infra/cache';
+import { sessionAuthHeader } from '@main/infra/http';
 import { scopedLogger } from '@main/infra/logger';
 
 const CACHE_NAMESPACE = 'media';
 
-// Cap the on-disk media cache so months of Strapi-image churn don't accrete
+// Cap the on-disk media cache so months of CMS-image churn don't accrete
 // a multi-GB footprint. LRU pruning runs after every cache write.
 export const MEDIA_CACHE_MAX_BYTES = 200 * 1024 * 1024;
 
@@ -39,7 +40,7 @@ const guessMimeFromUrl = (url: string): string => {
 };
 
 // The served Content-Type is stored in a tiny sidecar entry next to the body so
-// a cache hit reports the real type instead of guessing from the URL — Strapi
+// a cache hit reports the real type instead of guessing from the URL — CMS
 // and skin URLs are often extensionless, where the guess degrades to
 // application/octet-stream. A missing sidecar (old entry) falls back to the guess.
 const typeKey = (cacheKey: string): string => `${cacheKey}.type`;
@@ -68,7 +69,10 @@ const scheduleEviction = (): void => {
 
 const fetchAndStore = async (sourceUrl: string, cacheKey: string): Promise<CachedMedia | null> => {
   try {
-    const response = await fetch(sourceUrl, { signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
+    const response = await fetch(sourceUrl, {
+      headers: sessionAuthHeader(),
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    });
     if (!response.ok) {
       logger.warn(`Failed to fetch media (${response.status}): ${sourceUrl}`);
       return null;

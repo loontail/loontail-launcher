@@ -8,12 +8,6 @@ import {
 import type { MojangSession } from '@shared/contracts/auth';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.hoisted(() => {
-  process.env.API_URL ??= 'http://test.invalid';
-  process.env.API_TOKEN ??= 'test-token';
-  process.env.MOJANG_CLIENT_ID ??= '00000000-0000-0000-0000-000000000000';
-});
-
 vi.mock('@main/infra/logger', () => ({
   scopedLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));

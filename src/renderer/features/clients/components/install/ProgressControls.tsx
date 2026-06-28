@@ -1,17 +1,17 @@
 import { useCancelBundle, usePauseBundle, useResumeBundle } from '@renderer/features/bundle';
 import { useCancelInstall, usePauseInstall, useResumeInstall } from '@renderer/features/minecraft';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import { Pause, Play, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ActionButton } from './ActionButton';
 import type { ProgressControlsKind } from './installSteps';
 
 type ControlButtonsProps = {
-  slug: ClientSlug;
+  slug: CatalogKey;
   paused: boolean;
-  onPause: (slug: ClientSlug) => Promise<unknown>;
-  onResume: (slug: ClientSlug) => Promise<unknown>;
-  onCancel: (slug: ClientSlug) => Promise<unknown>;
+  onPause: (slug: CatalogKey) => Promise<unknown>;
+  onResume: (slug: CatalogKey) => Promise<unknown>;
+  onCancel: (slug: CatalogKey) => Promise<unknown>;
 };
 
 const ControlButtons = ({ slug, paused, onPause, onResume, onCancel }: ControlButtonsProps) => {
@@ -38,7 +38,7 @@ const ControlButtons = ({ slug, paused, onPause, onResume, onCancel }: ControlBu
   );
 };
 
-const InstallControls = ({ slug, paused }: { slug: ClientSlug; paused: boolean }) => {
+const InstallControls = ({ slug, paused }: { slug: CatalogKey; paused: boolean }) => {
   const pause = usePauseInstall();
   const resume = useResumeInstall();
   const cancel = useCancelInstall();
@@ -54,7 +54,7 @@ const InstallControls = ({ slug, paused }: { slug: ClientSlug; paused: boolean }
   );
 };
 
-const BundleControls = ({ slug, paused }: { slug: ClientSlug; paused: boolean }) => {
+const BundleControls = ({ slug, paused }: { slug: CatalogKey; paused: boolean }) => {
   const pause = usePauseBundle();
   const resume = useResumeBundle();
   const cancel = useCancelBundle();
@@ -73,7 +73,7 @@ const BundleControls = ({ slug, paused }: { slug: ClientSlug; paused: boolean })
 type ProgressControlsProps = {
   kind: ProgressControlsKind;
   paused: boolean;
-  slug: ClientSlug;
+  slug: CatalogKey;
 };
 
 export const ProgressControls = ({ kind, paused, slug }: ProgressControlsProps) => {

@@ -21,32 +21,11 @@ const settingsMock = vi.hoisted(() => ({
 
 vi.mock('@main/services/settings/settings', () => settingsMock);
 
-import type { Router } from '@main/ipc/router';
 import { registerSettingsRoutes } from '@main/services/settings/routes';
 import { ERROR_CODES } from '@shared/constants';
-import { IPC_CHANNELS, type IpcArgs, type IpcContract, type IpcResult } from '@shared/ipc';
-import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';
-
-type StoredHandler = (rawArgs: unknown) => Promise<unknown> | unknown;
-
-const fakeEvent = (): IpcMainInvokeEvent => ({}) as unknown as IpcMainInvokeEvent;
-
-const createTestRouter = (): { router: Router; handlers: Map<string, StoredHandler> } => {
-  const handlers = new Map<string, StoredHandler>();
-  const router: Router = {
-    handle<TChannel extends keyof IpcContract>(
-      channel: TChannel,
-      handler: (
-        args: IpcArgs<TChannel>,
-        event: IpcMainInvokeEvent,
-      ) => Promise<IpcResult<TChannel>> | IpcResult<TChannel>,
-    ): void {
-      handlers.set(channel, (rawArgs) => handler(rawArgs as IpcArgs<TChannel>, fakeEvent()));
-    },
-    dispose: () => undefined,
-  };
-  return { router, handlers };
-};
+import { IPC_CHANNELS } from '@shared/ipc';
+import type { BrowserWindow } from 'electron';
+import { captureThrow, createTestRouter } from '../../../helpers/router';
 
 const SETTINGS: LauncherSettings = {
   memory: { allocatedRamMb: 2048 },
@@ -73,19 +52,6 @@ afterEach(() => {
   vi.clearAllMocks();
   appMock.isPackaged = false;
 });
-
-// Most settings routes register synchronous handlers, so a failed
-// parseIpcArgs/assertNoIpcArgs throws synchronously rather than rejecting a
-// promise. The fake test router does not wrap handlers the way the real router
-// does, so capture both throw shapes.
-const captureThrow = async (run: () => unknown): Promise<unknown> => {
-  try {
-    await run();
-  } catch (error) {
-    return error;
-  }
-  throw new Error('expected the handler to throw');
-};
 
 describe('registerSettingsRoutes', () => {
   it('settings.get rejects any payload (no args)', async () => {
@@ -120,33 +86,54 @@ describe('registerSettingsRoutes', () => {
     expect(settingsMock.patchLauncherSettings).not.toHaveBeenCalled();
   });
 
-  it('settings.setClientOverride forwards the parsed slug and patch', async () => {
+  it('settings.setClientOverride forwards the parsed CatalogKey and patch', async () => {
     const handlers = registerWith();
     await handlers.get(IPC_CHANNELS.settingsSetClientOverride)?.({
-      slug: 'vanilla',
+      slug: 'official:vanilla',
       patch: { memory: { allocatedRamMb: 1024 } },
     });
-    expect(settingsMock.setClientOverride).toHaveBeenCalledWith('vanilla', {
+    expect(settingsMock.setClientOverride).toHaveBeenCalledWith('official:vanilla', {
       memory: { allocatedRamMb: 1024 },
     });
   });
 
-  it('settings.setClientOverride rejects a missing patch', async () => {
+  it('settings.setClientOverride rejects a bare slug', async () => {
     const handlers = registerWith();
     const thrown = await captureThrow(() =>
-      handlers.get(IPC_CHANNELS.settingsSetClientOverride)?.({ slug: 'vanilla' }),
+      handlers.get(IPC_CHANNELS.settingsSetClientOverride)?.({
+        slug: 'vanilla',
+        patch: { memory: { allocatedRamMb: 1024 } },
+      }),
     );
     expect(thrown).toMatchObject({ code: ERROR_CODES.IpcInvalidArgs });
     expect(settingsMock.setClientOverride).not.toHaveBeenCalled();
   });
 
-  it('settings.clearClientOverrides forwards a valid slug', async () => {
+  it('settings.setClientOverride rejects a missing patch', async () => {
     const handlers = registerWith();
-    await handlers.get(IPC_CHANNELS.settingsClearClientOverrides)?.('vanilla');
-    expect(settingsMock.clearClientOverride).toHaveBeenCalledWith('vanilla');
+    const thrown = await captureThrow(() =>
+      handlers.get(IPC_CHANNELS.settingsSetClientOverride)?.({ slug: 'official:vanilla' }),
+    );
+    expect(thrown).toMatchObject({ code: ERROR_CODES.IpcInvalidArgs });
+    expect(settingsMock.setClientOverride).not.toHaveBeenCalled();
   });
 
-  it('settings.clearClientOverrides rejects a non-string slug', async () => {
+  it('settings.clearClientOverrides forwards a valid CatalogKey', async () => {
+    const handlers = registerWith();
+    await handlers.get(IPC_CHANNELS.settingsClearClientOverrides)?.('official:vanilla');
+    expect(settingsMock.clearClientOverride).toHaveBeenCalledWith('official:vanilla');
+  });
+
+  it('settings.clearClientOverrides rejects a bare slug', async () => {
+    const handlers = registerWith();
+    const thrown = await captureThrow(() =>
+      handlers.get(IPC_CHANNELS.settingsClearClientOverrides)?.('vanilla'),
+    );
+    expect(thrown).toMatchObject({ code: ERROR_CODES.IpcInvalidArgs });
+    expect(settingsMock.clearClientOverride).not.toHaveBeenCalled();
+  });
+
+  it('settings.clearClientOverrides rejects a non-string key', async () => {
     const handlers = registerWith();
     const thrown = await captureThrow(() =>
       handlers.get(IPC_CHANNELS.settingsClearClientOverrides)?.(7),
@@ -158,27 +145,48 @@ describe('registerSettingsRoutes', () => {
   it('settings.chooseClientFolder returns null when the user cancels the picker', async () => {
     systemMock.pickFolderWithSuffix.mockResolvedValueOnce(null);
     const handlers = registerWith();
-    await expect(handlers.get(IPC_CHANNELS.settingsChooseClientFolder)?.('vanilla')).resolves.toBe(
-      null,
-    );
+    await expect(
+      handlers.get(IPC_CHANNELS.settingsChooseClientFolder)?.('official:vanilla'),
+    ).resolves.toBe(null);
     expect(settingsMock.setClientOverride).not.toHaveBeenCalled();
   });
 
-  it('settings.chooseClientFolder persists the picked folder and reports install presence', async () => {
+  it('settings.chooseClientFolder uses the bare ref as the folder suffix, not the CatalogKey', async () => {
     systemMock.pickFolderWithSuffix.mockResolvedValueOnce({ path: '/picked' });
     systemMock.directoryHasEntries.mockResolvedValueOnce(true);
     const handlers = registerWith();
-    const result = await handlers.get(IPC_CHANNELS.settingsChooseClientFolder)?.('vanilla');
-    expect(settingsMock.setClientOverride).toHaveBeenCalledWith('vanilla', {
+    const result = await handlers.get(IPC_CHANNELS.settingsChooseClientFolder)?.(
+      'official:vanilla',
+    );
+    // The picker suffix is the bare slug (`vanilla`), never `official:vanilla`:
+    // `:` is illegal in a Windows path segment.
+    expect(systemMock.pickFolderWithSuffix).toHaveBeenCalledWith(expect.anything(), 'vanilla');
+    // The settings record still keys by the CatalogKey.
+    expect(settingsMock.setClientOverride).toHaveBeenCalledWith('official:vanilla', {
       storage: { clientFolder: '/picked' },
     });
     expect(result).toEqual({ settings: SETTINGS, installed: true });
   });
 
-  it('settings.chooseClientFolder rejects a non-string slug before opening the picker', async () => {
+  it('settings.chooseClientFolder uses the bare uuid suffix for a local build', async () => {
+    systemMock.pickFolderWithSuffix.mockResolvedValueOnce({ path: '/picked' });
+    systemMock.directoryHasEntries.mockResolvedValueOnce(false);
+    const handlers = registerWith();
+    const localKey = 'local:550e8400-e29b-41d4-a716-446655440000';
+    await handlers.get(IPC_CHANNELS.settingsChooseClientFolder)?.(localKey);
+    expect(systemMock.pickFolderWithSuffix).toHaveBeenCalledWith(
+      expect.anything(),
+      '550e8400-e29b-41d4-a716-446655440000',
+    );
+    expect(settingsMock.setClientOverride).toHaveBeenCalledWith(localKey, {
+      storage: { clientFolder: '/picked' },
+    });
+  });
+
+  it('settings.chooseClientFolder rejects a bare slug before opening the picker', async () => {
     const handlers = registerWith();
     await expect(
-      handlers.get(IPC_CHANNELS.settingsChooseClientFolder)?.(null),
+      handlers.get(IPC_CHANNELS.settingsChooseClientFolder)?.('vanilla'),
     ).rejects.toMatchObject({ code: ERROR_CODES.IpcInvalidArgs });
     expect(systemMock.pickFolderWithSuffix).not.toHaveBeenCalled();
   });

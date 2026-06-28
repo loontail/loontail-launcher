@@ -33,9 +33,4 @@ export const changeLanguage = (language: Language): void => {
   void i18n.changeLanguage(language);
 };
 
-export const getCurrentLanguage = (): Language => {
-  const current = i18n.language;
-  return isLanguage(current) ? current : 'en';
-};
-
 export { i18n };

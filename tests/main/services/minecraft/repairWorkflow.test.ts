@@ -8,8 +8,6 @@ import {
 import { describe, expect, it, vi } from 'vitest';
 
 const workflowMocks = vi.hoisted(() => {
-  process.env.API_URL ??= 'http://test.invalid';
-  process.env.API_TOKEN ??= 'test-token';
   return {
     resolveClientInstallPresence: vi.fn(),
     resolveLaunchVersion: vi.fn(),
@@ -29,6 +27,7 @@ vi.mock('@main/services/minecraft/readinessPolicy', () => ({
   resolveClientInstallPresence: workflowMocks.resolveClientInstallPresence,
 }));
 
+import { createBundleRepairIssueFilter } from '@main/services/bundle/ownership';
 import type { Context } from '@main/services/minecraft/context';
 import type { ManagerEnv } from '@main/services/minecraft/env';
 import { createForgeProcessorCache } from '@main/services/minecraft/forgeProcessorHealing';
@@ -36,12 +35,13 @@ import {
   ensureLaunchable,
   finalizeRepairCancellation,
   finalizeRepairFailure,
+  verifyAndRepairBase,
 } from '@main/services/minecraft/repairWorkflow';
-import { type ClientSlug, asClientSlug } from '@shared/contracts/ids';
+import { type CatalogKey, asCatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraft';
 import { stubConsolePort, stubOpenConsole } from './managerStubs';
 
-const SLUG = asClientSlug('test-client');
+const SLUG = asCatalogKey('official:test-client');
 const CLIENT_FOLDER = 'Z:/client';
 
 const target = {
@@ -77,7 +77,7 @@ const env = (): ManagerEnv => {
   return {
     kit: {} as MinecraftKit,
     broadcaster,
-    ops: new Map<ClientSlug, never>(),
+    ops: new Map<CatalogKey, never>(),
     forgeProcessorCache: createForgeProcessorCache(),
     console: stubConsolePort(),
     openConsole: stubOpenConsole(),
@@ -86,6 +86,7 @@ const env = (): ManagerEnv => {
     emitError: vi.fn(),
     persistRuntime: vi.fn(),
     clearRuntimeOverride: vi.fn(),
+    resolveBundleRepairFilter: vi.fn(async () => null),
   };
 };
 
@@ -208,5 +209,66 @@ describe('ensureLaunchable', () => {
 
     expect(installPlan).not.toHaveBeenCalled();
     expect(runPlan).not.toHaveBeenCalled();
+  });
+});
+
+describe('verifyAndRepairBase bundle ownership', () => {
+  const bundleContext = (): Context =>
+    ({
+      item: { spec: { bundleSlug: 'pack-a' } },
+      clientFolder: CLIENT_FOLDER,
+      target,
+    }) as unknown as Context;
+
+  const repairOptions = () => ({
+    signal: new AbortController().signal,
+    onEvent: vi.fn(),
+  });
+
+  it('passes the injected filter to kit.repair.all and it skips bundle-owned issues', async () => {
+    const ownedFilter = createBundleRepairIssueFilter(CLIENT_FOLDER, new Set(['mods/owned.jar']));
+    const resolveBundleRepairFilter = vi.fn(async () => ownedFilter);
+    const repairAll = vi.fn(async (_target: unknown, _options: unknown) => ({
+      repairs: new Map(),
+    }));
+    const operationEnv: ManagerEnv = {
+      ...env(),
+      kit: { repair: { all: repairAll } } as unknown as MinecraftKit,
+      resolveBundleRepairFilter,
+    };
+
+    await verifyAndRepairBase(operationEnv, SLUG, bundleContext(), repairOptions());
+
+    expect(resolveBundleRepairFilter).toHaveBeenCalledWith(CLIENT_FOLDER, 'pack-a');
+    expect(repairAll).toHaveBeenCalledWith(
+      target,
+      expect.objectContaining({ shouldRepairIssue: ownedFilter }),
+    );
+    const passed = repairAll.mock.calls[0]?.[1] as { shouldRepairIssue: typeof ownedFilter };
+    const skipsOwned = passed.shouldRepairIssue({
+      issue: { path: `${CLIENT_FOLDER}/mods/owned.jar` },
+    } as never);
+    const repairsVanilla = passed.shouldRepairIssue({
+      issue: { path: `${CLIENT_FOLDER}/libraries/x.jar` },
+    } as never);
+    expect(skipsOwned).toBe(false);
+    expect(repairsVanilla).toBe(true);
+  });
+
+  it('repairs without a filter when the build has no bundle', async () => {
+    const resolveBundleRepairFilter = vi.fn(async () => null);
+    const repairAll = vi.fn(async (_target: unknown, _options: unknown) => ({
+      repairs: new Map(),
+    }));
+    const operationEnv: ManagerEnv = {
+      ...env(),
+      kit: { repair: { all: repairAll } } as unknown as MinecraftKit,
+      resolveBundleRepairFilter,
+    };
+
+    await verifyAndRepairBase(operationEnv, SLUG, context(), repairOptions());
+
+    expect(resolveBundleRepairFilter).not.toHaveBeenCalled();
+    expect(repairAll.mock.calls[0]?.[1]).not.toHaveProperty('shouldRepairIssue');
   });
 });

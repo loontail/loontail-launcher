@@ -1,6 +1,6 @@
 import { toast } from '@renderer/shared/ui/Toast';
-import { isIpcError } from '@shared/ipc';
 import { MutationCache, QueryClient } from '@tanstack/react-query';
+import { type IpcErrorLocalizer, resolveErrorToastMessage } from './errorToast';
 import { QUERY_PERSIST_MAX_AGE_MS } from './queryPersister';
 
 const DEFAULT_STALE_TIME_MS = 30_000;
@@ -8,19 +8,6 @@ const DEFAULT_STALE_TIME_MS = 30_000;
 // Refetch on every mount and drop the entry immediately, so the persisted query
 // cache can't replay a stale value from a previous main-process build.
 export const NEVER_CACHE = { staleTime: 0, gcTime: 0 } as const;
-
-// Best-effort string for arbitrary error shapes — covers IpcError ({code,
-// message}), Error instances, and as a last resort anything with a string
-// `message` so plain throw-objects never collapse to "[object Object]".
-const formatError = (error: unknown): string => {
-  if (isIpcError(error)) return error.message;
-  if (error instanceof Error) return error.message;
-  if (error && typeof error === 'object') {
-    const maybe = (error as Record<string, unknown>).message;
-    if (typeof maybe === 'string' && maybe.length > 0) return maybe;
-  }
-  return String(error);
-};
 
 export const createQueryClient = (): QueryClient =>
   new QueryClient({
@@ -41,7 +28,8 @@ export const createQueryClient = (): QueryClient =>
     mutationCache: new MutationCache({
       onError: (error, _vars, _ctx, mutation) => {
         if (mutation.meta?.skipGlobalErrorToast) return;
-        toast.error(formatError(error));
+        const localizer = mutation.meta?.errorLocalizer as IpcErrorLocalizer | undefined;
+        toast.error(resolveErrorToastMessage(error, localizer));
       },
     }),
   });

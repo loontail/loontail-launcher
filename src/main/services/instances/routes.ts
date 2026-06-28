@@ -1,5 +1,5 @@
 import type { MinecraftKit } from '@loontail/minecraft-kit';
-import { parseIpcArgs } from '@main/ipc/parseArgs';
+import { assertNoIpcArgs, parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
 import { InstanceIdSchema } from '@shared/contracts/ids';
 import {
@@ -40,9 +40,10 @@ export const registerInstanceRoutes = (router: Router, kit: MinecraftKit): void 
     await deleteInstance(id);
   });
 
-  router.handle(IPC_CHANNELS.buildsListMinecraftVersions, async () =>
-    listMinecraftVersionOptions(kit),
-  );
+  router.handle(IPC_CHANNELS.buildsListMinecraftVersions, async (rawArgs) => {
+    assertNoIpcArgs(rawArgs, 'builds.listMinecraftVersions takes no arguments');
+    return listMinecraftVersionOptions(kit);
+  });
 
   router.handle(IPC_CHANNELS.buildsListLoaderVersions, async (rawArgs) => {
     const args = parseIpcArgs(

@@ -2,7 +2,9 @@ import { createHash } from 'node:crypto';
 import fs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { BundleError } from '@main/services/bundle/errors';
 import { buildPlan } from '@main/services/bundle/plan';
+import { BundleErrorCodes } from '@shared/contracts/bundle';
 import type { LocalManifest, RemoteManifest } from '@shared/contracts/bundle';
 import { asBundleSlug } from '@shared/contracts/ids';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -74,6 +76,38 @@ describe('buildPlan', () => {
     expect(plan.toUpdate.concat(plan.toDownload)).toHaveLength(1);
   });
 
+  it('non-force: no local record but matching disk content falls through to disk hash and skips', async () => {
+    const remoteManifest = remote([{ path: 'mods/foo.jar', content: 'foo' }]);
+    await fs.mkdir(path.join(dir, 'mods'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'mods/foo.jar'), 'foo');
+    const local: LocalManifest = {
+      bundleSlug: asBundleSlug('b'),
+      manifestHash: 'h',
+      syncedAt: '2024-01-01',
+      files: { 'mods/unrelated.jar': { sha256: sha256('unrelated'), size: 9 } },
+    };
+    const plan = await buildPlan(remoteManifest, local, dir);
+    expect(plan.toSkip.map((e) => e.path)).toEqual(['mods/foo.jar']);
+    expect(plan.toDownload).toHaveLength(0);
+    expect(plan.toUpdate).toHaveLength(0);
+  });
+
+  it('non-force: no local record and differing disk content falls through to disk hash and updates', async () => {
+    const remoteManifest = remote([{ path: 'mods/foo.jar', content: 'foo' }]);
+    await fs.mkdir(path.join(dir, 'mods'), { recursive: true });
+    await fs.writeFile(path.join(dir, 'mods/foo.jar'), 'stale');
+    const local: LocalManifest = {
+      bundleSlug: asBundleSlug('b'),
+      manifestHash: 'h',
+      syncedAt: '2024-01-01',
+      files: { 'mods/unrelated.jar': { sha256: sha256('unrelated'), size: 9 } },
+    };
+    const plan = await buildPlan(remoteManifest, local, dir);
+    expect(plan.toUpdate.map((e) => e.path)).toEqual(['mods/foo.jar']);
+    expect(plan.toDownload).toHaveLength(0);
+    expect(plan.toSkip).toHaveLength(0);
+  });
+
   it('lists local-only files in toDelete', async () => {
     const remoteManifest = remote([{ path: 'mods/foo.jar', content: 'foo' }]);
     const local: LocalManifest = {
@@ -126,5 +160,43 @@ describe('buildPlan', () => {
     const plan = await buildPlan(remoteManifest, null, dir);
     expect(plan.bundleOwnedRelativePaths.has('libraries/bundle-patch.jar')).toBe(true);
     expect(plan.bundleOwnedRelativePaths.has('mods/foo.jar')).toBe(true);
+  });
+
+  it('throws ABORTED when the signal is already aborted before planning', async () => {
+    const remoteManifest = remote([{ path: 'mods/foo.jar', content: 'foo' }]);
+    const controller = new AbortController();
+    controller.abort();
+    const rejection = buildPlan(remoteManifest, null, dir, { signal: controller.signal });
+    await expect(rejection).rejects.toBeInstanceOf(BundleError);
+    await expect(rejection).rejects.toMatchObject({ code: BundleErrorCodes.ABORTED });
+  });
+
+  it('classifies a large entry set with bounded concurrency without losing any', async () => {
+    const entries = Array.from({ length: 50 }, (_, i) => ({
+      path: `mods/file-${i}.jar`,
+      content: `content-${i}`,
+    }));
+    const remoteManifest = remote(entries);
+    // First 25 already on disk with matching content → skip; rest absent → download.
+    await fs.mkdir(path.join(dir, 'mods'), { recursive: true });
+    const local: LocalManifest = {
+      bundleSlug: asBundleSlug('b'),
+      manifestHash: 'h',
+      syncedAt: '2024-01-01',
+      files: {},
+    };
+    for (let i = 0; i < 25; i++) {
+      const content = `content-${i}`;
+      await fs.writeFile(path.join(dir, `mods/file-${i}.jar`), content);
+      local.files[`mods/file-${i}.jar`] = { sha256: sha256(content), size: content.length };
+    }
+    const plan = await buildPlan(remoteManifest, local, dir);
+    expect(plan.toSkip).toHaveLength(25);
+    expect(plan.toDownload).toHaveLength(25);
+    expect(plan.toUpdate).toHaveLength(0);
+    expect(plan.toSkip.length + plan.toDownload.length + plan.toUpdate.length).toBe(50);
+    // Buckets keep input order.
+    expect(plan.toSkip.map((e) => e.path)).toEqual(entries.slice(0, 25).map((e) => e.path));
+    expect(plan.toDownload.map((e) => e.path)).toEqual(entries.slice(25).map((e) => e.path));
   });
 });

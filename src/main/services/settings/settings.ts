@@ -1,5 +1,5 @@
 import { getStoredLauncherSettings, setStoredLauncherSettings } from '@main/infra/store';
-import type { ClientSlug } from '@shared/contracts/ids';
+import type { CatalogKey } from '@shared/contracts/ids';
 import type {
   ClientSettingsOverride,
   LauncherSettings,
@@ -44,9 +44,9 @@ export const patchLauncherSettings = (patch: PatchLauncherSettings): LauncherSet
   writeSettings(applyLauncherPatch(getSettings(), patch));
 
 export const setClientOverride = (
-  slug: ClientSlug,
+  key: CatalogKey,
   patch: ClientSettingsOverride,
-): LauncherSettings => writeSettings(setClientOverridePure(getSettings(), slug, patch));
+): LauncherSettings => writeSettings(setClientOverridePure(getSettings(), key, patch));
 
-export const clearClientOverride = (slug: ClientSlug): LauncherSettings =>
-  writeSettings(clearClientOverridesPure(getSettings(), slug));
+export const clearClientOverride = (key: CatalogKey): LauncherSettings =>
+  writeSettings(clearClientOverridesPure(getSettings(), key));
