@@ -15,9 +15,8 @@ export const App = () => {
   const { needsSetup, isPending: isSetupPending } = useNeedsSetup();
   const isAuthenticated = !isAuthPending && user !== null && user !== undefined;
   const isBootstrapping = isSetupPending || (!needsSetup && isAuthPending);
-  // A failed auth check (main not ready, IPC error) leaves `user` undefined, not
-  // null — fall back to the login screen so the user can retry instead of facing
-  // a blank main area.
+  // A failed auth check leaves `user` undefined (not null); treat it as signed
+  // out so the user can retry instead of facing a blank main area.
   const isSignedOut = user === null || isAuthError;
   const showShell = !isBootstrapping && !needsSetup && isAuthenticated;
 

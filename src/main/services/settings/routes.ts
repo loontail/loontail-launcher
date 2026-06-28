@@ -46,9 +46,8 @@ export const registerSettingsRoutes = (
 
   router.handle(IPC_CHANNELS.settingsChooseClientFolder, async (rawArgs) => {
     const key = parseIpcArgs(CatalogKeySchema, rawArgs, KEY_REQUIRED_MSG);
-    // The folder suffix is the bare ref value, never the CatalogKey: `:` is an
-    // illegal Windows filename char. A malformed key is impossible here (schema
-    // validated), so the fallback only guards the type.
+    // Use the bare ref value, not the CatalogKey: `:` is illegal in Windows
+    // filenames. The schema-validated key can't be malformed; fallback guards type only.
     const suffix = catalogKeyToRefValue(key) ?? (key as string);
     const picked = await pickFolderWithSuffix(getMainWindow(), suffix);
     if (!picked) return null;

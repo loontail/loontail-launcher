@@ -1,19 +1,12 @@
 import { getStoredAuth, getStoredSessionToken, setStoredAuth } from '@main/infra/store';
 import type { LoontailAuth, RefreshResult } from './loontailAuth';
 
-// The single, de-duplicated path that rotates a Yggdrasil session.
-//
-// Session rotation is single-use server-side: the moment the server hands back a
-// new token, the old one is revoked. Without coordination, parallel session
-// requests that all see the same stale token each POST /auth/refresh with it —
-// the first rotates it, the rest hit the now-revoked token and get `expired`,
-// spuriously forcing a re-login (BUG-1). A refresh racing a login's
-// setStoredAuth could likewise clobber the fresh session.
-//
-// `refresh()` memoizes the in-flight rotation so concurrent callers share one
-// network round-trip and one setStoredAuth, and re-reads the current stored
-// token at the moment it actually fires so it never rotates with a token that
-// was already replaced underneath it. Both http.ts and verifySession route
+// The single, de-duplicated path that rotates a Yggdrasil session. Rotation is
+// single-use server-side (the new token revokes the old), so uncoordinated
+// parallel refreshes with the same stale token would force a spurious re-login
+// (BUG-1). `refresh()` memoizes the in-flight rotation and re-reads the stored
+// token when it fires, so concurrent callers share one round-trip and never
+// rotate a token that was already replaced. Both http.ts and verifySession route
 // through the same instance.
 export type SessionRefresher = {
   refresh: () => Promise<RefreshResult>;
@@ -25,9 +18,8 @@ export const createSessionRefresher = (loontailAuth: LoontailAuth): SessionRefre
   let refreshing: Promise<RefreshResult> | null = null;
 
   const runRefresh = async (): Promise<RefreshResult> => {
-    // Re-read at the moment the rotation fires: an earlier concurrent refresh
-    // (or a login) may have already rotated the session while this call was
-    // queued, so use the freshest stored token, not a caller's snapshot.
+    // Re-read when the rotation fires: a concurrent refresh or login may have
+    // already rotated the session, so use the freshest stored token.
     const session = getStoredAuth();
     const token = getStoredSessionToken();
     if (session?.provider !== 'yggdrasil' || !token) return REFRESH_NOOP;

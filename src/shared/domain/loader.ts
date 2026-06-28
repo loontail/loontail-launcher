@@ -8,7 +8,7 @@ type ClientLoaderFields = {
 export type LoaderResolution = { kind: 'resolved'; loader: LoaderChoice } | { kind: 'ambiguous' };
 
 // An override is only meaningful when the client still has the loader version
-// it points to. Without this guard, removing forge/fabric from the CMS has no
+// it points to. Without this guard, removing forge/fabric from the backend has no
 // effect — the stored override keeps the launcher pinned to a missing loader.
 export const isLoaderAvailable = (client: ClientLoaderFields, choice: LoaderChoice): boolean => {
   if (choice === LoaderChoices.FORGE) return Boolean(client.forgeVersion);

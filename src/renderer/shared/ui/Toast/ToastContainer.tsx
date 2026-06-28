@@ -17,8 +17,8 @@ export const ToastContainer = () => {
         idRef.current += 1;
         const id = idRef.current;
         setEntries((prev) => [...prev, { ...payload, id, closing: false, mounted: false }]);
-        // Two RAFs: first paints the toast off-screen at translateX(100%);
-        // the second flips `mounted` so the transition runs to the rest pose.
+        // Two RAFs: paint off-screen first, then flip `mounted` so the enter
+        // transition runs to the rest pose.
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             setEntries((prev) =>

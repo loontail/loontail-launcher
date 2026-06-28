@@ -4,8 +4,8 @@ import type { KeyboardEvent } from 'react';
 type SwitchProps = {
   checked?: boolean;
   disabled?: boolean;
-  // when omitted the switch is decorative and the surrounding control owns the
-  // accessible role/state (e.g. SettingsSwitchRow's role="switch" button)
+  // When omitted, the switch is decorative and the surrounding control owns the
+  // accessible role/state.
   onCheckedChange?: ((value: boolean) => void) | undefined;
   label?: string | undefined;
 };

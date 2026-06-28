@@ -11,8 +11,6 @@ type TopNavProps = {
   customTitleBar: boolean;
 };
 
-// The alpha marker + its hover tooltip, sat on the right of the bar (before the
-// console icon) now that the wordmark is gone.
 const AlphaTag = () => {
   const { t } = useTranslation();
   return (
@@ -30,8 +28,6 @@ const AlphaTag = () => {
   );
 };
 
-// A full-height, edge-to-edge control matching the native window buttons. The
-// icon actions add a hover fill; the nav links opt out (text-only highlight).
 const barItem =
   'app-region-no-drag relative flex h-full cursor-pointer items-center transition-colors duration-150 ease-standard focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/60';
 
@@ -40,9 +36,6 @@ const NAV_ITEMS = [
   { name: 'builds', icon: Boxes },
 ] as const;
 
-// The primary nav links + a single underline that slides to the active link.
-// The underline is measured (offset + width, inset by the link padding) so it
-// tracks the text/icon and lines up with the page content gutter.
 const NavTabs = ({ active, onSelect }: { active: string; onSelect: (name: string) => void }) => {
   const { t } = useTranslation();
   const navRef = useRef<HTMLElement>(null);
@@ -52,7 +45,7 @@ const NavTabs = ({ active, onSelect }: { active: string; onSelect: (name: string
     const measure = (): void => {
       const tab = navRef.current?.querySelector<HTMLElement>(`[data-tab="${active}"]`);
       if (!tab) return;
-      // 16px == the link's px-4, so the underline spans only the icon+label.
+      // 16/32 == the link's px-4, insetting the underline to the icon+label.
       setBar((prev) => ({
         left: tab.offsetLeft + 16,
         width: tab.offsetWidth - 32,
@@ -119,10 +112,6 @@ const IconAction = ({
   </button>
 );
 
-// The frameless title bar + primary navigation in one row. Transparent over the
-// immersive Home/detail art, solid on the flat Builds page. Build detail collapses
-// the bar to a labelled back affordance on the left; Settings clears the whole bar
-// and turns the settings icon (top-right, by the window controls) into a back arrow.
 export const TopNav = ({ customTitleBar }: TopNavProps) => {
   const { t } = useTranslation();
   const route = useCurrentRoute();
@@ -137,8 +126,6 @@ export const TopNav = ({ customTitleBar }: TopNavProps) => {
   const previous = stack[stack.length - 2];
   const backLabel = previous?.name === 'home' ? t('nav.home') : t('nav.builds');
 
-  // Build detail shows a labelled back button on the left; settings clears the left
-  // entirely (its back arrow lives in the right cluster); everything else gets nav.
   let leftContent: ReactNode = (
     <NavTabs
       active={route.name}
@@ -174,24 +161,17 @@ export const TopNav = ({ customTitleBar }: TopNavProps) => {
         isImmersive ? 'bg-linear-to-b from-overlay/50 via-overlay/15 to-transparent' : 'bg-canvas',
       )}
     >
-      {/* Hairline drawn as an absolute overlay (not a box border) so it never
-          changes the bar's height/centering — no 1px content shift between the
-          immersive routes (no line) and the solid pages (line). */}
+      {/* Absolute overlay, not a box border, so toggling it adds no 1px content shift. */}
       {!isImmersive && (
         <div
           className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-edge/60"
           aria-hidden
         />
       )}
-      {/* Left content sits in the shared page frame so the nav/back lines up with
-          every route's content. The -ml-4 cancels the first item's hover padding
-          so its text (not its hover box) aligns to the content gutter. */}
+      {/* -ml-4 cancels the first item's hover padding so its text aligns to the content gutter. */}
       <div className={cn(PAGE_CONTAINER, 'flex h-full items-center')}>{leftContent}</div>
 
-      {/* Right cluster is pinned to the window edge (clear of the native window
-          controls via title-bar-safe), independent of the centred content frame.
-          Settings replaces the whole cluster with a single back arrow sitting where
-          the settings icon was; build detail uses the left back affordance instead. */}
+      {/* Pinned to the window edge, kept clear of the native window controls via title-bar-safe. */}
       {isSettings ? (
         <div
           className={cn(

@@ -31,7 +31,6 @@ export { reconcileRegistry } from './reconcile';
 export type InstancesService = {
   init: () => Promise<void>;
   dispose: () => Promise<void>;
-  // The local build source, registered with the catalog aggregator as primary.
   localSource: CatalogSource;
 };
 

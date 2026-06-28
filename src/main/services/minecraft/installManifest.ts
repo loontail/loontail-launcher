@@ -13,15 +13,13 @@ const TARGET_INSTALL_MANIFEST_VERSION = 1;
 
 const logger = scopedLogger('minecraft.installManifest');
 
-// Inlined by electron-vite's `define` (electron.vite.config.ts) from the resolved
-// kit package.json. Declared module-locally (not as a global .d.ts) so the test
-// project, which does not include src/main, still type-checks this module.
+// Inlined by electron-vite's `define`. Declared module-locally (not a global
+// .d.ts) so the test project, which excludes src/main, still type-checks this.
 declare const __MINECRAFT_KIT_VERSION__: string;
 
-// Reading the kit version from the build-time constant keeps the packaged bundle
-// from recording `kitVersion: 'unknown'` when node_modules is absent (DLI-71).
-// The require branch only runs under the test runner (no define); Vite
-// dead-code-eliminates it from the production bundle once the literal substitutes.
+// Read from the build-time constant so the packaged bundle doesn't record
+// `kitVersion: 'unknown'` when node_modules is absent (DLI-71). The require
+// branch runs only under the test runner and is dead-code-eliminated in production.
 const MINECRAFT_KIT_VERSION =
   typeof __MINECRAFT_KIT_VERSION__ !== 'undefined'
     ? __MINECRAFT_KIT_VERSION__
@@ -118,9 +116,8 @@ export const saveCurrentTargetInstallManifest = async (
   await saveTargetInstallManifest(clientFolder, createTargetInstallManifest(target));
 };
 
-// Best-effort sidecar write: a failure here must not demote a successful
-// install/repair, so it warns and swallows. `logPrefix` tags the operation that
-// triggered the write ('install' / 'repair').
+// Best-effort sidecar write: warns and swallows so a failure here can't demote a
+// successful install/repair.
 export const persistTargetInstallManifest = async (
   slug: CatalogKey,
   clientFolder: string,

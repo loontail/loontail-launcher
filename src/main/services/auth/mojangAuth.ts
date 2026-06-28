@@ -8,13 +8,11 @@ import { shell } from 'electron';
 import { withRefreshedProfile } from './session';
 
 const logger = scopedLogger('auth.mojang');
-// The kit's authorize URL is built for Microsoft personal accounts only.
-// Keep this host/path allowlist narrow before crossing Electron's shell boundary.
+// Narrow host/path allowlist enforced before crossing Electron's shell boundary.
 const MICROSOFT_AUTHORIZE_HOST = 'login.microsoftonline.com';
 const MICROSOFT_AUTHORIZE_PATH = '/consumers/oauth2/v2.0/authorize';
 export const MOJANG_BROWSER_OPEN_ERROR_CODE = 'MOJANG_BROWSER_OPEN_FAILED';
-// Refresh the access token this far ahead of its stated expiry to absorb clock
-// skew and the round-trip cost of the MSAL refresh + profile read.
+// Refresh ahead of stated expiry to absorb clock skew and the refresh round-trip.
 const MOJANG_TOKEN_REFRESH_SAFETY_WINDOW_MS = 60_000;
 
 type BrowserOpener = (url: string) => Promise<void>;
@@ -41,7 +39,6 @@ const requireClientId = () => {
   return asAzureClientId(mainConfig.mojangClientId);
 };
 
-// The kit returns the active profile inline, so no second `/minecraft/profile` call is needed.
 const fromKitSession = (kitSession: KitMojangSession): MojangSession => ({
   provider: 'mojang',
   accessToken: kitSession.minecraft.accessToken,
@@ -112,9 +109,8 @@ export const createMojangAuth = (
   kit: MinecraftKit,
   options: MojangAuthOptions = {},
 ): MojangAuth => {
-  // One in-flight sign-in at a time. A second click while the browser flow is
-  // outstanding aborts the previous attempt so the launcher doesn't leak
-  // loopback servers.
+  // One in-flight sign-in at a time: a second click aborts the previous attempt
+  // so the launcher doesn't leak loopback servers.
   let activeController: AbortController | null = null;
   const openExternal = options.openExternal ?? ((url: string) => shell.openExternal(url));
 

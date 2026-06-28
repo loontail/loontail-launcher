@@ -16,8 +16,7 @@ import type { CatalogKey } from '@shared/contracts/ids';
 const logger = scopedLogger('forge.processors');
 
 export type ProcessorHealOutcome = {
-  // True when target was Forge and at least one missing/wrong output was repaired.
-  // False when target wasn't Forge, or all outputs were already on disk.
+  // True only when at least one missing/wrong Forge output was repaired.
   ranProcessors: boolean;
   reranCount: number;
 };
@@ -54,9 +53,8 @@ export type ForgeProcessorCache = {
   clear: () => void;
 };
 
-// Scoped to the MinecraftManager lifecycle (created in its constructor, cleared
-// on uninstall) instead of a module-level singleton, so the entries can't leak
-// across clients or test runs and don't grow unbounded for the process lifetime.
+// Scoped to the MinecraftManager lifecycle (not a module singleton) so entries
+// can't leak across clients or test runs or grow unbounded for the process life.
 export const createForgeProcessorCache = (): ForgeProcessorCache => {
   const entries = new Map<string, readonly RunForgeProcessorAction[]>();
   return {
@@ -103,10 +101,8 @@ const fileMissing = async (filePath: string): Promise<boolean> => {
   }
 };
 
-// True iff every declared output exists on disk and matches its declared SHA-1.
-// Forge processors emit deterministic outputs, so any divergence means we need
-// to re-run the processor (kit's runProcessor will fail-hard on hash mismatch
-// anyway, but checking here lets us skip processors that are already fine).
+// True iff every declared output exists and matches its SHA-1. Forge processor
+// outputs are deterministic, so checking here lets us skip processors already fine.
 const processorOutputsOk = async (
   action: RunForgeProcessorAction,
   signal?: AbortSignal,
@@ -131,12 +127,9 @@ const brokenProcessorIndices = async (
   return brokenIndices;
 };
 
-// kit.verify.forge only inspects libraries declared in the Forge version JSON,
-// so processor outputs (e.g. <mc>-srg.jar, <mc>-extra.jar, forge-<v>-client.jar)
-// slip through — they're generated, not downloaded. This walks the install plan
-// for the target and re-runs only the processors whose outputs are missing/broken.
-//
-// No-op for non-Forge targets.
+// kit.verify.forge only inspects libraries declared in the Forge version JSON, so
+// generated processor outputs (e.g. <mc>-srg.jar) slip through. Re-runs only the
+// processors whose outputs are missing/broken. No-op for non-Forge targets.
 export const repairMissingForgeProcessorOutputs = async (
   kit: MinecraftKit,
   slug: CatalogKey,
@@ -174,22 +167,16 @@ export const repairMissingForgeProcessorOutputs = async (
     return { ranProcessors: false, reranCount: 0 };
   }
 
-  // Forge processors depend on install-time libraries (install_profile.json
-  // classpath entries like installertools) that kit.verify.forge does not
-  // track — verify.forge only inspects the Forge *version.json* libraries.
-  // So we keep every non-processor action (downloads, extracts, version/log
-  // writes): they are skip-on-correct, so present files cost only a SHA
-  // check, while any missing classpath lib is repaired before the broken
-  // processor runs. Processor actions with outputs already on disk and
-  // SHA-matching are dropped — their outputs satisfy downstream inputs.
+  // Keep every non-processor action: processors depend on install-time libraries
+  // that verify.forge does not track, and skip-on-correct actions only cost a SHA
+  // check while repairing any missing classpath lib before the broken processor runs.
+  // Drop only already-correct processor actions.
   const focusedActions: readonly InstallAction[] = plan.actions.filter(
     (action) =>
       action.kind !== InstallActionKinds.RUN_FORGE_PROCESSOR || brokenIndices.has(action.index),
   );
-  // Only RUN_FORGE_PROCESSOR actions are dropped, and they carry no bytes, so the
-  // plan's byte total is still accurate for the focused subset. Recomputing from
-  // DOWNLOAD_FILE actions alone undercounted any non-download byte-bearing work the
-  // kit tracker accounts for; carrying plan.totalBytes forward keeps it correct.
+  // Dropped processor actions carry no bytes, so plan.totalBytes is still accurate
+  // for the focused subset; recomputing from downloads alone would undercount.
   const focusedPlan: InstallPlan = {
     ...plan,
     actions: focusedActions,

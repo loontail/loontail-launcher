@@ -11,9 +11,7 @@ type BadgeProps = {
   className?: string | undefined;
 };
 
-// Small monochrome label pill. `solid` sits over key-art (opaque dark fill — no
-// blur, so it's safe on the scrolling catalog), `soft` sits on an opaque surface,
-// `outline` is the quietest (tags/keywords).
+// `solid` uses an opaque fill (no blur) so it's safe over scrolling key-art.
 const variantClasses: Record<Variant, string> = {
   solid: 'border border-edge bg-overlay/70 text-text-hi',
   soft: 'border border-edge bg-surface-2 text-text',

@@ -8,9 +8,6 @@ type BuildVisualFallbackProps = {
   showInitial?: boolean;
 };
 
-// A deterministic generated visual for builds without artwork (most local
-// builds, and official builds missing media), so the grid never shows a broken
-// or empty image slot.
 export const BuildVisualFallback = ({
   item,
   className,

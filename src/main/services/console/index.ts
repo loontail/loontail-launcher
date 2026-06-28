@@ -40,8 +40,7 @@ export const createConsoleService = (
     });
   },
   dispose: async () => {
-    // Flush any pending lines and clear the batching timer so the last batch
-    // is not lost between the next setTimeout fire and process exit.
+    // Flush the batching timer so the last buffered batch is not lost on exit.
     consoleHub.flushPending();
   },
 });

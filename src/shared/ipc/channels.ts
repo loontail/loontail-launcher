@@ -57,11 +57,10 @@ export const IPC_CHANNELS = {
 
 export type IpcChannel = (typeof IPC_CHANNELS)[keyof typeof IPC_CHANNELS];
 
-// Explicit allowlist of channels the unsandboxed console window may invoke.
-// Every other channel is denied to it so a renderer compromise there cannot
-// reach the full IPC surface (auth.login, minecraft.launch, settings.setLauncher,
-// system.openPath, …). A new console.* channel is NOT trusted until it is added
-// here, forcing a deliberate trust decision rather than an implicit prefix grant.
+// Allowlist of channels the unsandboxed console window may invoke; every other
+// channel is denied so a renderer compromise there cannot reach the full IPC
+// surface. A new console.* channel is untrusted until added here, forcing a
+// deliberate trust decision rather than an implicit prefix grant.
 export const CONSOLE_TRUSTED_CHANNELS: ReadonlySet<IpcChannel> = new Set([
   IPC_CHANNELS.consoleGetInitial,
   IPC_CHANNELS.consoleClear,
@@ -69,9 +68,8 @@ export const CONSOLE_TRUSTED_CHANNELS: ReadonlySet<IpcChannel> = new Set([
   IPC_CHANNELS.consoleCopyText,
 ]);
 
-// Compile-time guard: every channel value must be a key in IpcContract, and
-// every IpcContract key must appear as a channel value. Adding/removing a
-// contract entry without updating IPC_CHANNELS (or vice versa) fails tsc.
+// Compile-time guard: channel values and IpcContract keys must match exactly, so
+// adding/removing one without the other fails tsc.
 type IpcChannelsCoverContract = Exclude<keyof IpcContract, IpcChannel> extends never
   ? Exclude<IpcChannel, keyof IpcContract> extends never
     ? true
@@ -97,9 +95,8 @@ export const IPC_EVENTS = {
 
 type IpcEventValue = (typeof IPC_EVENTS)[keyof typeof IPC_EVENTS];
 
-// Compile-time guard mirroring IpcChannelsCoverContract for the event side:
-// every IPC_EVENTS value must be a key in IpcEventPayloads and vice versa, so
-// adding an event without its payload type (or renaming one) fails tsc.
+// Compile-time guard: IPC_EVENTS values and IpcEventPayloads keys must match
+// exactly, so adding or renaming an event without its payload type fails tsc.
 type IpcEventsCoverPayloads = Exclude<keyof IpcEventPayloads, IpcEventValue> extends never
   ? Exclude<IpcEventValue, keyof IpcEventPayloads> extends never
     ? true

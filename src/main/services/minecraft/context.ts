@@ -18,10 +18,6 @@ import { ManagerError } from './errors';
 import { getRuntimeRoot } from './runtimeFs';
 import { buildSpecToTargetInput, resolveLoader } from './target';
 
-// Only the resolved-settings fields install/launch actually consume. The full
-// ResolvedClientSettings also carries runtime/loader/diff, which are used during
-// the buildContext fixup but never read downstream — narrowing the contract
-// keeps consumers from depending on the wider shape.
 export type ContextResolved = {
   storage: { clientFolder: string; clientsFolder: string };
   memory: { allocatedRamMb: number };
@@ -29,9 +25,6 @@ export type ContextResolved = {
 };
 
 export type Context = {
-  // The resolved build (official or local), source-agnostic. Downstream reads
-  // its `spec` (kit inputs) and `presentation` (display) rather than the
-  // API-specific Client shape.
   item: CatalogItem;
   clientFolder: string;
   loader: LoaderChoice;
@@ -39,15 +32,11 @@ export type Context = {
   resolved: ContextResolved;
 };
 
-// Injection seam: buildContext resolves the build through the catalog, reads
-// settings, and persists stale-override fixups — tests pass stubs here to
-// exercise it without touching the store or the live catalog. Each field
-// falls back to the real module-level dependency when omitted.
+// Each field falls back to the real module-level dependency when omitted, so
+// tests can stub the store and catalog.
 export type BuildContextDeps = {
   getSettings?: () => LauncherSettings;
   persistClientOverride?: (key: CatalogKey, patch: ClientSettingsOverride) => LauncherSettings;
-  // Resolves the build from its CatalogKey, injected at the composition root
-  // from the catalog service. A local build resolves offline.
   resolveBuild: (key: CatalogKey) => Promise<CatalogItem | null>;
 };
 
@@ -62,8 +51,8 @@ export const buildContext = async (
   const resolveBuild = deps.resolveBuild;
 
   // The id flowing through the slug-keyed chain is an opaque build id: a local
-  // instance UUID or an official slug. The resolver disambiguates by
-  // source (local first, network-free), so local builds resolve with the CMS down.
+  // instance UUID or an official slug. The resolver disambiguates by source
+  // (local first, network-free), so local builds resolve with the backend down.
   let item: CatalogItem | null;
   try {
     item = await resolveBuild(slug);
@@ -87,8 +76,7 @@ export const buildContext = async (
   const rawPersisted = settings.clients[slug]?.loader ?? null;
   const persisted = rawPersisted && isLoaderAvailable(spec, rawPersisted) ? rawPersisted : null;
   if (rawPersisted && !persisted) {
-    // The build no longer offers the loader the user once picked — drop the
-    // stale override so future reads (UI, launch) see a clean state.
+    // The build no longer offers the loader the user once picked — drop the stale override.
     persistClientOverride(slug, { loader: undefined });
   }
   const resolution = resolveLoader(spec, loaderOverride ?? persisted);
@@ -104,9 +92,8 @@ export const buildContext = async (
 
   const target = await kit.targets.resolve(
     buildSpecToTargetInput({
-      // The kit target id (and the on-disk install manifest's targetId) stays
-      // the bare, source-native ref — the official slug or instance UUID — so the
-      // CatalogKey migration never re-keys an existing install's manifest.
+      // Keep the kit target id as the bare source-native ref (official slug or
+      // instance UUID) so it keeps matching an existing install manifest's targetId.
       targetId: refValue(item.ref),
       spec,
       clientFolder: resolved.storage.clientFolder,

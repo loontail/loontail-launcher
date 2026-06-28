@@ -1,12 +1,8 @@
 import type { AuthProvider, AuthSession } from './auth';
 
-// Provider-agnostic view of the currently signed-in user. The renderer and
-// the launch path consume this; the rich provider-specific data lives behind
-// `AuthSession`.
-//
-// For Yggdrasil sessions, `email` comes from the login response and `skin`/`cape`
-// are enriched from the textures endpoint; the `accountFromSession` helper alone
-// returns them as `null`.
+// Provider-agnostic view of the signed-in user; rich provider data lives behind
+// `AuthSession`. For Yggdrasil, `email`/`skin`/`cape` are enriched elsewhere —
+// `accountFromSession` alone returns them as null.
 export type Account = {
   provider: AuthProvider;
   username: string;

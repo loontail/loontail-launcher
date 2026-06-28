@@ -26,8 +26,7 @@ export const selectClientActionsState = (input: {
 }): ClientActionsState => {
   const repairActive = input.status === InstallStatuses.REPAIRING;
   const canMutateInstall = input.status === InstallStatuses.INSTALLED;
-  // Repair runs to completion — while it is active the action is just disabled,
-  // there is no cancel affordance.
+  // Repair is not cancellable; it can only be disabled while running.
   return {
     repairActive,
     repairDisabled: repairActive || !canMutateInstall || input.repairPending,

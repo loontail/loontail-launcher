@@ -34,15 +34,13 @@ export type MinecraftProgressAdapter = {
 
 export type PlannedInstallProgressRunner = (plan: InstallPlan) => Promise<void>;
 
-// 4s rolling window, mirroring the renderer's useByteSpeed: wide enough to
-// smooth the kit's per-second jitter, short enough to react to a slowdown.
+// 4s rolling window mirroring the renderer's useByteSpeed: smooths the kit's
+// per-second jitter while still reacting to a slowdown.
 const SPEED_WINDOW_MS = 4000;
 
 // The kit reports `bytesDownloaded` install-wide but `totalBytes` per stage, so
-// the two are mixed-scale. Reconstruct per-stage bytes from stagePercent so the
-// emitted "X / Y" line is self-consistent, and sample throughput over those
-// reconstructed bytes — resetting at each stage boundary so the rate (and ETA)
-// don't dip negative when the next stage restarts at 0%.
+// reconstruct per-stage bytes from stagePercent for a self-consistent "X / Y" and
+// reset throughput at each stage boundary so the rate doesn't dip negative on restart.
 const createSnapshotEmitter = (env: ManagerEnv, slug: CatalogKey) => {
   let stage: ProgressStage | null = null;
   const speedWindow = createSpeedWindow(SPEED_WINDOW_MS);

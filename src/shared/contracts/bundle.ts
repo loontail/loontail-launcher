@@ -2,9 +2,6 @@ import { z } from 'zod';
 import { enumFromConst } from './enum';
 import { BundleSlugSchema, CatalogKeySchema } from './ids';
 
-// Stable string constants for the lifecycle of a bundle sync. The renderer
-// reads these to decide what affordance to show (Download / Pause / Resume /
-// Retry / Repair / Play).
 export const BundleSyncStatuses = {
   UNKNOWN: 'unknown',
   IDLE: 'idle',
@@ -25,8 +22,7 @@ export type BundleSyncStatus = (typeof BundleSyncStatuses)[keyof typeof BundleSy
 
 export const BundleSyncStatusSchema = enumFromConst(BundleSyncStatuses);
 
-// Statuses where a bundle sync is actively progressing. Renderer disables
-// start/launch buttons while any of these are active.
+// Statuses that gate the start/launch buttons while a sync is in flight.
 export const BUSY_BUNDLE_STATUSES: ReadonlySet<BundleSyncStatus> = new Set([
   BundleSyncStatuses.FETCHING_MANIFEST,
   BundleSyncStatuses.PLANNING,
@@ -53,7 +49,7 @@ export type BundleErrorCode = (typeof BundleErrorCodes)[keyof typeof BundleError
 
 export const BundleErrorCodeSchema = enumFromConst(BundleErrorCodes);
 
-// Single file in a bundle-registry build manifest. Mirrors plugin's ManifestEntry.
+// Single file in a bundle-registry build manifest, mirroring the backend entry shape.
 export const RemoteManifestEntrySchema = z.object({
   path: z.string(),
   name: z.string(),
@@ -66,7 +62,7 @@ export const RemoteManifestEntrySchema = z.object({
 
 export type RemoteManifestEntry = z.infer<typeof RemoteManifestEntrySchema>;
 
-// Categories from plugin (first path segment or "root"); values are file lists.
+// Keyed by category (first path segment, or "root"); values are file lists.
 export const RemoteManifestSchema = z.record(z.string(), z.array(RemoteManifestEntrySchema));
 
 export type RemoteManifest = z.infer<typeof RemoteManifestSchema>;
@@ -78,8 +74,8 @@ export const LocalManifestFileSchema = z.object({
 
 export const LocalManifestSchema = z.object({
   bundleSlug: BundleSlugSchema,
-  // SHA-256 of the raw remote manifest JSON we synced from. Lets the renderer
-  // detect "manifest changed upstream" cheaply on next checkStatus.
+  // SHA-256 of the raw remote manifest JSON we synced from, for cheap
+  // upstream-change detection on the next checkStatus.
   manifestHash: z.string(),
   syncedAt: z.string(),
   files: z.record(z.string(), LocalManifestFileSchema),
@@ -119,15 +115,12 @@ export const BundleErrorEventSchema = z.object({
 
 export type BundleErrorEvent = z.infer<typeof BundleErrorEventSchema>;
 
-// Reply for bundle.checkStatus — used by renderer to seed initial UI state.
 export type BundleInstallState = {
   // True only when a successful sync has produced a local manifest on disk.
   installed: boolean;
-  // True when the cached local manifest hash matches the latest remote manifest
-  // hash (or when we couldn't fetch — assume match to avoid spurious "update"
-  // affordances). False signals "bundle update available".
+  // False signals "bundle update available". Assumes match when the remote
+  // manifest couldn't be fetched, to avoid spurious update affordances.
   signatureMatches: boolean;
-  // Current status when a sync is in flight; null otherwise.
   progress: BundleProgressEvent | null;
 };
 

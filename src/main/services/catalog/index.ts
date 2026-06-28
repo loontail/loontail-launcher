@@ -12,7 +12,6 @@ export { createOfficialCatalogSource } from './officialSource';
 export { createCatalog } from './catalog';
 
 export type CatalogServiceDeps = {
-  // The official source's fetch (the existing offline-snapshot-backed clients list).
   listClients: (locale?: string) => Promise<Client[]>;
   // Additional sources (e.g. the local instance source) registered ahead of the
   // official one so they list first.

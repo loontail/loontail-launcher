@@ -15,8 +15,7 @@ const KIT_CODE_TO_LAUNCHER_CODE: Partial<Record<MinecraftKitErrorCode, Minecraft
   NETWORK_TIMEOUT: MinecraftErrorCodes.NETWORK_ERROR,
   NETWORK_HTTP_ERROR: MinecraftErrorCodes.NETWORK_ERROR,
   NETWORK_ABORTED: MinecraftErrorCodes.ABORTED,
-  // A missing manifest is a corrupt/incomplete install, not a transient
-  // connectivity failure — repairing fixes it, retrying the network does not.
+  // A missing manifest is a corrupt install (repair fixes it), not a transient network failure.
   MANIFEST_NOT_FOUND: MinecraftErrorCodes.INTEGRITY_ERROR,
   MANIFEST_INVALID: MinecraftErrorCodes.INTEGRITY_ERROR,
   METADATA_PARSE_ERROR: MinecraftErrorCodes.INTEGRITY_ERROR,

@@ -18,12 +18,11 @@ const entryFromManifest = (
   updatedAt: manifest.updatedAt,
 });
 
-// Best-effort self-heal run at startup. Drops registry entries whose
-// `instance.json` no longer loads (a manually deleted/renamed folder) and
-// re-discovers any instances under the install root that are missing from the
-// index (recovered from a corrupt or wiped registry). Official build folders
-// have no `instance.json`, so they are ignored. Never throws — a reconcile
-// failure must not crash bootstrap.
+// Best-effort self-heal run at startup: drops registry entries whose
+// `instance.json` no longer loads and re-discovers instances under the install
+// root that are missing from the index. Official build folders have no
+// `instance.json`, so they are ignored. Never throws — a reconcile failure must
+// not crash bootstrap.
 export const reconcileRegistry = async (): Promise<void> => {
   try {
     // Keyed by manifest id, not dir: the stored dir and the rediscovered dir can

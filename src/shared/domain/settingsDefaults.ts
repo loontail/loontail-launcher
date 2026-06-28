@@ -9,10 +9,9 @@ export const defaultLauncherSettings = (): LauncherSettings => ({
   clients: {},
 });
 
-// The default install folder for a build. The settings record keys by CatalogKey
-// (`official:<slug>` / `local:<uuid>`), but the on-disk folder name MUST use the
-// bare ref value: `:` is an illegal Windows filename char and re-keying would
-// orphan every existing install. A bare (pre-migration) key is used as-is.
+// The on-disk folder name MUST use the bare ref value, not the CatalogKey: `:`
+// is an illegal Windows filename char, and re-keying would orphan every existing
+// install. A bare key is used as-is.
 export const joinClientFolder = (clientsFolder: string, key: CatalogKey): string => {
   if (!clientsFolder) return '';
   const folderName = catalogKeyToRefValue(key) ?? (key as string);

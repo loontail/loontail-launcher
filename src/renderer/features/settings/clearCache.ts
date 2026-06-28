@@ -3,10 +3,8 @@ import { QUERY_KEY_ROOTS } from '@shared/constants';
 import type { QueryClient } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
 
-// Clears the in-memory query cache (except auth/media) then the on-disk media
-// cache. The disk clear is awaited last: only confirm success once it resolves,
-// and downgrade to a warning toast when it fails so the user is not told the
-// disk cache was cleared when it was not.
+// Await the disk clear last and only confirm success once it resolves, so a
+// failed disk clear downgrades to a warning instead of a false success.
 export const clearLauncherCache = async (
   queryClient: QueryClient,
   clearMediaCache: () => Promise<unknown>,

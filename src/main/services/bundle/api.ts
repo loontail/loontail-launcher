@@ -14,15 +14,13 @@ const logger = scopedLogger('bundle.api');
 
 export type RemoteManifestFetchResult = {
   manifest: RemoteManifest;
-  // SHA-256 of the raw JSON, used as a stable drift signal. The Rust
-  // bundle-registry serves `artifacts.json` from disk verbatim, so the byte
-  // stream is stable across fetches as long as the build's files are unchanged.
+  // SHA-256 of the raw JSON, used as a stable drift signal: the API serves the
+  // artifact list verbatim, so the bytes are stable while the build is unchanged.
   manifestHash: string;
 };
 
-// The Rust bundle-registry emits server-root-relative file URLs of the form
-// `/bundle-registry/builds/<slug>/files/<path>`. Resolve those against the
-// configured API base so the downloader can treat every URL as absolute.
+// The API emits root-relative file URLs; resolve them against the configured
+// API base so the downloader can treat every URL as absolute.
 const absolutizeManifestUrls = (manifest: RemoteManifest, baseUrl: string): RemoteManifest => {
   const out: RemoteManifest = {};
   for (const [category, entries] of Object.entries(manifest)) {
@@ -62,7 +60,7 @@ export const fetchRemoteManifest = async (
     try {
       preview = (await response.text()).slice(0, 200);
     } catch {
-      /* swallow body read errors — status is enough to throw */
+      // status alone is enough to throw
     }
     throw new BundleError(
       BundleErrorCodes.MANIFEST_FETCH_FAILED,

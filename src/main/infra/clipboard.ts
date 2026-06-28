@@ -1,8 +1,7 @@
 import { clipboard } from 'electron';
 
-// Write via the native clipboard module instead of `navigator.clipboard`: the
-// renderer's permission handler denies `clipboard-write` by default, so going
-// through main bypasses Chromium's focus / permission gating entirely.
+// Write via the native module, not `navigator.clipboard`: the renderer denies
+// `clipboard-write`, so going through main bypasses Chromium's permission gating.
 export const writeClipboardText = (text: string): void => {
   clipboard.writeText(text);
 };

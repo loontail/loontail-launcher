@@ -13,9 +13,6 @@ export type UseRecentBuildsResult = {
   isPending: boolean;
 };
 
-// Combines the persisted played-at map with the live catalog into a
-// most-recent-first list for the Home dashboard. Refetches the played-at map on
-// window focus; the MinecraftEventsListener also invalidates its key on RUNNING.
 export const useRecentBuilds = (limit: number = DEFAULT_RECENT_LIMIT): UseRecentBuildsResult => {
   const catalog = useCatalog();
   const playedQuery = useQuery({

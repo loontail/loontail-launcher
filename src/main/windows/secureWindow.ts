@@ -3,13 +3,9 @@ import type { BrowserWindow } from 'electron';
 import type { RendererLocation } from './rendererLocations';
 import { TITLE_BAR_HEIGHT, TITLE_BAR_OVERLAY_COLOR, TITLE_BAR_SYMBOL_COLOR } from './windowColors';
 
-// Shared window hardening used by both the main and console windows so the
-// frame styling and navigation lockdown live in one place.
-
 export const useNativeFrame = (): boolean => process.platform === 'linux';
 
-// Apply the platform window frame to a base options object: a native frame on
-// Linux, a hidden frame with the custom title-bar overlay everywhere else.
+// Native frame on Linux, hidden frame with the custom title-bar overlay elsewhere.
 export const withFrameOptions = (
   base: Electron.BrowserWindowConstructorOptions,
 ): Electron.BrowserWindowConstructorOptions => {
@@ -26,8 +22,7 @@ export const withFrameOptions = (
   };
 };
 
-// Lock a window to its own renderer entry: block in-window navigation away from
-// the allowed URL and refuse any webview attachment.
+// Block in-window navigation away from the allowed URL and refuse webview attachment.
 export const applyNavigationGuards = (
   window: BrowserWindow,
   rendererLocation: RendererLocation,

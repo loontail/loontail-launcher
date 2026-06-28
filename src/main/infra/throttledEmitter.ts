@@ -5,10 +5,9 @@ export type ThrottledEmitter<T> = {
   readonly dispose: () => void;
 };
 
-// Leading-edge throttle with a trailing flush: the first push emits immediately,
-// further pushes within `intervalMs` are coalesced and the latest value is
-// emitted when the interval elapses. `dispose` flushes any pending value before
-// cancelling the timer so the final update is never dropped on teardown.
+// Leading-edge throttle with a trailing flush: pushes within `intervalMs` are
+// coalesced to the latest value. `dispose` flushes any pending value so the final
+// update is never dropped on teardown.
 export const createThrottledEmitter = <T>(
   emit: (value: T) => void,
   intervalMs: number = PROGRESS_THROTTLE_MS,

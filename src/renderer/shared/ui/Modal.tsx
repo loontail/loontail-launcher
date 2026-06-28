@@ -25,9 +25,8 @@ const unlockBodyScroll = () => {
   }
 };
 
-// True while any modal is mounted. An open modal owns the Escape key (it closes
-// itself), so the global back handler consults this to avoid also popping the
-// route on the same keypress.
+// An open modal owns the Escape key, so the global back handler consults this to
+// avoid also popping the route on the same keypress.
 export const isAnyModalOpen = (): boolean => openModalCount > 0;
 
 type ModalProps = {

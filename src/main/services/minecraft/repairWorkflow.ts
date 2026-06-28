@@ -33,11 +33,9 @@ export type RepairFailureFinalizationInput = {
   readonly signal: AbortSignal;
 };
 
-// After a repair cancel/failure, report whatever the offline presence check says
-// we still have on disk. resolveClientInstallPresence is the single source of
-// truth for "do we already have this install?" (also used to seed open-time
-// status); here UNVERIFIED (files without our manifest) collapses to the caller's
-// not-ready status rather than claiming INSTALLED.
+// After a repair cancel/failure, report what the offline presence check still
+// finds on disk; UNVERIFIED collapses to the caller's not-ready status rather
+// than claiming INSTALLED.
 const emitPostOpStatus = async (
   env: ManagerEnv,
   slug: CatalogKey,
@@ -54,9 +52,7 @@ export const verifyAndRepairBase = async (
   ctx: Context,
   options: RepairOptions,
 ): Promise<RepairAllReport> => {
-  // The bundle-owned filter is injected (env.resolveBundleRepairFilter) so the
-  // minecraft repair path never imports the bundle service: the heal coupling
-  // now flows one way through the composition root.
+  // The bundle-owned filter is injected so the repair path never imports the bundle service.
   const bundleSlug = ctx.item.spec.bundleSlug ?? null;
   const shouldRepairIssue =
     bundleSlug === null ? null : await env.resolveBundleRepairFilter(ctx.clientFolder, bundleSlug);
@@ -78,22 +74,18 @@ export type EnsureLaunchableOptions = {
   readonly runPlan: (plan: InstallPlan) => Promise<void>;
 };
 
-// True when the version JSON the launcher will launch can be resolved from disk.
-// resolveLaunchVersion throws for Forge/Fabric when no installed loader version
-// JSON exists (the case repair.all + healForgeProcessors cannot always bootstrap);
-// for vanilla it resolves from the manifest and never throws, so vanilla never
-// triggers the fallback (repair.all already writes the vanilla version JSON).
+// True when the launch version JSON resolves from disk. resolveLaunchVersion
+// throws for Forge/Fabric when no installed loader version JSON exists; vanilla
+// never throws (repair.all already writes its version JSON).
 const launchVersionResolvable = async (ctx: Context): Promise<boolean> =>
   resolveLaunchVersion(ctx.target)
     .then(() => true)
     .catch(() => false);
 
-// Last-resort bootstrap. repair.all + healForgeProcessors fix the files of an
-// existing install but cannot always materialize a loader install from scratch
-// (the Forge installer -> processor -> version JSON chain). If the launch version
-// still cannot be resolved after them, run the full, idempotent (skip-on-correct)
-// install plan to build it. If even that cannot produce it, the thrown error is
-// surfaced as a real repair failure instead of a silently broken "success".
+// Last-resort bootstrap: repair.all + healForgeProcessors fix existing files but
+// cannot always materialize a loader install from scratch. When the launch version
+// still cannot resolve, run the full idempotent install plan to build it; a thrown
+// error here surfaces as a real repair failure rather than a silent broken success.
 export const ensureLaunchable = async (
   env: ManagerEnv,
   slug: CatalogKey,

@@ -47,9 +47,8 @@ const BuildRoute = ({ routeKey }: { routeKey: CatalogKey }) => {
   const pop = useNavigationStore((s) => s.pop);
   const item = items.find((candidate) => candidate.key === routeKey);
 
-  // The build vanished (deleted, or the catalog refetched it away). Don't crash —
-  // fall back to the catalog once the data has settled. Waiting for any in-flight
-  // fetch also covers a just-created build that hasn't landed in the list yet.
+  // Build vanished: fall back to the catalog once data has settled. Waiting on
+  // any in-flight fetch also covers a just-created build not yet in the list.
   useEffect(() => {
     if (!isFetching && !item) pop();
   }, [isFetching, item, pop]);
@@ -61,9 +60,7 @@ const BuildRoute = ({ routeKey }: { routeKey: CatalogKey }) => {
       </div>
     );
   }
-  // Key by build so navigating build→build (Continue card / Recently strip)
-  // remounts the page — resetting the active tab to About and scroll to top
-  // rather than reusing the previous build's instance.
+  // Key by build so build→build navigation remounts the page (resetting tab/scroll).
   return <BuildDetailPage key={item.key} item={item} onBack={pop} />;
 };
 

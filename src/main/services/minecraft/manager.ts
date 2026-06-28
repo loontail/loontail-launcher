@@ -51,26 +51,22 @@ const MINECRAFT_DELETE_RESOURCES = [
   ClientOperationResources.BUNDLE_MANIFEST,
 ] as const;
 
-// Optional hook the bundle service installs at boot; awaited in startLaunch's
-// bundle-sync phase so a play click syncs the bundle before the game process is
-// spawned. Untouched when no bundle is wired.
+// Optional hook the bundle service installs at boot, awaited in the bundle-sync
+// phase so a play click syncs the bundle before the game spawns.
 export type LaunchHook = (key: CatalogKey, signal?: AbortSignal) => Promise<void>;
 
-// Synchronous "what's the active account" probe, injected at construction so
-// the manager owns account resolution and the launch route stays a thin arg
-// parser. Returns null when signed out — startLaunch turns that into NO_ACCOUNT.
+// Active-account probe injected at construction; returns null when signed out,
+// which startLaunch turns into NO_ACCOUNT.
 export type AccountProvider = () => Account | null;
 
-// Resolves a kit RepairIssueFilter from the on-disk bundle ownership, injected
-// at the composition root from the bundle service so the minecraft repair path
-// stays free of any static bundle import.
+// Injected from the bundle service so the repair path keeps no static bundle
+// import: resolves a kit RepairIssueFilter from on-disk bundle ownership.
 export type ResolveBundleRepairFilter = (
   clientFolder: string,
   expectedBundleSlug: string,
 ) => Promise<RepairIssueFilter | null>;
 
-// Resolves a build from its CatalogKey, injected at the composition root from
-// the catalog service so the manager owns no static catalog import.
+// Injected from the catalog service so the manager keeps no static catalog import.
 export type ResolveBuild = (key: CatalogKey) => Promise<CatalogItem | null>;
 
 export class MinecraftManager {
@@ -95,8 +91,7 @@ export class MinecraftManager {
     this.env = {
       kit,
       broadcaster,
-      // env.ops must be the same Map the manager holds: the consumer modules
-      // mutate ops through this reference and the manager reads them back.
+      // Must be the same Map the manager holds (consumers mutate it, manager reads it back).
       ops,
       forgeProcessorCache: createForgeProcessorCache(),
       console,
@@ -118,15 +113,14 @@ export class MinecraftManager {
     };
   }
 
-  // Single buildContext entry point: threads the injected resolveBuild into the
-  // context builder so the manager owns no static catalog dependency.
+  // Threads the injected resolveBuild into the context builder so the manager
+  // keeps no static catalog dependency.
   private buildContext(slug: CatalogKey, loaderOverride?: LoaderChoice): Promise<Context> {
     return buildContext(this.kit, slug, loaderOverride, { resolveBuild: this.resolveBuild });
   }
 
-  // Heal port consumed by the bundle service (injected at the composition root):
-  // resolve the minecraft target + client folder for a slug so the post-delete
-  // heal can verify/repair without the bundle service importing minecraft.
+  // Consumed by the bundle service so its post-delete heal can verify/repair
+  // without importing minecraft.
   async resolveHealTarget(slug: CatalogKey): Promise<{ target: Target; clientFolder: string }> {
     const ctx = await this.buildContext(slug);
     return { target: ctx.target, clientFolder: ctx.clientFolder };
@@ -137,9 +131,8 @@ export class MinecraftManager {
     this.launchHook = hook;
   }
 
-  // The bundle launch hook runs only for official builds; LOCAL builds load
-  // loose mods natively and have no managed overlay (the hook would fail trying
-  // to resolve them as an official client). Returns the hook when eligible.
+  // Only official builds have a managed overlay; LOCAL builds load loose mods
+  // natively, so skip the hook (it would fail resolving them as an official client).
   private bundleHookFor(ctx: Context): LaunchHook | null {
     if (this.launchHook === null || ctx.item.kind === SourceKinds.LOCAL) return null;
     return this.launchHook;
@@ -153,9 +146,8 @@ export class MinecraftManager {
         paused: op.kind === OpKinds.INSTALL ? op.paused : false,
       };
     }
-    // Opening the launcher must not verify the install (no hashing, no network,
-    // no target resolve): report installability from local files only. The real
-    // check runs when the user clicks Play.
+    // Opening the launcher must not verify the install (no hashing, network, or
+    // target resolve): report from local files only. The real check runs at Play.
     return {
       status: await resolveClientInstallPresence(slug),
       paused: false,
@@ -165,10 +157,9 @@ export class MinecraftManager {
   async startInstall(slug: CatalogKey, loaderOverride?: LoaderChoice): Promise<void> {
     this.requireIdle(slug);
     const lock = this.acquireWriteLock(slug);
-    // Claim the slug before the buildContext await (mirror startRepair) so
-    // getStatus reports INSTALLING during setup and a concurrent startLaunch
-    // trips requireIdle instead of racing ops.set. A Stop in this window aborts
-    // the placeholder controller, which beginInstall carries forward.
+    // Claim the slug before the buildContext await so a concurrent startLaunch
+    // trips requireIdle instead of racing ops.set; a Stop here aborts the
+    // placeholder controller, which beginInstall carries forward.
     const startingOp: Op = { kind: OpKinds.INSTALL_STARTING, abort: new AbortController() };
     this.ops.set(slug, startingOp);
     lock.setCancel(() => this.cancel(slug));
@@ -196,31 +187,24 @@ export class MinecraftManager {
       try {
         await runInstall(this.env, slug, ctx, op);
       } finally {
-        // Release before the bundle phase: the bundle sync acquires the same
-        // CLIENT_FOLDER lease, so holding it here would self-block with
-        // OP_IN_FLIGHT.
+        // Release before the bundle phase, which acquires the same CLIENT_FOLDER
+        // lease and would otherwise self-block with OP_IN_FLIGHT.
         lock.release();
       }
-      // INSTALLED is emitted before the bundle phase so the UI can swap the
-      // progress card from Minecraft download to bundle sync (which only renders
-      // on top of an installed client).
+      // Emit INSTALLED before the bundle phase so the UI can swap the progress
+      // card to bundle sync (which only renders on an installed client).
       this.env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
-      // Local builds carry no managed bundle overlay (loose mods load natively),
-      // so the bundle launch hook is skipped (see bundleHookFor). Official
-      // builds always run it (it no-ops internally when there is no bundleSlug).
       const installHook = this.bundleHookFor(ctx);
       if (installHook) {
-        // On abort getStatus falls back to presence (INSTALLED), so the cancel is
-        // not an error. Other bundle failures surface via the bundle.error
-        // channel; the Minecraft install itself is done, so the INSTALLED state
-        // already emitted above is kept either way.
+        // The Minecraft install is already done and INSTALLED is emitted, so a
+        // bundle failure (surfaced via the bundle.error channel) keeps that state.
         await this.runBundleSyncPhase(slug, installHook, {
           onFailure: (error) =>
             logger.warn(`[${slug}] install: bundle sync after install failed`, error),
         });
       }
     })().catch(() => {
-      // runInstall failure already reported by handleInstallFailure; nothing to do.
+      // Already reported by handleInstallFailure.
     });
   }
 
@@ -256,14 +240,12 @@ export class MinecraftManager {
         op.abort.abort();
         return;
       case OpKinds.UNINSTALL:
-        // Uninstall is an atomic file removal with no abort controller, so there
-        // is nothing to interrupt. Warn so a Stop click during uninstall is
-        // traceable instead of vanishing as a silent no-op.
+        // Uninstall has no abort controller; warn so a Stop click during it is
+        // traceable rather than a silent no-op.
         logger.warn(`[${slug}] cancel ignored: uninstall is not cancellable`);
         return;
       case OpKinds.LAUNCH:
-        // The spawned game session is owned by the kit; it is torn down via
-        // `stop()` (user-stop), never aborted here.
+        // The kit-owned game session is torn down via stop() (user-stop), not here.
         return;
       default:
         assertNever(op);
@@ -273,19 +255,16 @@ export class MinecraftManager {
   async startRepair(slug: CatalogKey): Promise<void> {
     this.requireIdle(slug);
     const lock = this.acquireWriteLock(slug);
-    // Register the op before the buildContext await so getStatus reports
-    // REPAIRING (not the stale disk-presence status) during setup, and a second
-    // concurrent startRepair trips requireIdle instead of starting in parallel.
+    // Register the op before the buildContext await so getStatus reports REPAIRING
+    // during setup and a concurrent startRepair trips requireIdle.
     const op: Op = { kind: OpKinds.REPAIR, abort: new AbortController() };
     this.ops.set(slug, op);
     lock.setCancel(() => this.cancel(slug));
     this.env.emitStatus({ slug, status: InstallStatuses.REPAIRING, paused: false });
     let ctx: Context;
     try {
-      // No "is it installed enough" gate: buildContext already enforces a
-      // configured install folder (NO_CLIENT_FOLDER) and resolves the target, and
-      // kit.repair.all rebuilds whatever is missing on disk — including the version
-      // JSON — so repair runs from any state (a broken or even empty folder).
+      // No "installed enough" gate: buildContext enforces a configured folder and
+      // kit.repair.all rebuilds whatever is missing, so repair runs from any state.
       ctx = await this.buildContext(slug);
     } catch (error) {
       this.ops.delete(slug);
@@ -316,11 +295,8 @@ export class MinecraftManager {
 
   async startLaunch(slug: CatalogKey): Promise<void> {
     this.requireIdle(slug);
-    // Claim the slug synchronously (no await between the check and the claim) so
-    // a second concurrent startLaunch trips requireIdle instead of both passing
-    // the gate during buildContext and spawning two sessions for one client.
-    // Setup failures release the claim; the paths below replace it with their
-    // own op (bundle sync, then the launch op inside runLaunch).
+    // Claim the slug synchronously (no await between check and claim) so a second
+    // concurrent startLaunch trips requireIdle instead of spawning two sessions.
     const startingOp: Op = { kind: OpKinds.LAUNCH_STARTING, abort: new AbortController() };
     this.ops.set(slug, startingOp);
 
@@ -334,10 +310,8 @@ export class MinecraftManager {
       throw error;
     }
 
-    // A Stop issued during the buildContext window aborts startingOp but, since
-    // buildContext resolved instead of throwing, the catch above never runs.
-    // Honor the cancel here (for BOTH the local and official branches) before
-    // spawning anything: drop the op and settle to presence/INSTALLED.
+    // A Stop during buildContext aborts startingOp without throwing, so the catch
+    // above never runs — honor the cancel here before spawning anything.
     if (startingOp.abort.signal.aborted) {
       if (this.ops.get(slug) === startingOp) this.ops.delete(slug);
       this.env.emitStatus({
@@ -348,21 +322,15 @@ export class MinecraftManager {
       return;
     }
 
-    // The bundle sync claims a BUNDLE_SYNCING op so cancel(slug) can abort the
-    // download mid-flight. Local builds skip the sync phase and launch directly
-    // (see bundleHookFor).
+    // Local builds skip the sync phase and launch directly (see bundleHookFor).
     const launchHook = this.bundleHookFor(ctx);
     if (launchHook) {
       this.env.emitStatus({ slug, status: InstallStatuses.LAUNCHING, paused: false });
       const settleInstalled = () =>
         this.env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
-      // A non-aborted bundle failure (offline, manifest fetch error) must not
-      // freeze the client on LAUNCHING — the base game is still installed and
-      // launchable. Settle status back to INSTALLED on both abort and failure and
-      // do not proceed to runLaunch: a failure already reached the renderer via the
-      // bundle error channel (BundleEventsListener toasts the localized code), so
-      // propagating it would double-surface as the launch IPC rejection's global
-      // toast (mirror runLaunch's swallow at launch.ts:447-449).
+      // Settle back to INSTALLED on abort/failure and do not proceed to runLaunch:
+      // the base game is still launchable, and the failure already reached the
+      // renderer via the bundle error channel — propagating would double-surface it.
       const outcome = await this.runBundleSyncPhase(slug, launchHook, {
         onAbort: settleInstalled,
         onFailure: (error) => {
@@ -381,9 +349,8 @@ export class MinecraftManager {
     if (op?.kind === OpKinds.LAUNCH) op.session.abort('user-stop');
   }
 
-  // Called on app shutdown so abortable ops are told to stop before the process
-  // exits — including an in-flight bundle sync, whose open socket would
-  // otherwise block Electron's quit until the request times out.
+  // Abort in-flight ops on shutdown, notably a bundle sync whose open socket
+  // would otherwise block Electron's quit until the request times out.
   cancelAll(): void {
     const slugs = [...this.ops.keys()];
     for (const slug of slugs) {
@@ -399,8 +366,7 @@ export class MinecraftManager {
           break;
         case OpKinds.UNINSTALL:
         case OpKinds.LAUNCH:
-          // UNINSTALL is uninterruptible; LAUNCH is the user's live game session
-          // (kit-owned) — neither is aborted on shutdown.
+          // UNINSTALL is uninterruptible; LAUNCH is the user's live game session.
           break;
         default:
           assertNever(op);
@@ -408,13 +374,10 @@ export class MinecraftManager {
     }
   }
 
-  // Shared body of the post-install / pre-launch / post-repair bundle sync: claim
-  // a BUNDLE_SYNCING op so getStatus reports the sync, cancel(slug) can abort the
-  // download mid-flight, and cancelAll reaches it on quit; await the hook; then
-  // drop the op. Decodes abort-vs-error once: a cancel resolves to 'aborted'
-  // (silent — getStatus falls back to presence), any other rejection resolves to
-  // 'failed'. The optional handlers let callers add a status emit / log without
-  // re-deriving the classification. Never rethrows.
+  // Shared body of the post-install / pre-launch / post-repair bundle sync. Claims
+  // a BUNDLE_SYNCING op (so cancel/cancelAll can abort the download), awaits the
+  // hook, and decodes the outcome once: a cancel → 'aborted' (silent), any other
+  // rejection → 'failed'. Never rethrows.
   private async runBundleSyncPhase(
     slug: CatalogKey,
     hook: LaunchHook,
@@ -478,8 +441,6 @@ export class MinecraftManager {
     const repairHook = this.bundleHookFor(ctx);
     if (!repaired || !repairHook) return;
 
-    // On abort getStatus falls back to presence, so the cancel is not an error
-    // worth logging.
     await this.runBundleSyncPhase(slug, repairHook, {
       onFailure: (error) => logger.warn(`[${slug}] repair: bundle sync after repair failed`, error),
     });

@@ -7,9 +7,8 @@ const CACHE_NAMESPACE = 'api/clients';
 
 const cacheKeyFor = (locale: string | undefined): string => `list:${locale ?? '__default__'}`;
 
-// Dedupes concurrent main-side callers (e.g. install + launch firing in
-// parallel). No TTL — every resolved call fronts a fresh HTTP request and,
-// on offline, the on-disk snapshot maintained by cachedFetch.
+// Dedupes concurrent callers (e.g. install + launch in parallel). No TTL: each
+// resolved call re-fetches, falling back to cachedFetch's on-disk snapshot offline.
 const inFlight = new Map<string, Promise<Client[]>>();
 
 export const getClients = (locale?: string): Promise<Client[]> => {

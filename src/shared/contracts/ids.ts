@@ -5,12 +5,11 @@ type Brand<T, B extends string> = T & { readonly __brand: B };
 export type ClientSlug = Brand<string, 'ClientSlug'>;
 export type ClientId = Brand<string, 'ClientId'>;
 export type BundleSlug = Brand<string, 'BundleSlug'>;
-// Identity of a user-authored local build. A UUID that doubles as its on-disk
-// folder name under `<clientsFolder>/local/`.
+// A UUID that doubles as the local build's on-disk folder name under
+// `<clientsFolder>/local/`.
 export type InstanceId = Brand<string, 'InstanceId'>;
-// Source-namespaced identity for a catalog build, used to key settings, op
-// locks, and status routing across both build kinds: `official:<ClientSlug>`
-// or `local:<InstanceId>`. Composed via the helpers in `./catalog`.
+// Source-namespaced build id keying settings, op locks, and status routing:
+// `official:<ClientSlug>` or `local:<InstanceId>`. Composed via `./catalog`.
 export type CatalogKey = Brand<string, 'CatalogKey'>;
 
 export const asClientSlug = (value: string): ClientSlug => value as ClientSlug;
@@ -34,12 +33,9 @@ export const InstanceIdSchema = z
   .uuid()
   .transform((value): InstanceId => value as InstanceId);
 
-// The cross-kind operational id carried over IPC: `official:<slug>` or
-// `local:<uuid>`. Validating the source-namespaced shape lets the IPC surface
-// reject a bare slug/uuid (the ClientSlug brand-erosion the punned channels
-// suffered) and keeps the two keyspaces distinct. `parseCatalogKey` (in
-// `./catalog`) recovers the source + bare ref; the prefix check here is the
-// cheap fail-closed guard the route layer needs.
+// Validating the source-namespaced shape lets the IPC surface reject a bare
+// slug/uuid and keeps the two keyspaces distinct. The prefix check is the cheap
+// fail-closed guard for the route layer; `parseCatalogKey` recovers the bare ref.
 export const CatalogKeySchema = z
   .string()
   .min(1)

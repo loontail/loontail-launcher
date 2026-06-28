@@ -23,7 +23,7 @@ import { manifestToCatalogItem } from './localSource';
 import { getInstanceEntry, removeInstanceEntry, upsertInstanceEntry } from './registry';
 
 // Side-effecting collaborators are injectable so create/update/delete can be
-// unit-tested without electron-store or the filesystem.
+// unit-tested without the store or the filesystem.
 export type InstanceMutationDeps = {
   getSettings?: typeof defaultGetSettings;
   newId?: () => string;

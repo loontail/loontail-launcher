@@ -10,6 +10,5 @@ export const createHistoryService = (router: Router): HistoryService => ({
   init: async () => {
     registerHistoryRoutes(router);
   },
-  // No subscriptions or timers to release.
   dispose: () => Promise.resolve(),
 });

@@ -17,12 +17,8 @@ type RovingGroupProps = HTMLAttributes<HTMLDivElement> & {
 
 const FOCUSABLE = 'button:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])';
 
-// Roving-tabindex container: treats its focusable button descendants as a single
-// tab stop. Exactly one descendant carries tabindex=0 (the first, or whichever
-// was last focused); the rest are tabindex=-1. Arrow keys move focus by DOM order
-// (1-D, which wraps cleanly for a reflowing grid); Home/End jump to first/last.
-// Activation is left to the children — they are real <button>s, so Enter/Space
-// and click already work.
+// Roving-tabindex container: descendants are one tab stop with exactly one
+// tabindex=0; arrow keys move focus by DOM order (wraps), Home/End jump to ends.
 export const RovingGroup = ({ children, resetKey, ...rest }: RovingGroupProps) => {
   const ref = useRef<HTMLDivElement>(null);
 
@@ -32,8 +28,7 @@ export const RovingGroup = ({ children, resetKey, ...rest }: RovingGroupProps) =
     return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE));
   }, []);
 
-  // Keep exactly one item tabbable: the one that already has tabindex=0 if it
-  // still exists, otherwise the first. Runs on mount and whenever resetKey moves.
+  // Keep exactly one item tabbable: the existing tabindex=0, else the first.
   // biome-ignore lint/correctness/useExhaustiveDependencies: resetKey is the trigger; body reads only DOM
   useEffect(() => {
     const found = items();
@@ -69,8 +64,7 @@ export const RovingGroup = ({ children, resetKey, ...rest }: RovingGroupProps) =
     setActive(target, all);
   };
 
-  // Entering a child (click or programmatic focus) makes it the tabbable anchor
-  // so a later Tab-out / Shift-Tab-in returns to where the user last was.
+  // Focusing a child makes it the tabbable anchor so a later Tab-out returns here.
   const onFocus = (event: FocusEvent<HTMLDivElement>) => {
     const all = items();
     const target = all.find((el) => el === event.target);

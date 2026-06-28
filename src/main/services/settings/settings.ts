@@ -15,8 +15,7 @@ export const getSettings = (): LauncherSettings => getStoredLauncherSettings();
 export const writeSettings = (next: LauncherSettings): LauncherSettings =>
   setStoredLauncherSettings(next);
 
-// Section-wise merge that only overwrites with defined patch fields, so an
-// omitted section or key leaves the current value untouched.
+// Only overwrites defined patch fields; an omitted section or key is untouched.
 const mergeSection = <T extends object>(
   current: T,
   patch: { [K in keyof T]?: T[K] | undefined } | undefined,

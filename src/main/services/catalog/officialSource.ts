@@ -4,13 +4,11 @@ import type { ClientSlug } from '@shared/contracts/ids';
 import { type CatalogSource, clientToCatalogItem } from './source';
 
 export type OfficialCatalogSourceDeps = {
-  // Reuses the existing offline-snapshot-backed fetch; allowed to reject when
-  // the CMS is unreachable and no snapshot exists — the aggregator swallows it.
+  // Allowed to reject when the backend is unreachable and no offline snapshot
+  // exists — the aggregator swallows it.
   listClients: (locale?: string) => Promise<Client[]>;
 };
 
-// The official, CMS-curated source. A thin projection over the existing
-// clients fetch; carries no new network or persistence concerns.
 export const createOfficialCatalogSource = (deps: OfficialCatalogSourceDeps): CatalogSource => ({
   id: SourceKinds.OFFICIAL,
   listItems: async (opts): Promise<CatalogItem[]> => {

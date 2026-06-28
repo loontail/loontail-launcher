@@ -5,8 +5,6 @@ import { type LoontailAuthResponse, LoontailAuthResponseSchema } from '@shared/c
 
 const logger = scopedLogger('auth.api');
 
-// HTTP-status sentinels the login flow distinguishes. The unified auth API
-// returns 401 for bad credentials and 429 when rate-limited.
 const HTTP_UNAUTHORIZED = 401;
 const HTTP_FORBIDDEN = 403;
 const HTTP_TOO_MANY_REQUESTS = 429;
@@ -55,10 +53,9 @@ const parseAuthResponse = async (
   return parsed.data;
 };
 
-// The launcher's HTTP-based client for the unified Loontail auth API. It is
-// deliberately separate from `@loontail/yggdrasil-client` (which speaks the
-// Yggdrasil authserver protocol): the session token issued here is the
-// universal API bearer, while the `minecraft` pair feeds the in-game handshake.
+// Deliberately separate from `@loontail/yggdrasil-client` (which speaks the
+// Yggdrasil authserver protocol): the session token issued here is the universal
+// API bearer, while the `minecraft` pair feeds the in-game handshake.
 export type AuthApi = {
   login: (input: { username: string; password: string }) => Promise<LoontailAuthResponse>;
   register: (input: {
@@ -66,8 +63,7 @@ export type AuthApi = {
     email: string;
     password: string;
   }) => Promise<LoontailAuthResponse>;
-  // Rotates the session; the old token is revoked server-side. Bearer is the
-  // current session token.
+  // Rotates the session; the old token is revoked server-side (single-use).
   refresh: (sessionToken: string) => Promise<LoontailAuthResponse>;
   logout: (sessionToken: string) => Promise<void>;
 };

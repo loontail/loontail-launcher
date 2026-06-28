@@ -29,10 +29,9 @@ export type Router = {
 
 const logger = scopedLogger('ipc');
 
-// Failures the launcher expects and recovers from: a rejected sender probe, a
-// validation reject, a fast double-click (OP_IN_FLIGHT), or a user cancel
-// (ABORTED). Per code-guideline §9 these log at warn so logger.error stays a
-// signal for genuine, unrecovered handler crashes rather than benign noise.
+// Expected, recovered-from failures (untrusted sender, invalid args, double-click
+// OP_IN_FLIGHT, user ABORTED) log at warn so logger.error stays a signal for
+// genuine unrecovered handler crashes (code-guideline §9).
 const RECOVERABLE_CODES: ReadonlySet<string> = new Set<string>([
   ERROR_CODES.IpcUntrustedSender,
   ERROR_CODES.IpcInvalidArgs,
@@ -51,10 +50,9 @@ const logIpcError = (channel: keyof IpcContract, ipcError: IpcError): void => {
   }
 };
 
-// Electron's IPC drops the structure of any thrown value other than an Error
-// and just forwards `String(value)` ("[object Object]"). Wrap the IpcError in
-// an Error and tag the message with the shared sentinel so the preload can
-// recognise and rehydrate it into a structured `{code, message, details}`.
+// Electron's IPC forwards `String(value)` for any non-Error thrown value, so the
+// IpcError is wrapped in an Error tagged with the shared sentinel for the preload
+// to rehydrate into a structured `{code, message, details}`.
 const wrapForTransport = (ipcError: IpcError): Error =>
   new Error(`${IPC_ERROR_SENTINEL}${JSON.stringify(ipcError)}`);
 

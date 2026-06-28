@@ -21,8 +21,6 @@ const ICON_BY_GLYPH: Record<BuildStatusGlyph, LucideIcon> = {
   error: TriangleAlert,
 };
 
-// The frosted status pill shown over a build's key-art (cards + detail hero).
-// Monochrome: the icon + label carry state, never hue.
 export const BuildStatusBadge = ({
   item,
   className,

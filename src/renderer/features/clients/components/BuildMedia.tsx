@@ -6,9 +6,6 @@ import { localBackgroundFor } from './localBackgrounds';
 
 type MediaSlot = 'poster' | 'background' | 'titleImage';
 
-// What to render if the image is absent or fails to load: a generated visual
-// (good for covers/backdrops) or nothing (logos/screenshots, where a gradient
-// block would look wrong).
 type MediaFallback = 'visual' | 'none';
 
 type BuildMediaProps = {
@@ -27,10 +24,6 @@ const renderFallback = (
     <BuildVisualFallback item={item} showInitial={false} className={className} />
   ) : null;
 
-// Renders a build's media regardless of source: official builds render their
-// API media (cached protocol) via their raw Client; local builds render their
-// on-disk media URL. A missing or broken image degrades to the configured
-// fallback instead of a blank/collapsed box.
 export const BuildMedia = ({ item, slot, className, fallback = 'visual' }: BuildMediaProps) => {
   const [failed, setFailed] = useState(false);
   if (failed) return renderFallback(item, fallback, className);
@@ -44,8 +37,7 @@ export const BuildMedia = ({ item, slot, className, fallback = 'visual' }: Build
   const ref = item.presentation.media[slot];
   if (ref)
     return <img src={ref.url} alt="" className={className} onError={() => setFailed(true)} />;
-  // Personal builds rarely ship key-art; give the backdrop slot a stable, seeded
-  // Minecraft screenshot instead of a flat gradient. Other slots keep the gradient.
+  // Backdrop slot falls back to a key-seeded screenshot so it stays stable across renders.
   if (slot === 'background') {
     return (
       <img

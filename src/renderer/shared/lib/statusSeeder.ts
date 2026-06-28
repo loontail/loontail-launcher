@@ -8,12 +8,9 @@ export type StatusSeeder<TResult> = {
   reset: () => void;
 };
 
-// A bounded-concurrency, per-slug-deduped status prefetcher. Live IPC events are
-// the source of truth; this only fills the initial gap before the first event,
-// so concurrent mounts of N build cards don't fire N simultaneous status IPCs.
-// Generic over the fetched shape so both the bundle and minecraft features share
-// one implementation, each instantiated with its own status fetcher. The pool is
-// the shared `createLimiter` primitive; this layers a per-slug dedup map on top.
+// Bounded-concurrency, per-slug-deduped status prefetcher. Live IPC events are
+// the source of truth; this only fills the gap before the first event so N build
+// cards mounting at once don't fire N simultaneous status IPCs.
 export const createStatusSeeder = <TResult>(
   fetchStatus: (slug: CatalogKey) => Promise<TResult>,
   maxConcurrency: number = DEFAULT_MAX_CONCURRENCY,
@@ -35,7 +32,7 @@ export const createStatusSeeder = <TResult>(
   return {
     seedStatus,
     // A fresh limiter abandons any queued (not-yet-started) work so the next
-    // seed starts from an empty pool, matching the prior hand-rolled reset.
+    // seed starts from an empty pool.
     reset: () => {
       limit = createLimiter(maxConcurrency);
       requests.clear();

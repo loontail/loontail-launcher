@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
-// True while the app window holds OS focus. Drives dimming the chrome (title bar /
-// top nav) when the launcher sits backgrounded behind the running game.
+// True while the app window holds OS focus; drives dimming the chrome when
+// backgrounded behind the running game.
 export const useWindowFocused = (): boolean => {
   const [focused, setFocused] = useState(() => document.hasFocus());
 

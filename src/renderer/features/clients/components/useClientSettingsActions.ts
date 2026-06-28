@@ -11,7 +11,6 @@ import type { LoaderChoice, ResolvedClientSettings } from '@shared/contracts/set
 type UseClientSettingsActionsArgs = {
   slug: CatalogKey;
   resolved: ResolvedClientSettings;
-  // Reset identity for the pending RAM value (modal toggle / client switch).
   resetKey: unknown;
 };
 

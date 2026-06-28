@@ -7,18 +7,13 @@ import { useTranslation } from 'react-i18next';
 import { create } from 'zustand';
 import { useUpdaterStore } from './store';
 
-// 30 min background poll. Squirrel.Windows can't push pings, so the renderer
-// drives recurring checks while the launcher is open.
+// Squirrel.Windows can't push pings, so the renderer polls while the launcher is open.
 const BACKGROUND_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 
-// Minimum gap between automatic checks (startup / focus / interval). Stops
-// burst focus events from spamming update.electronjs.org. User-clicked checks
-// bypass this — they go through `triggerUpdaterCheck` directly.
+// Min gap between automatic checks, so burst focus events don't spam the update endpoint.
 const AUTO_CHECK_DEDUPE_MS = 5_000;
 
-// Mirrors the literal the main-side watchdog broadcasts on a stalled check
-// (updater/index.ts). A timeout ERROR is the renderer's signal that the
-// user's pending success confirmation is now stale and must be dropped.
+// Must match the literal the main-side watchdog broadcasts on a stalled check.
 const UPDATER_TIMEOUT_MESSAGE = 'Update check timed out';
 
 type CheckTrackingStore = {
@@ -26,9 +21,6 @@ type CheckTrackingStore = {
   userInitiatedCheck: boolean;
   markUserInitiated: () => void;
   clearUserInitiated: () => void;
-  // Records the attempt and reports whether the dedupe window allows it. Kept
-  // in the store (not module scope) so it survives no instance and resets
-  // cleanly between mounts.
   claimAutoCheck: (now: number) => boolean;
   reset: () => void;
 };
@@ -46,8 +38,7 @@ export const useUpdaterCheckTracking = create<CheckTrackingStore>((set, get) => 
   reset: () => set({ lastAutoCheckAt: Number.NEGATIVE_INFINITY, userInitiatedCheck: false }),
 }));
 
-// Per-session toast-dedup so the same news isn't re-toasted on every background
-// poll, but is fresh again in a new launcher session.
+// Per-session toast-dedup so a background poll doesn't re-toast the same news.
 type ToastDedup = { state: string | null; errorMessage: string | null };
 
 export const markUserInitiatedCheck = (): void => {
@@ -58,10 +49,7 @@ export const triggerUpdaterCheck = (): void => {
   void window.api.invoke(IPC_CHANNELS.updaterCheck, undefined);
 };
 
-// Automatic checks (startup / focus / interval) skip if a check is already
-// in flight, an update is already staged, or another auto-check fired very
-// recently. The main process has its own in-flight guard too — this just
-// avoids the IPC roundtrip in the common case.
+// Skip the IPC roundtrip when a check is in flight, an update is staged, or one fired very recently.
 const triggerAutoCheck = (): void => {
   const current = useUpdaterStore.getState().value;
   if (
@@ -92,7 +80,7 @@ const toastFor = (
 ): boolean => {
   switch (status.state) {
     case UpdaterStates.CHECKING:
-      // Button shows a spinner — an extra toast would just be noise.
+      // The button already shows a spinner; a toast would be noise.
       return false;
     case UpdaterStates.AVAILABLE:
       if (dedup.state === status.state) return false;
@@ -103,8 +91,7 @@ const toastFor = (
       );
       return true;
     case UpdaterStates.NOT_AVAILABLE:
-      // Background polls stay silent — only confirm "up to date" when the user
-      // explicitly asked.
+      // Only confirm "up to date" when the user explicitly asked; background polls stay silent.
       if (!wasUserInitiated) return false;
       toast.success(t('updater.toast.notAvailable'));
       return true;
@@ -137,9 +124,7 @@ export const handleUpdaterStatus = (
   const wasUserInitiated = tracking.userInitiatedCheck;
   const didToast = toastFor(status, wasUserInitiated, t, dedup);
   if (didToast) dedup.state = status.state;
-  // A timeout ERROR is a terminal state, so the second clause is redundant for
-  // correctness; it documents the alignment with the main-side watchdog and
-  // keeps the intent explicit if isFinalState ever narrows.
+  // Timeout clause is redundant today but stays explicit in case isFinalState ever narrows.
   if (isFinalState(status.state) || isWatchdogTimeout(status)) {
     tracking.clearUserInitiated();
   }

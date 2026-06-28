@@ -22,9 +22,9 @@ if (rootElement === null) {
 
 const queryClient = createQueryClient();
 
-// Localized CMS fields (title, description, media) are cached per-locale by
-// query key; drop the previous locale's entries so the UI doesn't briefly show
-// stale text/images while the new locale fetches in the background.
+// Client text/media is cached per-locale by query key; drop the previous
+// locale's entries so the UI doesn't briefly show stale content while the new
+// locale fetches in the background.
 i18n.on('languageChanged', () => {
   void queryClient.invalidateQueries({ queryKey: [QUERY_KEY_ROOTS.clients] });
 });

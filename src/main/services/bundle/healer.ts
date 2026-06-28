@@ -15,16 +15,12 @@ const logger = scopedLogger('bundle.heal');
 
 export type HealOptions = {
   signal?: AbortSignal;
-  // Forwarded to the kit's verify + repair calls so the bundle manager can
-  // surface live progress while in the HEALING status.
   onEvent?: ProgressListener;
 };
 
 export type Healer = {
-  // Called by the bundle manager after the delete phase. Verifies the
-  // minecraft slice and re-downloads any vanilla file the bundle no longer
-  // claims ownership of. Bundle-owned files are skipped so deliberate
-  // overrides survive the heal pass.
+  // Verify the minecraft slice and re-download any vanilla file the bundle no
+  // longer owns; bundle-owned files are skipped so deliberate overrides survive.
   healAfterDeletes: (
     slug: CatalogKey,
     bundleOwnedPaths: ReadonlySet<string>,
@@ -34,18 +30,15 @@ export type Healer = {
 
 export type ResolvedHealContext = { target: Target; clientFolder: string };
 
-// Injection seam (heal port): the bundle service no longer imports minecraft to
-// resolve the heal target. The composition root injects this from the minecraft
-// manager so the verify/repair pass runs against a single resolution.
+// Injection seam so the bundle service does not import minecraft to resolve the
+// heal target; the composition root injects this from the minecraft manager.
 export type CreateHealerDeps = {
   resolveContext: (slug: CatalogKey) => Promise<ResolvedHealContext>;
 };
 
 type HealOutcome = {
-  // Files the bundle currently owns — never repaired even if kit verify flags
-  // them as wrong-sha1 (the bundle deliberately overrides vanilla).
+  // Bundle-owned files: never repaired even if verify flags them wrong-sha1.
   ignoredByBundle: number;
-  // Files outside the bundle's ownership that we actually re-downloaded.
   repaired: number;
 };
 
@@ -66,10 +59,9 @@ const countBundleOwnedIssues = (
   result.issues.filter((issue) => isBundleOwnedIssue(clientFolder, bundleOwnedPaths, issue.path))
     .length;
 
-// Run kit.verify.minecraft, drop any issues for paths the bundle owns, then
-// repair only what's left. No-op when the filtered set is empty. The caller
-// passes the already-resolved minecraft target + clientFolder, so this never
-// re-resolves the target (no CMS/settings round-trip in the heal path).
+// Verify, drop issues for bundle-owned paths, then repair only what's left.
+// The caller passes the already-resolved target + clientFolder, so this never
+// re-resolves the target (no settings round-trip in the heal path).
 const verifyAndRepairExceptBundle = async (
   kit: MinecraftKit,
   target: Target,

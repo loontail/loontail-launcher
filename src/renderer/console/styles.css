@@ -1,13 +1,4 @@
-/**
- * Console-window-specific styling. The launcher hides scrollbars
- * globally; the log viewport needs them, so they are explicitly
- * restored here. Source/level tinting and the search-highlight token
- * also live in this file because they bind to data-attributes on rows.
- *
- * Colours come from the launcher's design tokens
- * (`--color-destructive`, `--color-success`, `--color-edge*`,
- * `--color-glass*`) — no hard-coded hex/HSL palette lives in this file.
- */
+/* The launcher hides scrollbars globally; the log viewport restores them here. */
 
 html,
 body,

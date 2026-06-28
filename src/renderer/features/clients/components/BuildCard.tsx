@@ -11,10 +11,6 @@ type BuildCardProps = {
   variant?: 'grid' | 'list';
 };
 
-// One build in the catalog. Grid = an image-forward poster (key-art / seeded
-// screenshot) with the install status over the art, and an icon + title + one
-// meta line below. List = a dense row of the same parts. Color comes only from
-// the build's own art; the chrome stays monochrome.
 export const BuildCard = ({ item, onOpen, variant = 'grid' }: BuildCardProps) => {
   const { t } = useTranslation();
   const loader = primaryLoader(item);

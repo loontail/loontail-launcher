@@ -14,8 +14,7 @@ export const createMediaService = (router: Router): MediaService => ({
     registerMediaProtocol();
     registerMediaRoutes(router);
   },
-  // The cache:// handler registered by registerMediaProtocol persists for the
-  // process lifetime (Electron unregisters it on exit); there is nothing for
-  // dispose to tear down.
+  // The cache:// handler lives for the process lifetime (Electron unregisters it
+  // on exit), so there's nothing to tear down.
   dispose: () => Promise.resolve(),
 });

@@ -8,9 +8,8 @@ import {
 import { defaultLauncherSettings } from './settingsDefaults';
 import { migrateClientOverrideKey } from './settingsMigration';
 
-// MemorySettingsSchema is `z.number().int().nonnegative()`, so the normalizer
-// must reject floats, negatives, and NaN/Infinity — otherwise it can emit a
-// value that fails the very schema it feeds.
+// Must reject floats, negatives, and NaN/Infinity, or the normalizer can emit a
+// value that fails the very schema (`z.number().int().nonnegative()`) it feeds.
 const isNonNegativeInt = (value: unknown): value is number =>
   typeof value === 'number' && Number.isInteger(value) && value >= 0;
 
@@ -79,8 +78,8 @@ export const normalizeLauncherSettings = (value: unknown): LauncherSettings => {
   const clients: Record<string, ClientSettingsOverride> = {};
   for (const [slug, override] of Object.entries(rawClients)) {
     if (slug && slug !== 'undefined' && slug !== 'null') {
-      // Lift a pre-CatalogKey bare slug/uuid key onto the source-namespaced
-      // form so an upgrade does not orphan existing per-client overrides.
+      // Lift a bare slug/uuid key onto the CatalogKey form so an upgrade does
+      // not orphan existing per-client overrides.
       clients[migrateClientOverrideKey(slug)] = normalizeClientOverride(override);
     }
   }

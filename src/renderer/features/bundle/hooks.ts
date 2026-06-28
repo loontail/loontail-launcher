@@ -20,7 +20,7 @@ export const useBundleStatus = (slug: CatalogKey | null | undefined): BundleRunt
 
   useEffect(() => {
     if (!slug) return;
-    // Live events are source of truth — only seed if the store has no entry yet.
+    // Live events are source of truth — only seed when the store has no entry.
     if (useBundleStore.getState().entries[slug]) return;
     void statusSeeder
       .seedStatus(slug)

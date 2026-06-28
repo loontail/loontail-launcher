@@ -17,10 +17,9 @@ import type { SessionRefresher } from './sessionRefresh';
 import { enrichYggdrasilAccount, verifySession } from './verify';
 import type { FetchTextures } from './yggdrasilClient';
 
-// Single visible point where a freshly authenticated session becomes the
-// renderer-facing account. Yggdrasil textures live behind a separate endpoint
-// and need enrichment; the Microsoft/Mojang session already embeds the active
-// skin and exposes no cape API, so its account is returned without a fetch.
+// Yggdrasil textures live behind a separate endpoint and need enrichment; a
+// Microsoft/Mojang session already embeds the active skin (and has no cape API),
+// so its account is returned without a fetch.
 export const buildLoginResult = async (
   session: AuthSession,
   fetchTextures: FetchTextures,
@@ -32,10 +31,8 @@ export const buildLoginResult = async (
   return { ok: true, user: account };
 };
 
-// Persist the authenticated identity (Yggdrasil session + API bearer) and return
-// the renderer-facing account, enriching it with the live texture URLs. The
-// account from the login response already carries the email; only skin/cape need
-// a textures fetch.
+// Persist the identity, then enrich the account with live texture URLs; the
+// login response already carries the email, so only skin/cape need a fetch.
 const completeAuthentication = async (
   identity: AuthenticatedIdentity,
   fetchTextures: FetchTextures,
@@ -82,11 +79,10 @@ export const logout = (loontailAuth: LoontailAuth): Promise<void> => {
   return Promise.resolve();
 };
 
-// Synchronous "what's the active account" probe for callers (e.g. launch
-// path) that cannot await the network-touching `fetchCurrentUser`. Returns
-// the bare account derived from the stored session; for Yggdrasil sessions
-// this leaves `email`/`skin`/`cape` as `null` — the launch composer only
-// needs `username`.
+// Synchronous active-account probe for callers (e.g. the launch path) that
+// cannot await the network-touching `fetchCurrentUser`. For Yggdrasil sessions
+// this leaves `email`/`skin`/`cape` null — the launch composer only needs
+// `username`.
 export const getStoredAccount = (): Account | null => {
   const session = getStoredAuth();
   return session ? accountFromSession(session) : null;

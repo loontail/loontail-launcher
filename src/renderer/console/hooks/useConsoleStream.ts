@@ -24,9 +24,8 @@ export type ConsoleStreamApi = {
   clear: () => void;
 };
 
-// Keep the most recent `limit` items, returning the trimmed array and how many
-// were dropped from the head. Single allocation via slice — O(limit) memcpy,
-// no per-element shifts unlike Array.splice on large buffers.
+// Single slice (O(limit) memcpy) instead of Array.splice to avoid per-element
+// shifts on large buffers.
 const trimToWindow = <T>(items: T[], limit: number): { items: T[]; dropped: number } => {
   if (items.length <= limit) return { items, dropped: 0 };
   const dropped = items.length - limit;
@@ -184,9 +183,7 @@ export const useConsoleStream = (
           scheduleFlush();
         })
         .catch(() => {
-          // Background reconcile poll — a transient IPC failure here will be
-          // retried on the next tick. Surfacing it would add noise to a flow
-          // the user did not trigger.
+          // Background poll: a transient IPC failure is retried next tick.
         });
     }, RECONCILE_INTERVAL_MS);
     return () => window.clearInterval(handle);
@@ -196,9 +193,8 @@ export const useConsoleStream = (
 
   const clear = useCallback(() => {
     void clearConsole().catch(() => {
-      // User-driven clear: local buffer is already wiped below. An IPC failure
-      // only means the main-side mirror survives a tick longer; the next
-      // reconcile poll will reseed it.
+      // Local buffer is wiped below regardless; the reconcile poll reseeds the
+      // main-side mirror if this IPC failed.
     });
     pendingRef.current = [];
     seenIdsRef.current = new Set();

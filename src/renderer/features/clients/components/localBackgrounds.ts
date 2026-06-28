@@ -5,9 +5,7 @@ import bg4 from '@renderer/assets/backgrounds/4.png';
 import bg5 from '@renderer/assets/backgrounds/5.png';
 import bg6 from '@renderer/assets/backgrounds/6.png';
 
-// Bundled Minecraft screenshots used as backdrops for personal builds that ship
-// no key-art of their own. The pick is seeded by the build's catalog key so a
-// given build keeps a stable backdrop across renders (never flickers).
+// Seeded by the build's catalog key so a given build keeps a stable backdrop across renders.
 const LOCAL_BACKGROUNDS = [bg1, bg2, bg3, bg4, bg5, bg6] as const;
 
 export const localBackgroundFor = (key: string): string => {

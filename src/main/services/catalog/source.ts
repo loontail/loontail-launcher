@@ -8,11 +8,9 @@ import {
 } from '@shared/contracts/catalog';
 import type { Client } from '@shared/contracts/client';
 
-// One build source feeding the unified catalog. `listItems` is the catalog
-// listing; `getItem` resolves a single build for install/launch/repair. A
-// source returns null from `getItem` for refs it does not own or that are
-// absent; it throws only on a genuine fetch failure (so the aggregator can mark
-// it degraded without blanking other sources).
+// One build source feeding the unified catalog. `getItem` returns null for refs
+// it does not own or that are absent; it throws only on a genuine fetch failure
+// (so the aggregator can mark it degraded without blanking other sources).
 export type CatalogSource = {
   readonly id: CatalogRef['source'];
   listItems(opts?: { locale?: string }): Promise<CatalogItem[]>;
@@ -23,7 +21,7 @@ const mediaRef = (media: { url: string } | null | undefined): MediaRef | null =>
   media ? { url: media.url } : null;
 
 // Project a normalized API Client into the source-agnostic catalog shape the
-// UI and the kit bridge consume. Keeps the raw Client for legacy read paths.
+// UI and the kit bridge consume.
 export const clientToCatalogItem = (client: Client): OfficialCatalogItem => ({
   kind: SourceKinds.OFFICIAL,
   key: officialKey(client.slug),
@@ -47,8 +45,8 @@ export const clientToCatalogItem = (client: Client): OfficialCatalogItem => ({
       screenshots: (client.screenshots ?? []).map((media): MediaRef => ({ url: media.url })),
     },
     servers: client.servers ?? [],
-    // The native contract drops record timestamps; official ordering falls back
-    // to the source-provided sequence (stable sort) via the empty sentinel.
+    // Empty sentinel: with no record timestamps, official ordering falls back to
+    // the source-provided sequence via the stable sort.
     createdAt: '',
     updatedAt: '',
   },

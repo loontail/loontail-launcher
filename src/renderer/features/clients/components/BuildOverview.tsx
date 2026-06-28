@@ -33,9 +33,6 @@ type BuildOverviewProps = {
   onViewScreenshots: () => void;
 };
 
-// The detail Overview: a row of factual stat tiles, the description + tags, and a
-// screenshot preview that hands off to the Screenshots tab. Everything reads from
-// real catalog data — no fabricated counts.
 export const BuildOverview = ({ item, onViewScreenshots }: BuildOverviewProps) => {
   const { t } = useTranslation();
   const loader = primaryLoader(item);

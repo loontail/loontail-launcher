@@ -14,7 +14,7 @@ const MIN_HEIGHT = 624;
 
 const logger = scopedLogger('mainWindow');
 
-// Allowlist for shell.openExternal targets. CMS host comes from mainConfig
+// Allowlist for shell.openExternal targets. The API host comes from mainConfig
 // so dev/prod stay aligned; default posture is deny.
 const buildExternalHostAllowlist = (): ReadonlySet<string> => {
   const allowed = new Set<string>();
@@ -94,13 +94,10 @@ export type MainWindowHolder = {
   get: () => BrowserWindow;
 };
 
-// Owns the single main-window reference and ties its lifecycle to the rest of
-// the process: closing the main window also closes the console (it is a child
-// surface of the launcher, not a standalone app), `second-instance` focuses the
-// main window specifically rather than whichever window happens to be first,
-// and macOS `activate` only recreates when the main window is gone (a lingering
-// console must not suppress the re-open). The reference is read through `get`
-// so window-dependent services follow a macOS dock re-open without rewiring.
+// Closing the main window also closes the console (a child surface, not a
+// standalone app); macOS `activate` only recreates when the main window is gone
+// so a lingering console can't suppress re-open. The reference is read through
+// `get` so window-dependent services follow a macOS dock re-open without rewiring.
 export const installMainWindowLifecycle = (deps: MainWindowLifecycleDeps): MainWindowHolder => {
   const { app, consoleHub, createWindow, attachNotifier } = deps;
 

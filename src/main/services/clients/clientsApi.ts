@@ -24,8 +24,7 @@ const coerceVersionString = (input: unknown): string | null => {
   return null;
 };
 
-// Rich-text fields may be string or null; collapse anything non-string to ''
-// (renderer feeds this to marked.parse).
+// Collapse non-string rich-text to '' since the renderer feeds it to marked.parse.
 const coerceDescriptionString = (input: unknown): string =>
   typeof input === 'string' ? input : '';
 
@@ -34,8 +33,7 @@ const absolutizeMedia = (media: Media): Media => ({
   url: buildMediaUrl(media.url),
 });
 
-// The API may return an empty string for an unset bundleSlug; collapse it (and
-// other empty/falsy forms) to null so the manager treats it uniformly.
+// Collapse an empty/unset bundleSlug to null so the manager treats it uniformly.
 const coerceBundleSlug = (input: unknown): BundleSlug | null => {
   if (typeof input !== 'string') return null;
   const trimmed = input.trim();

@@ -11,9 +11,6 @@ type SkinViewerCardProps = {
   className?: string;
 };
 
-// Visual-only wrapper around the 3D viewer used inside Account settings.
-// Owns its own framing; everything else (file picking, upload mutations,
-// pending-state messaging) lives in the surrounding controls.
 export const SkinViewerCard = ({
   width,
   height,

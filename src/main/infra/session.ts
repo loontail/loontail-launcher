@@ -7,12 +7,10 @@ const baseDirectives = [
   "default-src 'self'",
   // style-src 'unsafe-inline' is a documented react-aria-components requirement.
   "style-src 'self' 'unsafe-inline'",
-  // No open `https`: remote images are routed through the hardened `cache:` proxy
-  // (host-pinned to the API origin), so an XSS/renderer foothold can't use an
-  // image URL as an exfil beacon to an arbitrary host. `blob:` is required so
-  // skinview3d can render an unsaved skin/cape preview from the file the user
-  // just picked (URL.createObjectURL); the API origin is allowed directly for
-  // any image served straight from the backend.
+  // No open `https`: remote images route through the host-pinned `cache:` proxy
+  // so a renderer foothold can't use an image URL as an exfil beacon to an
+  // arbitrary host. `blob:` is required for skinview3d's unsaved-skin preview
+  // (URL.createObjectURL); the API origin is allowed for images served directly.
   `img-src 'self' data: blob: cache: ${apiOrigin}`,
   "font-src 'self' data:",
   `connect-src 'self' ${apiOrigin}`,
@@ -20,8 +18,7 @@ const baseDirectives = [
 
 const PROD_CSP = ["script-src 'self'", ...baseDirectives].join('; ');
 
-// Dev: Vite injects HMR client + sourcemaps; needs eval. Connect to localhost dev
-// server is granted via the renderer origin already (script-src 'self' covers it).
+// Dev only: Vite's HMR client + sourcemaps need eval.
 const DEV_CSP = [
   "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
   ...baseDirectives.map((directive) =>

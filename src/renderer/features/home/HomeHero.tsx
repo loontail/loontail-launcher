@@ -13,10 +13,6 @@ type HomeHeroProps = {
   onOpenDetails: () => void;
 };
 
-// The immersive Home stage for the currently-featured build: its key-art bleeds
-// full-bleed under the transparent title bar, with a left-weighted scrim holding
-// the eyebrow, title, one meta line and the launch row (Play/Update + settings +
-// Details). Color is supplied entirely by the build art.
 export const HomeHero = ({ item, onOpenSettings, onOpenDetails }: HomeHeroProps) => {
   const { t } = useTranslation();
   const loader = primaryLoader(item);

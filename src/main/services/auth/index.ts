@@ -16,10 +16,10 @@ export type AuthService = {
   dispose: () => Promise<void>;
 };
 
-// Bridge the HTTP layer's session-auth needs (attach bearer, refresh-and-retry)
-// to the stored session + the shared refresher. The refresher de-duplicates the
-// rotation and persists the new session in place; the port just hands the HTTP
-// layer the rotated bearer (or null when the session is gone) for its retry.
+// Bridges the HTTP layer's session-auth needs (attach bearer, refresh-and-retry)
+// to the stored session and the shared refresher: the refresher de-duplicates
+// the rotation and persists in place; this port hands back the rotated bearer
+// (or null when the session is gone).
 const buildSessionAuthPort = (refresher: SessionRefresher) => ({
   getToken: (): string | null => getStoredSessionToken(),
   refresh: async (): Promise<string | null> => {

@@ -5,11 +5,9 @@ import {
   type InstanceRegistryEntry,
 } from '@shared/contracts/instance';
 
-// Thin business layer over the persisted local-build index. The index is a
-// fast-lookup cache (id/name/dir/updatedAt); the authoritative descriptor is
+// The persisted index is a fast-lookup cache; the authoritative descriptor is
 // each instance's `instance.json`, so a lost or corrupt index is recoverable by
-// rescanning the install root (see reconcile in ./reconcile).
-
+// rescanning the install root (see ./reconcile).
 export const listInstanceEntries = (): InstanceRegistryEntry[] =>
   getStoredInstanceRegistry().instances;
 

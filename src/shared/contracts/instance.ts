@@ -3,14 +3,13 @@ import { BundleSlugSchema, ClientSlugSchema, InstanceIdSchema } from './ids';
 import { ServerSchema } from './media';
 import { LoaderChoiceSchema } from './settings';
 
-// Bump when the on-disk `instance.json` shape changes incompatibly; the
-// instance repo migrates older manifests forward on read.
+// Bump when the on-disk `instance.json` shape changes incompatibly; older
+// manifests are migrated forward on read.
 export const INSTANCE_MANIFEST_SCHEMA_VERSION = 1;
 
-// A local build's overlay source. `none` is a plain instance whose mods are
-// loose files under `mods/` (loaded natively by Fabric/Forge). `remote` opts
-// into a managed bundle-registry overlay (the same sync path official builds
-// use) — making that one instance dependent on the remote registry by choice.
+// A local build's overlay source. `none` keeps mods as loose files under
+// `mods/`; `remote` opts into a managed bundle-registry overlay (the same sync
+// path official builds use).
 export const InstanceBundleRefSchema = z.discriminatedUnion('source', [
   z.object({ source: z.literal('none') }),
   z.object({
@@ -22,24 +21,22 @@ export const InstanceBundleRefSchema = z.discriminatedUnion('source', [
 
 export const InstancePresentationSchema = z.object({
   description: z.string().default(''),
-  // Relative path (under the instance dir) to a user-supplied icon, served via
-  // the media protocol. Null → UI renders a generated placeholder.
+  // Relative path (under the instance dir) to a user-supplied icon. Null → placeholder.
   icon: z.string().nullable().default(null),
-  // A built-in icon key (lucide glyph) chosen at create time. Null → generated
-  // initial placeholder. Lets a fresh build pick an identity without an upload.
+  // Built-in lucide icon key chosen at create time. Null → generated placeholder.
   iconPreset: z.string().nullable().default(null),
   screenshots: z.array(z.string()).default([]),
 });
 
 export const InstanceLoaderSchema = z.object({
   type: LoaderChoiceSchema,
-  // Concrete loader build pinned at create time. Null for vanilla (and allowed
-  // for "latest" loaders the kit resolves at install).
+  // Loader build pinned at create time. Null for vanilla and for "latest"
+  // loaders the kit resolves at install.
   version: z.string().min(1).nullable(),
 });
 
-// Optional pointer to the official build this instance was cloned from. Null
-// for builds authored from scratch. Reserved for a future "Save as Local" flow.
+// Optional pointer to the official build this instance was cloned from; null
+// for builds authored from scratch.
 export const InstanceOriginSchema = z.object({
   source: z.literal('official'),
   slug: ClientSlugSchema,
@@ -67,9 +64,9 @@ export const InstanceManifestSchema = z.object({
 
 export type InstanceManifest = z.infer<typeof InstanceManifestSchema>;
 
-// Persisted index of local builds for fast catalog listing without walking N
-// instance folders. The authoritative descriptor is each `instance.json`; this
-// index is rebuildable by scanning them when missing or corrupt.
+// Persisted index for fast catalog listing without walking every instance
+// folder. Each `instance.json` is authoritative; this index is rebuildable from
+// them when missing or corrupt.
 export const InstanceRegistryEntrySchema = z.object({
   id: InstanceIdSchema,
   name: z.string().min(1),
@@ -88,8 +85,8 @@ export const InstanceRegistrySchema = z.object({
 
 export type InstanceRegistry = z.infer<typeof InstanceRegistrySchema>;
 
-// Validated at the `builds.create` IPC boundary. Resolved/pinned metadata is
-// derived in the main process via the kit version APIs.
+// Validated at the `builds.create` IPC boundary; pinned metadata is derived in
+// the main process via the kit version APIs.
 export const CreateInstancePayloadSchema = z.object({
   name: z.string().min(1),
   minecraftVersion: z.string().min(1),
@@ -101,8 +98,8 @@ export const CreateInstancePayloadSchema = z.object({
 
 export type CreateInstancePayload = z.infer<typeof CreateInstancePayloadSchema>;
 
-// Validated at `builds.update`. Only user-editable fields; identity/timestamps
-// are owned by the repo.
+// Validated at `builds.update`; only user-editable fields. Identity and
+// timestamps are owned by the repo.
 export const UpdateInstancePayloadSchema = z.object({
   id: InstanceIdSchema,
   patch: z
@@ -115,9 +112,8 @@ export const UpdateInstancePayloadSchema = z.object({
 
 export type UpdateInstancePayload = z.infer<typeof UpdateInstancePayloadSchema>;
 
-// Renderer-facing option shapes for the create-build version pickers. Projected
-// from the kit's version summaries in the main process so the kit's Node-only
-// types never reach the renderer.
+// Renderer-facing option shapes for the version pickers, projected in the main
+// process so the kit's Node-only types never reach the renderer.
 export type MinecraftVersionOption = {
   readonly id: string;
   readonly type: string;

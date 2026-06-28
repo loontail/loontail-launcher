@@ -11,12 +11,11 @@ const VERSIONS_STALE_TIME_MS = 5 * 60 * 1000;
 
 export type UseCatalogResult = {
   items: CatalogItem[];
-  // The official source's last fetch succeeded. False → show a degraded-CMS
-  // banner; local builds always render regardless.
+  // False → show a degraded banner; local builds always render regardless.
   officialOk: boolean;
   isPending: boolean;
-  // True while a (re)fetch is in flight, including background refetches after an
-  // invalidation — lets consumers wait out a just-created build landing.
+  // True during background refetches too, so consumers can wait out a
+  // just-created build landing.
   isFetching: boolean;
   isError: boolean;
 };
@@ -55,8 +54,7 @@ const useCatalogMutation = <TInput, TResult>(
   });
 };
 
-// The build editor surfaces creation failures inline in its form, so the global
-// toast would double-surface them.
+// The build editor surfaces creation failures inline, so suppress the global toast.
 export const useCreateBuild = () =>
   useCatalogMutation(api.createBuild, { skipGlobalErrorToast: true });
 export const useDeleteBuild = () => useCatalogMutation(api.deleteBuild);

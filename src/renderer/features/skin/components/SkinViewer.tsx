@@ -32,8 +32,7 @@ export const SkinViewer = ({
     if (!canvas) return;
     let viewer: SkinView3d;
     try {
-      // WebGL context creation throws on a disabled/absent GPU; contain it here so
-      // a viewer failure can't unmount the whole Settings tree via the root boundary.
+      // Contain WebGL init failure (disabled/absent GPU) so it can't unmount the whole Settings tree.
       viewer = new SkinView3d({ canvas, width, height, ...options });
     } catch (error) {
       // biome-ignore lint/suspicious/noConsole: best-effort diagnostic — main logger unreachable from renderer
@@ -42,9 +41,7 @@ export const SkinViewer = ({
       return;
     }
     viewerRef.current = viewer;
-    // The first skin/cape load is left to the dedicated [skinUrl]/[capeUrl]
-    // effects below — they also run on mount (and handle the reset cases), so
-    // loading here too would fetch each texture twice.
+    // First load is left to the [skinUrl]/[capeUrl] effects (which also run on mount); loading here too double-fetches.
     onReady?.({ viewer, canvas });
     return () => {
       viewer.dispose();

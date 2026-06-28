@@ -26,10 +26,8 @@ export const createHealProgressListener = (
   let currentFile: string | undefined;
 
   const emitter = createThrottledEmitter<HealProgress>((value) => {
-    // Patch bytes explicitly even when no heal download is in flight (0/0).
-    // makeProgressEvent's defaults pull task.bytesDownloaded / task.plan.bytesTotal
-    // from the just-finished download phase, so omitting them here would leak
-    // those stale totals into HEALING events.
+    // Patch bytes explicitly (even 0/0): makeProgressEvent's defaults pull the
+    // just-finished download phase's totals, which would leak into HEALING events.
     emit(slug, BundleSyncStatuses.HEALING, {
       processedFiles: value.verifiedFiles,
       bytesDownloaded: value.bytesDownloaded,

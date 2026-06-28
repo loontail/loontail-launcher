@@ -14,10 +14,9 @@ export const OpKinds = {
 
 export type OpKind = (typeof OpKinds)[keyof typeof OpKinds];
 
-// Placeholder op claimed synchronously by startInstall before buildContext
-// resolves, so getStatus reports INSTALLING and a concurrent startLaunch trips
-// requireIdle during setup. beginInstall replaces it with the real InstallOp,
-// carrying this abort controller forward so a Stop during buildContext is honored.
+// Claimed synchronously before buildContext resolves so a concurrent startLaunch
+// trips requireIdle during setup; beginInstall replaces it, carrying this abort
+// controller forward so a Stop during buildContext is honored.
 export type InstallStartingOp = {
   kind: typeof OpKinds.INSTALL_STARTING;
   abort: AbortController;
@@ -33,9 +32,8 @@ export type InstallOp = {
 
 export type RepairOp = { kind: typeof OpKinds.REPAIR; abort: AbortController };
 export type UninstallOp = { kind: typeof OpKinds.UNINSTALL };
-// Represents a bundle sync window: pre-launch (between install and launch),
-// post-install, or post-repair. Holds an abort controller so `cancel(slug)`
-// can stop an in-flight bundle download mid-flight.
+// A bundle sync window (pre-launch, post-install, or post-repair); the abort
+// controller lets cancel(slug) stop an in-flight bundle download.
 export type BundleSyncingOp = {
   kind: typeof OpKinds.BUNDLE_SYNCING;
   abort: AbortController;
@@ -68,8 +66,6 @@ export const OP_TO_STATUS: Record<OpKind, InstallStatus> = {
   [OpKinds.LAUNCH]: InstallStatuses.RUNNING,
 };
 
-// The manager and the consumer modules (install/launch/repair/uninstall) share
-// one live Map of in-flight ops per slug: the manager reads it back via this.ops
-// while the consumers mutate it through ManagerEnv.ops, both pointing at the same
-// object.
+// The manager (this.ops) and the consumer modules (ManagerEnv.ops) must point at
+// the same live Map: consumers mutate it, the manager reads it back.
 export type OpMap = Map<CatalogKey, Op>;

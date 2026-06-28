@@ -4,8 +4,6 @@ import type { BrowserWindow } from 'electron';
 
 let mainWindow: BrowserWindow | null = null;
 
-// Wire once from bootstrap; the renderer picks up `app.notification` events via
-// NotificationsListener and dispatches into the toast system.
 export const attachNotifier = (window: BrowserWindow): void => {
   mainWindow = window;
 };

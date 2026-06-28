@@ -10,8 +10,8 @@ import { clearTargetInstallManifest } from './installManifest';
 import { OpKinds } from './ops';
 import { isAnythingInstalled } from './runtimeState';
 
-// Guard before recursive rm: reject anything not strictly under clientsRoot
-// (no `..` escapes, no absolute paths).
+// Guard before recursive rm: reject anything not strictly under clientsRoot (no
+// `..` escapes, no absolute paths).
 export const isUnderClientsRoot = (folder: string, clientsRoot: string): boolean => {
   if (!folder || !clientsRoot) return false;
   const rel = path.relative(clientsRoot, folder);
@@ -40,9 +40,8 @@ export const runUninstall = async (
     env.emitStatus({ slug, status: InstallStatuses.NOT_INSTALLED, paused: false });
   } catch (error) {
     env.logger.error(`[${slug}] uninstall failed`, error);
-    // Best-effort second pass on just the markers `isAnythingInstalled` checks.
-    // A file lock elsewhere in the tree shouldn't leave the user staring at an
-    // ERROR + INSTALLED flicker if the version/runtime markers did come off.
+    // Best-effort second pass on just the markers isAnythingInstalled checks, so a
+    // file lock elsewhere in the tree doesn't leave an ERROR + INSTALLED flicker.
     await Promise.allSettled([
       fs.rm(path.join(folder, 'versions'), { recursive: true, force: true }),
       fs.rm(path.join(folder, 'runtime'), { recursive: true, force: true }),

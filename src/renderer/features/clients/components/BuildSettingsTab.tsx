@@ -26,8 +26,6 @@ import { useClientSettingsActions } from './useClientSettingsActions';
 
 type BuildSettingsTabProps = {
   item: CatalogItem;
-  // Notifies the page that the underlying build was deleted, so it can navigate
-  // away rather than linger on a now-removed build.
   onBuildDeleted: () => void;
 };
 
@@ -59,8 +57,6 @@ type ContentProps = {
   onBuildDeleted: () => void;
 };
 
-// Destructive but colourless: the danger reads from the Trash2 icon, the
-// explicit wording and a stronger hairline — never a hue.
 const DeleteBuildSection = ({
   item,
   disabled,

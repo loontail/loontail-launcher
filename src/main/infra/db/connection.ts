@@ -10,11 +10,8 @@ export const DB_FILE_NAME = 'launcher.db';
 
 let instance: Db | null = null;
 
-// Open a launcher database at `filePath`, apply pragmas, and ensure the schema
-// is current. The parent directory is created first — `userData` exists on a
-// normal Electron run, but a custom path may not. WAL keeps reads non-blocking
-// during the synchronous writes the store performs; `foreign_keys` is enabled
-// for future relational integrity.
+// The parent directory is created first because a custom path may not exist. WAL
+// keeps reads non-blocking during the store's synchronous writes.
 export const openDatabase = (filePath: string): Db => {
   mkdirSync(path.dirname(filePath), { recursive: true });
   const db = new Database(filePath);
@@ -24,9 +21,8 @@ export const openDatabase = (filePath: string): Db => {
   return db;
 };
 
-// Lazily-opened process-wide handle. The first access resolves the path under
-// `userData`, so importing this module triggers no filesystem I/O — unit tests
-// can import the store without touching disk until they call into it.
+// Lazily-opened process-wide handle, so importing this module triggers no
+// filesystem I/O until first use.
 export const getDb = (): Db => {
   if (!instance) {
     instance = openDatabase(path.join(app.getPath('userData'), DB_FILE_NAME));
@@ -34,19 +30,14 @@ export const getDb = (): Db => {
   return instance;
 };
 
-// Close and forget the handle. Production calls this on `before-quit`; tests use
-// it to release the file lock between cases before deleting the database file.
 // Checkpoint and truncate the WAL before closing so the last synchronous writes
-// (settings, last-played) land in the main database file on a clean shutdown
-// instead of lingering in `-wal` until the next open. Best-effort: a checkpoint
-// failure must not block the close, and WAL recovers on next open regardless.
+// land in the main file on clean shutdown instead of lingering in `-wal`. A
+// checkpoint failure must not block the close; WAL recovers on next open.
 export const closeDatabase = (): void => {
   if (!instance) return;
   try {
     instance.pragma('wal_checkpoint(TRUNCATE)');
-  } catch {
-    // Ignore: the close below still finalizes, and WAL recovers on next open.
-  }
+  } catch {}
   instance.close();
   instance = null;
 };

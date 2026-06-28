@@ -3,9 +3,8 @@ const MB = 1024 ** 2;
 const GB = 1024 ** 3;
 
 type FormatBytesOptions = {
-  // Shown when `bytes` is not a finite number.
   placeholder?: string;
-  // Largest unit the value may scale up to. 'gb' picks GB/MB, 'mb' picks MB/KB.
+  // 'gb' picks GB/MB, 'mb' picks MB/KB.
   maxUnit?: 'gb' | 'mb';
 };
 

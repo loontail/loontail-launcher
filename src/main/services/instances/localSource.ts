@@ -70,7 +70,7 @@ const defaultDeps: LocalCatalogSourceDeps = {
 
 // The local, network-free build source — the primary source of the unified
 // catalog. Always resolves from disk so local builds list and launch with the
-// CMS unreachable.
+// backend unreachable.
 export const createLocalCatalogSource = (
   deps: LocalCatalogSourceDeps = defaultDeps,
 ): CatalogSource => ({

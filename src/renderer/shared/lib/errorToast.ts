@@ -2,9 +2,8 @@ import { type IpcError, isIpcError } from '@shared/ipc';
 
 export type IpcErrorLocalizer = (error: IpcError) => string;
 
-// Best-effort string for arbitrary error shapes — covers IpcError ({code,
-// message}), Error instances, and as a last resort anything with a string
-// `message` so plain throw-objects never collapse to "[object Object]".
+// Best-effort string for arbitrary error shapes so plain throw-objects never
+// collapse to "[object Object]".
 const formatError = (error: unknown): string => {
   if (isIpcError(error)) return error.message;
   if (error instanceof Error) return error.message;
@@ -15,12 +14,9 @@ const formatError = (error: unknown): string => {
   return String(error);
 };
 
-// A mutation tags itself with `meta.errorLocalizer` to opt its coded rejections
-// into a domain localizer (the same code→key map the live event listener uses),
-// so a NO_ACCOUNT/offline launch shows one localized toast instead of the raw
-// English `message`. Un-coded errors or untagged mutations fall through to
-// formatError. The localizer lives in the feature that owns the mutation, so
-// renderer/shared never imports a feature.
+// A mutation tags itself with `meta.errorLocalizer` to localize its coded
+// rejections; the localizer is injected by the owning feature so renderer/shared
+// never imports a feature. Un-coded or untagged errors fall through to formatError.
 export const resolveErrorToastMessage = (
   error: unknown,
   localizer: IpcErrorLocalizer | undefined,

@@ -3,38 +3,27 @@ import { mainConfig } from '@main/config';
 
 export type FetchTextures = (uuid: string) => Promise<TexturesLookupResponse>;
 
-// The Yggdrasil texture client plus its launcher-aware lookup, created once and
-// threaded through the auth and skin services like `kit` — never a module
-// singleton, so tests can swap in a fake per service.
 export type YggdrasilGateway = {
-  // why: this YggdrasilClient is rooted at the bare API origin so its texture
-  // calls resolve to `${apiUrl}/textures/...`. Use it ONLY for the texture
-  // methods (getTextures/uploadSkin/uploadCape/deleteSkin/deleteCape). Its
+  // Rooted at the bare API origin so texture calls resolve to
+  // `${apiUrl}/textures/...`. Use ONLY for the texture methods
+  // (getTextures/uploadSkin/uploadCape/deleteSkin/deleteCape); the
   // authenticate/refresh/validate/invalidate/profile/bulkProfiles methods build
-  // `${apiUrl}/authserver|/api/profiles/...` paths that the backend mounts under
-  // `/api/yggdrasil/*` — calling them through this instance would 404.
+  // paths the backend mounts under `/api/yggdrasil/*` and would 404 here.
   readonly texturesClient: YggdrasilClient;
   readonly fetchTextures: FetchTextures;
 };
 
 export const createYggdrasilClient = (deps: { fetch?: typeof fetch } = {}): YggdrasilGateway => {
-  // Textures are served at the API origin's top-level `/textures` (the server
-  // mounts the textures router there; `/api/yggdrasil/textures` only exists as a
-  // back-compat alias for older launchers). Point the client at the bare
-  // `apiUrl` so skin/cape upload, lookup, and delete resolve to
-  // `${apiUrl}/textures/...` instead of the stale CMS-era
-  // `${apiUrl}/api/yggdrasil/textures/...` path, which the new API 404s.
-  // (The game's authlib-injector still targets `yggdrasilApiRoot` directly in
-  // the launch args — that's a separate, server-side concern.)
+  // Textures are served at the API origin's top-level `/textures`; point the
+  // client at the bare `apiUrl` so skin/cape upload, lookup, and delete resolve
+  // to `${apiUrl}/textures/...`.
   const texturesClient = new YggdrasilClient(
     deps.fetch ? { apiRoot: mainConfig.apiUrl, fetch: deps.fetch } : { apiRoot: mainConfig.apiUrl },
   );
 
-  // `GET /textures/:uuid` may return relative URLs depending on how the server
-  // is configured (the convenience endpoint doesn't prepend `publicUrl` the way
-  // the signed `textures` property does). Resolve any non-http(s) URL against
-  // `mainConfig.apiUrl` so consumers downstream — the skinview3d viewer, the
-  // media cache — receive a fully-qualified URL they can hand to `fetch`.
+  // `GET /textures/:uuid` may return relative URLs; resolve any non-http(s) URL
+  // against `mainConfig.apiUrl` so downstream consumers receive a fully-qualified
+  // URL they can hand to `fetch`.
   const absolutizeTextureUrl = (url: string): string => {
     if (/^https?:\/\//i.test(url)) return url;
     return new URL(url, mainConfig.apiUrl).toString();

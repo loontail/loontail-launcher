@@ -91,7 +91,7 @@ export const CreateBuildModal = ({ isOpen, onClose, onCreated }: CreateBuildModa
         onClose();
       })
       .catch(() => {
-        // Surfaced inline via create.isError; nothing else to do here.
+        // Surfaced inline via create.isError.
       });
   };
 

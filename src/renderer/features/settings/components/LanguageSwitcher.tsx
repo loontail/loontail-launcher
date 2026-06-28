@@ -20,7 +20,7 @@ const isLanguage = (value: string): value is Language =>
 
 export const LanguageSwitcher = () => {
   const { i18n } = useTranslation();
-  // Subscribe to i18n.language so the active highlight re-renders on switch.
+  // Read i18n.language so the active highlight re-renders on switch.
   const current = isLanguage(i18n.language) ? i18n.language : 'en';
 
   return (

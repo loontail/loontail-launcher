@@ -8,9 +8,8 @@ import { sha256File } from './hash';
 import { flattenRemoteEntries } from './manifestUtils';
 import { normalizePathForSet, resolveSafeEntryPath, toComparisonKey } from './paths';
 
-// Index a local manifest's files by their comparison key so lookups survive a
-// casing drift between the remote manifest and what a prior sync recorded (see
-// `toComparisonKey`). The stored keys keep their original casing for fs ops.
+// Index local files by comparison key so lookups survive a casing drift (see
+// `toComparisonKey`); stored records keep their original casing for fs ops.
 type LocalFileRecord = LocalManifest['files'][string];
 const indexLocalFiles = (local: LocalManifest | null): Map<string, LocalFileRecord> => {
   const index = new Map<string, LocalFileRecord>();
@@ -22,12 +21,10 @@ const indexLocalFiles = (local: LocalManifest | null): Map<string, LocalFileReco
 };
 
 export type PlanFlags = {
-  // True for "Repair" mode: ignore local manifest fast-path, re-hash everything
-  // on disk so we trust observed state, not cached state.
+  // Repair mode: skip the manifest fast-path and re-hash disk, trusting observed
+  // state over cached.
   force?: boolean;
-  // Aborts classification: force mode re-hashes the whole bundle, so a cancel
-  // (or a launch-target sync that the user stopped) must short-circuit instead
-  // of running uncancellably to completion.
+  // Force mode re-hashes the whole bundle, so a cancel must short-circuit it.
   signal?: AbortSignal;
 };
 
@@ -36,10 +33,9 @@ export type SyncPlan = {
   toUpdate: RemoteManifestEntry[];
   toDelete: string[]; // relative paths from the previous local manifest
   toSkip: RemoteManifestEntry[];
-  // Bundle-owned paths in the *current remote* manifest. Healer uses this to
-  // know which kit verify issues to ignore (bundle deliberately overrides them).
+  // Bundle-owned paths in the current remote manifest; the healer ignores verify
+  // issues for these (the bundle deliberately overrides them).
   bundleOwnedRelativePaths: Set<string>;
-  // Progress-bar denominator.
   bytesTotal: number;
 };
 
@@ -54,8 +50,6 @@ const exists = async (absPath: string): Promise<boolean> => {
   }
 };
 
-// Decide a single entry's fate against local manifest + disk. Pure-ish (reads
-// disk for force mode and the "no local record" branch, never mutates).
 const classifyEntry = async (
   entry: RemoteManifestEntry,
   localFiles: Map<string, LocalFileRecord>,
@@ -65,14 +59,12 @@ const classifyEntry = async (
   const destPath = resolveSafeEntryPath(clientFolder, entry.path);
   const comparisonKey = toComparisonKey(entry.path);
 
-  // downloadOnce: fire-and-forget files (installers, one-shot patches).
-  // Never re-checked once placed.
+  // downloadOnce: one-shot files (installers/patches), never re-checked once placed.
   if (entry.downloadOnce) {
     return (await exists(destPath)) ? 'skip' : 'download';
   }
 
-  // No sha256 → can't verify integrity; safest to always re-fetch unless
-  // we've already accepted it in a previous successful sync.
+  // No sha256 → can't verify; re-fetch unless a prior sync already accepted it.
   if (!entry.sha256) {
     const known = localFiles.get(comparisonKey);
     return !force && known && (await exists(destPath)) ? 'skip' : 'download';
@@ -93,8 +85,6 @@ const classifyEntry = async (
     }
   }
 
-  // Disk-hash fast path: only paid in force mode or when local manifest is
-  // missing a record for a file that exists on disk.
   try {
     const onDiskHash = await sha256File(destPath);
     return onDiskHash === entry.sha256 ? 'skip' : 'update';
@@ -104,9 +94,8 @@ const classifyEntry = async (
   }
 };
 
-// Build the diff between remote and local. Classifies entries with bounded
-// concurrency, then assembles the buckets by walking the results in input
-// order so the plan is deterministic regardless of which task settled first.
+// Classify entries with bounded concurrency, then assemble buckets in input
+// order so the plan is deterministic regardless of settle order.
 export const buildPlan = async (
   remote: RemoteManifest,
   local: LocalManifest | null,
@@ -116,15 +105,13 @@ export const buildPlan = async (
   const force = flags.force === true;
   const signal = flags.signal;
   const remoteEntries = flattenRemoteEntries(remote);
-  // Healer-facing set keeps the storage casing: the healer compares it against
-  // disk-derived paths (kit-verify issues) whose casing must be matched exactly
-  // on case-sensitive platforms, so this set must not be case-folded.
+  // Healer-facing set keeps storage casing: it's matched against disk-derived
+  // paths exactly on case-sensitive platforms, so must not be case-folded.
   const bundleOwnedRelativePaths = new Set<string>(
     remoteEntries.map((e) => normalizePathForSet(e.path)),
   );
-  // Separate case-insensitive (on Windows) membership set for the local-only
-  // delete diff: a casing drift must not queue a still-remote-owned file for
-  // deletion (BUG-4).
+  // Case-folded (on Windows) set for the delete diff so a casing drift doesn't
+  // queue a still-remote-owned file for deletion.
   const remoteComparisonKeys = new Set<string>(remoteEntries.map((e) => toComparisonKey(e.path)));
   const localFiles = indexLocalFiles(local);
 
@@ -156,10 +143,8 @@ export const buildPlan = async (
     }
   });
 
-  // Local-only files that no longer appear in the remote → delete after the
-  // download phase. Membership is tested case-insensitively (on Windows) so a
-  // casing drift between manifests does not delete a still-owned file, but the
-  // original-cased local key is what gets queued for the actual fs delete.
+  // Local-only files absent from the remote → delete. The original-cased local
+  // key is what gets queued for the fs delete.
   const toDelete: string[] = [];
   if (local) {
     for (const localPath of Object.keys(local.files)) {

@@ -19,10 +19,8 @@ import * as api from './api';
 import { localizeMinecraftError } from './errorCopy';
 import { type ClientRuntimeState, useMinecraftStore } from './store';
 
-// Errors a repair can actually fix (missing/corrupt files, missing runtime).
-// For these we show a calm "heads up" prompt offering a Repair, not a red error —
-// the game is still installed, something is just out of date. Other errors
-// (no account, network, …) stay as informational error toasts.
+// Errors a repair can fix (missing/corrupt files, missing runtime); these get a
+// calm Repair prompt instead of a red error. Everything else stays an error toast.
 export const REPAIRABLE_ERROR_CODES: ReadonlySet<MinecraftErrorCode> = new Set([
   MinecraftErrorCodes.NOT_INSTALLED,
   MinecraftErrorCodes.INTEGRITY_ERROR,
@@ -35,9 +33,6 @@ export type MinecraftErrorToast = {
   readonly action?: ToastAction;
 };
 
-// A repairable code becomes a warn toast with a friendly "run a repair?" prompt
-// and an inline Repair action (no raw error text); everything else stays a plain
-// error toast carrying the localized error message.
 export const buildMinecraftErrorToast = (
   code: MinecraftErrorCode,
   slug: CatalogKey,
@@ -84,7 +79,7 @@ export const MinecraftEventsListener = (): null => {
         void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.system.folderSizeRoot });
         void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.system.diskSpaceRoot });
       }
-      // The main process stamps last-played on RUNNING; refresh the Home recents.
+      // Main stamps last-played on RUNNING; refresh the Home recents.
       if (rest.status === InstallStatuses.RUNNING) {
         void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.history.lastPlayed });
       }

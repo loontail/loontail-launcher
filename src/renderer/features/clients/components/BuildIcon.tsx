@@ -13,10 +13,7 @@ type BuildIconProps = {
 const hasPoster = (item: CatalogItem): boolean =>
   isOfficial(item) ? Boolean(item.raw.poster) : Boolean(item.presentation.media.poster);
 
-// The build's icon: the `poster` media shown whole and centered (object-contain,
-// never cropped or stretched) over a deterministic gradient. When there is no
-// poster, a single initial stands in — rendered ONLY then, so a logo with
-// transparency never shows the initial bleeding through behind it.
+// Render the initial only when there is no poster, so a transparent logo never bleeds it through.
 export const BuildIcon = ({ item, className }: BuildIconProps) => {
   const hue = fallbackHue(item);
   const Preset = iconPresetFor(item.presentation.iconPreset);

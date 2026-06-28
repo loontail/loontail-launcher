@@ -1,6 +1,5 @@
-// Streaming parser for Minecraft log4j2 XMLLayout output. Events straddle
-// chunk boundaries and interleave with plain-text JVM/mod prints, so we buffer
-// per-stream and emit a typed sequence of text / event chunks.
+// Streaming parser for log4j2 XMLLayout output: events straddle chunk boundaries
+// and interleave with plain-text prints, so it buffers per-stream.
 
 import type { ConsoleSources } from '@shared/contracts/console';
 

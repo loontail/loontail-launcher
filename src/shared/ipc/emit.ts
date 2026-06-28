@@ -1,18 +1,15 @@
 import type { IpcEventPayloads } from './contract';
 
-// Structural slice of Electron's BrowserWindow so this shared helper does not
-// pull an electron type dependency into the renderer build (which never imports
-// electron). Main-side callers pass a real BrowserWindow, which satisfies it.
+// Structural slice of Electron's BrowserWindow so this shared helper pulls no
+// electron type dependency into the renderer build. A real BrowserWindow satisfies it.
 type EmitTarget = {
   isDestroyed(): boolean;
   webContents: { send(channel: string, payload: unknown): void };
 };
 
-// Single typed gateway for every main→renderer push. Binding the event channel
-// to its payload type (`IpcEventPayloads[TEvent]`) makes a wrong channel/payload
-// pairing a tsc error instead of a silently mismatched wire shape. The destroyed
-// guard and the swallow-on-teardown catch fold the per-callsite boilerplate that
-// the broadcasters, notifier, and console sink each previously open-coded.
+// Typed gateway for every main→renderer push: binding the channel to its payload
+// type makes a wrong channel/payload pairing a tsc error rather than a silently
+// mismatched wire shape.
 export const emit = <TEvent extends keyof IpcEventPayloads>(
   window: EmitTarget | null,
   event: TEvent,

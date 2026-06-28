@@ -1,11 +1,9 @@
 import { type ClassValue, clsx } from 'clsx';
 import { extendTailwindMerge } from 'tailwind-merge';
 
-// The palette defines custom font-size tokens (see `--text-*` in index.css).
-// tailwind-merge doesn't know them, so by default it lumps e.g. `text-microlabel`
-// into the same group as a `text-glass/85` colour and drops the size when both
-// appear in one `cn(...)` call. Registering them under `font-size` keeps size and
-// colour as independent groups so both survive the merge.
+// Register the custom `--text-*` size tokens under `font-size` so tailwind-merge
+// keeps size and colour as independent groups; otherwise it drops the size when
+// both appear in one `cn(...)` call.
 const twMerge = extendTailwindMerge({
   extend: {
     classGroups: {

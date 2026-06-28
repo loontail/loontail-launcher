@@ -1,9 +1,8 @@
 import type { Database } from 'better-sqlite3';
 
-// Physical layout version of launcher.db. Distinct from the LauncherSettings
-// `schemaVersion` (a logical settings-shape version persisted in the `meta`
-// table): this one tracks the table structure itself. Bump it and add a step
-// to `LAYOUT_MIGRATIONS` when the columns/tables change incompatibly.
+// Physical table-layout version of launcher.db, distinct from the logical
+// LauncherSettings `schemaVersion` in the `meta` table. Bump it and add a step
+// to `LAYOUT_MIGRATIONS` when columns/tables change incompatibly.
 export const DB_LAYOUT_VERSION = 1;
 
 const CREATE_TABLES = `
@@ -45,14 +44,12 @@ CREATE TABLE IF NOT EXISTS last_played (
 );
 `;
 
-// Indexed by the layout version being migrated FROM. Empty today: version 1 is
-// the initial layout. Add a step here (and bump DB_LAYOUT_VERSION) for every
-// incompatible table change so existing databases upgrade in place.
+// Indexed by the layout version being migrated FROM. Add a step here (and bump
+// DB_LAYOUT_VERSION) for every incompatible table change.
 const LAYOUT_MIGRATIONS: Record<number, (db: Database) => void> = {};
 
-// Create the tables and advance the physical layout to DB_LAYOUT_VERSION. Runs
-// inside a single transaction so a partial upgrade never leaves a half-built
-// schema behind. Idempotent: re-running on an up-to-date database is a no-op.
+// Runs inside one transaction so a partial upgrade never leaves a half-built
+// schema. Idempotent: re-running on an up-to-date database is a no-op.
 export const applyDbSchema = (db: Database): void => {
   db.exec(CREATE_TABLES);
   const current = db.pragma('user_version', { simple: true }) as number;

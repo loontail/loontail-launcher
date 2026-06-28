@@ -19,9 +19,8 @@ export const beginInstall = (
   ctx: Context,
   options: { abort?: AbortController },
 ): InstallOp => {
-  // Carry the placeholder's abort controller forward when startInstall passes
-  // one, so a Stop issued during the buildContext window stays armed: the
-  // controller may already be aborted, and runInstall's signal honors it.
+  // Carry the placeholder's abort controller forward so a Stop during the
+  // buildContext window stays armed (it may already be aborted).
   const op: InstallOp = {
     kind: OpKinds.INSTALL,
     pauseController: new PauseController(),
@@ -106,7 +105,6 @@ export const runInstall = async (
   try {
     env.logger.info(`[${slug}] install: planning…`);
     await tryInstall(env, slug, ctx, op);
-    // No derivable equivalent for runtime path elsewhere in settings.
     env.persistRuntime(slug, {
       component: ctx.target.runtime.component,
       path: runtimePathFor(ctx.target.runtime.component),

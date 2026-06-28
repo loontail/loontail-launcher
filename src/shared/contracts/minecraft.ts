@@ -69,8 +69,7 @@ export const MinecraftProgressEventSchema = z.object({
   stage: ProgressStageSchema,
   stagePercent: z.number().min(0).max(100),
   overallPercent: z.number().min(0).max(100),
-  // Per-stage reconstructed bytes (stagePercent × stage total): the adapter
-  // rounds before IPC, so these are non-negative reals, not strict ints.
+  // Reconstructed bytes (stagePercent × stage total), so non-negative reals not ints.
   bytesDownloaded: z.number().nonnegative(),
   totalBytes: z.number().nonnegative(),
   speedBytesPerSec: z.number().nonnegative().optional(),

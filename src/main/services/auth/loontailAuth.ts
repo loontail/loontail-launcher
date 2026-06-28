@@ -18,9 +18,8 @@ import {
 
 const logger = scopedLogger('auth.loontail');
 
-// A successful authentication splits into the three pieces the launcher tracks
-// separately: the in-game Yggdrasil session (fed to the game), the universal
-// API bearer (`sessionToken`), and the renderer-facing account (with email).
+// The three pieces the launcher tracks separately: the in-game Yggdrasil session,
+// the universal API bearer (`sessionToken`), and the renderer-facing account.
 export type AuthenticatedIdentity = {
   session: YggdrasilSession;
   sessionToken: string;
@@ -49,8 +48,7 @@ const identityFromResponse = (response: LoontailAuthResponse): AuthenticatedIden
   return { session, sessionToken: response.session.token, account };
 };
 
-// Map a transport/HTTP failure to the renderer's `LoginErrorCode`. A bare
-// TypeError from undici means the request never reached the server.
+// A bare TypeError from undici means the request never reached the server.
 const errorToLoginCode = (error: unknown): LoginErrorCode => {
   if (isAuthRateLimited(error)) return LOGIN_ERROR_CODE.RateLimited;
   if (isAuthCredentialRejection(error)) return LOGIN_ERROR_CODE.InvalidCredentials;
@@ -59,9 +57,8 @@ const errorToLoginCode = (error: unknown): LoginErrorCode => {
   return LOGIN_ERROR_CODE.Unknown;
 };
 
-// Result of a session refresh. `expired` means the server rejected the token
-// (the session is gone — clear it); `offline` means the server was unreachable
-// (keep the cached session and retry later).
+// `expired` = server rejected the token (clear the session); `offline` = server
+// unreachable (keep the cached session and retry later).
 export type RefreshResult =
   | { kind: 'ok'; identity: AuthenticatedIdentity }
   | { kind: 'expired' }
@@ -70,7 +67,6 @@ export type RefreshResult =
 export type LoontailAuth = {
   signIn: (payload: LoginPayload) => Promise<LoontailAuthResult>;
   register: (payload: RegisterPayload) => Promise<LoontailAuthResult>;
-  // Rotate the session given the current API bearer.
   refresh: (sessionToken: string) => Promise<RefreshResult>;
   signOut: (sessionToken: string) => Promise<void>;
 };
@@ -110,7 +106,6 @@ export const createLoontailAuth = (api: AuthApi): LoontailAuth => {
       return { kind: 'ok', identity: identityFromResponse(await api.refresh(sessionToken)) };
     } catch (error) {
       if (error instanceof TypeError) {
-        // Network blip — keep the session and let the next call retry.
         logger.warn('Session refresh hit a network error; keeping the stored session', error);
         return { kind: 'offline' };
       }

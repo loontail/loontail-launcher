@@ -7,11 +7,9 @@ const STORAGE_KEY = 'loontail-query-cache-v1';
 export const QUERY_PERSIST_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const THROTTLE_MS = 1000;
 
-// Only offline-first roots are persisted: the catalog the user browses, their
-// settings, the cached session, and last-played history. Everything else
-// (system probes, build metadata, media, app version, server statuses) must be
-// refetched on launch, so an allow-list keeps the localStorage payload small
-// and prevents a stale snapshot from a previous build replaying into new code.
+// Allow-list of offline-first roots; everything else is refetched on launch.
+// Keeps the localStorage payload small and stops a stale snapshot from a
+// previous build replaying into new code.
 const PERSISTED_QUERY_ROOTS: ReadonlySet<string> = new Set([
   QUERY_KEY_ROOTS.catalog,
   QUERY_KEY_ROOTS.settings,

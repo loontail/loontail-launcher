@@ -3,8 +3,7 @@ import { NotificationVariants } from '@shared/contracts/notification';
 import { IPC_EVENTS } from '@shared/ipc';
 import { useEffect } from 'react';
 
-// Mount once at app root: relays `app.notification` IPC events to the toast
-// system. Main process emits via `notify.{success,error,info,warn}`.
+// Mount once at app root: relays `app.notification` IPC events to the toast system.
 export const NotificationsListener = (): null => {
   useEffect(
     () =>

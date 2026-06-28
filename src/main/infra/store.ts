@@ -42,9 +42,8 @@ import {
 export { closeDatabase } from './db/connection';
 
 const logger = scopedLogger('store');
-// Bumped to 2 when the Loontail session token joined the Yggdrasil secret blob.
-// A version-1 blob (no session token) fails validation and forces a fresh
-// sign-in, which is correct: a pre-unification session has no API bearer.
+// A blob without the session token fails validation and forces a fresh sign-in,
+// which is correct: such a session has no API bearer.
 const AUTH_SECRET_STORAGE_VERSION = 2;
 type LinuxSecretBackend = ReturnType<typeof safeStorage.getSelectedStorageBackend>;
 
@@ -80,8 +79,8 @@ const YggdrasilAuthSecretSchema = z.object({
   provider: z.literal('yggdrasil'),
   accessToken: z.string().min(1),
   clientToken: z.string().min(1),
-  // The universal Loontail API bearer. Stored encrypted next to the in-game
-  // Yggdrasil pair so a single decrypt yields everything a session needs.
+  // The API bearer, stored encrypted next to the in-game Yggdrasil pair so a
+  // single decrypt yields everything a session needs.
   sessionToken: z.string().min(1),
 });
 
@@ -109,22 +108,16 @@ const buildDefaultSettings = (): LauncherSettings => {
   return { ...base, memory: { allocatedRamMb: computeDefaultRamMb() } };
 };
 
-// --- launcher-settings schema migrations -----------------------------------
-
 type MigrationFn = (settings: LauncherSettings) => LauncherSettings;
 
-// Indexed by the version we're migrating FROM. Add entries as the schema
-// evolves; applySettingsMigrations applies them in order until
-// CURRENT_SCHEMA_VERSION. 0 → 1 is an identity step: version-0 settings are
-// structurally identical to version 1, so the bump only stamps the version.
+// Indexed by the version migrated FROM. 0 → 1 is an identity step: version-0
+// settings are structurally identical to version 1, so the bump only stamps.
 const MIGRATIONS: Record<number, MigrationFn> = {
   0: (settings) => settings,
 };
 
-// Apply the migration steps from `fromVersion` up to `toVersion`, in order. A
-// gap in the chain would silently corrupt user state, so a missing step throws
-// and lets the next release supply it. Pure: no store access, so the gap-throw
-// and ordering are unit-testable in isolation.
+// A gap in the migration chain would silently corrupt user state, so a missing
+// step throws and lets the next release supply it.
 export const applySettingsMigrations = (
   settings: LauncherSettings,
   fromVersion: number,
@@ -168,19 +161,13 @@ const runMigrations = (db: Db): void => {
   setMeta(db, STORE_KEY_SCHEMA_VERSION, String(CURRENT_SCHEMA_VERSION));
 };
 
-// Seed a fresh database: default settings plus the current schema version, so a
-// first run with no legacy data behaves exactly like the old electron-store
-// `defaults`.
 const seedDefaults = (db: Db): void => {
   writeSettings(db, buildDefaultSettings());
   setMeta(db, STORE_KEY_SCHEMA_VERSION, String(CURRENT_SCHEMA_VERSION));
 };
 
-// Explicit store bootstrap. Opens the database, performs the one-time import
-// from the legacy electron-store layout (or seeds defaults), runs the settings
-// schema migration, and drops legacy auth sessions. Called once from main
-// bootstrap before any service is created, so importing this module (e.g. from
-// a unit test) triggers no store I/O until invoked.
+// Explicit store bootstrap so importing this module (e.g. from a unit test)
+// triggers no store I/O until invoked. Called once before any service is created.
 export const initStore = (): void => {
   const db = getDb();
   if (!readSettings(db)) {
@@ -191,16 +178,13 @@ export const initStore = (): void => {
   purgeLegacyAuth(db);
 };
 
-// --- auth ------------------------------------------------------------------
-
 const secureStorageFailure = (error: unknown): { message: string } => ({
   message: error instanceof Error ? error.message : 'Unknown secure storage error',
 });
 
-// Tagged "the secret store itself is unavailable" error. This is TRANSIENT — a
-// keyring/DBus hiccup or a not-yet-ready backend — and must NOT destroy a still-
-// valid stored session: callers fail soft (return null, keep the row) and retry
-// on the next read. Distinct from a present-but-corrupt blob, which IS deleted.
+// TRANSIENT secret-store unavailability (keyring/DBus hiccup, not-yet-ready
+// backend) that must NOT destroy a still-valid session: callers fail soft (keep
+// the row) and retry. Distinct from a present-but-corrupt blob, which IS deleted.
 class SecureStorageUnavailableError extends Error {
   readonly transient = true as const;
   constructor(message: string) {
@@ -241,8 +225,8 @@ const metadataFromSession = (session: AuthSession): StoredAuthMetadata => {
 const secretFromSession = (session: AuthSession, sessionToken: string | undefined): AuthSecret => {
   if (session.provider === 'yggdrasil') {
     if (!sessionToken) {
-      // A Yggdrasil session without its API bearer is unusable — every backend
-      // call would 401. Refuse to persist it rather than store a half-session.
+      // A Yggdrasil session without its API bearer is unusable; refuse to persist
+      // a half-session rather than store one that 401s on every call.
       throw new Error('Yggdrasil session requires a Loontail session token');
     }
     return {
@@ -274,9 +258,8 @@ const hydrateSession = (metadata: StoredAuthMetadata, secret: AuthSecret): unkno
   return { ...metadata, accessToken: secret.accessToken, refreshToken: secret.refreshToken };
 };
 
-// Decrypt and validate the secure-storage blob persisted alongside the account
-// metadata. Token material is never written in plaintext: it lives only inside
-// this `safeStorage`-encrypted blob (Windows DPAPI / macOS Keychain / Linux
+// Token material is never written in plaintext: it lives only inside this
+// `safeStorage`-encrypted blob (Windows DPAPI / macOS Keychain / Linux
 // libsecret|KWallet).
 const decryptAuthSecret = (blob: Buffer | null): AuthSecret => {
   assertSecureStorageAvailable();
@@ -291,8 +274,8 @@ const decryptAuthSecret = (blob: Buffer | null): AuthSecret => {
 };
 
 // Only Mojang legacy sessions can be migrated in place: a legacy Yggdrasil
-// session predates the unified session token and `setStoredAuth` rejects it, so
-// it falls through to a clean re-login (correct — it has no API bearer).
+// session has no session token, so `setStoredAuth` rejects it and it falls
+// through to a clean re-login.
 const migrateLegacyAuthSession = (session: AuthSession): AuthSession | null => {
   try {
     setStoredAuth(session);
@@ -300,9 +283,8 @@ const migrateLegacyAuthSession = (session: AuthSession): AuthSession | null => {
     return session;
   } catch (error) {
     if (isTransientSecureStorageError(error)) {
-      // Secure storage is transiently unavailable. Leave the legacy row in
-      // place so the migration retries on the next read instead of dropping a
-      // still-valid session. setStoredAuth already left the row untouched.
+      // Leave the legacy row in place so the migration retries on the next read
+      // instead of dropping a still-valid session.
       logger.warn(
         'Secure auth storage is temporarily unavailable; deferring legacy session migration',
         secureStorageFailure(error),
@@ -327,9 +309,8 @@ const parseStoredMetadata = (metadata: string): unknown | null => {
 };
 
 // Drop legacy sessions whose `provider` value is no longer recognised by the
-// current discriminated union — old strapi-JWT sessions (`provider:'strapi'`)
-// and the very-old pre-tagged shape both fall here. Idempotent: an absent row
-// and already-valid metadata pass through untouched.
+// current discriminated union. Idempotent: an absent row and already-valid
+// metadata pass through untouched.
 const purgeLegacyAuth = (db: Db): void => {
   const row = readAuthRow(db);
   if (!row) return;
@@ -345,8 +326,7 @@ const purgeLegacyAuth = (db: Db): void => {
 };
 
 // Reading also migrates: a legacy session stored without the secret/metadata
-// split is detected here and rewritten via `migrateLegacyAuthSession`, so the
-// first `getStoredAuth()` after an upgrade upgrades the stored shape in place.
+// split is rewritten in place via `migrateLegacyAuthSession`.
 export const getStoredAuth = (): AuthSession | null => {
   const row = readAuthRow(getDb());
   if (!row) return null;
@@ -375,8 +355,8 @@ export const getStoredAuth = (): AuthSession | null => {
     throw new Error('Stored auth session failed validation after secure-storage rehydration');
   } catch (error) {
     if (isTransientSecureStorageError(error)) {
-      // Secure storage is transiently unavailable. Keep the row so the next
-      // read can recover the still-valid session instead of forcing a re-login.
+      // Keep the row so the next read can recover the still-valid session
+      // instead of forcing a re-login.
       logger.warn(
         'Secure auth storage is temporarily unavailable; keeping the stored session',
         secureStorageFailure(error),
@@ -393,15 +373,13 @@ export const getStoredAuth = (): AuthSession | null => {
 };
 
 // Triggers the legacy-session migration baked into `getStoredAuth` at a
-// deterministic point during auth-service init, rather than relying on whichever
-// consumer happens to read the session first.
+// deterministic point during init rather than on whichever consumer reads first.
 export const runAuthStoreMigrationIfNeeded = (): void => {
   getStoredAuth();
 };
 
-// `sessionToken` is the Loontail API bearer; it is mandatory for Yggdrasil
-// sessions and ignored for Mojang (which has no Loontail session). Callers that
-// only rewrite Mojang profile data omit it.
+// `sessionToken` is the API bearer: mandatory for Yggdrasil sessions, ignored
+// for Mojang (which has none).
 export const setStoredAuth = (session: AuthSession | null, sessionToken?: string): void => {
   if (session === null) {
     clearStoredAuth();
@@ -415,8 +393,8 @@ export const setStoredAuth = (session: AuthSession | null, sessionToken?: string
     writeAuthRow(getDb(), JSON.stringify(metadataFromSession(session)), encrypted);
   } catch (error) {
     if (isTransientSecureStorageError(error)) {
-      // Don't wipe an existing row over a transient store outage — surface the
-      // failure so the caller can retry once secure storage is back.
+      // Don't wipe an existing row over a transient outage; surface the failure
+      // so the caller can retry once secure storage is back.
       throw error;
     }
     clearStoredAuth();
@@ -424,10 +402,8 @@ export const setStoredAuth = (session: AuthSession | null, sessionToken?: string
   }
 };
 
-// The live Loontail API bearer for the stored session, or null when no
-// Yggdrasil session is stored (Mojang sessions have no Loontail token). Reading
-// goes through the same decrypt path as `getStoredAuth`; a decrypt/validation
-// failure surfaces as null so callers fall back to a re-login.
+// The API bearer for the stored session, or null when none is stored (Mojang
+// has no token) or decrypt/validation fails — callers then fall back to re-login.
 export const getStoredSessionToken = (): string | null => {
   const row = readAuthRow(getDb());
   if (!row) return null;
@@ -447,8 +423,6 @@ export const clearStoredAuth = (): void => {
   deleteAuthRow(getDb());
 };
 
-// --- launcher settings -----------------------------------------------------
-
 export const getStoredLauncherSettings = (): LauncherSettings => {
   const raw = readSettings(getDb());
   if (raw === null) return buildDefaultSettings();
@@ -464,11 +438,8 @@ export const setStoredLauncherSettings = (settings: LauncherSettings): LauncherS
   return normalized;
 };
 
-// --- instance registry index ----------------------------------------------
-
-// The local-build index. A malformed value degrades to an empty registry rather
-// than throwing; the instances service self-heals it from the on-disk instance
-// manifests.
+// The local-build index. A malformed value degrades to an empty registry; the
+// instances service self-heals it from the on-disk instance manifests.
 export const getStoredInstanceRegistry = (): InstanceRegistry => {
   const registry = {
     schema: INSTANCE_REGISTRY_SCHEMA_VERSION,
@@ -485,17 +456,13 @@ export const setStoredInstanceRegistry = (registry: InstanceRegistry): InstanceR
   return registry;
 };
 
-// --- last played -----------------------------------------------------------
-
-// Stamp a build's last-played time, keyed by CatalogKey so the renderer can
-// match the map against the catalog. A stale key (build later deleted) is
-// harmless — the selector ignores keys with no matching catalog item.
+// Keyed by CatalogKey so the renderer can match the map against the catalog. A
+// stale key (build later deleted) is harmless: the selector ignores unmatched keys.
 export const recordPlayed = (key: string): void => {
   upsertLastPlayed(getDb(), key, Date.now());
 };
 
-// Rehydrate any legacy bare-keyed entries to the CatalogKey form on read so the
-// Home recents (which match by `item.key`) still line up after an upgrade. New
-// writes already stamp by CatalogKey, so this is a defensive lift.
+// Rehydrate legacy bare-keyed entries to CatalogKey form on read so Home recents
+// (matched by `item.key`) still line up after an upgrade.
 export const getLastPlayed = (): Record<string, number> =>
   migrateLastPlayedKeys(readLastPlayed(getDb()));

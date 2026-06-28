@@ -15,10 +15,9 @@ type Broadcaster<TChannels extends BroadcasterChannels> = {
   error: (payload: IpcEventPayloads[TChannels['error']]) => void;
 };
 
-// Build a {status, progress, error} broadcaster bound to a feature's three IPC
-// channels. `getWindow` resolves the live main window on each send: it can be
-// recreated (macOS dock re-open after the window was closed) and a captured
-// reference would broadcast into the destroyed original.
+// `getWindow` resolves the live main window on each send: it can be recreated
+// (macOS dock re-open) and a captured reference would broadcast into the
+// destroyed original.
 export const makeBroadcaster = <TChannels extends BroadcasterChannels>(
   getWindow: () => BrowserWindow,
   channels: TChannels,

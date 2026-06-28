@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 
 type UseRamPendingArgs = {
   savedRam: number;
-  // Identity that, when changed, discards any unsaved pending value (e.g. the
-  // settings tab reopening or the active client switching).
+  // When this changes, any unsaved pending value is discarded.
   resetKey: unknown;
   persist: (ramMb: number) => Promise<unknown>;
 };

@@ -65,9 +65,9 @@ export const getDiskSpace = async (path: string): Promise<DiskInfo> => {
   }
 };
 
-// Cap concurrent fs ops on libuv: a Minecraft install can hold tens of
-// thousands of files, and unbounded Promise.all would queue every stat at
-// once and starve other main-process fs/dns work behind a busy thread pool.
+// Cap concurrent fs ops: a Minecraft install holds tens of thousands of files,
+// and unbounded Promise.all would starve other main-process work behind a busy
+// libuv pool.
 const WALK_CONCURRENCY = 16;
 
 const walkDirectorySize = async (root: string): Promise<number> => {

@@ -4,10 +4,6 @@ import type { CatalogItem } from '@shared/contracts/catalog';
 import { BuildIcon } from './BuildIcon';
 import { BuildMedia } from './BuildMedia';
 
-// The detail page's full-bleed key-art banner: the build's logo + title at the
-// bottom-left. Install status and provenance are intentionally omitted here —
-// the Play/Install button already conveys readiness, and the page context makes
-// ownership obvious.
 export const BuildDetailHero = ({ item }: { item: CatalogItem }) => {
   const { title } = item.presentation;
 

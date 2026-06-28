@@ -5,8 +5,6 @@ type BuildGridSkeletonProps = {
   count?: number;
 };
 
-// Mirrors a grid card: 16:9 poster over a title line and a meta line so the
-// loading state matches the final layout's height and reflow.
 export const BuildGridSkeleton = ({ count = 8 }: BuildGridSkeletonProps) => (
   <BuildGrid>
     {Array.from({ length: count }).map((_, index) => (

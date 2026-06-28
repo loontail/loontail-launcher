@@ -18,9 +18,7 @@ type ProgressBodyProps = {
   slug: CatalogKey;
 };
 
-// A transfer is "stalled" when bytes haven't advanced for a few seconds while
-// it should be actively downloading — surfaced as a hint so a slow network
-// doesn't read as a frozen UI.
+// Bytes-unchanged window before a download is flagged stalled, so a slow network reads as working.
 const STALL_MS = 6000;
 
 const useStalled = (bytes: number | undefined, active: boolean): boolean => {
@@ -71,10 +69,7 @@ export const ProgressBody = ({ active, paused, pausable, controls, slug }: Progr
     <div className="flex flex-col gap-2.5">
       <div className="relative h-9 w-full overflow-hidden rounded-md bg-surface-2">
         {indeterminate ? (
-          // Reduced motion collapses the sliding stripe to a frozen partial bar,
-          // which reads as "stuck". So under motion-reduce show a steady, subtle
-          // full-width fill (clearly "working, indeterminate"); the sliding 1/3
-          // stripe is motion-safe only.
+          // Under motion-reduce, a frozen partial bar reads as "stuck"; use a steady full-width fill instead.
           <div
             className="absolute inset-y-0 left-0 motion-reduce:w-full motion-reduce:bg-glass/20 motion-safe:w-1/3 motion-safe:bg-glass/45 motion-safe:animate-[install-indeterminate_1.4s_ease-in-out_infinite]"
             aria-hidden="true"

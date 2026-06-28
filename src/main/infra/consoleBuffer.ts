@@ -70,9 +70,8 @@ export class ConsoleBuffer {
     this.dropPendingBelow(this.lines[0]?.id ?? 0);
   }
 
-  // Ids are monotonically increasing, so pending is sorted; drop the leading
-  // run whose ids were just evicted from lines. Keeps consumePending a subset
-  // of getLines.
+  // Ids are monotonic, so pending is sorted; dropping the leading evicted run
+  // keeps consumePending a subset of getLines.
   private dropPendingBelow(minRetainedId: number): void {
     let cut = 0;
     while (cut < this.pending.length) {

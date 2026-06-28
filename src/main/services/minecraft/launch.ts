@@ -36,13 +36,10 @@ import { type LaunchStartingOp, OpKinds } from './ops';
 
 const launchLogger = scopedLogger('minecraft.launch');
 
-// Placeholder Azure AD client id used to satisfy the kit's `OnlineAuth` shape
-// for Yggdrasil sessions. authlib-injector intercepts the Mojang authlib calls
-// at JVM init, so the game never contacts Microsoft — but the kit still
-// validates the field shape, hence a real-looking zero GUID.
+// Zero GUID to satisfy the kit's OnlineAuth shape for Yggdrasil sessions;
+// authlib-injector intercepts the authlib calls so the game never contacts Microsoft.
 const YGGDRASIL_PLACEHOLDER_CLIENT_ID = asAzureClientId('00000000-0000-0000-0000-000000000000');
-// authlib-injector fetches metadata with Java's default URLConnection UA.
-// Cloudflare blocks bare `Java/...`, so give that JVM traffic a launcher UA.
+// Cloudflare blocks authlib-injector's bare `Java/...` UA, so give it a launcher UA.
 const YGGDRASIL_HTTP_AGENT_NAME = 'LoontailLauncher';
 
 class LaunchPreflightError extends ManagerError {}
@@ -57,9 +54,8 @@ const RUNTIME_REPAIR_KIT_CODES: ReadonlySet<MinecraftKitErrorCode> = new Set([
   MinecraftKitErrorCodes.LAUNCH_JAVA_NOT_FOUND,
 ]);
 
-// compose reads only from disk — a MinecraftKitError here means an incomplete
-// install, not a network failure. Reclassify so the renderer offers Repair
-// instead of a raw, non-repairable error.
+// compose reads only from disk, so a MinecraftKitError here means an incomplete
+// install — reclassify so the renderer offers Repair, not a raw error.
 const toComposeFailure = (error: unknown): unknown => {
   if (isLaunchPreflightError(error)) return error;
   if (!isMinecraftKitError(error)) return error;
@@ -69,10 +65,8 @@ const toComposeFailure = (error: unknown): unknown => {
   return new LaunchPreflightError(code, errorMessage(error));
 };
 
-// The launch command line embeds the session bearer as
-// `-Dloontail.network.serviceToken=<token>` (see buildNetworkAgentJvmArgs).
-// The full command is written to the log file, so the secret would otherwise
-// persist on disk. Redact the value before logging so it never hits disk.
+// The full launch command is logged to disk, so redact the session bearer it
+// embeds (-Dloontail.network.serviceToken=) before it ever hits the log file.
 const SERVICE_TOKEN_PROP = '-Dloontail.network.serviceToken=';
 const redactServiceToken = (command: string): string =>
   command.replace(/-Dloontail\.network\.serviceToken=\S+/g, `${SERVICE_TOKEN_PROP}<redacted>`);
@@ -96,13 +90,10 @@ const resolveAuthlibInjectorJar = (): string => {
   return resolveAuthlibInjectorJarPath();
 };
 
-// Packaged: shipped to `process.resourcesPath/loontail-agent/` via
-// electron-builder extraResources. Dev: read from the repo's `resources/agent/`.
 const LOONTAIL_AGENT_JAR = 'loontail-network-agent.jar';
 
-// The agent jar is built `--release 21`, so attaching it via `-javaagent` to an
-// older Minecraft that launches on Java 8/17 would abort JVM startup. Only attach
-// on Java 21+ — which is every Minecraft version the agent supports (1.21.4+).
+// The agent jar is built `--release 21`, so attaching it via `-javaagent` on an
+// older JVM (Java 8/17) would abort startup. Only attach on Java 21+.
 const NETWORK_AGENT_MIN_JAVA = 21;
 
 const resolveNetworkAgentJar = (): string =>
@@ -110,9 +101,8 @@ const resolveNetworkAgentJar = (): string =>
     ? path.join(process.resourcesPath, 'loontail-agent', LOONTAIL_AGENT_JAR)
     : path.join(app.getAppPath(), 'resources', 'agent', LOONTAIL_AGENT_JAR);
 
-// JVM args that attach the in-game network agent, or [] when it must not be
-// attached (older/unknown Java, or the bundled jar is missing). A wrong Java or a
-// missing jar must never block the launch — the overlay is strictly best-effort.
+// JVM args that attach the in-game network agent, or [] when it must not attach.
+// The overlay is strictly best-effort: a wrong Java or missing jar never blocks launch.
 const buildNetworkAgentJvmArgs = async (
   slug: CatalogKey,
   javaMajor: number | undefined,
@@ -130,17 +120,10 @@ const buildNetworkAgentJvmArgs = async (
     if (mainConfig.networkServiceUrl) {
       args.push(`-Dloontail.network.serviceUrl=${mainConfig.networkServiceUrl}`);
     }
-    // Hand the in-game agent the same session token the launcher uses as its API
-    // bearer, so it authenticates against the network service as this user.
-    //
-    // why: the token rides on a `-D` system property, which is readable in the
-    // local process list (Win32_Process / `ps -ww` / /proc/pid/cmdline). Moving
-    // it off `-D` (env var / 0600 file / loopback handshake) requires a
-    // coordinated change to how the mod/agent reads it (System.getProperty), and
-    // a mismatch would silently break in-game auth at runtime — out of scope for
-    // this launcher-only change. The on-disk leak (the launch-command log line)
-    // is closed by redactServiceToken below; the process-list exposure is
-    // tracked for a follow-up that lands with the agent change.
+    // Hand the agent the same session token so it authenticates as this user.
+    // Known leak: the token rides on a `-D` property, readable in the local
+    // process list. Moving it off `-D` needs a coordinated agent change and is
+    // tracked for a follow-up; the on-disk log leak is closed by redactServiceToken.
     const sessionToken = getStoredSessionToken();
     if (sessionToken) {
       args.push(`-Dloontail.network.serviceToken=${sessionToken}`);
@@ -164,10 +147,8 @@ const requireLaunchFile = async (
   }
 };
 
-// compose already resolved the launch version from disk and rejected if the
-// version JSON was missing, so the only files left to gate here are the runtime
-// and the classpath (which holds the actual executable jar — the vanilla client
-// for vanilla, the loader-patched jar for Forge/Fabric).
+// compose already gated the version JSON, so only the runtime and classpath
+// (which holds the executable jar) remain to check here.
 const verifyLaunchPreflight = async (composition: LaunchComposition): Promise<void> => {
   await requireLaunchFile(
     composition.javaPath,
@@ -181,13 +162,12 @@ const verifyLaunchPreflight = async (composition: LaunchComposition): Promise<vo
       'Launch preflight failed: classpath is empty',
     );
   }
-  // Classpath entries are independent, so fan the fs.access checks out — a Forge
-  // classpath can hold 100+ jars and a sequential walk adds visible launch
-  // latency on a cold disk. Promise.all still fails fast on the first miss.
+  // Fan the fs.access checks out: a Forge classpath can hold 100+ jars and a
+  // sequential walk adds visible cold-disk latency. Promise.all fails fast on first miss.
   await Promise.all(
     composition.classpath.map((classpathFile) => {
-      // An empty entry would make fs.access('') resolve against the CWD and
-      // silently pass, masking a malformed version JSON.
+      // fs.access('') would resolve against the CWD and silently pass, masking a
+      // malformed version JSON.
       if (!classpathFile) {
         throw new LaunchPreflightError(
           MinecraftErrorCodes.NOT_INSTALLED,
@@ -199,9 +179,8 @@ const verifyLaunchPreflight = async (composition: LaunchComposition): Promise<vo
   );
 };
 
-// The kit wraps a non-zero exit in a LAUNCH_PROCESS_FAILED error whose context
-// carries the OS exit code (e.g. -1073741819 = access violation, 1 = Java OOM).
-// It is the first triage signal for a crash, so lift it onto the console state.
+// Lift the OS exit code the kit carries on a LAUNCH_PROCESS_FAILED error onto the
+// console state — it's the first crash-triage signal (e.g. -1073741819 = access violation).
 const launchExitCode = (error: unknown): number | null => {
   if (isMinecraftKitError(error) && typeof error.context.exitCode === 'number') {
     return error.context.exitCode;
@@ -216,8 +195,8 @@ export const endLaunch = (
   exit?: LaunchExit,
 ): void => {
   env.ops.delete(slug);
-  // Flush the log4j parser before emitting the terminal state so a crash event
-  // split across the final lines is ingested instead of dropped at next launch.
+  // Flush the log4j parser before the terminal state so a crash event split
+  // across the final lines is ingested, not dropped.
   env.console.endSession(slug);
   if (error) {
     const message = errorMessage(error);
@@ -238,7 +217,7 @@ export const endLaunch = (
     if (!env.console.hasWindow()) env.openConsole();
   } else {
     // The kit resolves `exited` for both a clean exit and a user stop; only the
-    // latter sets `aborted`, so distinguish the two in the log.
+    // latter sets `aborted`.
     env.logger.info(`[${slug}] launch: game ${exit?.aborted ? 'stopped' : 'exited'}`);
     env.console.emitState({ slug, status: ConsoleStatuses.EXITED, exitCode: exit?.code ?? null });
     env.console.recordSystem('Process exited', {
@@ -254,11 +233,9 @@ type ResolvedLaunchAuth = {
   readonly extraJvmArgs: readonly string[];
 };
 
-// Pick the kit's auth shape based on the active session. Yggdrasil sessions
-// run the game in ONLINE mode using the Yggdrasil-issued access token, with a
-// `-javaagent` JVM arg pointing the JVM at authlib-injector so the game's
-// own auth/profile calls hit the launcher's Yggdrasil server. Mojang sessions
-// pass the upstream Microsoft session through unchanged. No session → offline.
+// Pick the kit's auth shape per session: Yggdrasil runs ONLINE with authlib-injector
+// pointed at the launcher's Yggdrasil server, Mojang passes the Microsoft session
+// through unchanged, no session → offline.
 export const resolveLaunchAuth = (
   account: Account,
   session: AuthSession | null,
@@ -311,11 +288,9 @@ export const runLaunch = async (
   slug: CatalogKey,
   ctx: Context,
   account: Account,
-  // The caller (startLaunch) already claimed a LAUNCH_STARTING op before the
-  // buildContext await, so a Stop issued during that window aborts this exact
-  // controller. Reuse it instead of minting a fresh one — otherwise the cancel
-  // is dropped and the game spawns anyway (A4). Defaults to a fresh op for the
-  // bundle path, which deletes the caller's op before reaching here.
+  // Reuse the caller's LAUNCH_STARTING op so a Stop during buildContext aborts
+  // this exact controller; minting a fresh one would drop the cancel and spawn
+  // anyway. Defaults to a fresh op for the bundle path.
   startupOp: LaunchStartingOp = { kind: OpKinds.LAUNCH_STARTING, abort: new AbortController() },
 ): Promise<void> => {
   const startupSignal = startupOp.abort.signal;
@@ -413,10 +388,9 @@ export const runLaunch = async (
       return;
     }
     env.ops.set(slug, { kind: OpKinds.LAUNCH, session });
-    // Observe termination before any post-spawn bookkeeping that could throw: a
-    // failure below must never leave the process unobserved or the LAUNCH op
-    // stranded (which would brick the slug via requireIdle). Kit rejects
-    // session.exited on non-zero exit; the trailing .catch guards endLaunch.
+    // Observe termination before any post-spawn bookkeeping that could throw, else
+    // a failure below leaves the process unobserved or the LAUNCH op stranded
+    // (bricking the slug via requireIdle). The trailing .catch guards endLaunch.
     void session.exited
       .then((exit) => {
         endLaunch(env, slug, undefined, exit);
@@ -428,10 +402,8 @@ export const runLaunch = async (
         env.logger.error(`[${slug}] endLaunch threw`, error);
       });
 
-    // The build reached RUNNING — stamp it for the Home recents. Keyed by the
-    // resolved CatalogKey (ctx.item.key), not the operational slug, so the
-    // renderer can match it against the catalog directly. Best-effort: a stamp
-    // failure must not derail a launch that already succeeded.
+    // Stamp Home recents keyed by the resolved CatalogKey (not the operational
+    // slug) so the renderer matches it against the catalog. Best-effort.
     try {
       recordPlayed(ctx.item.key);
     } catch (error) {
@@ -451,9 +423,8 @@ export const runLaunch = async (
     if (isLaunchPreflightError(error)) {
       const message = errorMessage(error);
       launchLogger.warn(`[${slug}] launch preflight failed - ${message}`, error);
-      // Surface the failed check in the console and keep the client INSTALLED so
-      // the affordance stays "Play". The renderer turns the error event into a
-      // toast offering a repair — we do not silently reinstall here.
+      // Keep the client INSTALLED (affordance stays "Play"); the renderer turns the
+      // error event into a repair toast rather than us silently reinstalling.
       env.console.recordSystem(`Launch check failed: ${message}`, { slug });
       if (!env.console.hasWindow()) env.openConsole();
       env.emitError(slug, error.code, message);
@@ -467,9 +438,8 @@ export const runLaunch = async (
     env.console.emitState({ slug, status: ConsoleStatuses.ERROR, message });
     env.console.recordSystem(`Process error: ${message}`, { slug });
     if (!env.console.hasWindow()) env.openConsole();
-    // The failure is already surfaced via emitError (the renderer's repair toast)
-    // and the status is restored; re-throwing would double-surface it as an IPC
-    // rejection (a second toast) and an error-level handler log.
+    // Already surfaced via emitError; re-throwing would double-surface it as an
+    // IPC rejection (second toast) plus an error-level handler log.
   } finally {
     if (env.ops.get(slug) === startupOp) env.ops.delete(slug);
   }

@@ -1,12 +1,8 @@
 import type { CatalogItem } from '@shared/contracts/catalog';
 import { type LoaderChoice, LoaderChoices } from '@shared/contracts/settings';
 
-// Pure presentation helpers shared by the tile and the detail modal — kept out
-// of the components so the view model is testable and the components stay thin.
-
-// The loader to surface in compact UI. A build that ships both Forge and Fabric
-// (the loader is picked at install) shows Forge here; the modal/loader picker
-// still lets the user choose.
+// A build shipping both loaders shows Forge in compact UI; the picker still lets
+// the user choose at install.
 export const primaryLoader = (item: CatalogItem): LoaderChoice => {
   const { forgeVersion, fabricVersion } = item.spec;
   if (forgeVersion) return LoaderChoices.FORGE;
@@ -21,8 +17,8 @@ export const loaderVersionFor = (item: CatalogItem): string | null => {
   return null;
 };
 
-// A stable hue derived from the build key so the generated fallback visual is
-// consistent per build across renders without storing anything.
+// Stable hue derived from the build key so the fallback visual stays consistent
+// per build without persisting anything.
 export const fallbackHue = (item: CatalogItem): number => {
   const key = item.key as string;
   let hash = 0;

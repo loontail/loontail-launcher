@@ -29,11 +29,10 @@ export type SyncTask = {
   clientFolder: string;
   plan: SyncPlan;
   abort: AbortController;
-  // Set of in-flight HTTP requests for synchronous cancellation.
+  // In-flight HTTP requests, for synchronous cancellation.
   currentRequests: Set<ClientRequest>;
-  // Cooperative lifecycle phase. Workers check it between file boundaries, not
-  // mid-chunk. Transition through the syncState mark* helpers (cancel overrides
-  // pause; cancel is terminal) — never assign 'cancelled'→'running' directly.
+  // Cooperative lifecycle phase, checked between files (not mid-chunk). Mutate
+  // only through the syncState mark* helpers.
   phase: SyncPhase;
   bytesDownloaded: number;
   speedWindowStart: number;
@@ -56,8 +55,6 @@ export type PhaseResult = {
   deletedAny: boolean;
 };
 
-// Discriminated outcome of a full sync run. The manager reads `outcome` on the
-// resolved path; the thrown ABORTED on cancel is decoded against `task.phase`.
 export type SyncPhasesResult = {
   outcome: 'completed' | 'paused' | 'cancelled';
   deletedAny: boolean;
@@ -71,8 +68,8 @@ const syncPhasesResult = (
   deletedAny,
 });
 
-// Coalesce progress emissions to one every BUNDLE_DOWNLOAD_PROGRESS_THROTTLE_MS,
-// otherwise we'd flood the renderer with hundreds of IPC pushes per second.
+// Coalesce progress emissions, else hundreds of IPC pushes per second flood the
+// renderer.
 const maybeEmit = (
   task: SyncTask,
   status: BundleSyncStatus,
@@ -129,16 +126,13 @@ const runDownloadPhase = async (task: SyncTask, emit: EmitProgress): Promise<voi
     workers.push(
       runDownloadWorker(task, emit).catch((err: unknown) => {
         if (firstError) {
-          // Only the first failure is reported; log the rest so a discarded
-          // secondary cause is still traceable (the abort below makes siblings
-          // reject with the same propagated signal error).
+          // Only the first failure is thrown; log the rest so a discarded
+          // secondary cause stays traceable.
           logger.debug(`[${task.slug}] secondary download worker error discarded`, err);
         } else {
           firstError = err;
         }
-        // Drain queue so other workers exit promptly, and abort to cancel any
-        // sibling download already mid-flight instead of letting it run to
-        // completion.
+        // Drain the queue and abort so siblings already mid-flight stop too.
         task.pendingDownloads.length = 0;
         task.abort.abort();
       }),
@@ -147,9 +141,8 @@ const runDownloadPhase = async (task: SyncTask, emit: EmitProgress): Promise<voi
   await Promise.all(workers);
   if (firstError) {
     if (firstError instanceof BundleError) throw firstError;
-    // Only user-initiated cancel/pause maps to ABORTED. The internal
-    // failure-abort above also flips signal.aborted, so it must not be confused
-    // with a genuine cancel — a non-BundleError failure stays DOWNLOAD_FAILED.
+    // The failure-abort above also flips signal.aborted, so don't map it to
+    // ABORTED — only a real cancel (phase no longer running) does.
     if (!isRunning(task)) {
       throw new BundleError(BundleErrorCodes.ABORTED, 'Sync cancelled');
     }
@@ -160,8 +153,8 @@ const runDownloadPhase = async (task: SyncTask, emit: EmitProgress): Promise<voi
   }
 };
 
-// Walk parent dirs upward, deleting each empty one until we hit either a
-// non-empty directory or the client root (which we always preserve).
+// Delete empty parent dirs upward, stopping at a non-empty dir or the client
+// root (always preserved).
 const cleanEmptyDirs = async (clientFolder: string, leafDir: string): Promise<void> => {
   let current = leafDir;
   while (isAncestor(clientFolder, current)) {
@@ -172,7 +165,7 @@ const cleanEmptyDirs = async (clientFolder: string, leafDir: string): Promise<vo
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code === 'ENOENT') {
-        // Already gone — keep walking up just in case the parent is empty too.
+        // Already gone — keep walking up in case the parent is empty too.
       } else if (code === 'ENOTEMPTY') {
         return;
       } else {
@@ -209,11 +202,9 @@ const runDeletePhase = async (task: SyncTask, emit: EmitProgress): Promise<Phase
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code === 'ENOENT') {
-        // File already gone — still flag deletedAny so the heal pass runs. The
-        // bundle no longer owns this path, so any vanilla file it was
-        // overriding must be reconciled even when the delete itself was a no-op.
-        // A missing target is still a processed unit of work, so count it toward
-        // processedFiles like a real delete; otherwise the progress bar stalls.
+        // Already gone, but still flag deletedAny so the heal pass reconciles any
+        // vanilla file this path was overriding, and count it as processed so the
+        // progress bar doesn't stall.
         deletedAny = true;
         completedDeletes += 1;
         task.processedFiles += 1;
@@ -242,12 +233,10 @@ export const runSyncPhases = async (
   emit: EmitProgress,
 ): Promise<SyncPhasesResult> => {
   await runDownloadPhase(task, emit);
-  // why: cancel throws ABORTED (cancel is terminal — manager.ts decodes the
-  // thrown error against the phase); a pause returns the 'paused' outcome and
-  // leaves deletes for resume. Check cancel first so it overrides a pause.
+  // Check cancel first so it overrides a pause: cancel throws ABORTED (terminal),
+  // a pause returns 'paused' and leaves deletes for resume.
   if (isCancelled(task)) throw new BundleError(BundleErrorCodes.ABORTED, 'Sync cancelled');
   if (isPaused(task)) {
-    // Leave deletes for resume.
     return syncPhasesResult('paused', false);
   }
   const deleteResult = await runDeletePhase(task, emit);

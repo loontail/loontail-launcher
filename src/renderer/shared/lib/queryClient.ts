@@ -21,10 +21,9 @@ export const createQueryClient = (): QueryClient =>
         refetchOnWindowFocus: false,
       },
     },
-    // v5 routes global mutation handlers through MutationCache. `defaultOptions.
-    // mutations.onError` is per-mutation default that any local onError shadows,
-    // and `mutateAsync` rejections also skip it; MutationCache.onError fires for
-    // every mutation regardless of how the caller awaits it.
+    // MutationCache.onError fires for every mutation regardless of how the caller
+    // awaits it, unlike `defaultOptions.mutations.onError` (shadowed by a local
+    // onError, and skipped by `mutateAsync` rejections).
     mutationCache: new MutationCache({
       onError: (error, _vars, _ctx, mutation) => {
         if (mutation.meta?.skipGlobalErrorToast) return;

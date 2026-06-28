@@ -15,8 +15,7 @@ import { registerMinecraftRoutes } from './routes';
 export type MinecraftService = {
   init: () => Promise<void>;
   dispose: () => Promise<void>;
-  // Exposed so the bundle service can install a launch hook that runs after
-  // the minecraft-install step and before the game process spawns.
+  // Exposed so the bundle service can install a launch hook between install and spawn.
   manager: MinecraftManager;
 };
 

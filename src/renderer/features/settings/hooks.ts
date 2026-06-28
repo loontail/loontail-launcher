@@ -19,9 +19,8 @@ import { getDiskSpace, getFolderSize, getRamRange, pickInstallFolder } from './s
 const DISK_SPACE_STALE_TIME_MS = 30_000;
 const DISK_SPACE_DEBOUNCE_MS = 300;
 const FOLDER_SIZE_STALE_TIME_MS = 60_000;
-// Main-side mutations (e.g. runtime path stored after install) bypass the IPC
-// mutation channel that calls `setQueryData`. Refetch periodically so the
-// renderer eventually picks them up without a manual reload.
+// Main-side mutations bypass the setQueryData path, so refetch periodically to
+// pick them up without a manual reload.
 const LAUNCHER_SETTINGS_STALE_TIME_MS = 5 * 60 * 1000;
 
 const useLauncherSettingsMutation = <TInput>(
@@ -106,8 +105,7 @@ const useDebouncedValue = <T>(value: T, delayMs: number): T => {
   return debounced;
 };
 
-// Shared shape for the path-sized lookups: debounce the path (so rapid client
-// switching doesn't fan out N IPC calls), then run an enabled, path-keyed query.
+// Debounce the path so rapid client switching doesn't fan out N IPC calls.
 const useDebouncedPathQuery = <T>(config: {
   path: string | undefined | null;
   staleTime: number;

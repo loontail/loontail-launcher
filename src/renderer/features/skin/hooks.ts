@@ -20,7 +20,7 @@ export const useClearSkin = () => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const mutation = useMutation({
-    // onError localizes by skin error code; skip the generic global toast.
+    // onError localizes by skin error code, so suppress the generic global toast.
     meta: { skipGlobalErrorToast: true },
     mutationFn: clearSkin,
     onSuccess: () => {
@@ -43,9 +43,7 @@ export const useSkinEditor = () => {
   const queryClient = useQueryClient();
   const provider = user?.provider ?? null;
   const reset = useClearSkin();
-  // Skin and cape upload concurrently; a local flag tracks the combined save
-  // instead of one shared mutation observer (which two parallel mutateAsync
-  // calls would race, corrupting its pending state).
+  // Local flag, not a shared mutation observer: two parallel mutateAsync calls would race its pending state.
   const [isSaving, setIsSaving] = useState(false);
 
   const remoteSkin = user?.skin ? toCachedMediaUrl(user.skin) : null;
@@ -90,9 +88,6 @@ export const useSkinEditor = () => {
       const objectUrl = job.pending.objectUrl;
       if (objectUrl === null) return;
       const buffer = await normalizeTextureToPng(objectUrl);
-      // Fast-fail on bad dimensions/corruption before the IPC round-trip; the
-      // rejection handler localizes via the same SkinErrorCode path as the
-      // authoritative main-side check.
       const reason = validateTexture(buffer, job.type);
       if (reason !== null) {
         const error: IpcError = { code: SkinErrorCodes.INVALID_IMAGE, message: reason };
@@ -105,8 +100,7 @@ export const useSkinEditor = () => {
       job.pending.clearIfCurrent(objectUrl);
     };
 
-    // Upload independently so one texture failing leaves the other saved and
-    // its own pending preview intact for a retry.
+    // Upload independently so one failure leaves the other saved and its preview intact for retry.
     setIsSaving(true);
     try {
       const results = await Promise.allSettled(jobs.map(uploadOne));

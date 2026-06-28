@@ -1,8 +1,6 @@
 import { Box, Boxes, Cpu, Gamepad2, type LucideIcon, Server, Shield } from 'lucide-react';
 
-// Built-in build icons offered in the Create-build dialog and rendered by
-// BuildIcon. The key is persisted in the instance manifest
-// (presentation.iconPreset), so keep these stable.
+// Keys are persisted in the instance manifest (presentation.iconPreset); keep them stable.
 export const ICON_PRESETS = {
   blocks: Boxes,
   gamepad: Gamepad2,

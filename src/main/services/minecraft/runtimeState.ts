@@ -4,8 +4,8 @@ import path from 'node:path';
 
 const VERSIONS_DIR = 'versions';
 
-// Legacy fallback scan: the durable install manifest is the fast current-target
-// proof, but this keeps cancel/uninstall recovery tolerant of old installs.
+// Legacy fallback scan, kept so cancel/uninstall recovery tolerates installs
+// that predate the durable install manifest.
 export const isAnythingInstalled = async (clientFolder: string): Promise<boolean> => {
   if (!clientFolder) return false;
   const versionsRoot = path.join(clientFolder, VERSIONS_DIR);
@@ -19,8 +19,6 @@ export const isAnythingInstalled = async (clientFolder: string): Promise<boolean
     .filter((entry) => entry.isDirectory())
     .map((entry) => fs.access(path.join(versionsRoot, entry.name, `${entry.name}.json`)));
   if (probes.length === 0) return false;
-  // Promise.any short-circuits on the first present version JSON; it rejects
-  // (AggregateError) only when every probe failed, i.e. nothing is installed.
   try {
     await Promise.any(probes);
     return true;

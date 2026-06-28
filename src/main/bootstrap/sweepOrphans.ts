@@ -8,9 +8,8 @@ import { pruneClientOverrides } from '@shared/domain/settings';
 
 const logger = scopedLogger('sweep-orphans');
 
-// Best-effort: if the CMS is unreachable AND no disk snapshot exists, skip
-// silently. With a snapshot, cachedFetch returns the last known list so the
-// sweep stays accurate even on startup with no network.
+// With a disk snapshot, cachedFetch returns the last known list so the sweep
+// stays accurate on startup with no network; otherwise it skips silently.
 export const sweepOrphanClientOverrides = async (): Promise<void> => {
   let list: Awaited<ReturnType<typeof getClients>>;
   try {
@@ -19,8 +18,8 @@ export const sweepOrphanClientOverrides = async (): Promise<void> => {
     logger.warn('skipping orphan sweep — clients fetch failed', error);
     return;
   }
-  // An empty list means an unhealthy/empty CMS (not "every official build was
-  // deleted"); skip so a transient outage can't prune all official overrides.
+  // An empty list means an unhealthy/empty backend (not "every official build
+  // was deleted"); skip so a transient outage can't prune all official overrides.
   if (list.length === 0) return;
   // Overrides key by CatalogKey, so the keep-set must too: official builds as
   // `official:<slug>`, local builds as `local:<uuid>`. Without the local keys a

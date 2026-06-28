@@ -7,11 +7,9 @@ const HTTP_PROTOCOL = 'http:';
 const HTTP_DEVELOPMENT_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1']);
 const HTTP_DEVELOPMENT_SUFFIXES = ['.localhost', '.test', '.invalid'] as const;
 
-// Bundle assets are served by the same backend as the rest of the API — there
-// is no separate asset CDN in this deployment — so every asset/manifest URL is
-// host-pinned to the API origin. This closes the manifest-gated SSRF: a
-// compromised/misconfigured manifest can no longer point a file at an arbitrary
-// host and have the launcher fetch it with the live API bearer attached.
+// Assets share the API origin (no separate CDN), so every asset/manifest URL is
+// host-pinned to it. Closes the manifest-gated SSRF: a crafted manifest can't
+// point a file at an arbitrary host and have it fetched with the live bearer.
 const API_ORIGIN = new URL(mainConfig.apiUrl).origin;
 
 type BundleUrlErrorCode =
@@ -29,9 +27,8 @@ const isHttpDevelopmentHost = (hostname: string): boolean => {
   );
 };
 
-// Allow non-API origins only for local/test hosts (the dev backend runs on
-// e.g. http://localhost:1337, and tests use .test/.invalid hosts), mirroring the
-// existing HTTP-scheme carve-out so dev/test flows keep working.
+// Allow non-API origins only for local/test hosts so dev/test flows keep
+// working, mirroring the HTTP-scheme carve-out.
 const isAllowedAssetOrigin = (url: URL): boolean =>
   url.origin === API_ORIGIN || isHttpDevelopmentHost(url.hostname);
 
@@ -48,9 +45,8 @@ const parseBundleAssetUrl = (
   }
 };
 
-// `pinOrigin` host-pins the initial entry/download URL to the API origin. It is
-// false for redirect hops, which `resolveBundleRedirectUrl` already constrains
-// to the (already-pinned) initial origin.
+// `pinOrigin` host-pins the initial entry/download URL; false for redirect hops,
+// which resolveBundleRedirectUrl already constrains to the initial origin.
 const assertAllowedBundleAssetUrl = (
   url: URL,
   code: BundleUrlErrorCode,
@@ -63,8 +59,8 @@ const assertAllowedBundleAssetUrl = (
   if (url.protocol === HTTP_PROTOCOL && !isHttpDevelopmentHost(url.hostname)) {
     throw new BundleError(code, `${safeLabel} uses HTTP outside local/test hosts`);
   }
-  // The bearer is attached to these requests, so a non-API host is a
-  // bearer-exfil / SSRF target and must be rejected even over HTTPS.
+  // The bearer rides these requests, so a non-API host is a bearer-exfil/SSRF
+  // target and is rejected even over HTTPS.
   if (pinOrigin && !isAllowedAssetOrigin(url)) {
     throw new BundleError(code, `${safeLabel} host is not the API origin`);
   }
@@ -72,10 +68,8 @@ const assertAllowedBundleAssetUrl = (
 
 const describeOrigin = (url: URL): string => `${url.protocol}//${url.host}`;
 
-// Whether the live API bearer may ride along with a request to this URL. Only
-// the API origin (with the local/test carve-out) is trusted; the downloader uses
-// this so a redirect that somehow reached an off-origin host would not leak the
-// bearer (defense-in-depth on top of the entry host-pin + redirect origin lock).
+// Whether the bearer may ride a request to this URL: only the API origin (with
+// the local/test carve-out) is trusted, so an off-origin redirect can't leak it.
 export const isTrustedBundleAssetUrl = (url: string): boolean => {
   try {
     return isAllowedAssetOrigin(new URL(url));

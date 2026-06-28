@@ -29,9 +29,8 @@ export const LEGACY_AUTH_SECRET_FILE = 'auth-session.bin';
 const errorMeta = (error: unknown): { message: string } => ({ message: errorMessage(error) });
 
 // One-time migration from the previous electron-store layout. Returns true when
-// a legacy `launcher.json` was found (and therefore handled), false on a fresh
-// install. Idempotent in practice: the caller only invokes it before any
-// settings row exists, and on success the legacy files are renamed aside.
+// a legacy `launcher.json` was found, false on a fresh install. On success the
+// legacy files are renamed aside.
 export const importLegacyElectronStore = (db: Db, userDataDir: string): boolean => {
   const jsonPath = path.join(userDataDir, LEGACY_STORE_FILE);
   if (!existsSync(jsonPath)) return false;
@@ -63,9 +62,8 @@ const importSchemaVersion = (db: Db, raw: Record<string, unknown>): void => {
   setMeta(db, STORE_KEY_SCHEMA_VERSION, String(typeof stored === 'number' ? stored : 0));
 };
 
-// The legacy `auth` value is copied verbatim into account metadata, and the
-// encrypted secret blob (if any) from `auth-session.bin` into the BLOB column.
-// A plaintext full session has no blob; the store re-splits it on first read.
+// A plaintext legacy session has no encrypted blob; the store re-splits it on
+// first read.
 const importAuth = (db: Db, raw: Record<string, unknown>, userDataDir: string): void => {
   const auth = raw[STORE_KEY_AUTH];
   if (!auth || typeof auth !== 'object') return;

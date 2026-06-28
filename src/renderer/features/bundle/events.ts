@@ -27,9 +27,8 @@ export const BundleEventsListener = (): null => {
       toast.error(localizeBundleError(code, message, i18n.t));
     });
 
-    // Bundle local manifest lives inside the client folder, so an uninstall
-    // wipes it transparently. Mirror that here so the UI doesn't stay stuck on
-    // a "Repair bundle" state after the user deletes the client.
+    // Uninstall wipes the bundle's local manifest (it lives in the client folder),
+    // so mirror that here or the UI stays stuck on "Repair bundle".
     const offMinecraftStatus = window.api.on(IPC_EVENTS.minecraftStatus, ({ slug, status }) => {
       if (status === InstallStatuses.NOT_INSTALLED) useBundleStore.getState().reset(slug);
     });

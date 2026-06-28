@@ -5,8 +5,8 @@ import type { CatalogKey } from './ids';
 
 export type { LoaderKind as LoaderChoice } from '@loontail/minecraft-kit';
 
-// Mirrors kit's `Loaders` const. Kept local because kit pulls in Node-only
-// modules (yauzl, crypto, fs/promises) that can't be bundled into the renderer.
+// Mirrors kit's `Loaders` const; kept local because kit pulls in Node-only
+// modules that can't be bundled into the renderer.
 export const LoaderChoices = {
   VANILLA: 'vanilla',
   FORGE: 'forge',
@@ -59,9 +59,8 @@ export const LauncherSettingsSchema = z.object({
   memory: MemorySettingsSchema,
   storage: StorageSettingsSchema,
   launch: LaunchSettingsSchema,
-  // Keyed by CatalogKey (`official:<slug>` / `local:<uuid>`) at runtime, but the
-  // key schema stays a permissive string so a legacy store keyed by a bare slug
-  // still validates on read and survives until the migration in
+  // Keyed by CatalogKey at runtime, but the key schema stays a permissive string
+  // so a legacy store keyed by a bare slug still validates on read until
   // `normalizeLauncherSettings` rehydrates it.
   clients: z.record(z.string(), ClientSettingsOverrideSchema),
 });

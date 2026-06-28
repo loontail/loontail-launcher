@@ -11,15 +11,15 @@ import type { Account } from './account';
 export const AUTH_PROVIDERS = ['yggdrasil', 'mojang'] as const;
 export type AuthProvider = (typeof AUTH_PROVIDERS)[number];
 
-// Re-export kit-side literal unions so renderer/IPC code uses a single source of truth.
+// Re-export kit-side literal unions so renderer/IPC code uses one source of truth.
 export type { MojangAssetState, SkinVariant } from '@loontail/minecraft-kit';
 
 const NonEmptyStringSchema = z.string().min(1);
 const MOJANG_MILLISECOND_TIMESTAMP_MIN = Date.UTC(2000, 0, 1);
 const MOJANG_XUID_PATTERN = /^\d+$/;
 
-// Mirror of kit's `MojangProfileSkin` shape; kept here so the persisted-store
-// Zod schema can validate it without pulling kit's runtime into shared/.
+// Mirror of kit's `MojangProfileSkin`, kept here so the persisted-store schema
+// can validate it without pulling kit's runtime into shared/.
 const MojangProfileSkinSchema = z.object({
   id: NonEmptyStringSchema,
   state: z.enum(['ACTIVE', 'INACTIVE']),
@@ -28,11 +28,9 @@ const MojangProfileSkinSchema = z.object({
   textureKey: NonEmptyStringSchema.optional(),
 });
 
-// Compile-time guard: the mirror above must stay structurally identical to the
-// kit's `MojangProfileSkin`. The bare `z.object` (no `z.ZodType` cast) keeps
-// Zod's exhaustiveness, and the two-way `extends` check fails tsc if the kit
-// adds, renames, or retypes a field — forcing a schema update instead of
-// silently stripping the new field when a persisted session is rehydrated.
+// Compile-time guard: the two-way `extends` check fails tsc if the mirror drifts
+// from kit's `MojangProfileSkin`, forcing a schema update rather than silently
+// stripping a new field when a persisted session is rehydrated.
 type MojangProfileSkinShapeMatches = z.infer<
   typeof MojangProfileSkinSchema
 > extends MojangProfileSkin
@@ -43,9 +41,8 @@ type MojangProfileSkinShapeMatches = z.infer<
 const _mojangProfileSkinShapeCheck: MojangProfileSkinShapeMatches = true;
 void _mojangProfileSkinShapeCheck;
 
-// The kit's `as*` brand validators are runtime imports that drag yauzl/stream
-// into the renderer bundle. Shared code carries the same primitive shape and
-// adds lightweight Zod checks before applying the compile-time brand.
+// Kit's `as*` brand validators are runtime imports that drag yauzl/stream into
+// the renderer bundle, so shared code re-validates with Zod before branding.
 export const PlayerUuidSchema = z
   .string()
   .uuid()
@@ -70,20 +67,17 @@ export const MojangProfileSchema = z.object({
   skins: z.array(MojangProfileSkinSchema),
 });
 
-// `selectedProfile.id` from the Yggdrasil server is the 32-char undashed hex
-// UUID (per the Mojang/Yggdrasil spec). The launcher dashes it before handing
-// it to the kit's launch composer.
+// Yggdrasil `selectedProfile.id` is the 32-char undashed hex UUID per spec; the
+// launcher dashes it before the kit's launch composer.
 export const YggdrasilProfileSchema = z.object({
   uuid: z.string().refine(isUuidUndashed, 'profile id must be 32-char undashed hex'),
   name: NonEmptyStringSchema,
 });
 
-// Stored session shapes - discriminated by `provider`.
-//
-// `YggdrasilSession` carries the in-game online-mode handshake pair
-// (`accessToken`/`clientToken`) plus the selected profile. The pair is fed only
-// to the game (authlib-injector → Yggdrasil authserver); the universal API
-// bearer is the separate Loontail session token, persisted alongside it.
+// Stored session shapes, discriminated by `provider`. The Yggdrasil
+// `accessToken`/`clientToken` pair is the in-game online-mode handshake material
+// (fed only to the game), distinct from the universal API bearer (the separate
+// Loontail session token persisted alongside it).
 export const YggdrasilSessionSchema = z.object({
   provider: z.literal('yggdrasil'),
   accessToken: NonEmptyStringSchema,
@@ -112,15 +106,12 @@ export const AuthSessionSchema = z.discriminatedUnion('provider', [
 
 export type AuthSession = z.infer<typeof AuthSessionSchema>;
 
-// Login (Loontail unified auth API). Mojang has its own IPC flow.
 export const LoginPayloadSchema = z.object({
   identifier: NonEmptyStringSchema,
   password: NonEmptyStringSchema,
 });
 export type LoginPayload = z.infer<typeof LoginPayloadSchema>;
 
-// Register (Loontail unified auth API). `email` is mandatory at sign-up; the
-// renderer reuses the same login error codes for the result.
 export const RegisterPayloadSchema = z.object({
   username: NonEmptyStringSchema,
   email: z.string().email(),
@@ -128,8 +119,8 @@ export const RegisterPayloadSchema = z.object({
 });
 export type RegisterPayload = z.infer<typeof RegisterPayloadSchema>;
 
-// Shape returned by POST /api/auth/{login,register,refresh}. The `session.token`
-// is the universal API bearer; the `minecraft` pair is the in-game Yggdrasil
+// Shape returned by POST /api/auth/{login,register,refresh}. `session.token` is
+// the universal API bearer; the `minecraft` pair is the in-game Yggdrasil
 // handshake material; `profile` is the renderer-facing identity.
 export const LoontailAuthResponseSchema = z.object({
   session: z.object({

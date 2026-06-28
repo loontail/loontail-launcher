@@ -29,17 +29,14 @@ export type InstallStep = {
   state: StepState;
   // 0..100, only meaningful when state is ACTIVE or PAUSED.
   percent: number;
-  // True when the active step has no determinate progress signal (manifest
-  // fetch, planning) — the UI substitutes a shimmer for the bar.
+  // No determinate progress signal yet (manifest fetch, planning); UI shows a shimmer.
   indeterminate?: boolean;
   currentFile?: string;
   bytesDownloaded?: number;
   bytesTotal?: number;
-  // Bytes/sec from a runner that already tracks throughput (bundle). UI falls
-  // back to a renderer-side moving average when this is absent (install path).
+  // From runners that track throughput (bundle); absent on the install path, which estimates a rate.
   speedBytesPerSec?: number;
-  // Raw sub-stage id ("runtime"|"minecraft"|... for install, bundle status for bundle).
-  // The UI maps this to a localized label.
+  // Raw sub-stage id the UI maps to a localized label.
   subStage?: string;
 };
 
@@ -53,15 +50,12 @@ export type InstallProgressView = {
   activeStep: InstallStepKey | null;
   paused: boolean;
   controls: ProgressControlsKind;
-  // False when the sync must not be paused — a launch-time (Play) bundle sync
-  // parks on pause and would freeze the Play flow, so the UI offers only
-  // Resume/Cancel during it (BUG-2). Install/repair are always pausable.
+  // False for a launch-time bundle sync: pausing it would freeze the Play flow (BUG-2).
   pausable: boolean;
 };
 
-// `finalize` is folded into the *last* scheduled step — loader if present,
-// otherwise minecraft — because kit skips the `loader` stage when no loader is
-// selected and runs `finalize` directly after `minecraft`.
+// `finalize` folds into the last scheduled step (loader if present, else minecraft),
+// because the install runner skips the loader stage when no loader is selected.
 const stageToStep = (stage: ProgressStage, hasLoader: boolean): InstallStepKey => {
   if (stage === ProgressStages.PREPARE || stage === ProgressStages.RUNTIME) {
     return InstallStepKeys.RUNTIME;
@@ -73,8 +67,7 @@ const stageToStep = (stage: ProgressStage, hasLoader: boolean): InstallStepKey =
   return InstallStepKeys.MINECRAFT;
 };
 
-// Pre-download bundle phases have no per-byte progress signal — they emit
-// status events but no progress events, so we render an indeterminate bar.
+// Pre-download bundle phases emit status but no progress events; render an indeterminate bar.
 const BUNDLE_INDETERMINATE: ReadonlySet<BundleSyncStatus> = new Set([
   BundleSyncStatuses.FETCHING_MANIFEST,
   BundleSyncStatuses.PLANNING,
@@ -82,10 +75,7 @@ const BUNDLE_INDETERMINATE: ReadonlySet<BundleSyncStatus> = new Set([
   BundleSyncStatuses.HEALING,
 ]);
 
-// The progress card is reserved for an *actual transfer*. A bundle sync only
-// downloads bytes in DOWNLOADING (and a PAUSED download that can resume); the
-// fetch/plan/delete/heal phases just inspect or clean up, so they surface as a
-// spinner instead. Mirrors how install/repair gate the card on `totalBytes`.
+// The progress card is reserved for an actual transfer; only DOWNLOADING/PAUSED move bytes.
 const isBundleDownloading = (status: BundleSyncStatus): boolean =>
   status === BundleSyncStatuses.DOWNLOADING || status === BundleSyncStatuses.PAUSED;
 
@@ -138,7 +128,6 @@ const buildSteps = (hasLoader: boolean, hasBundle: boolean): InstallStep[] => [
   ...(hasBundle ? [makeStep(InstallStepKeys.BUNDLE)] : []),
 ];
 
-// Returns null when nothing is in progress — the card collapses immediately.
 export const selectInstallProgress = (
   client: ClientRuntimeState,
   bundle: BundleRuntimeState,
@@ -146,10 +135,7 @@ export const selectInstallProgress = (
 ): InstallProgressView | null => {
   const installRunning = client.status === InstallStatuses.INSTALLING;
   const repairRunning = client.status === InstallStatuses.REPAIRING;
-  // The card shows only once there is something to download. While an op is
-  // still checking the build (install planning, repair verification, bundle
-  // manifest fetch/planning) there is no transfer to render — the caller shows
-  // a spinner and this returns null so no card mounts.
+  // No transfer to render during checking/planning phases; return null so the caller shows a spinner.
   const hasDownloadBytes = (client.totalBytes ?? 0) > 0;
   const installDownloadRunning = installRunning && hasDownloadBytes;
   const repairDownloadRunning = repairRunning && hasDownloadBytes;
@@ -169,8 +155,7 @@ export const selectInstallProgress = (
   if (installDownloadRunning || repairDownloadRunning) {
     mode = repairRunning ? 'repair' : 'install';
     paused = client.paused;
-    // Repair is not user-cancellable: it only refetches what verification found
-    // broken, so it always runs to completion. Install keeps pause/cancel.
+    // Repair is not user-cancellable; only install exposes pause/cancel controls.
     controls = installRunning ? 'install' : null;
 
     const stage = client.stage;
@@ -203,9 +188,7 @@ export const selectInstallProgress = (
     mode = 'bundle';
     paused = bundle.status === BundleSyncStatuses.PAUSED;
     controls = 'bundle';
-    // A launch-time bundle sync (the client is LAUNCHING while the bundle syncs)
-    // is parked on pause and would freeze Play, so the user gets Resume/Cancel
-    // only — never an initial Pause (BUG-2).
+    // Launch-time sync (LAUNCHING) offers Resume/Cancel only; pausing would freeze Play (BUG-2).
     pausable = client.status !== InstallStatuses.LAUNCHING;
     activeStep = InstallStepKeys.BUNDLE;
     markPrecedingDone(steps, InstallStepKeys.BUNDLE);

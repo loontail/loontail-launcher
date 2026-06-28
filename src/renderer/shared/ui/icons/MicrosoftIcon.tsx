@@ -1,8 +1,6 @@
 import type { SVGProps } from 'react';
 
-// Microsoft brand mark: four equal squares in red / green / blue / yellow.
-// Rendered with explicit hex fills (not currentColor) because the logo is
-// always shown in its trademarked colour palette.
+// Explicit hex fills (not currentColor): the logo must keep its trademarked palette.
 export const MicrosoftIcon = (props: SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" {...props}>
     <rect x="2" y="2" width="9" height="9" fill="#F35325" />

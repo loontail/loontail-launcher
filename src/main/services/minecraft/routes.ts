@@ -7,10 +7,9 @@ import { IPC_CHANNELS } from '@shared/ipc';
 import { ManagerError, classifyError } from './errors';
 import type { MinecraftManager } from './manager';
 
-// buildContext (via kit.targets.resolve) can throw a raw MinecraftKitError out
-// of the install/repair/launch entry points. Left unwrapped, toIpcError would
-// collapse it to the opaque IpcHandlerFailed code; reclassify it into a coded
-// ManagerError here so the renderer receives an actionable launcher code.
+// Reclassify a raw MinecraftKitError into a coded ManagerError, else toIpcError
+// collapses it to the opaque IpcHandlerFailed code and the renderer loses the
+// actionable launcher code.
 const withClassifiedKitError = async (run: () => Promise<void>): Promise<void> => {
   try {
     await run();

@@ -22,14 +22,12 @@ import { SkinError } from './errors';
 
 const logger = scopedLogger('skin');
 
-// A 64x64 skin PNG is only a few KB; this caps a renderer that bypasses the
-// canvas re-encode and hands us a hand-crafted ArrayBuffer with a valid header
-// but megabytes of trailing chunks (validatePngBuffer only reads the header).
+// Caps a hand-crafted buffer with a valid PNG header but megabytes of trailing
+// chunks (validatePngBuffer only reads the header). A real skin is a few KB.
 const MAX_TEXTURE_BYTES = 256 * 1024;
 
-// Compile-time guard: `validatePngBuffer` takes yggdrasil-core's `SkinAssetKind`.
-// Our `SkinKind` shares the same 'skin'|'cape' literals but is declared
-// independently; this assertion fails tsc if the two unions ever diverge.
+// Fails tsc if our SkinKind ever diverges from yggdrasil-core's SkinAssetKind,
+// which validatePngBuffer requires.
 type SkinKindMatchesAsset = SkinKind extends SkinAssetKind
   ? true
   : ['SkinKind diverged from yggdrasil-core SkinAssetKind'];
@@ -49,10 +47,8 @@ const throwUploadError = (prefix: string, error: unknown): never => {
   throw new SkinError(SkinErrorCodes.UPLOAD_FAILED, `${prefix}: ${message}`);
 };
 
-// Mojang's profile-mutation errors come back as JSON like:
-//   { "path": "...", "details": { "status": "BANNED_SKIN" }, "errorMessage": "Banned skin image" }
-// Pull the human-readable `errorMessage` (preferred) or `details.status` so
-// the toast surfaces "Banned skin image" instead of a raw JSON dump.
+// Pull Mojang's human-readable `errorMessage` (or `details.status`) so the toast
+// shows e.g. "Banned skin image" instead of a raw JSON dump.
 const extractMojangMessage = (error: unknown): string | null => {
   if (!isMinecraftKitError(error)) return null;
   const body = error.context.responseBody;
@@ -96,9 +92,8 @@ const POST_UPLOAD_TEXTURE_RETRY_DELAY_MS = 200;
 
 const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-// A freshly uploaded texture can lag behind the server's textures endpoint
-// while the CDN propagates the new revision, so the immediate lookup may still
-// return no URL. Retry a few times before declaring the upload URL-less.
+// A freshly uploaded texture can lag the textures endpoint while the CDN
+// propagates the new revision, so retry before declaring the upload URL-less.
 const fetchUploadedTextureUrl = async (
   uuid: string,
   kind: typeof SkinKinds.SKIN | typeof SkinKinds.CAPE,
@@ -115,11 +110,9 @@ const fetchUploadedTextureUrl = async (
   return null;
 };
 
-// Yggdrasil flow: the texture endpoints authenticate with the universal Loontail
-// session bearer (the unified API's `AuthUser`), which identifies the owner —
-// NOT the Yggdrasil in-game `accessToken` (that only feeds the game's
-// authlib-injector handshake). We push the PNG with the session token and later
-// fetch the new URL for media-cache pre-warming.
+// Texture endpoints authenticate with the session bearer that identifies the
+// owner — NOT the in-game `accessToken` (that only feeds the authlib-injector
+// handshake).
 const uploadSkinYggdrasil = async (
   session: YggdrasilSession,
   payload: UploadSkinPayload,
@@ -129,9 +122,8 @@ const uploadSkinYggdrasil = async (
   const { texturesClient, fetchTextures } = gateway;
   const buffer = Buffer.from(payload.buffer);
 
-  // Capture the previous URL before the upload so we can invalidate the
-  // launcher's media cache once the new revision lands. Failures here are
-  // not fatal — worst case the old PNG lingers in the cache until TTL.
+  // Capture the previous URL before upload to invalidate the media cache once
+  // the new revision lands. Failures here are non-fatal (stale PNG until TTL).
   const previousTextures = await fetchTextures(session.profile.uuid).catch(() => null);
   const previousUrl = previousTextures ? readTextureUrl(previousTextures, payload.type) : null;
 
@@ -179,10 +171,6 @@ export const createSkinHandlers = (
   gateway: YggdrasilGateway,
   authSession: AuthSessionPort,
 ): SkinHandlers => {
-  // Mojang flow: hand the PNG to `kit.auth.profile.uploadSkin`, which posts
-  // it to api.minecraftservices.com/minecraft/profile/skins. Kit errors now
-  // include Mojang's response body in the message (kit 0.8.8+), so
-  // user-visible toasts surface the real reason.
   const uploadSkinMojang = async (
     session: MojangSession,
     payload: UploadSkinPayload,
@@ -264,9 +252,7 @@ export const createSkinHandlers = (
       return;
     }
 
-    // Mojang: drop the active skin via the kit. Capes are not exposed by the
-    // kit (Mojang does not allow launchers to manage them), so nothing to do
-    // for the cape slot.
+    // Mojang exposes no cape management to launchers, so only the skin resets.
     try {
       const profile = await kit.auth.profile.resetSkin({ accessToken: session.accessToken });
       authSession.updateMojangProfile(session, profile);

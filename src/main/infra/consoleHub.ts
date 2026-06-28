@@ -164,19 +164,17 @@ export class ConsoleHub {
   }
 
   setActiveSession(session: SessionInfo | null): void {
-    // Drain partial XML left from the previous session before the parser is
-    // reset; a trailing fragment would otherwise leak into the new session.
+    // Drain partial XML from the previous session before reset, else a trailing
+    // fragment leaks into the new session.
     if (this.activeSession) this.drainLog4j(this.activeSession.slug);
     this.clearFlushTimer();
     this.log4j.reset();
     this.activeSession = session;
   }
 
-  // Flush the log4j stream parsers when the game process exits. A FATAL crash
-  // event is often split across the final lines and would otherwise be held in
-  // the parser buffer until the next session reset — i.e. discarded. Called by
-  // the launch flow before emitting the EXITED/CRASHED state so the last event
-  // (the most useful for triage) reaches the console.
+  // Flush the parsers on process exit: a FATAL crash event is often split across
+  // the final lines and would otherwise be held in the parser buffer until the
+  // next reset (i.e. discarded). Called before emitting EXITED/CRASHED.
   endSession(slug: CatalogKey): void {
     this.drainLog4j(slug);
     this.log4j.reset();
@@ -195,10 +193,9 @@ export class ConsoleHub {
   }
 
   emitState(state: ConsoleProcessState): void {
-    // Only tag the state with the active session's title when it actually
-    // belongs to that session. A terminal state for a different slug (e.g. an
-    // older client exiting after a newer launch became active) must keep its
-    // own title rather than being mislabeled with the active client's.
+    // Tag with the active session's title only when the state belongs to it; a
+    // terminal state for a different slug (an older client exiting after a newer
+    // launch became active) must keep its own title.
     const matchesActive = this.activeSession?.slug === state.slug;
     if (this.activeSession && matchesActive) {
       this.activeSession = {
@@ -254,9 +251,8 @@ export class ConsoleHub {
     }, FLUSH_INTERVAL_MS);
   }
 
-  // Push any pending lines to the renderer immediately and tear down the flush
-  // timer. Called on app shutdown so the last batch isn't lost between the
-  // last setTimeout and process exit.
+  // Called on shutdown so the last batch isn't lost between the pending
+  // setTimeout and process exit.
   flushPending(): void {
     this.clearFlushTimer();
     const batch = this.buffer.consumePending();
@@ -270,8 +266,8 @@ export class ConsoleHub {
     this.flushTimer = null;
   }
 
-  // Typed to the console.* event channels so a wrong channel/payload pairing
-  // fails tsc instead of silently shipping a mismatched wire shape.
+  // Typed to the console.* channels so a wrong channel/payload pairing fails tsc
+  // instead of shipping a mismatched wire shape.
   private sendToWindow<E extends ConsoleEventChannel>(
     channel: E,
     payload: IpcEventPayloads[E],

@@ -1,9 +1,7 @@
 export type Limiter = <T>(fn: () => Promise<T>) => Promise<T>;
 
-// Bound the number of concurrently running async tasks. Callers wrap each unit
-// of work in `limit(() => ...)`; at most `max` run at once, the rest queue.
-// Lives in the shared layer so both the main process (fs/socket fan-out caps)
-// and the renderer (the status seeder's prefetch pool) use one primitive.
+// At most `max` tasks run at once, the rest queue. Shared so both the main
+// process and the renderer's prefetch pool use one concurrency primitive.
 export const createLimiter = (max: number): Limiter => {
   let active = 0;
   const queue: Array<() => void> = [];

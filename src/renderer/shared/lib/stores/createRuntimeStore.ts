@@ -2,10 +2,9 @@ import type { CatalogKey } from '@shared/contracts/ids';
 import { type UseBoundStore, create } from 'zustand';
 import type { StoreApi } from 'zustand';
 
-// Per-slug runtime state projected from live IPC events, shared by the minecraft
-// and bundle features. Both stores keep a `Record<slug, state>` and merge each
-// patch, clearing progress on terminal statuses and the error on success — the
-// only divergence is *which* fields get cleared, captured by the config patches.
+// Per-slug runtime state projected from live IPC events. Each patch is merged,
+// clearing progress on terminal statuses and the error on success; which fields
+// get cleared is the config's only per-feature divergence.
 type RuntimeState<TStatus extends string> = { status: TStatus };
 
 type RuntimeStoreModel<TState> = {
@@ -17,15 +16,11 @@ type RuntimeStoreModel<TState> = {
 type RuntimeStoreConfig<TStatus extends string, TState extends RuntimeState<TStatus>> = {
   // The state an unseen slug starts from; also what `reset(slug)` restores.
   default: TState;
-  // Statuses that end an operation — their patch clears the in-flight progress
-  // fields via `clearProgressFields`.
+  // Statuses whose patch clears `clearProgressFields`.
   terminalStatuses: ReadonlySet<TStatus>;
-  // The progress fields to clear (to undefined/null) on a terminal status.
   clearProgressFields: Partial<TState>;
-  // Statuses that represent a clean success — their patch clears the error (and
-  // any extra success fields) via `clearErrorFields`.
+  // Statuses whose patch clears `clearErrorFields`.
   clearErrorStatuses: ReadonlySet<TStatus>;
-  // The fields to clear/restore on a clean-success status.
   clearErrorFields: Partial<TState>;
 };
 

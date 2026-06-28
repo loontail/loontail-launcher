@@ -7,8 +7,8 @@ import type { SyncTask } from './runner';
 
 export type ActiveSync = {
   task: SyncTask;
-  // Lock + sync state are one record so the slug cannot be removed from
-  // activeSyncs without releasing the lease (dropActiveSync owns both).
+  // Lock + state are one record so a slug can't leave activeSyncs without
+  // releasing the lease (dropActiveSync owns both).
   lock: ClientOperationLease;
   lastProgress: BundleProgressEvent | null;
   remoteManifestHash: string;
@@ -17,8 +17,8 @@ export type ActiveSync = {
   forLaunch: boolean;
   awaiters: Array<{ resolve: () => void; reject: (err: Error) => void }>;
   pauseIdleTimer: NodeJS.Timeout | null;
-  // Resolves once the sync leaves activeSyncs (used by cancelAll to await real
-  // completion instead of a fixed grace timer).
+  // Resolves once the sync leaves activeSyncs; cancelAll awaits this for real
+  // completion instead of a fixed grace timer.
   whenDropped: Promise<void>;
   signalDropped: () => void;
 };
@@ -34,8 +34,8 @@ const createEmptySyncPlan = (): SyncPlan => ({
 
 export type SyncPhase = 'running' | 'paused' | 'cancelled';
 
-// Cancel overrides pause: a paused sync can still be cancelled (cancelSync's
-// wasPaused drop path), but a cancelled sync is terminal and never reverts.
+// Cancel overrides pause: a paused sync can still be cancelled, but a cancelled
+// sync is terminal and never reverts.
 export const markPaused = (task: SyncTask): void => {
   if (task.phase === 'running') task.phase = 'paused';
 };
@@ -48,10 +48,9 @@ export const markRunning = (task: SyncTask): void => {
   if (task.phase === 'paused') task.phase = 'running';
 };
 
-// Phase reads go through these predicates rather than inlined `task.phase === …`
-// comparisons: the mark* helpers mutate task.phase through an aliased reference
-// across the runner/heal awaits, which TS control-flow narrowing cannot track —
-// a function boundary keeps each read independent.
+// Read phase through these predicates, not inlined `task.phase === …`: the mark*
+// helpers mutate it across awaits via an aliased reference, which TS control-flow
+// narrowing can't track — a function boundary keeps each read independent.
 export const isCancelled = (task: SyncTask): boolean => task.phase === 'cancelled';
 export const isPaused = (task: SyncTask): boolean => task.phase === 'paused';
 export const isRunning = (task: SyncTask): boolean => task.phase === 'running';
@@ -101,10 +100,8 @@ export const createActiveSync = (
   };
 };
 
-// Resume only runs after pause has fully drained the download workers
-// (runSyncPhases returned), so reassigning task.abort here cannot strand a live
-// worker on the old signal — each downloadEntry captured the previous signal by
-// value for its lifetime.
+// Resume only runs after pause drained the workers (runSyncPhases returned), so
+// reassigning task.abort here can't strand a live worker on the old signal.
 export const resetTaskForResume = (task: SyncTask): void => {
   markRunning(task);
   task.abort = new AbortController();

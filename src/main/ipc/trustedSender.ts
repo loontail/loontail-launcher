@@ -22,9 +22,8 @@ const isTrustedWindowFrame = (
   return location.isAllowedUrl(event.senderFrame.url);
 };
 
-// `getMainWindow` is resolved per-call so a recreated window (macOS dock
-// re-open) is recognised by its current webContents id rather than the
-// destroyed original's — otherwise every IPC from the new window is rejected.
+// `getMainWindow` is resolved per-call so a recreated window (macOS dock re-open)
+// is matched by its current webContents id, not the destroyed original's.
 export const createTrustedSenderCheck = (
   getMainWindow: () => BrowserWindow,
   consoleHub: ConsoleHub,
@@ -47,9 +46,8 @@ export const createTrustedSenderCheck = (
     if (event.senderFrame === null) return false;
     if (event.senderFrame.parent !== null) return false;
     if (isTrustedWindowFrame(event, getMainWindow(), mainLocation)) return true;
-    // The console window runs unsandboxed, so scope it to an explicit channel
-    // allowlist; it must never be able to invoke auth/launch/settings/system
-    // handlers.
+    // The console window runs unsandboxed, so scope it to an explicit allowlist;
+    // it must never invoke auth/launch/settings/system handlers.
     if (!CONSOLE_TRUSTED_CHANNELS.has(channel)) return false;
     const consoleWindow = consoleHub.getWindow();
     if (!consoleWindow) return false;

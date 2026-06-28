@@ -11,8 +11,7 @@ const ERROR_COPY_KEYS: Record<LoginErrorCode, string> = {
   [LOGIN_ERROR_CODE.NetworkError]: 'auth.errorNetwork',
   [LOGIN_ERROR_CODE.RateLimited]: 'auth.errorRateLimited',
   [LOGIN_ERROR_CODE.BrowserOpenFailed]: 'auth.errorBrowserOpen',
-  // useMojangLogin suppresses `Cancelled` before it reaches errorCode state, so
-  // this copy is never shown; the entry exists only to keep the record total.
+  // Never shown (Cancelled is suppressed upstream); entry exists to keep the record total.
   [LOGIN_ERROR_CODE.Cancelled]: 'auth.errorUnknown',
   [LOGIN_ERROR_CODE.Unknown]: 'auth.errorUnknown',
 };

@@ -14,6 +14,5 @@ export const createSettingsService = (
   init: async () => {
     registerSettingsRoutes(router, getMainWindow);
   },
-  // No subscriptions or timers to release.
   dispose: () => Promise.resolve(),
 });

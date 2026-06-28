@@ -1,8 +1,7 @@
 const SIZE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB'] as const;
 
 export const formatBytes = (bytes: number): string => {
-  // Sub-byte values (e.g. fractional bytes from a stage-percent calculation)
-  // would make Math.log negative and index SIZE_UNITS out of bounds → "NaN B".
+  // Guard sub-byte values: Math.log would go negative and index SIZE_UNITS out of bounds.
   if (bytes < 1) return '0 B';
   const unit = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), SIZE_UNITS.length - 1);
   const value = bytes / 1024 ** unit;
@@ -12,8 +11,7 @@ export const formatBytes = (bytes: number): string => {
 export const formatSpeed = (bytesPerSec: number): string =>
   bytesPerSec > 0 ? `${formatBytes(bytesPerSec)}/s` : '';
 
-// Seconds remaining from a smoothed rate; null whenever the estimate is
-// meaningless (stalled, complete, or a negative remainder) so the UI can hide it.
+// Null when the estimate is meaningless (stalled/complete/negative) so the UI can hide it.
 export const computeEtaSeconds = (bytesRemaining: number, bytesPerSec: number): number | null => {
   if (bytesPerSec <= 0 || bytesRemaining <= 0) return null;
   return bytesRemaining / bytesPerSec;

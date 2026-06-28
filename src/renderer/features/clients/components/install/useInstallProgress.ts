@@ -15,8 +15,7 @@ export type ClientInstallProgress = {
   progress: InstallProgressView | null;
 };
 
-// `hasLoader` is derived the same way the main-process install pipeline picks
-// the loader: persisted override → the build's loader fields → vanilla.
+// `hasLoader` mirrors the install pipeline's loader pick: persisted override → loader fields → vanilla.
 export const useInstallProgress = (item: CatalogItem): ClientInstallProgress => {
   const slug = item.key;
   const spec = item.spec;

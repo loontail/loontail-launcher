@@ -10,6 +10,5 @@ export const createServersService = (router: Router): ServersService => ({
   init: async () => {
     registerServersRoutes(router);
   },
-  // No subscriptions or timers to release.
   dispose: () => Promise.resolve(),
 });

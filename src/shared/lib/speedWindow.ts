@@ -1,17 +1,8 @@
-// A rolling-window byte-rate sampler shared by the main install/repair progress
-// adapter and the renderer's repair-speed hook (cross-process, so this module
-// stays dependency-free). Each `sample(value, nowMs)` records a cumulative byte
-// count and returns the average bytes/sec over the trailing `windowMs`:
-//
-//   * A whole-window average (first→last over the retained samples) smooths the
-//     install kit's per-second jitter, keeping the speed/ETA readout steady.
-//   * A backward jump in `value` (resume after pause, stage restart at 0%, or a
-//     replan) resets the window so the rate never dips negative and then
-//     recovers slowly — it restarts cleanly from the new baseline.
-//   * Samples older than `windowMs` are pruned each tick.
-//
-// The returned rate is the raw (unrounded) bytes/sec; callers round/clamp as
-// they need. `reset()` drops all samples (e.g. on a stage boundary).
+// Rolling-window byte-rate sampler, dependency-free so it can run in both the
+// main process and the renderer. `sample` takes a cumulative byte count and
+// returns the trailing `windowMs` average bytes/sec (unrounded). A backward jump
+// in `value` (resume, stage restart, replan) resets the window so the rate never
+// goes negative and restarts cleanly from the new baseline.
 export type SpeedWindow = {
   sample: (value: number, nowMs: number) => number;
   reset: () => void;

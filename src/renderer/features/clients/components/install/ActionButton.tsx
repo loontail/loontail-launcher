@@ -1,10 +1,7 @@
 import { cn } from '@renderer/shared/lib/cn';
 import { type ButtonHTMLAttributes, forwardRef } from 'react';
 
-// `primary` is the white CTA. `muted` is the neutral secondary (Stop, Cancel,
-// Launching) — monochrome, no chromatic/destructive hue. `ghost` is the quiet
-// inline control (Pause/Resume). `danger` is kept as a name-compatible alias of
-// `muted` plus a stronger outline so cancel reads as the heavier neutral action.
+// `danger` is a name-compatible alias of `muted` with a stronger outline (no hue).
 export type ActionVariant = 'primary' | 'muted' | 'ghost' | 'danger';
 
 export type ActionButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {

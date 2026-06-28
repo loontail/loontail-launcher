@@ -7,13 +7,10 @@ import type { ZodTypeAny, z } from 'zod';
 type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 type AuthMode =
-  // The live Loontail session token is attached as `Authorization: Bearer`.
-  // This is the universal API bearer: catalogue, bundle manifest, and texture
-  // routes all now require a session. A 401/403 triggers a single
-  // refresh-and-retry before the call is allowed to fail.
+  // Attach the session token as `Authorization: Bearer`; a 401/403 triggers a
+  // single refresh-and-retry before the call fails.
   | 'session'
-  // No Authorization header. For the auth endpoints themselves, which either
-  // take credentials in the body (login/register) or carry their own bearer.
+  // No Authorization header, for the auth endpoints themselves.
   | 'none';
 
 type RequestOptions = {
@@ -38,15 +35,12 @@ export class HttpError extends Error {
   }
 }
 
-// The auth service owns the session token and the refresh flow, so it registers
-// these accessors at init. http.ts stays decoupled from the auth/store modules
-// (avoiding an import cycle) while still being able to attach the live bearer
-// and recover from a 401/403 by rotating the session once.
+// The auth service registers these at init so http.ts can attach the live bearer
+// and rotate the session without importing auth/store (avoids an import cycle).
 export type SessionAuthPort = {
-  // Current session token, or null when no session is stored.
   getToken: () => string | null;
-  // Refresh the stored session (POST /api/auth/refresh) and return the rotated
-  // token, or null if refresh failed (the user must re-authenticate).
+  // Refresh the stored session and return the rotated token, or null on failure
+  // (the user must re-authenticate).
   refresh: () => Promise<string | null>;
 };
 
@@ -54,16 +48,14 @@ let sessionPort: SessionAuthPort | null = null;
 
 export const registerSessionAuthPort = (port: SessionAuthPort): void => {
   sessionPort = port;
-  // A fresh port owns its own session lifecycle; drop any refresh memoized
-  // against the previous one so a re-register never returns a stale rotation.
+  // Drop any refresh memoized against the previous port so a re-register never
+  // returns a stale rotation.
   refreshing = null;
 };
 
-// De-duplicate concurrent refresh-and-retry. Session rotation is single-use
-// server-side, so N parallel 401s must trigger exactly ONE refresh: the first
-// caller starts it, the rest await the same promise and retry with the same
-// rotated token (BUG-1). Cleared in `finally` so the next genuine staleness
-// refreshes again.
+// Session rotation is single-use server-side, so N parallel 401s must trigger
+// exactly ONE refresh: the rest await this promise and retry the same rotated
+// token (BUG-1). Cleared in `finally` so later staleness refreshes again.
 let refreshing: Promise<string | null> | null = null;
 
 const refreshOnce = (port: SessionAuthPort): Promise<string | null> => {
@@ -117,17 +109,14 @@ export const httpRequest = async (url: string, options: RequestOptions): Promise
   const requestToken = port.getToken();
   const response = await rawFetch(fullUrl, method, payload, requestToken ?? undefined, signal);
   if (!isSessionRejection(response)) return response;
-  // 401/403: the session may have expired. Before refreshing, re-read the
-  // stored token — a concurrent request (or a login) may have already rotated
-  // it while this call was in flight. If it changed, retry with the fresh token
-  // instead of refreshing again and burning the now-current single-use token.
+  // A concurrent request may have already rotated the token while this call was
+  // in flight; retry with it rather than burning the now-current single-use token.
   const current = port.getToken();
   if (current && current !== requestToken) {
     return rawFetch(fullUrl, method, payload, current, signal);
   }
-  // Otherwise rotate once (de-duplicated across concurrent 401s) and retry; if
-  // refresh fails the original rejection stands and the caller surfaces a
-  // re-login.
+  // Otherwise rotate once (de-duplicated) and retry; a failed refresh leaves the
+  // original rejection to surface a re-login.
   logger.warn(`${method} ${url} rejected (${response.status}); attempting session refresh`);
   const rotated = await refreshOnce(port);
   if (!rotated) return response;
@@ -138,10 +127,9 @@ export const buildMediaUrl = (path: string): string =>
   path.startsWith('http') ? path : `${mainConfig.apiUrl}${path}`;
 
 // Authorization header for the raw-fetch paths (bundle file download, media
-// cache) that bypass `httpRequest`. Bundle `/files` and CMS/textures media
-// now require a session, so the live bearer must ride along. Returns an empty
-// object when no session is stored — the request proceeds unauthenticated and
-// the server decides (public assets still resolve; gated ones 401).
+// cache) that bypass `httpRequest`. Bundle `/files` and texture media require a
+// session, so the live bearer must ride along. Returns an empty object when no
+// session is stored — the server then decides (public assets resolve; gated 401).
 export const sessionAuthHeader = (): Record<string, string> => {
   const token = sessionPort?.getToken() ?? null;
   return token ? { Authorization: `Bearer ${token}` } : {};

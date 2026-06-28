@@ -14,8 +14,7 @@ import { useTranslation } from 'react-i18next';
 
 const FEEDBACK_MS = 1500;
 
-// Hook for non-button contexts (e.g. toasts, custom UI). Manages the
-// "just copied" flash so callers don't have to wire timers themselves.
+// Copy helper for non-button contexts; manages the "just copied" flash.
 export const useCopyText = () => {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<number | null>(null);
@@ -35,8 +34,8 @@ export const useCopyText = () => {
       timerRef.current = window.setTimeout(() => setCopied(false), FEEDBACK_MS);
       return true;
     } catch {
-      // Clipboard write can fail (focus, permission, IPC error). Swallow —
-      // the caller's surface usually has the value selectable as a fallback.
+      // Clipboard write can fail; the caller's surface usually keeps the value
+      // selectable as a fallback.
       return false;
     }
   }, []);
@@ -46,15 +45,9 @@ export const useCopyText = () => {
 
 export type CopyButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & {
   text: string;
-  // Visual variant. `icon` is the compact 28px square (default); `inline`
-  // matches text-row affordances; `custom` renders only the children with no
-  // built-in styling so callers can drop CopyButton anywhere.
+  // `custom` renders only the children with no built-in styling.
   variant?: 'icon' | 'inline' | 'custom';
-  // Optional renderer override. By default the button swaps a Copy → Check
-  // icon on success; pass children to provide your own visual.
   children?: ((copied: boolean) => ReactNode) | ReactNode;
-  // i18n label for `aria-label` / `title`. Defaults to a generic
-  // "Copy to clipboard" string from the shared toast namespace.
   copyLabel?: string;
   copiedLabel?: string;
 };

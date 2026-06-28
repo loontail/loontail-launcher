@@ -7,8 +7,7 @@ export const ToastVariants = {
 
 export type ToastVariant = (typeof ToastVariants)[keyof typeof ToastVariants];
 
-// Optional inline call-to-action (e.g. "Repair"). When present, the toast does
-// not auto-dismiss — the user must act on or dismiss it.
+// When present, the toast does not auto-dismiss until the user acts or dismisses.
 export type ToastAction = {
   label: string;
   onClick: () => void;
@@ -27,8 +26,7 @@ export type ToastOptions = {
 type Listener = (payload: ToastPayload) => void;
 
 let listeners: Listener[] = [];
-// Buffer toasts emitted before the container mounts (e.g. emits fired during
-// top-level effects that run in the same commit as the container).
+// Buffer toasts emitted before the container mounts.
 const pending: ToastPayload[] = [];
 
 export const subscribeToToasts = (listener: Listener): (() => void) => {

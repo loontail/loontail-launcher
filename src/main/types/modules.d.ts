@@ -1,7 +1,6 @@
 declare module 'electron-squirrel-startup' {
-  // Returns true when Electron was launched with a Squirrel install/update/
-  // uninstall flag and has performed the corresponding shortcut work; the
-  // caller should exit immediately in that case.
+  // True when launched with a Squirrel install/update/uninstall flag and the
+  // shortcut work was done; the caller should exit immediately.
   const handled: boolean;
   export default handled;
 }

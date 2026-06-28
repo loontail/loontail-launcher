@@ -7,8 +7,7 @@ type UninstallConfirmModalProps = {
   clientTitle: string;
   onClose: () => void;
   onConfirm: () => void;
-  // Optional copy overrides so the same confirm dialog backs both uninstall
-  // (default) and the local-build delete flow.
+  // Copy overrides so this dialog backs both uninstall and local-build delete.
   title?: string;
   message?: string;
   confirmLabel?: string;

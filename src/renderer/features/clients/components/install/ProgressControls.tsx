@@ -33,9 +33,7 @@ const ControlButtons = ({
           {t('clients.resume')}
         </ActionButton>
       ) : (
-        // Pausing a launch-time (forLaunch) bundle sync parks it and would freeze
-        // the Play flow, so the Pause control is disabled for it — the user can
-        // still Cancel (BUG-2).
+        // Pause disabled for a launch-time sync; pausing it would freeze Play (BUG-2).
         <ActionButton variant="ghost" disabled={!pausable} onClick={() => void onPause(slug)}>
           <Pause size={12} />
           {t('clients.pause')}

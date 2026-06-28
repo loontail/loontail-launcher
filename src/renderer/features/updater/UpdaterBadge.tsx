@@ -46,8 +46,6 @@ type BadgeProps = {
   title?: string;
 };
 
-// Persistent, non-dismissing title-bar marker. Monochrome: the "ready" state
-// reads brighter (a solid neutral dot + raised text), never by hue.
 const Badge = ({ icon, children, ready, onClick, title }: BadgeProps) => {
   const className = cn(
     'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-microlabel font-bold uppercase tracking-wider ring-1 transition-colors',

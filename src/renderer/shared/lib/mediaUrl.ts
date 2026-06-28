@@ -2,9 +2,8 @@
 const CACHE_SCHEME = 'cache';
 const PATH_PREFIX = `${CACHE_SCHEME}://media/`;
 
-// Wrap an HTTP(S) URL so the disk media cache serves it. Anything else (data:, blob:,
-// bundled Vite asset paths, already-wrapped cache:// URLs) is returned unchanged so the
-// browser keeps treating it as a normal resource.
+// Wrap an HTTP(S) URL so the disk media cache serves it; anything else is
+// returned unchanged.
 export const toCachedMediaUrl = (originalUrl: string): string => {
   if (!originalUrl) return originalUrl;
   if (!originalUrl.startsWith('http://') && !originalUrl.startsWith('https://')) {

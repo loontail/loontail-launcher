@@ -11,8 +11,8 @@ import type { CatalogSource } from './source';
 
 const logger = scopedLogger('catalog');
 
-// Local builds first (most recently updated), then official builds (most
-// recently created — preserving the prior official ordering). Stable per-group.
+// Local builds order by updatedAt, official builds by createdAt; sortCatalogItems
+// keeps locals ahead of officials, most-recent first within each group.
 const sortKey = (item: CatalogItem): number => {
   const iso =
     item.kind === SourceKinds.LOCAL ? item.presentation.updatedAt : item.presentation.createdAt;
@@ -27,15 +27,15 @@ const sortCatalogItems = (items: CatalogItem[]): CatalogItem[] =>
   });
 
 // Aggregates multiple build sources into one catalog. A source rejecting (e.g.
-// CMS unreachable) is logged and marked degraded but never propagated, so a
-// failing official source can never blank the local builds.
+// the backend is unreachable) is logged and marked degraded but never
+// propagated, so a failing official source can never blank the local builds.
 export type CatalogService = {
   list: (locale?: string) => Promise<CatalogListResult>;
   resolve: (ref: CatalogRef) => Promise<CatalogItem | null>;
   // Resolve a build from its CatalogKey (`official:<slug>` / `local:<uuid>`),
   // the cross-kind operational id that flows over IPC. The key names its source,
-  // so resolution dispatches straight to that source — a local build resolves
-  // network-free, an official build hits the CMS. A malformed key resolves null.
+  // so resolution dispatches straight to it — a local build resolves
+  // network-free, an official build hits the API. A malformed key resolves null.
   resolveBuildByKey: (key: CatalogKey) => Promise<CatalogItem | null>;
 };
 

@@ -1,12 +1,9 @@
 import type { LauncherSettings } from '@shared/contracts/settings';
 import type { Db } from './connection';
 
-// Raw persistence layer: SQL ↔ plain JS. No Zod, no defaulting, no domain
-// logic — the store facade owns validation, normalization, and hydration. Every
-// function takes the database handle explicitly so the facade controls the
-// single process-wide connection and tests can pass their own.
-
-// --- meta ------------------------------------------------------------------
+// Raw persistence layer: SQL ↔ plain JS, no validation or domain logic (the
+// store facade owns those). The database handle is passed explicitly so the
+// facade controls the single connection and tests can pass their own.
 
 export const getMeta = (db: Db, key: string): string | null => {
   const row = db.prepare('SELECT value FROM meta WHERE key = ?').get(key) as
@@ -21,8 +18,6 @@ export const setMeta = (db: Db, key: string, value: string): void => {
   ).run(key, value);
 };
 
-// --- launcher settings -----------------------------------------------------
-
 type SettingsRow = {
   allocated_ram_mb: number;
   clients_folder: string;
@@ -30,11 +25,8 @@ type SettingsRow = {
   launch_fullscreen: number;
 };
 
-// Reassemble the LauncherSettings-shaped object from its normalized columns and
-// the per-client override rows. Returns `null` when no settings row exists yet
-// (a fresh install) so the facade can fall back to defaults. Override payloads
-// are returned as parsed JSON; an unparseable row degrades to `{}` and is left
-// for the facade's normalizer to reconcile rather than throwing.
+// Returns `null` when no settings row exists yet so the facade falls back to
+// defaults. An unparseable override row degrades to `{}` rather than throwing.
 export const readSettings = (db: Db): Record<string, unknown> | null => {
   const row = db.prepare('SELECT * FROM settings WHERE id = 1').get() as SettingsRow | undefined;
   if (!row) return null;
@@ -65,9 +57,7 @@ const parseJsonObject = (raw: string): Record<string, unknown> => {
   }
 };
 
-// Replace the singleton settings row and the full set of client overrides in
-// one transaction. The caller passes an already-normalized value, so the
-// columns are written verbatim.
+// Replace the singleton settings row and all client overrides in one transaction.
 export const writeSettings = (db: Db, settings: LauncherSettings): void => {
   const tx = db.transaction((value: LauncherSettings) => {
     db.prepare(
@@ -94,8 +84,6 @@ export const writeSettings = (db: Db, settings: LauncherSettings): void => {
   tx(settings);
 };
 
-// --- auth account ----------------------------------------------------------
-
 export type AuthRow = { metadata: string; secret: Buffer | null };
 
 export const readAuthRow = (db: Db): AuthRow | null => {
@@ -105,9 +93,8 @@ export const readAuthRow = (db: Db): AuthRow | null => {
   return row ?? null;
 };
 
-// `secret` is null only on the legacy-import path: a plaintext session carries
-// its tokens inside `metadata` and has no encrypted blob yet, so the store
-// re-splits it on first read. Live writes always supply an encrypted secret.
+// `secret` is null only on the legacy-import path; live writes always supply an
+// encrypted secret.
 export const writeAuthRow = (db: Db, metadata: string, secret: Buffer | null): void => {
   db.prepare(
     `INSERT INTO auth_account (id, metadata, secret) VALUES (1, ?, ?)
@@ -118,8 +105,6 @@ export const writeAuthRow = (db: Db, metadata: string, secret: Buffer | null): v
 export const deleteAuthRow = (db: Db): void => {
   db.prepare('DELETE FROM auth_account WHERE id = 1').run();
 };
-
-// --- instance registry index ----------------------------------------------
 
 export type InstanceRow = { id: string; name: string; dir: string; updatedAt: string };
 
@@ -140,8 +125,6 @@ export const replaceInstanceEntries = (db: Db, entries: InstanceRow[]): void => 
   });
   tx(entries);
 };
-
-// --- last played -----------------------------------------------------------
 
 export const readLastPlayed = (db: Db): Record<string, number> => {
   const rows = db

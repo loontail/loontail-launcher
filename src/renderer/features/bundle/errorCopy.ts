@@ -17,8 +17,7 @@ const KEY_BY_CODE: Record<BundleErrorCode, string> = {
 
 const isBundleErrorCode = (code: string): code is BundleErrorCode => code in KEY_BY_CODE;
 
-// Accepts an IpcError code (arrives as a plain string over the bridge); unknown
-// codes fall back to the generic key, which still surfaces the raw message.
+// Unknown codes fall back to the generic key, which still surfaces the raw message.
 export const localizeBundleError = (code: string, message: string, t: TFunction): string =>
   t(isBundleErrorCode(code) ? KEY_BY_CODE[code] : KEY_BY_CODE[BundleErrorCodes.UNKNOWN], {
     message,

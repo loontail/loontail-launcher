@@ -10,10 +10,6 @@ type RecentFilmstripProps = {
   onSelect: (index: number) => void;
 };
 
-// The pinned bottom strip of recently-played builds, modelled as the carousel's
-// single-select control: a roving-tabindex radiogroup where arrows change the
-// featured build (the keyboard equivalent of the hero chevrons). The active card
-// lifts to a bright ring; the rest stay quiet.
 export const RecentFilmstrip = ({ items, activeIndex, onSelect }: RecentFilmstripProps) => {
   const { t } = useTranslation();
   const refs = useRef<(HTMLButtonElement | null)[]>([]);

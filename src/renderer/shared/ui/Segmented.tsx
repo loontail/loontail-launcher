@@ -17,8 +17,6 @@ type SegmentedProps<T extends string> = {
   className?: string;
 };
 
-// shadcn-style segmented control: a recessed track where the active segment lifts
-// to the white CTA fill. Used for the loader picker, the grid/list toggle, etc.
 export const Segmented = <T extends string>({
   options,
   value,

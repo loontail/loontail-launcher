@@ -1,17 +1,11 @@
 import { type SpeedWindow, createSpeedWindow } from '@shared/lib/speedWindow';
 import { useEffect, useRef, useState } from 'react';
 
-// 4s rolling window — wide enough to smooth the install kit's per-second jitter,
-// short enough to react to a genuine slowdown within a few ticks.
+// Rolling window wide enough to smooth per-second jitter, short enough to track real slowdowns.
 const WINDOW_MS = 4000;
 
-// Smoothed bytes/sec derived from successive `bytes` snapshots over a rolling
-// window. Used for the repair path, whose adapter reports per-stage bytes but no
-// rate; the install and bundle paths report their own throughput (the selector
-// prefers `speedBytesPerSec` and falls back here only when it is absent).
-//
-// A backwards jump (resume after pause, or replanning) resets the window so
-// the rate doesn't dip negative and recover slowly.
+// A backwards jump (resume after pause, or replanning) resets the window so the rate
+// doesn't dip negative and recover slowly.
 export const useByteSpeed = (bytes: number | undefined, active: boolean): number => {
   const windowRef = useRef<SpeedWindow>(undefined as unknown as SpeedWindow);
   if (!windowRef.current) windowRef.current = createSpeedWindow(WINDOW_MS);
@@ -29,11 +23,8 @@ export const useByteSpeed = (bytes: number | undefined, active: boolean): number
   return speed;
 };
 
-// Display percent that never walks backwards. The selector recomputes percent
-// from raw byte counts each tick; a stage-boundary recompute or a replan can
-// momentarily report a lower value, which would make the bar visibly retreat.
-// We latch the high-water mark and reset only when the source clearly restarts
-// (a large drop, e.g. moving to the next stepper stage at 0%).
+// Latch a high-water mark so a stage-boundary recompute or replan can't make the bar retreat;
+// reset only on a large drop (a clear restart, e.g. the next stage at 0%).
 export const useMonotonicPercent = (percent: number, resetKey: string | number): number => {
   const peakRef = useRef(0);
   const keyRef = useRef(resetKey);

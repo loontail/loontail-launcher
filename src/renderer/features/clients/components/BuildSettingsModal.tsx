@@ -9,13 +9,9 @@ type BuildSettingsModalProps = {
   item: CatalogItem;
   isOpen: boolean;
   onClose: () => void;
-  // Defaults to closing the modal; the detail page also navigates back.
   onBuildDeleted?: () => void;
 };
 
-// The per-build settings, unchanged, hosted in a dialog opened by the gear beside
-// Play. BuildSettingsTab keeps its existing sections/behaviour — only its host
-// changed from a detail tab to this modal.
 export const BuildSettingsModal = ({
   item,
   isOpen,

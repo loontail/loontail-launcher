@@ -4,9 +4,6 @@ import { Button } from '@renderer/shared/ui/Button';
 import { Boxes } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-// First-launch Home: no recent builds yet. A fixed bundled key-art screenshot
-// sits behind the prompt, dimmed and faded into the canvas on every edge so it
-// reads as ambience. Points the player at the Builds catalog.
 export const HomeEmptyState = () => {
   const { t } = useTranslation();
   const push = useNavigationStore((s) => s.push);
@@ -14,9 +11,6 @@ export const HomeEmptyState = () => {
   return (
     <div className="relative h-full overflow-hidden">
       <img src={backdrop} alt="" aria-hidden className="absolute inset-0 size-full object-cover" />
-      {/* Fade the art into the canvas on every edge (sides first — the user's
-          ask), then pool extra darkness behind the centred prompt so the white
-          text + CTA stay legible over busy, light art. */}
       <div className="absolute inset-0 bg-canvas/30" />
       <div className="absolute inset-0 bg-linear-to-r from-canvas via-transparent to-canvas" />
       <div className="absolute inset-0 bg-linear-to-b from-canvas/40 via-transparent to-canvas" />

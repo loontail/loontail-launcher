@@ -2,12 +2,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { z } from 'zod';
 
-// Atomically move the file already written at `tmpPath` onto `destPath`: readers
-// see either the previous or the new file, never a half-written one. The
-// destination is removed first because Windows `fs.rename` rejects an existing
-// target (idempotent on ENOENT). On failure the stray tmp is removed
-// best-effort (`onCleanupError` observes a cleanup failure) and the original
-// error is rethrown for the caller to classify.
+// Move `tmpPath` onto `destPath` so readers see the previous or new file, never
+// a half-written one. The destination is removed first because Windows
+// `fs.rename` rejects an existing target. On failure the stray tmp is cleaned up
+// best-effort and the original error rethrown.
 export const atomicReplace = async (
   tmpPath: string,
   destPath: string,
@@ -24,10 +22,8 @@ export const atomicReplace = async (
   }
 };
 
-// Write `value` as pretty JSON to `target` atomically: ensure the parent dir
-// exists, write a sibling `.tmp`, then atomically replace `target` with it
-// (temp + rename). A mid-write failure removes the stray tmp best-effort
-// (`onCleanupError` observes a cleanup failure) and rethrows for the caller.
+// Write `value` as pretty JSON to `target` via a sibling `.tmp` + atomic rename.
+// A mid-write failure cleans up the stray tmp best-effort and rethrows.
 export const writeJsonAtomic = async (
   target: string,
   value: unknown,
@@ -46,11 +42,8 @@ export const writeJsonAtomic = async (
   await atomicReplace(tmp, target, onCleanupError);
 };
 
-// Read and Zod-validate a JSON file. Returns null (never throws) for the three
-// non-fatal cases so callers can skip/discard one bad file without breaking the
-// whole listing: a missing file (ENOENT, silent), a malformed/invalid file
-// (`onInvalid` observes it), or an unexpected read failure (`onReadError`).
-// Generic over the schema so the resolved value carries its branded output type.
+// Read and Zod-validate a JSON file. Returns null (never throws) for missing,
+// malformed, or unreadable files so one bad file can't break a whole listing.
 export const readJsonValidated = async <S extends z.ZodTypeAny>(
   target: string,
   schema: S,

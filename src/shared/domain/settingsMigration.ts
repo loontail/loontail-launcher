@@ -5,10 +5,8 @@ import type { ClientSettingsOverride } from '@shared/contracts/settings';
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CATALOG_KEY_RE = /^(official:|local:).+/;
 
-// Lift a pre-CatalogKey client-override key onto the source-namespaced form.
-// Before the migration the punned key was the bare operational id: an official
-// slug for official builds, the instance UUID for local builds. A UUID-shaped
-// key is a local build (`local:<uuid>`); anything else is an official build
+// Lift a bare client-override key onto the source-namespaced CatalogKey form: a
+// UUID-shaped key is a local build (`local:<uuid>`), anything else is official
 // (`official:<slug>`). Already-namespaced keys pass through untouched.
 export const migrateClientOverrideKey = (key: string): string => {
   if (CATALOG_KEY_RE.test(key)) return key;
@@ -31,9 +29,8 @@ export const migrateClientOverrides = (
   return changed ? next : clients;
 };
 
-// Rehydrate lastPlayed keys to the CatalogKey form. New writes already stamp by
-// CatalogKey; this is the defensive read-time lift for any record persisted
-// before that landed (bare slug/uuid keys).
+// Defensive read-time lift of lastPlayed keys to the CatalogKey form, for any
+// record persisted with bare slug/uuid keys.
 export const migrateLastPlayedKeys = (
   lastPlayed: Record<string, number>,
 ): Record<string, number> => {

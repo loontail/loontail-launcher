@@ -88,9 +88,7 @@ export const selectPlayButtonAction = ({
   isChecking,
 }: PlayButtonSelectionInput): PlayButtonAction => {
   if (hasProgress) return PlayButtonActions.PROGRESS;
-  // A bundle sync that is busy but not yet downloading (manifest fetch,
-  // planning, deleting, healing) has no card to show — surface a spinner so we
-  // never flash a stale Play/Update/Download affordance mid-sync.
+  // A busy-but-not-downloading bundle sync has no card; show a spinner instead of a stale affordance.
   if (hasBundle && BUSY_BUNDLE_STATUSES.has(bundleStatus)) {
     return PlayButtonActions.CHECKING;
   }
@@ -110,8 +108,7 @@ export const selectPlayButtonAction = ({
   ) {
     return PlayButtonActions.BUNDLE_UPDATE;
   }
-  // INSTALLING before the first progress event = the planning/checking phase
-  // (the card only mounts once bytes are flowing). Show the same spinner.
+  // INSTALLING before any progress event is the planning phase (card mounts only once bytes flow).
   if (status === InstallStatuses.INSTALLING) {
     return PlayButtonActions.CHECKING;
   }
@@ -161,9 +158,7 @@ export const PlayButton = ({ item }: PlayButtonProps) => {
 
   const folderReady = Boolean(resolved?.storage.clientFolder);
   const rawPersistedLoader = settings?.clients[slug]?.loader ?? null;
-  // Ignore a persisted choice that no longer matches the build's loader fields —
-  // e.g. user picked Forge, then it was removed upstream. Without this the
-  // launcher would skip the picker and try to install a loader the build lacks.
+  // Drop a persisted loader the build no longer offers, else the picker is skipped and install fails.
   const persistedLoader =
     rawPersistedLoader && isLoaderAvailable(spec, rawPersistedLoader) ? rawPersistedLoader : null;
   const needsLoaderChoice = isLoaderAmbiguous(spec, persistedLoader);

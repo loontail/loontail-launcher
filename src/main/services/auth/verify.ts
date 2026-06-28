@@ -14,10 +14,9 @@ import { scopedLogger } from '@main/infra/logger';
 
 const logger = scopedLogger('auth.verify');
 
-// Skin and cape URLs come from the native textures endpoint
-// (GET /textures/:uuid on the API origin, via `fetchTextures`), session-gated
-// like every other API read. `email` comes from the login/refresh response, so
-// a bare session keeps it null until the next successful authentication.
+// Skin and cape URLs come from the textures endpoint (via `fetchTextures`);
+// `email` comes from the login/refresh response, so a bare session keeps it null
+// until the next successful authentication.
 export const enrichYggdrasilAccount = async (
   session: YggdrasilSession,
   fallback: Account,
@@ -36,16 +35,12 @@ export const enrichYggdrasilAccount = async (
   }
 };
 
-// Provider-agnostic session check. Returns the active account on success,
-// `null` if no session is stored or the server invalidated it, and the
-// cached account if the network is unavailable (offline fallback).
-//
-// Yggdrasil verification rotates the session via the shared `SessionRefresher`
-// (POST /api/auth/refresh) so it is de-duplicated against the HTTP layer's
-// refresh-and-retry and never double-rotates a single-use token: a success has
-// already persisted the new tokens (the refresher owns setStoredAuth), so this
-// only enriches the account; an `expired` result clears the session; an
-// `offline` result keeps the cached account.
+// Provider-agnostic session check: active account on success, `null` if no
+// session is stored or the server invalidated it, cached account when offline.
+// Yggdrasil verification rotates via the shared `SessionRefresher` so it is
+// de-duplicated against the HTTP layer and never double-rotates a single-use
+// token; on success the refresher has already persisted the new tokens, so this
+// only enriches the account.
 export const verifySession = async (
   refresher: SessionRefresher,
   mojangAuth: MojangAuth,

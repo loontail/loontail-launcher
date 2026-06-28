@@ -22,9 +22,6 @@ const SectionHeading = ({ title, aside }: { title: string; aside?: ReactNode }) 
   </div>
 );
 
-// Shown under "My builds" when the user has authored none. Their own builds are
-// always created here, so this carries the single create affordance for the
-// empty case (the section header drops its button when there's nothing beside).
 const MyBuildsEmpty = ({ onCreate }: { onCreate: () => void }) => {
   const { t } = useTranslation();
   return (
@@ -72,8 +69,6 @@ export const BuildsHomePage = () => {
       <BuildCard key={item.key} item={item} onOpen={openBuild} variant={viewMode} />
     ));
 
-  // My builds always shows (with its own empty state); Official only appears when
-  // there are official builds to list — an empty/unreachable catalog hides it.
   const showMyBuilds = !query || localItems.length > 0;
   const showOfficial = officialItems.length > 0;
   const noResults = query.length > 0 && localItems.length === 0 && officialItems.length === 0;

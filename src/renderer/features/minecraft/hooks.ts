@@ -25,16 +25,15 @@ export const useClientStatus = (slug: CatalogKey | null | undefined): ClientRunt
 
   useEffect(() => {
     if (!slug) return;
-    // Live events are source of truth — only seed if the store has no entry yet.
+    // Live events are source of truth — only seed when the store has no entry.
     if (useMinecraftStore.getState().entries[slug]) return;
     void statusSeeder
       .seedStatus(slug)
       .then((data) => {
         if (useMinecraftStore.getState().entries[slug]) return;
         useMinecraftStore.getState().patch(slug, data);
-        // why: a fresh seed can reveal an already-installed-on-disk client, which
-        // changes the settings-derived install presence the account/client UI
-        // reads — refetch settings so it reflects the discovered state.
+        // A seed can reveal an already-installed client; refetch settings so the
+        // settings-derived install presence reflects it.
         void queryClient.invalidateQueries({ queryKey: QUERY_KEYS.settings.root });
       })
       .catch((error: unknown) => {

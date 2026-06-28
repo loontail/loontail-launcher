@@ -14,9 +14,6 @@ const FALLBACK_KEY = 'settings.account.skinError.unknown';
 
 const isSkinErrorCode = (code: string): code is SkinErrorCode => code in KEY_BY_CODE;
 
-// Resolves an IpcError code (arrives as a plain string over the bridge) to a
-// localized, code-keyed message. Unknown codes fall back to a generic key that
-// still surfaces the raw main-process message for diagnostics.
 export const localizeSkinError = (code: string, message: string, t: TFunction): string => {
   const key = isSkinErrorCode(code) ? KEY_BY_CODE[code] : FALLBACK_KEY;
   return t(key, { message });

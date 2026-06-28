@@ -10,14 +10,12 @@ export const initLogger = (): Logger => {
     log.initialize();
     log.transports.file.level = 'info';
     log.transports.console.level = 'debug';
-    // Cap on-disk log volume. electron-log's default archiveLogFn does a single
-    // `main.log` → `main.old.log` swap, so total usage is bounded to ~2× this.
+    // electron-log's default archiveLogFn does a single `main.log` →
+    // `main.old.log` swap, so on-disk usage is bounded to ~2× this.
     log.transports.file.maxSize = 5 * 1024 * 1024;
-    // Route raw console.* calls through electron-log so the launcher's log
-    // file captures output from dependencies that write directly via
-    // `console.warn` / `console.error`. Without this, those lines only go to
-    // the OS-level stdout and disappear when the launcher isn't started from
-    // a terminal.
+    // Route raw console.* through electron-log so the log file captures output
+    // from dependencies that write directly via `console.warn` / `console.error`;
+    // otherwise those lines only reach OS stdout and vanish without a terminal.
     Object.assign(console, log.functions);
     initialized = true;
   }

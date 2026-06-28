@@ -11,9 +11,8 @@ import { cancelMojangLogin, fetchCurrentUser, login, logout, signInWithMojang } 
 
 const CURRENT_USER_STALE_TIME_MS = 5 * 60_000;
 
-// auth.login resolves to a discriminated LoginResult instead of throwing coded
-// IpcErrors, so the only rejections here are transport-level: undici surfaces a
-// dropped connection as a bare TypeError.
+// login resolves to a LoginResult rather than throwing, so the only rejections
+// are transport-level: undici reports a dropped connection as a bare TypeError.
 export const loginErrorCodeFromRejection = (error: unknown): LoginErrorCode => {
   if (error instanceof TypeError) return LOGIN_ERROR_CODE.NetworkError;
   return LOGIN_ERROR_CODE.Unknown;
@@ -77,17 +76,14 @@ export const useLogout = () => {
   return { submit: mutation.mutateAsync, isPending: mutation.isPending };
 };
 
-// Drives the OAuth Authorization Code (browser) flow as a single blocking
-// call. The main process opens the system browser, waits for the loopback
-// redirect, and returns the resulting account. `isPending` covers the entire
-// window so the LoginForm can disable inputs and show a spinner.
+// Drives the browser OAuth flow as one blocking call; `isPending` covers the
+// whole window so the form can disable inputs and show a spinner.
 export const useMojangLogin = () => {
   const queryClient = useQueryClient();
   const [isPending, setIsPending] = useState(false);
   const [errorCode, setErrorCode] = useState<LoginErrorCode | null>(null);
 
-  // If the component unmounts mid-flow, best-effort abort so the main process
-  // releases the loopback server.
+  // Unmount mid-flow: abort so main releases the loopback server.
   useEffect(() => {
     return () => {
       void cancelMojangLogin();

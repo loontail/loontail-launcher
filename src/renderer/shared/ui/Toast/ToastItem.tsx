@@ -20,9 +20,8 @@ export type ToastEntry = ToastPayload & {
 
 const AUTO_CLOSE_MS = 5000;
 
-// Monochrome by design: severity is read from the lucide icon's shape plus the
-// left-border brightness, never from hue. `icon`/`border`/`progress` resolve to
-// neutral white tokens at different opacities (brightness differentiates).
+// Monochrome by design: severity is conveyed by icon shape and border
+// brightness, never hue; all tokens are neutral white at varying opacity.
 const VARIANT_STYLES: Record<
   ToastVariant,
   { icon: string; border: string; Icon: typeof Info; progress: string }
@@ -83,8 +82,7 @@ export const ToastItem = ({ entry, style, paused, onClose, onHeight }: ToastItem
   }, [entry.id, onHeight]);
 
   const isError = entry.variant === ToastVariants.ERROR;
-  // Errors (and actionable toasts) never auto-dismiss: they persist until the
-  // user acts on or explicitly dismisses them.
+  // Errors and actionable toasts never auto-dismiss.
   const persist = isError || Boolean(entry.action);
 
   // Auto-close with hover-pause: `remainingRef` carries the leftover budget so

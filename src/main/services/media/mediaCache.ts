@@ -13,11 +13,10 @@ import { scopedLogger } from '@main/infra/logger';
 
 const CACHE_NAMESPACE = 'media';
 
-// The decoded `cache://` source URL is renderer/CMS-influenceable, so it is
-// pinned to the configured API origin — there is no separate asset CDN in this
-// deployment, so the API origin is the only trusted host. Pinning here closes
-// the SSRF (a crafted URL targeting 127.0.0.1 / 169.254.169.254) and stops the
-// universal API bearer from being attached to — and leaked at — any other host.
+// The decoded `cache://` source URL is renderer-influenceable, so it's pinned to
+// the API origin (the only trusted host — no separate CDN). Closes the SSRF (a
+// crafted URL targeting 127.0.0.1 / 169.254.169.254) and stops the bearer from
+// being attached to, and leaked at, any other host.
 const TRUSTED_MEDIA_ORIGIN = new URL(mainConfig.apiUrl).origin;
 
 export const isTrustedMediaOrigin = (url: string): boolean => {
@@ -31,8 +30,8 @@ export const isTrustedMediaOrigin = (url: string): boolean => {
 // Bound manual redirect following so a misconfigured server can't loop forever.
 const MEDIA_MAX_REDIRECTS = 5;
 
-// Cap the on-disk media cache so months of CMS-image churn don't accrete
-// a multi-GB footprint. LRU pruning runs after every cache write.
+// Cap the on-disk cache so image churn doesn't accrete a multi-GB footprint;
+// LRU pruning runs after every write.
 export const MEDIA_CACHE_MAX_BYTES = 200 * 1024 * 1024;
 
 const logger = scopedLogger('media-cache');
@@ -58,10 +57,10 @@ const guessMimeFromUrl = (url: string): string => {
   return MIME_BY_EXT[ext] ?? 'application/octet-stream';
 };
 
-// The served Content-Type is stored in a tiny sidecar entry next to the body so
-// a cache hit reports the real type instead of guessing from the URL — CMS
-// and skin URLs are often extensionless, where the guess degrades to
-// application/octet-stream. A missing sidecar (old entry) falls back to the guess.
+// Store the served Content-Type in a sidecar so a cache hit reports the real
+// type instead of guessing from the URL — media/skin URLs are often
+// extensionless, where the guess degrades to application/octet-stream. A missing
+// sidecar (old entry) falls back to the guess.
 const typeKey = (cacheKey: string): string => `${cacheKey}.type`;
 
 const storeMime = (cacheKey: string, mimeType: string): Promise<void> =>
@@ -76,8 +75,8 @@ const FETCH_TIMEOUT_MS = 30_000;
 
 const inFlight = new Map<string, Promise<CachedMedia | null>>();
 
-// De-dupe eviction passes: a burst of writes (loading a screenshot grid) would
-// otherwise stat the same directory N times in parallel.
+// De-dupe eviction passes so a burst of writes doesn't stat the same directory
+// N times in parallel.
 let evictionInFlight: Promise<void> | null = null;
 const scheduleEviction = (): void => {
   if (evictionInFlight) return;
@@ -86,10 +85,8 @@ const scheduleEviction = (): void => {
   });
 };
 
-// Fetch with manual redirect handling so a 30x cannot smuggle the API bearer to
-// an off-origin host: every hop's URL (and the initial URL) is re-validated
-// against the trusted origin, and the Authorization header is attached only when
-// the request host is that trusted origin.
+// Manual redirect handling so a 30x can't smuggle the bearer off-origin: every
+// hop (and the initial URL) is re-validated against the trusted origin.
 const fetchTrustedMedia = async (sourceUrl: string): Promise<Response | null> => {
   let current = sourceUrl;
   for (let hop = 0; hop <= MEDIA_MAX_REDIRECTS; hop++) {
