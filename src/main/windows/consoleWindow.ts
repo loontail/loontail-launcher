@@ -25,9 +25,20 @@ const buildOptions = (): Electron.BrowserWindowConstructorOptions =>
     show: false,
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      // sandbox:false — contextBridge push batches (`console.lines`) silently
-      // dropped in sandboxed background BrowserWindows. Safe here: the preload
-      // is the only script path and only exposes our typed contextBridge API.
+      // sandbox:false is a documented workaround: contextBridge push batches
+      // (`console.lines`) are silently dropped in sandboxed background
+      // BrowserWindows, and there is no test that would catch that runtime
+      // regression, so flipping to sandbox:true is not a safe minimal change.
+      //
+      // The residual blast radius (a renderer compromise here is unsandboxed) is
+      // contained by two invariants that MUST hold:
+      //   1. IPC is scoped to CONSOLE_TRUSTED_CHANNELS (4 console.* channels);
+      //      the trusted-sender check denies every other handler (auth/launch/
+      //      settings/system) to this window.
+      //   2. The console renderer renders all (attacker-influenceable) Minecraft
+      //      stdout/stderr as TEXT nodes only — never dangerouslySetInnerHTML or
+      //      unsanitized markdown — so attacker output cannot become DOM/script.
+      // contextIsolation stays on and the preload exposes only the typed API.
       sandbox: false,
       contextIsolation: true,
       nodeIntegration: false,

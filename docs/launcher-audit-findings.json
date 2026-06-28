@@ -1,0 +1,412 @@
+[
+  {
+    "id": "API-1",
+    "severity": "P2",
+    "title": "Launcher catalog schema omits the new inlined `bundle` summary object (tolerated, not read)",
+    "location": "backend crates/catalog/src/dto.rs:54-73 (ClientDto.bundle: Option<BundleSummaryDto>) + dto.rs:22-30 (BundleSummaryDto{slug,version,status,filesCount,manifestUrl}); launcher src/shared/contracts/client.ts:15-44 (ClientResponseSchema)",
+    "detail": "The refactor added an inlined `bundle` object to each client (slug/version/status/filesCount/manifestUrl). The launcher's ClientResponseSchema does not declare `bundle`, and Zod object parsing strips unknown keys by default, so the field is silently dropped. This is non-breaking because the launcher drives its bundle phase off the top-level `bundleSlug` (still served at dto.rs:65 and read in clientsApi.ts:61 via coerceBundleSlug) and fetches the manifest itself. But it means the new server-provided `manifestUrl`/`status`/`filesCount`/`version` are unused — if the launcher ever wants to skip a manifest round-trip or show bundle status/version, the data is already on the wire and just needs adding to the schema.",
+    "fix": "Optionally extend ClientResponseSchema with an optional `bundle` object ({slug,version:nullable,status,filesCount,manifestUrl}) and surface it in normalizeClient, so the launcher can consume server-side bundle status/manifestUrl instead of re-deriving. No change needed if the current bundleSlug-only flow is intended.",
+    "confidence": "high",
+    "area": "API-SYNC drift audit: loontail-launcher (Electron) consumer vs loontail-minecraft-network-service (Rust/Axum) provider, post backend refactor (builds+bundle merge, catalog native contract, yggdrasil auth, token hashing)."
+  },
+  {
+    "id": "API-2",
+    "severity": "P2",
+    "title": "Bundled yggdrasil-client carries authserver/sessionserver/bulkProfiles paths that would mis-resolve against the launcher's bare apiRoot — latent, never invoked",
+    "location": "launcher src/main/services/auth/yggdrasilClient.ts:23-25 (apiRoot: mainConfig.apiUrl); node_modules/@loontail/yggdrasil-client client.ts:132-146 (bulkProfiles → '/api/profiles/minecraft'), 50-120 (authenticate/refresh/validate/invalidate → '/authserver/*'); backend crates/server/src/main.rs:112-116 (yggdrasil nested under /api/yggdrasil) + crates/yggdrasil/src/lib.rs:58-75",
+    "detail": "The launcher constructs YggdrasilClient with apiRoot = bare apiUrl (correct for textures, which the backend serves top-level at /textures). But the same client's authenticate/refresh/validate/invalidate/profile/bulkProfiles/meta methods build URLs as apiRoot+endpoint (e.g. apiUrl + '/authserver/authenticate' or apiUrl + '/api/profiles/minecraft'). The backend only mounts those under /api/yggdrasil, so calling them through this bare-rooted client would 404. This is NOT a live break: a grep confirms the launcher only ever calls texturesClient for getTextures/uploadSkin/uploadCape/deleteSkin/deleteCape (all /textures/*); login/refresh go through the separate authApi.ts HTTP client, and in-game auth goes through authlib-injector pointed at yggdrasilApiRoot. The risk is purely future: any code that reaches for texturesClient.authenticate/bulkProfiles/profile would silently hit the wrong path.",
+    "fix": "Either rename/narrow the launcher type to expose only the texture methods (it already only surfaces texturesClient+fetchTextures), or add a code comment that this instance is textures-only and the non-texture methods must not be used with the bare apiRoot. No functional change required today.",
+    "confidence": "high",
+    "area": "API-SYNC drift audit: loontail-launcher (Electron) consumer vs loontail-minecraft-network-service (Rust/Axum) provider, post backend refactor (builds+bundle merge, catalog native contract, yggdrasil auth, token hashing)."
+  },
+  {
+    "id": "API-3",
+    "severity": "P2",
+    "title": "Stale comments reference the retired CMS/Strapi `publicUrl`/`server.url` plugin contract",
+    "location": "launcher src/main/services/bundle/api.ts:24-26 (\"when the plugin's publicUrl is unset and server.url is empty\") and :17-18 (\"the CMS serializes consistently\"); src/main/services/bundle/manager.ts and verify.ts:18 still say \"CMS\"/\"plugin\"",
+    "detail": "Several comments still describe the old Strapi-plugin behavior (publicUrl/server.url fallback, CMS serialization) that no longer exists — the backend now serves artifacts.json verbatim from disk (crates/bundles/src/public.rs:18-50) with url fields fixed at /bundle-registry/builds/{slug}/files/{path} (crates/bundles/src/storage.rs:52-56, manifest.rs). The behavior the comments rely on (server may emit root-relative URLs → launcher absolutizes against apiUrl) still happens to hold because the backend's url fields are always server-relative and api.ts:91 absolutizes them, so functionality is correct; only the rationale text is outdated.",
+    "fix": "Update the comments in bundle/api.ts (and the 'CMS'/'plugin' wording in manager.ts/verify.ts) to describe the native Rust bundle-registry contract instead of the retired Strapi plugin. Pure doc cleanup.",
+    "confidence": "medium",
+    "area": "API-SYNC drift audit: loontail-launcher (Electron) consumer vs loontail-minecraft-network-service (Rust/Axum) provider, post backend refactor (builds+bundle merge, catalog native contract, yggdrasil auth, token hashing)."
+  },
+  {
+    "id": "DEAD-1",
+    "severity": "P1",
+    "title": "Dead renderer registration slice: useRegister hook + register api never called by any UI",
+    "location": "src/renderer/features/auth/hooks.ts:87 (useRegister); src/renderer/features/auth/api.ts:7 (register)",
+    "detail": "useRegister (hooks.ts:87) is a fully-built React-Query mutation hook with no consumer. Proof: `grep -rn useRegister src tests` returns only the definition line. Its only feeder, the `register` api function (api.ts:7), is referenced solely by `registerWithRejectionResult` (hooks.ts:38) which is referenced solely by the dead useRegister. LoginForm.tsx (the only auth UI) imports only useLogin and useMojangLogin — there is no signup form. The whole renderer-side registration vertical (useRegister -> register -> auth.register invoke) is unreachable. The main-side handler registerAuthRoutes/auth.register and RegisterPayload schema are still live/constrained by the contract coverage test, so this is a half-wired feature.",
+    "fix": "Remove useRegister (hooks.ts:87-109), the register api fn (api.ts:7-8), and registerWithRejectionResult (hooks.ts:38-44); drop `register` from the api import in hooks.ts:16 and the now-unused RegisterPayload import. Decide separately whether to also retire the main-side auth.register handler + IpcContract entry (would require updating contractCoverage.test.ts and channels.ts) or keep it for a future signup UI.",
+    "confidence": "high",
+    "area": "Dead-code audit of loontail-launcher/src (Electron main/renderer/preload/shared)"
+  },
+  {
+    "id": "DEAD-2",
+    "severity": "P1",
+    "title": "Dead renderer build-edit slice: useUpdateBuild hook + updateBuild api never consumed",
+    "location": "src/renderer/features/catalog/hooks.ts:62 (useUpdateBuild); src/renderer/features/catalog/api.ts:18 (updateBuild)",
+    "detail": "useUpdateBuild (hooks.ts:62) is exported and re-exported through catalog/index.ts but never imported by any component. Proof: `grep -rn useUpdateBuild src tests` shows only the definition and the barrel passthrough line (catalog/index.ts:9), no consumer. Its only feeder, api.updateBuild (api.ts:18), is referenced only by the dead useUpdateBuild. By contrast useCreateBuild and useDeleteBuild ARE used in components (CreateBuildModal.tsx, BuildSettingsTab.tsx). There is no edit-build modal, so the 'update build' feature is dead on the renderer. Main-side builds.update handler (instances/routes.ts:29) and UpdateInstancePayload remain live/constrained by the coverage test.",
+    "fix": "Remove useUpdateBuild (hooks.ts:62), drop it from the catalog/index.ts barrel re-export (index.ts:9), and remove the updateBuild api fn (api.ts:18-19). Decide separately about retiring the main-side builds.update channel/handler.",
+    "confidence": "high",
+    "area": "Dead-code audit of loontail-launcher/src (Electron main/renderer/preload/shared)"
+  },
+  {
+    "id": "DEAD-3",
+    "severity": "P2",
+    "title": "Orphaned install-manifest target-match pair: hasCurrentTargetInstallManifest + targetInstallManifestMatches have no production caller",
+    "location": "src/main/services/minecraft/installManifest.ts:180 (hasCurrentTargetInstallManifest), :166 (targetInstallManifestMatches)",
+    "detail": "hasCurrentTargetInstallManifest (line 180) is referenced only by its own definition and test files. Proof: `grep -rn hasCurrentTargetInstallManifest src` returns only line 180; production minecraft code imports only persistTargetInstallManifest / loadTargetInstallManifest / clearTargetInstallManifest from installManifest. targetInstallManifestMatches (line 166) is referenced only inside the dead hasCurrentTargetInstallManifest (line 185) plus tests. readinessPolicy.ts deliberately does NOT do target-matching (its comment lines 12-17 say the match is 'deferred to Play'), so this pair is genuinely orphaned. Three manager test files (managerInstall/managerLaunch/managerStatus) also mock hasCurrentTargetInstallManifest as a vestigial module export the production manager never calls.",
+    "fix": "Remove hasCurrentTargetInstallManifest (lines 180-186) and targetInstallManifestMatches (lines 166-178) plus their direct test (installManifest.test.ts) and the stale `hasCurrentTargetInstallManifest: vi.fn()` mock entries in managerInstall/managerLaunch/managerStatus tests. Confirm targetInstallManifestMatches isn't intended for a future Play-time match (it currently is not wired).",
+    "confidence": "high",
+    "area": "Dead-code audit of loontail-launcher/src (Electron main/renderer/preload/shared)"
+  },
+  {
+    "id": "DEAD-4",
+    "severity": "P2",
+    "title": "Stale test seam _internals (and dead type re-export) in bundle/manager.ts",
+    "location": "src/main/services/bundle/manager.ts:614 (_internals), :615 (export type { ActiveSync, SyncPlan })",
+    "detail": "_internals = { flattenRemote } is commented 'exported only for tests' (line 613) but no test imports _internals. Proof: `grep -rn _internals src tests` returns only line 614; flattenRemote is instead tested directly via manifestSnapshot/manifestUtils. The accompanying `export type { ActiveSync, SyncPlan }` (line 615) is also dead: tests import these types from '@main/services/bundle/plan' and '.../syncState' directly, never from manager (`grep` for imports-from-manager shows only BundleManager/GetClient). The 'exported only for tests' comment is actively misleading. Distinct from the LIVE test seams seedActiveSync (syncState.ts:169) and seedOp (ops.ts:105), which tests do use — keep those.",
+    "fix": "Delete manager.ts lines 613-615 (the _internals const, its comment, and the ActiveSync/SyncPlan re-export). The `import { flattenRemote }` at manager.ts:37 stays (still used at line 453).",
+    "confidence": "high",
+    "area": "Dead-code audit of loontail-launcher/src (Electron main/renderer/preload/shared)"
+  },
+  {
+    "id": "DEAD-5",
+    "severity": "P2",
+    "title": "Dead branded-id helpers: asUserId, UserIdSchema, ClientIdSchema",
+    "location": "src/shared/contracts/ids.ts:19 (asUserId), :34 (UserIdSchema), :29 (ClientIdSchema)",
+    "detail": "All three have zero consumers outside ids.ts and the contracts barrel. Proof: `grep -rn` excluding ids.ts and contracts/index.ts returns nothing for each. The UserId brand type is only referenced internally within ids.ts (no out-of-file consumer either). Sibling helpers asClientSlug/asClientId/asBundleSlug/asInstanceId/asCatalogKey and ClientSlugSchema/BundleSlugSchema/InstanceIdSchema/CatalogKeySchema are all live, so this is leftover scaffolding for a user-id keyspace that is never validated or constructed on the client.",
+    "fix": "Remove asUserId (line 19), ClientIdSchema (lines 29-32), UserIdSchema (lines 34-37), and their entries in the contracts/index.ts barrel (asUserId, ClientIdSchema, UserIdSchema). The UserId brand type (line 7) can also go unless retained for documentation; verify no @shared/contracts consumer re-adds it.",
+    "confidence": "high",
+    "area": "Dead-code audit of loontail-launcher/src (Electron main/renderer/preload/shared)"
+  },
+  {
+    "id": "DEAD-6",
+    "severity": "P2",
+    "title": "Unused exported error message constant SLUG_REQUIRED_MSG",
+    "location": "src/main/ipc/parseArgs.ts:6",
+    "detail": "SLUG_REQUIRED_MSG is exported but never imported. Proof: `grep -rn SLUG_REQUIRED_MSG src tests scripts` returns only line 6. The route layer migrated to source-namespaced CatalogKeys, so all callers use the sibling KEY_REQUIRED_MSG (line 7, used in bundle/minecraft routes); the bare-slug message is a leftover from the pre-CatalogKey era.",
+    "fix": "Delete parseArgs.ts line 6.",
+    "confidence": "high",
+    "area": "Dead-code audit of loontail-launcher/src (Electron main/renderer/preload/shared)"
+  },
+  {
+    "id": "DEAD-7",
+    "severity": "P2",
+    "title": "Eleven dead z.infer type aliases (schemas live, inferred types never imported)",
+    "location": "src/shared/contracts/auth.ts:73 MojangProfile, :82 YggdrasilProfile; bundle.ts:79 LocalManifestFile; client.ts:10 Keyword; instance.ts:23 InstanceBundleRef, :36 InstancePresentation, :45 InstanceLoader, :54 InstanceOrigin; settings.ts:32 StorageSettings; updater.ts:9 UpdaterState; constants/errorCodes.ts:9 ErrorCode",
+    "detail": "Each is a `type X = z.infer<typeof XSchema>` (or keyof-typeof) alias whose only references are its definition line and a passthrough in the contracts/constants barrel. Proof: for every symbol, `grep -rn` over src+tests excluding the defining contract file and contracts/index.ts/constants/index.ts returns zero hits, while the underlying schema/object (MojangProfileSchema, KeywordSchema, ERROR_CODES, etc.) is used. These inferred-type aliases imply a public type contract that nothing consumes.",
+    "fix": "Remove the 11 type-alias declarations and their corresponding entries in src/shared/contracts/index.ts (and constants/index.ts for ErrorCode). Keep the underlying schemas — they are live. If any is wanted as documentation of the contract surface, leave a note; otherwise drop.",
+    "confidence": "high",
+    "area": "Dead-code audit of loontail-launcher/src (Electron main/renderer/preload/shared)"
+  },
+  {
+    "id": "DEAD-8",
+    "severity": "P2",
+    "title": "Test-only contract helpers catalogKeyFor and isLocal have no production caller",
+    "location": "src/shared/contracts/catalog.ts:24 (catalogKeyFor), :118 (isLocal)",
+    "detail": "Both are exported, re-exported through contracts/index.ts, and referenced only by tests/shared/contracts/catalog.test.ts. Proof: `grep -rn catalogKeyFor src tests` and `grep -rn isLocal src tests` show only the definition, the barrel passthrough, and assertions in catalog.test.ts — no production consumer. Production builds CatalogKeys via asCatalogKey / parseCatalogKey and discriminates catalog items by their `source` field inline rather than via these helpers.",
+    "fix": "Remove catalogKeyFor (catalog.ts:24-...) and isLocal (catalog.ts:118-...) plus their barrel entries and their dedicated test assertions, OR wire them in if the inline `source` checks should be centralized. Verify parseCatalogKey/asCatalogKey cover the remaining call sites (they do).",
+    "confidence": "high",
+    "area": "Dead-code audit of loontail-launcher/src (Electron main/renderer/preload/shared)"
+  },
+  {
+    "id": "DEAD-9",
+    "severity": "P2",
+    "title": "Test-only renderer helper clampMonotonicPercent has no production caller",
+    "location": "src/renderer/features/clients/components/install/progressFormat.ts:57",
+    "detail": "clampMonotonicPercent is exported and referenced only by tests/renderer/features/clients/progressFormat.test.ts. Proof: `grep -rn clampMonotonicPercent src tests` shows the definition (progressFormat.ts:57) and only test assertions — it is NOT re-exported through any barrel and no install/progress component imports it. The monotonic-percent clamping it provides is not applied on any live progress path.",
+    "fix": "Remove clampMonotonicPercent (progressFormat.ts:57-...) and its test block, OR apply it where install progress percent is rendered if monotonic clamping is actually desired. Confirm the live progress formatter (progressFormat/useInstallProgress) does not need it before deleting.",
+    "confidence": "high",
+    "area": "Dead-code audit of loontail-launcher/src (Electron main/renderer/preload/shared)"
+  },
+  {
+    "id": "CPX-1",
+    "severity": "P1",
+    "title": "Bundle SyncTask carries dead 'compat' getter/setter views over phase, plus a parallel result shape, both gated by stale W5-T5 TODOs",
+    "location": "src/main/services/bundle/syncState.ts:42-86,118-127; src/main/services/bundle/runner.ts:27-80,248-264; src/main/services/bundle/manager.ts:385-407",
+    "detail": "SyncTask has a real `phase: 'running'|'paused'|'cancelled'` field, but ALSO exposes `paused`/`cancelled` as getter/setter pairs that translate to/from `phase` via markPaused/markCancelled/markRunning. runner.ts comments call these 'Backward-compatible views over phase ... Kept until W5-T5 collapses the manager catch-decode'. Separately, runSyncPhases returns SyncPhasesResult={outcome, deletedAny, paused, cancelled} where paused/cancelled are just `outcome==='paused'`/`'==='cancelled'` (syncPhasesResult helper, runner.ts:72-80) — a second redundant view, also justified only by the W5-T5 note. The manager's resolved path already reads `result.outcome` (manager.ts:364) while the catch path still reads `task.cancelled`/`task.paused` (manager.ts:391-407). The whole 'compat view' scaffolding is transitional code that was never removed.",
+    "fix": "Collapse to one representation. Make workers/manager read `task.phase` directly (e.g. `task.phase==='cancelled'`) and drop the paused/cancelled accessor pair from SyncTask; replace mutations with `task.phase = ...` guarded by the existing mark* helpers. Drop the `paused`/`cancelled` fields from SyncPhasesResult and have manager.ts:364 keep using `result.outcome`. Net deletion of ~30 lines of accessors + 2 derived fields with no behavior change (the transition guards stay in mark*).",
+    "confidence": "high",
+    "area": "Over-complexity / refactor audit of loontail-launcher/src (main + renderer + shared)"
+  },
+  {
+    "id": "API-1",
+    "severity": "P1",
+    "title": "OpRegistry is a Map wrapper that re-exposes its backing Map (.map); consumers mutate it directly, so the class adds nothing",
+    "location": "src/main/services/minecraft/ops.ts:71-101; src/main/services/minecraft/manager.ts:91-101 (env.ops = ops.map); src/main/services/minecraft/env.ts:22",
+    "detail": "OpRegistry wraps a `Map<CatalogKey,Op>` and forwards get/set/delete/has/keys 1:1. Its own comment admits the backing Map is shared into ManagerEnv.ops via `.map` and 'mutated by the consumer modules through that reference'. So install/launch/repair/uninstall mutate the raw Map while the manager calls the wrapper — two access paths to the same Map. The wrapper provides no invariant, encapsulation, or added behavior.",
+    "fix": "Delete OpRegistry and the `.map` getter; use `Map<CatalogKey,Op>` directly in MinecraftManager and pass that Map as `env.ops`. The constructor's `ops: OpRegistry = new OpRegistry()` becomes `ops = new Map()`. Replace `ops.set/get/delete/has/keys` calls (already Map-compatible) verbatim. Replace the test-only `seedOp(registry,key,op)` with `map.set(key,op)`.",
+    "confidence": "high",
+    "area": "Over-complexity / refactor audit of loontail-launcher/src (main + renderer + shared)"
+  },
+  {
+    "id": "API-2",
+    "severity": "P2",
+    "title": "SyncStateStore is a no-value Map wrapper",
+    "location": "src/main/services/bundle/syncState.ts:129-155; used in src/main/services/bundle/manager.ts:108,140,etc.",
+    "detail": "SyncStateStore wraps `Map<CatalogKey,ActiveSync>` and forwards get/set/delete/has/size/values 1:1 with zero added logic. BundleManager already takes it as an injectable (`activeSyncs: SyncStateStore = new SyncStateStore()`), but a plain Map is equally injectable and has the same API surface the manager uses.",
+    "fix": "Replace `SyncStateStore` with `Map<CatalogKey,ActiveSync>` (default `new Map()`). All manager call sites (`.get/.set/.delete/.values/.size`) are Map-native already; only `has` is unused. Delete the class (~27 lines). Keep seedActiveSync taking a `Map` param.",
+    "confidence": "high",
+    "area": "Over-complexity / refactor audit of loontail-launcher/src (main + renderer + shared)"
+  },
+  {
+    "id": "DEAD-1",
+    "severity": "P2",
+    "title": "Test-only helpers (seedActiveSync, noopLease, seedOp) ship in production source modules",
+    "location": "src/main/services/bundle/syncState.ts:157-190; src/main/services/minecraft/ops.ts:103-107",
+    "detail": "seedActiveSync + its noopLease helper, and seedOp, are documented 'Test-only' and are referenced only from tests (managerResumeCleanup/managerPauseFetchResume/managerPauseCleanup/managerStatus/managerCancel). They live in production modules, inflating them and exposing test seams in shipped code.",
+    "fix": "Move seedActiveSync/noopLease/seedOp into a tests/helpers (or *.testkit.ts) module imported only by tests. If OpRegistry/SyncStateStore are removed per API-1/API-2, seedOp/seedActiveSync collapse to one-line Map seeding in the tests themselves and can be deleted outright.",
+    "confidence": "high",
+    "area": "Over-complexity / refactor audit of loontail-launcher/src (main + renderer + shared)"
+  },
+  {
+    "id": "DUP-1",
+    "severity": "P1",
+    "title": "Three independent rolling byte-speed window implementations",
+    "location": "src/main/services/minecraft/progressAdapter.ts:38-96 (windowSpeed + sampling); src/renderer/features/clients/components/install/useByteSpeed.ts:6-43 (+ progressFormat.rollingSpeed); src/main/services/bundle/runner.ts:84-106 (maybeEmit speed window)",
+    "detail": "The same 'sample [ms,bytes], prune to window, reset on backwards jump, rate=(last-first)/dt' logic is reimplemented three times with the same 4s/1s window semantics and the same 'don't go negative on resume' comment. progressAdapter and useByteSpeed are nearly line-for-line identical (both even document the identical 4s window rationale).",
+    "fix": "Extract one pure helper (e.g. shared `createSpeedWindow(windowMs)` returning {push(bytes):number, reset()}) and have all three call sites use it. The renderer hook wraps it in useEffect; the two main-process samplers call push() per chunk/snapshot. Removes ~2 copies of the sampling/pruning loop.",
+    "confidence": "medium",
+    "area": "Over-complexity / refactor audit of loontail-launcher/src (main + renderer + shared)"
+  },
+  {
+    "id": "DUP-2",
+    "severity": "P2",
+    "title": "Atomic JSON-write (mkdir + tmp write + rm + rename + tmp cleanup) duplicated; atomicReplace exists but is wrapped redundantly",
+    "location": "src/main/infra/atomicFile.ts:9-23; src/main/services/bundle/manifestRepo.ts:27-42; src/main/services/instances/instanceRepo.ts:33-48",
+    "detail": "atomicReplace already encapsulates the rm-dest + rename + tmp-cleanup. saveLocalManifest re-implements the 'mkdir, write tmp, on-error rm tmp' wrapper around it; saveInstanceManifest re-implements the ENTIRE dance inline (mkdir + writeFile tmp + rm target + rename + catch rm tmp) and does NOT even call atomicReplace, despite a comment claiming it 'matches the bundle/install manifest writers'. Three loadManifest readers (manifestRepo, instanceRepo, plus installManifest) also share an identical readFile→JSON.parse→safeParse→ENOENT-null pattern.",
+    "fix": "Add `writeJsonAtomic(target, value)` (mkdir dirname, write `${target}.tmp`, atomicReplace) and `readJsonValidated(target, schema)` in infra, and route saveLocalManifest/saveInstanceManifest/installManifest through them. Deletes the inline duplicate in instanceRepo and the wrapper boilerplate in manifestRepo.",
+    "confidence": "high",
+    "area": "Over-complexity / refactor audit of loontail-launcher/src (main + renderer + shared)"
+  },
+  {
+    "id": "DUP-3",
+    "severity": "P2",
+    "title": "db/repos: seedAuthRow and writeAuthRow are byte-identical",
+    "location": "src/main/infra/db/repos.ts:108-123",
+    "detail": "writeAuthRow(db, metadata, secret: Buffer) and seedAuthRow(db, metadata, secret: Buffer|null) execute the exact same INSERT...ON CONFLICT statement. The only difference is the parameter type (Buffer vs Buffer|null); the SQL and runtime behavior are identical. The comment justifies seedAuthRow by tolerance of a null secret, but writeAuthRow would accept null at runtime too.",
+    "fix": "Delete seedAuthRow and widen writeAuthRow's signature to `secret: Buffer | null`. Update the one legacyImport caller. Net -8 lines.",
+    "confidence": "high",
+    "area": "Over-complexity / refactor audit of loontail-launcher/src (main + renderer + shared)"
+  },
+  {
+    "id": "DUP-4",
+    "severity": "P2",
+    "title": "Two near-identical renderer event-listener components + zustand stores + status seeders + broadcasters (bundle vs minecraft)",
+    "location": "src/renderer/features/minecraft/events.ts:73-107 & bundle/events.ts:10-45; minecraft/store.ts & bundle/store.ts; bundle/statusSeeder.ts vs minecraft/hooks.ts:13; main/services/minecraft/broadcast.ts & bundle/broadcast.ts",
+    "detail": "The minecraft and bundle stacks repeat the same shapes: (a) a useEffect listener that subscribes to status/progress/error, patches a zustand store, toasts errors; (b) a zustand store with `entries: Record<slug,State>`, a `patch` that merges + clears progress/error on terminal statuses, and a `selectX(slug)` selector; (c) a createStatusSeeder instance; (d) a createBroadcaster with status/progress/error each calling `emit(getWindow(), CHANNEL, payload)`. The store patch/clear-set logic differs only in which status sets clear which fields.",
+    "fix": "These are partial dups — don't force a single generic if it obscures the field-clearing tables. Highest-value, lowest-risk wins: (1) factor the createBroadcaster trio into `makeBroadcaster(getWindow, {status,progress,error}channels)` (both are mechanically identical); (2) factor the store into a shared `createRuntimeStore({default, terminalStatuses, clearErrorStatuses, clearProgressFields})` factory. Leave the two event listeners separate (their side-effects/invalidations genuinely diverge).",
+    "confidence": "medium",
+    "area": "Over-complexity / refactor audit of loontail-launcher/src (main + renderer + shared)"
+  },
+  {
+    "id": "DUP-5",
+    "severity": "P2",
+    "title": "useSlugMutation + mutationMeta pattern duplicated verbatim across minecraft and bundle hooks",
+    "location": "src/renderer/features/minecraft/hooks.ts:15-62; src/renderer/features/bundle/hooks.ts:11-52",
+    "detail": "Both files define identical `const useSlugMutation = <T>(fn) => useMutation({ meta, mutationFn: fn })` plus a `{errorLocalizer}` meta object, then expose a list of one-line `useXxx = () => useSlugMutation(api.xxx)` wrappers. The only difference is which localizer/api is closed over.",
+    "fix": "Add a shared `makeSlugMutationHook(meta)` (or a `useSlugMutation(fn, meta)`) in shared/lib and instantiate per feature. Removes one copy of the helper and the meta wiring; keeps the per-feature localizer.",
+    "confidence": "medium",
+    "area": "Over-complexity / refactor audit of loontail-launcher/src (main + renderer + shared)"
+  },
+  {
+    "id": "CPX-2",
+    "severity": "P2",
+    "title": "MinecraftManager repeats the 'register BUNDLE_SYNCING op, run hook, drop op' block three times",
+    "location": "src/main/services/minecraft/manager.ts:211-231 (startInstall), 363-388 (startLaunch), 463-481 (finishRepair)",
+    "detail": "Three sites build `const bundleOp = {kind:BUNDLE_SYNCING, abort:new AbortController()}`, set it, await `hook(slug, bundleOp.abort.signal)`, catch with an 'aborted → not an error' guard, and `finally ops.delete(slug)`. The bodies differ only in the surrounding status emit on failure and the log level. The repeated comment 'Register a BUNDLE_SYNCING op ... symmetric with startLaunch' confirms the intent to share.",
+    "fix": "Extract `private async runBundleSyncPhase(slug, hook, opts:{onFailure?})`: claims the BUNDLE_SYNCING op, awaits hook, applies the shared abort/log/cleanup, lets callers pass the failure status emit. Collapses ~60 lines to ~25 and centralizes the abort-vs-error decoding.",
+    "confidence": "medium",
+    "area": "Over-complexity / refactor audit of loontail-launcher/src (main + renderer + shared)"
+  },
+  {
+    "id": "CPX-3",
+    "severity": "P2",
+    "title": "BundleManager.tryGetClient and fetchClient differ only in error handling; getInstallState/runSync each re-derive folder/bundleSlug",
+    "location": "src/main/services/bundle/manager.ts:467-507; getInstallState 201-231 vs runSync 265-311",
+    "detail": "officialSlugFor + tryGetClient (best-effort, returns null on any error) and officialSlugFor + fetchClient (distinguishes not-found vs fetch-fail) share the same slug-resolve + getClient skeleton. getInstallState and runSync both independently do: resolve client → check bundleSlug → resolveClientFolder, with subtly different early-returns. This is a 615-line god-class; the duplicated preamble adds to it.",
+    "fix": "Introduce one `resolveSyncTarget(key): {client, bundleSlug, clientFolder} | <reason>` that both entry points consume, with a single getClient call whose error policy is a parameter (swallow vs classify). Reduces the per-method preamble and the two getClient wrappers to one.",
+    "confidence": "medium",
+    "area": "Over-complexity / refactor audit of loontail-launcher/src (main + renderer + shared)"
+  },
+  {
+    "id": "API-3",
+    "severity": "P2",
+    "title": "operationalId(item) is a single-property passthrough abstraction (item.key) used pervasively",
+    "location": "src/renderer/features/catalog/buildIdentity.ts:8; ~24 call sites incl. PlayButton.tsx:150, useInstallProgress.ts:22",
+    "detail": "`export const operationalId = (item) => item.key`. It is just a renamed property read. The comment documents the concept, but the function adds an import + indirection at every call site without enforcing anything (item.key is already typed CatalogKey).",
+    "fix": "Inline to `item.key` at call sites and delete the function (keep the doc as a one-line comment on CatalogItem.key, or a JSDoc). If the team wants the named concept, downgrade to a type alias rather than a runtime function. Low risk, removes an import across ~24 files.",
+    "confidence": "medium",
+    "area": "Over-complexity / refactor audit of loontail-launcher/src (main + renderer + shared)"
+  },
+  {
+    "id": "API-4",
+    "severity": "P2",
+    "title": "createValueStore is a generic zustand-wrapper factory with only two trivial single-field consumers",
+    "location": "src/renderer/shared/lib/stores/createValueStore.ts:1-21; consumers: features/updater/store.ts:4, features/clients/components/viewMode.ts:7",
+    "detail": "createValueStore builds a typed zustand store + attaches `.useValue`/`.useSetValue` helpers via a cast. It has exactly two consumers, each storing a single value (a status event, a 'grid'|'list' mode). The factory + the augmented-type machinery (ValueStoreHook intersection, `as ValueStoreHook<T>` cast) is more code than two direct `create()` stores.",
+    "fix": "Inline two tiny `create<{value,setValue}>()` stores (or keep one but drop the typed-hook augmentation/cast). This is borderline — the factory is small; flag as low-priority. If kept, at least drop the `as` cast by typing create's generic directly.",
+    "confidence": "low",
+    "area": "Over-complexity / refactor audit of loontail-launcher/src (main + renderer + shared)"
+  },
+  {
+    "id": "DUP-6",
+    "severity": "P2",
+    "title": "Two bounded-concurrency pools (createLimiter) plus a third hand-rolled one in createStatusSeeder",
+    "location": "src/main/infra/concurrency.ts:7-29 (used in system.ts:75, plan.ts:110); src/renderer/shared/lib/statusSeeder.ts:15-61",
+    "detail": "createLimiter is a clean shared bounded-concurrency primitive. createStatusSeeder re-implements the same activeCount/queue/flush bounded-concurrency loop by hand (plus per-key dedup). The dedup is legitimately extra, but the concurrency-gating half duplicates createLimiter's logic.",
+    "fix": "Have createStatusSeeder layer its per-slug dedup map on top of a createLimiter(maxConcurrency) instead of reimplementing activeCount/queue/flush. The renderer can import the same primitive (it's dependency-free). Removes the duplicated pool loop; keeps dedup.",
+    "confidence": "medium",
+    "area": "Over-complexity / refactor audit of loontail-launcher/src (main + renderer + shared)"
+  },
+  {
+    "id": "API-5",
+    "severity": "P2",
+    "title": "writeClipboardText is a one-line forwarder over clipboard.writeText",
+    "location": "src/main/infra/clipboard.ts:1-8",
+    "detail": "The module exists solely to call `clipboard.writeText(text)`. The valuable part is the comment explaining why main-process clipboard is used; the function itself is pure indirection over a single Electron call.",
+    "fix": "Borderline-keep: if there is exactly one caller, inline `clipboard.writeText` there and move the rationale comment to that call site. If multiple callers rely on the abstraction for testability/mocking, leave it. Verify caller count before acting. Low priority.",
+    "confidence": "low",
+    "area": "Over-complexity / refactor audit of loontail-launcher/src (main + renderer + shared)"
+  },
+  {
+    "id": "RACE-1",
+    "severity": "P1",
+    "title": "Pausing a launch-triggered bundle sync freezes the Play flow until the 5-minute idle timeout",
+    "location": "src/main/services/bundle/manager.ts:119-137 (syncForLaunch / runSync await launchWait) + 139-153 (pauseSync) + 396-407 (executePreparedSync pause path)",
+    "detail": "runSync creates a forLaunch awaiter (createAwaiter) and does `await launchWait` after executePreparedSync. The awaiter only settles via resolveAwaiters (COMPLETED) / rejectAwaiters (ERROR or cancel). When pauseSync is invoked on a forLaunch sync, the runner throws ABORTED, executePreparedSync's catch sees `ABORTED && task.paused` and returns WITHOUT resolving/rejecting the awaiter, and its finally does not drop the active sync (task.paused true). So `await launchWait` in runSync never settles. MinecraftManager.startLaunch is blocked inside `await launchHook(...)`, the BUNDLE_SYNCING op stays set, and the client is stuck on LAUNCHING. It only unblocks after BUNDLE_PAUSED_SYNC_MAX_IDLE_MS (5 min, constants/bundle.ts:21) when expirePausedSync rejects the awaiter with ABORTED. The bundlePause IPC route (bundle/routes.ts:14-17) is not gated on forLaunch, so the user can trigger this. Net effect: pause during a Play-time sync freezes the Play button for up to 5 minutes (or until the user separately cancels).",
+    "fix": "Disallow pause for forLaunch syncs (pauseSync: `if (active.forLaunch) return;` or treat pause as cancel during launch), OR make the forLaunch awaiter reject immediately when a forLaunch sync is paused (e.g. in pauseSync, if active.forLaunch call rejectAwaiters with ABORTED before parking, or convert forLaunch pause into cancelSync). Simplest: in pauseSync, `if (active.forLaunch) { this.cancelSync(slug); return; }`.",
+    "confidence": "high",
+    "area": "launcher main process (Electron): bundle sync/download, minecraft install/launch, sqlite store, auth/session, IPC"
+  },
+  {
+    "id": "AUTH-1",
+    "severity": "P1",
+    "title": "Concurrent/duplicate session refreshes are not de-duplicated; can clobber a freshly rotated session and waste single-use rotations",
+    "location": "src/main/infra/http.ts:92-107 (httpRequest 401 refresh-and-retry) + services/auth/index.ts:26-37 (buildSessionAuthPort.refresh) + services/auth/verify.ts:54-73",
+    "detail": "Session rotation is single-use server-side ('the old token is revoked server-side' — authApi.ts:69-70). httpRequest fires port.refresh() on any 401/403 with no in-flight de-dup. The launcher issues many session-auth requests in parallel (catalog, bundle manifest fetch via fetchRemoteManifest with auth:'session', media cache). If several land while the token is stale, each independently calls refresh() with the SAME old token; the first rotates it, the rest POST /auth/refresh with the now-revoked token and get `expired`, returning null — so their retries fail even though a valid token now exists. Worse, verify.ts:verifySession also calls loontailAuth.refresh concurrently and does setStoredAuth on its own result; a refresh racing with a login's setStoredAuth (auth.ts:completeAuthentication) can overwrite the new session with a stale-derived one. There is no mutex around refresh/setStoredAuth.",
+    "fix": "Memoize the in-flight refresh in http.ts (and/or buildSessionAuthPort): keep a `let refreshing: Promise<string|null> | null`; on refresh, if one is in flight return it, else start it and clear in finally. Also re-read the current token before refreshing and, if it already changed since the request's token, retry with the new token instead of refreshing again. Consider a single shared refresh path used by both http.ts and verifySession.",
+    "confidence": "medium",
+    "area": "launcher main process (Electron): bundle sync/download, minecraft install/launch, sqlite store, auth/session, IPC"
+  },
+  {
+    "id": "AUTH-2",
+    "severity": "P2",
+    "title": "getStoredAuth destroys the stored session on a transient secure-storage/decrypt failure",
+    "location": "src/main/infra/store.ts:323-357 (getStoredAuth) + 344-356 catch calling clearStoredAuth()",
+    "detail": "getStoredAuth is a read used on the launch path (launch.ts:312 resolveLaunchAuth(account, getStoredAuth())) and elsewhere. On any throw from decryptAuthSecret/hydrateSession/validation it calls clearStoredAuth() — a destructive delete of the auth row. decryptAuthSecret throws not only for corrupt blobs but also when safeStorage is transiently unavailable (assertSecureStorageAvailable: e.g. Linux keyring/DBus not yet ready, or 'Secure auth storage is unavailable'). A transient secure-storage hiccup therefore permanently drops a still-valid session and forces a full re-login, instead of failing soft (return null, keep the row for the next attempt). The migrateLegacyAuthSession path (clearStoredAuth on failure) has the same shape.",
+    "fix": "Distinguish 'storage unavailable' (transient → return null without deleting) from 'blob present but corrupt/invalid' (delete). E.g. only clearStoredAuth() when the blob exists and fails schema validation, not when safeStorage.isEncryptionAvailable() is false. Have assertSecureStorageAvailable throw a tagged error that getStoredAuth treats as non-destructive.",
+    "confidence": "medium",
+    "area": "launcher main process (Electron): bundle sync/download, minecraft install/launch, sqlite store, auth/session, IPC"
+  },
+  {
+    "id": "PATH-1",
+    "severity": "P2",
+    "title": "Windows path case-sensitivity gap can mark remote-owned bundle files for deletion (and heal-thrash)",
+    "location": "src/main/services/bundle/paths.ts:46-47 (normalizePathForSet only swaps backslashes, no case fold) + services/bundle/plan.ts:104-147 (bundleOwnedRelativePaths / toDelete) + manifestSnapshot.ts flattenRemote",
+    "detail": "normalizePathForSet only converts `\\`→`/`; it does not case-fold. bundleOwnedRelativePaths is built from the current remote manifest's paths, and toDelete is `local.files` keys not present in that set. On Windows the filesystem is case-insensitive, so if the remote manifest ever emits a path with different casing than what a prior local manifest recorded (e.g. remote 'Mods/x.jar' vs local 'mods/x.jar'), `bundleOwnedRelativePaths.has(localPath)` returns false and the still-owned file is queued for deletion in runDeletePhase, then the heal pass churns. Same normalization feeds classifyEntry's `local?.files[normalizedKey]` skip fast-path, so a casing drift also forces needless re-downloads. resolveSafeEntryPath resolves to the real (possibly differently-cased) disk path regardless, so the delete can actually remove a wanted file.",
+    "fix": "On Windows (or unconditionally, if the CMS guarantees stable casing is not assumable), case-fold keys used purely for set membership and local-manifest lookup: e.g. `normalizePathForSet(p) = p.replace(/\\\\/g,'/')` plus a separate `toComparisonKey(p)` that also lowercases, and build bundleOwnedRelativePaths / local.files lookups against the comparison key. Keep the original-cased path for the actual fs operation.",
+    "confidence": "medium",
+    "area": "launcher main process (Electron): bundle sync/download, minecraft install/launch, sqlite store, auth/session, IPC"
+  },
+  {
+    "id": "RACE-2",
+    "severity": "P2",
+    "title": "Cancel landing after heal completes but before the final pause-check emits COMPLETED instead of CANCELLED",
+    "location": "src/main/services/bundle/manager.ts:367-384 (executePreparedSync: heal then `if (task.paused) return;` then completePreparedSync)",
+    "detail": "After runSyncPhases returns 'completed' and the deletedAny heal runs to success, the only guard before completePreparedSync(COMPLETED) is `if (task.paused) return;`. A cancelSync arriving in that window sets task.cancelled (not paused), so the code proceeds to emit COMPLETED and resolve forLaunch awaiters, rather than CANCELLED. The heal call itself throws ABORTED if cancelled mid-heal (healer.ts:122-125), so the window is narrow (cancel strictly between heal resolving and the check), and the actual work is already done, so it is mostly cosmetic — but a forLaunch cancel would then resolve (launch proceeds) instead of rejecting.",
+    "fix": "Make the post-heal guard also honor cancel: `if (task.cancelled) throw new BundleError(ABORTED, 'cancelled after heal'); if (task.paused) return;` so the catch emits CANCELLED and rejects awaiters consistently.",
+    "confidence": "medium",
+    "area": "launcher main process (Electron): bundle sync/download, minecraft install/launch, sqlite store, auth/session, IPC"
+  },
+  {
+    "id": "ERR-1",
+    "severity": "P2",
+    "title": "downloadEntry hash-mismatch on the finish path leaks the stale .tmp on the success-shaped reject",
+    "location": "src/main/services/bundle/download.ts:169-186 (writeStream 'finish' handler hash check) vs 195-210 (.catch tmp cleanup)",
+    "detail": "On a SHA-256 mismatch the finish handler sets settled=true, calls cleanup(), then `reject(...)` for the integrity error. That reject is caught by the outer `.catch` (line 195) which does remove the tmp — so cleanup of the tmp does happen. However, the integrity reject does NOT call response.destroy()/writeStream.destroy() (unlike fail()); both are already finished so handles are closed, so this is benign. The genuinely fragile part: the integrity-failure BundleError is created with DOWNLOAD_INTEGRITY_FAILED, but the outer catch rethrows `if (err instanceof BundleError) throw err;` — correct. Net: behavior is correct today, but the finish-path reject bypasses the shared fail() helper, so a future change (e.g. needing stream teardown or settled accounting) can silently regress. Low-impact maintainability/robustness risk rather than an active bug.",
+    "fix": "Route the hash-mismatch through the same fail() helper (or at minimum reuse its teardown), e.g. `return fail(new BundleError(DOWNLOAD_INTEGRITY_FAILED, ...))` after digesting, so all reject paths share settled/cleanup/teardown semantics.",
+    "confidence": "low",
+    "area": "launcher main process (Electron): bundle sync/download, minecraft install/launch, sqlite store, auth/session, IPC"
+  },
+  {
+    "id": "RACE-3",
+    "severity": "P2",
+    "title": "cancelAll bundle drain can resolve before slow syncs finish their finally (tmp cleanup / manifest write) on quit",
+    "location": "src/main/services/bundle/manager.ts:592-610 (cancelAll maxMs race) + index.ts:192-209 (drain → closeDatabase)",
+    "detail": "On before-quit, drain() calls clientOperationLocks.cancelAll() then disposes services (bundleService.dispose → manager.cancelAll(250)). cancelAll races settled vs a 250ms timeout, so if a sync's finally (tmp rm, saveLocalManifest) is still running at 250ms, drain proceeds and index.ts calls closeDatabase(). A late saveLocalManifest is fs-only (no DB), so DB-close is safe; but a late persist that touched the store (none here for bundle) could hit a closed DB. The actual risk is a partially-written local manifest .tmp left behind if the process exits during the rename window — acceptable per the documented best-effort cleanup, but worth noting the 250ms bound can truncate legitimate cleanup on slow disks/AV.",
+    "fix": "Either raise/await the bundle drain unconditionally during shutdown (it already uses unref timers so it won't block exit forever), or ensure no store/DB writes occur in the post-timeout window. Current behavior is defensible; document that DB writes must never run in a sync's finally.",
+    "confidence": "low",
+    "area": "launcher main process (Electron): bundle sync/download, minecraft install/launch, sqlite store, auth/session, IPC"
+  },
+  {
+    "id": "DB-1",
+    "severity": "P2",
+    "title": "WAL database closed without checkpoint on quit; last writes may sit only in -wal until next open",
+    "location": "src/main/infra/db/connection.ts:18-43 (openDatabase WAL, closeDatabase) + index.ts:200 closeDatabase()",
+    "detail": "journal_mode=WAL is enabled but closeDatabase just calls instance.close() with no explicit `wal_checkpoint(TRUNCATE)`. better-sqlite3's close does finalize and SQLite checkpoints on the last connection close in most cases, so this is usually fine; however, if the process is force-terminated during drain (the before-quit drain is async and app.quit() is only called after it settles, but window-all-closed / OS kill can preempt), recent writes live in the -wal file. They are recovered on next open, so this is durability-on-clean-exit only, not corruption. Calling it out because last-played / settings writes are synchronous and expected to persist immediately.",
+    "fix": "Optionally run `db.pragma('wal_checkpoint(TRUNCATE)')` before close, or set `db.pragma('journal_mode = WAL'); db.pragma('synchronous = NORMAL')` is already implied — add a checkpoint in closeDatabase for a clean shutdown. Low priority since WAL recovers on next open.",
+    "confidence": "low",
+    "area": "launcher main process (Electron): bundle sync/download, minecraft install/launch, sqlite store, auth/session, IPC"
+  },
+  {
+    "id": "SSRF-1",
+    "severity": "P1",
+    "title": "cache media protocol is an SSRF and session-bearer exfiltration primitive",
+    "location": "src/main/services/media/protocol.ts:11-51; src/main/services/media/mediaCache.ts:70-90; src/renderer/shared/lib/mediaUrl.ts:8-14",
+    "detail": "The renderer wraps any http/https media URL (from CMS/catalog or texture lookups) into a cache scheme URL via toCachedMediaUrl and renders it in an img tag. The main-process cache protocol handler decodes it, checks only that the scheme is http/https, then calls fetch with sessionAuthHeader(). sessionAuthHeader (infra/http.ts:117-120) attaches the API session Bearer UNCONDITIONALLY with no check that the host is mainConfig.apiUrl. So a media URL is enough to (1) make the main process fetch arbitrary internal hosts like 127.0.0.1 or 169.254.169.254 (SSRF the renderer/CSP cannot reach), and (2) leak the user API bearer to an attacker host. URLs are attacker-influenceable via any CMS media field (officialSource/catalog contracts pass MediaRef.url verbatim) and fully controllable by a compromised renderer. The bundle downloader pins host scheme + redirect origin in urlPolicy.ts; the media path has no equivalent.",
+    "fix": "Host-allowlist the decoded URL to mainConfig.apiUrl origin (plus any explicit public CDN) and reject others. Only attach sessionAuthHeader when the host is the trusted API origin. Use redirect:'manual' and re-validate Location origin so a 30x cannot smuggle the bearer cross-host.",
+    "confidence": "high",
+    "area": "Electron launcher security audit"
+  },
+  {
+    "id": "TOKEN-1",
+    "severity": "P1",
+    "title": "Session API bearer passed to the game JVM as a -D system property, readable via local process listing",
+    "location": "src/main/services/minecraft/launch.ts:124-131; launch.ts:364",
+    "detail": "buildNetworkAgentJvmArgs appends a JVM system property carrying the universal API bearer (getStoredSessionToken) to the Java command line. Full command lines are readable by any same-user process on Windows/macOS/Linux (Task Manager command-line column, WMIC, Get-CimInstance Win32_Process, ps -ww, /proc/pid/cmdline), so any local process can read the live bearer that authenticates catalogue/bundle/textures/network as the user. The composed command is also written to disk via the launch info log at launch.ts:364.",
+    "fix": "Pass the token out of band: a process env var (not logged, narrower than argv) or a 0600 file / stdin handshake / localhost loopback the agent reads once. At minimum redact the serviceToken from the launch command log line.",
+    "confidence": "high",
+    "area": "Electron launcher security audit"
+  },
+  {
+    "id": "REDIR-1",
+    "severity": "P2",
+    "title": "Bundle manifest entry hosts not pinned to the API origin; bearer attached to whatever host the manifest names",
+    "location": "src/main/services/bundle/download.ts:34-117; src/main/services/bundle/urlPolicy.ts:37-76",
+    "detail": "The downloader attaches sessionAuthHeader. resolveBundleRedirectUrl correctly blocks HTTPS->HTTP downgrade and pins each redirect hop to the initial origin. The gap: the INITIAL entry URL is only scheme-validated, not host-validated. assertAllowedBundleAssetUrl accepts any https host and resolveBundleManifestEntryUrl does not require the result to stay on the API host, so a compromised/misconfigured CMS manifest can point a file at an arbitrary https host and the launcher fetches it with the bearer attached. Same class as SSRF-1 but gated behind manifest control.",
+    "fix": "Require the asset host to equal the API origin (or an explicit asset-CDN allowlist) in resolveBundleManifestEntryUrl/validateBundleAssetDownloadUrl. Only attach sessionAuthHeader when the request host is the trusted API origin.",
+    "confidence": "medium",
+    "area": "Electron launcher security audit"
+  },
+  {
+    "id": "CSP-1",
+    "severity": "P2",
+    "title": "Renderer CSP allows img-src https for any host (image-beacon exfil channel)",
+    "location": "src/main/infra/session.ts:6-16",
+    "detail": "Scripts are well scoped (script-src self, no unsafe-inline/eval) and connect-src is self + apiOrigin only. But img-src is 'self data blob https cache' — open https lets the renderer load images from any HTTPS host, giving an XSS/renderer foothold a classic data-exfil channel via image URLs. style-src 'unsafe-inline' is a documented react-aria trade-off.",
+    "fix": "Restrict img-src to self/data/blob/cache plus explicit API+CDN origins instead of open https, routing remote images through the hardened cache proxy. Keep style-src unsafe-inline only while react-aria needs it.",
+    "confidence": "medium",
+    "area": "Electron launcher security audit"
+  },
+  {
+    "id": "SANDBOX-1",
+    "severity": "P2",
+    "title": "Console window runs with sandbox disabled",
+    "location": "src/main/windows/consoleWindow.ts:26-37; trustedSender.ts:46-57",
+    "detail": "The console BrowserWindow sets sandbox:false (documented workaround for dropped contextBridge push batches in backgrounded sandboxed windows). contextIsolation/nodeIntegration are correct and the trusted-sender check restricts the console to an explicit channel allowlist (cannot invoke auth/launch/settings/system). Residual risk: a renderer RCE has a larger blast radius unsandboxed; the console renders attacker-influenceable Minecraft stdout/stderr, so DOM-injection hygiene matters.",
+    "fix": "Prefer sandbox:true with a pull model (console streams via ipcRenderer.invoke) or webContents.send which is not subject to the batching issue. If sandbox:false stays, keep the allowlist tight and render all console output as text (never dangerouslySetInnerHTML / unsanitized markdown).",
+    "confidence": "medium",
+    "area": "Electron launcher security audit"
+  },
+  {
+    "id": "INFO-1",
+    "severity": "P2",
+    "title": "Positive: core defenses verified (recorded to prevent regression)",
+    "location": "src/main/windows/mainWindow.ts:46-72; secureWindow.ts:31-47; src/preload/index.ts:31-50; src/main/ipc/router.ts:61-96; src/main/infra/store.ts:200-403; src/main/services/bundle/paths.ts:15-37; electron-builder.yml:42-48",
+    "detail": "No action required. Main window: sandbox/contextIsolation on, nodeIntegration off, webSecurity on, insecure content off; will-navigate and will-attach-webview blocked; window-open denied and openExternal HTTPS-host-allowlisted. Preload exposes only invoke/on/platform, no raw ipcRenderer. Router enforces trusted-sender + zod arg validation; console restricted to its channel allowlist. Permission handlers deny by default. Secrets only in safeStorage (versioned, Linux backend allowlist); legacy plaintext sessions purged/migrated. Path traversal blocked via resolveSafeEntryPath (download + delete); downloads verify SHA-256. Electron fuses fully set (runAsNode off, cookie encryption, ASAR integrity, onlyLoadAppFromAsar, NODE_OPTIONS/inspect off). DevTools auto-open dev-only. openPath restricted to launcher-owned canonical roots; Microsoft authorize URL host+path allowlisted.",
+    "fix": "No change needed; treat as invariants in future review of window creation, preload, IPC, and secret store.",
+    "confidence": "high",
+    "area": "Electron launcher security audit"
+  }
+]

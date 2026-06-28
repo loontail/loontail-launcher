@@ -69,6 +69,14 @@ const toComposeFailure = (error: unknown): unknown => {
   return new LaunchPreflightError(code, errorMessage(error));
 };
 
+// The launch command line embeds the session bearer as
+// `-Dloontail.network.serviceToken=<token>` (see buildNetworkAgentJvmArgs).
+// The full command is written to the log file, so the secret would otherwise
+// persist on disk. Redact the value before logging so it never hits disk.
+const SERVICE_TOKEN_PROP = '-Dloontail.network.serviceToken=';
+const redactServiceToken = (command: string): string =>
+  command.replace(/-Dloontail\.network\.serviceToken=\S+/g, `${SERVICE_TOKEN_PROP}<redacted>`);
+
 const sanitizeHttpAgentToken = (value: string): string => {
   const token = value.trim().replace(/[^0-9A-Za-z.+_-]/g, '-');
   return token.length > 0 ? token : 'dev';
@@ -124,6 +132,15 @@ const buildNetworkAgentJvmArgs = async (
     }
     // Hand the in-game agent the same session token the launcher uses as its API
     // bearer, so it authenticates against the network service as this user.
+    //
+    // why: the token rides on a `-D` system property, which is readable in the
+    // local process list (Win32_Process / `ps -ww` / /proc/pid/cmdline). Moving
+    // it off `-D` (env var / 0600 file / loopback handshake) requires a
+    // coordinated change to how the mod/agent reads it (System.getProperty), and
+    // a mismatch would silently break in-game auth at runtime — out of scope for
+    // this launcher-only change. The on-disk leak (the launch-command log line)
+    // is closed by redactServiceToken below; the process-list exposure is
+    // tracked for a follow-up that lands with the agent change.
     const sessionToken = getStoredSessionToken();
     if (sessionToken) {
       args.push(`-Dloontail.network.serviceToken=${sessionToken}`);
@@ -361,7 +378,9 @@ export const runLaunch = async (
       onEvent: (event) => {
         switch (event.type) {
           case EventTypes.LAUNCH_STARTING:
-            env.logger.info(`[${slug}] launch: starting ${event.command} (cwd ${event.cwd})`);
+            env.logger.info(
+              `[${slug}] launch: starting ${redactServiceToken(event.command)} (cwd ${event.cwd})`,
+            );
             return;
           case EventTypes.LAUNCH_STARTED:
             env.logger.info(`[${slug}] launch: started pid=${event.pid}`);

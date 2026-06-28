@@ -4,6 +4,7 @@ import path from 'node:path';
 import {
   Architectures,
   AuthModes,
+  EventTypes,
   type LaunchComposition,
   type LaunchRunOptions,
   type LaunchSession,
@@ -662,6 +663,41 @@ describe('runLaunch', () => {
     expect(options?.extraJvmArgs).toEqual(
       expect.arrayContaining(['-Dloontail.network.serviceToken=handoff-session-token']),
     );
+  });
+
+  it('redacts the service token from the launch-command log line (no on-disk leak)', async () => {
+    launchMocks.getStoredSessionToken.mockReturnValue('handoff-session-token');
+    const fixture = await createLaunchFixture();
+    const ctx = {
+      ...fixture.ctx,
+      target: {
+        ...fixture.ctx.target,
+        runtime: { ...fixture.ctx.target.runtime, majorVersion: 21 },
+      },
+    } as Context;
+    const compose = vi.fn(async (_target: Target, _options: unknown) => fixture.composition);
+    // The kit reports the resolved command line via the LAUNCH_STARTING event;
+    // that command embeds the -D token and is what reaches the log file.
+    const run = vi.fn((_composition: LaunchComposition, options?: LaunchRunOptions) => {
+      options?.onEvent?.({
+        type: EventTypes.LAUNCH_STARTING,
+        command:
+          'java -Dloontail.network.serviceToken=handoff-session-token -cp client.jar net.minecraft.client.main.Main',
+        cwd: fixture.composition.directory,
+      } as Parameters<NonNullable<LaunchRunOptions['onEvent']>>[0]);
+      return session();
+    });
+    const kit = { launch: { compose, run } } as unknown as MinecraftKit;
+    const managerEnv = env(kit, new Map<CatalogKey, Op>());
+
+    await runLaunch(managerEnv, SLUG, ctx, account());
+
+    const startingLog = (managerEnv.logger.info as ReturnType<typeof vi.fn>).mock.calls
+      .map((call) => String(call[0]))
+      .find((line) => line.includes('launch: starting'));
+    expect(startingLog).toBeDefined();
+    expect(startingLog).not.toContain('handoff-session-token');
+    expect(startingLog).toContain('-Dloontail.network.serviceToken=<redacted>');
   });
 
   it('does not attach the network agent on older Java (would abort JVM startup)', async () => {

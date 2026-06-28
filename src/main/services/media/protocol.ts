@@ -1,6 +1,6 @@
 import { scopedLogger } from '@main/infra/logger';
 import { protocol } from 'electron';
-import { fetchCachedMedia } from './mediaCache';
+import { fetchCachedMedia, isTrustedMediaOrigin } from './mediaCache';
 
 export const CACHE_SCHEME = 'cache';
 
@@ -34,6 +34,13 @@ export const registerMediaProtocol = (): void => {
     const sourceUrl = decodeSourceUrl(request.url);
     if (!sourceUrl) {
       return new Response(null, { status: 400 });
+    }
+    // Host-pin to the API origin here too (mediaCache re-checks before any fetch):
+    // reject the SSRF/bearer-exfil request up front with a clear status instead
+    // of letting it reach the cache layer.
+    if (!isTrustedMediaOrigin(sourceUrl)) {
+      logger.warn(`Rejected media request to non-API host: ${sourceUrl}`);
+      return new Response(null, { status: 403 });
     }
     const cached = await fetchCachedMedia(sourceUrl);
     if (!cached) {

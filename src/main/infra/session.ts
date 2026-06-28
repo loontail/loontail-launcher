@@ -5,10 +5,15 @@ const apiOrigin = new URL(mainConfig.apiUrl).origin;
 
 const baseDirectives = [
   "default-src 'self'",
+  // style-src 'unsafe-inline' is a documented react-aria-components requirement.
   "style-src 'self' 'unsafe-inline'",
-  // `blob:` is required so skinview3d can render an unsaved skin/cape
-  // preview from the file the user just picked (URL.createObjectURL).
-  "img-src 'self' data: blob: https: cache:",
+  // No open `https`: remote images are routed through the hardened `cache:` proxy
+  // (host-pinned to the API origin), so an XSS/renderer foothold can't use an
+  // image URL as an exfil beacon to an arbitrary host. `blob:` is required so
+  // skinview3d can render an unsaved skin/cape preview from the file the user
+  // just picked (URL.createObjectURL); the API origin is allowed directly for
+  // any image served straight from the backend.
+  `img-src 'self' data: blob: cache: ${apiOrigin}`,
   "font-src 'self' data:",
   `connect-src 'self' ${apiOrigin}`,
 ];

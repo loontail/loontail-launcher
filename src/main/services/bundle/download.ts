@@ -15,7 +15,11 @@ import { sessionAuthHeader } from '@main/infra/http';
 import { scopedLogger } from '@main/infra/logger';
 import { BundleErrorCodes, type RemoteManifestEntry } from '@shared/contracts/bundle';
 import { BundleError } from './errors';
-import { resolveBundleRedirectUrl, validateBundleAssetDownloadUrl } from './urlPolicy';
+import {
+  isTrustedBundleAssetUrl,
+  resolveBundleRedirectUrl,
+  validateBundleAssetDownloadUrl,
+} from './urlPolicy';
 
 const logger = scopedLogger('bundle.download');
 
@@ -34,8 +38,10 @@ const HTTPS_PROTOCOL = 'https:';
 const requestOnce = (url: string, options: DownloadOptions): Promise<IncomingMessage> =>
   new Promise<IncomingMessage>((resolve, reject) => {
     let parsed: URL;
+    let validatedUrl: string;
     try {
-      parsed = new URL(validateBundleAssetDownloadUrl(url));
+      validatedUrl = validateBundleAssetDownloadUrl(url);
+      parsed = new URL(validatedUrl);
     } catch (err) {
       reject(err);
       return;
@@ -48,11 +54,11 @@ const requestOnce = (url: string, options: DownloadOptions): Promise<IncomingMes
         port: parsed.port || undefined,
         path: `${parsed.pathname}${parsed.search}`,
         method: 'GET',
-        // Bundle `/files` and manifests are now session-gated. Attach the live
-        // bearer so the downloader is authorised; a CDN redirect that points
-        // off-host still works because the header is dropped on cross-origin
-        // hops by the server, and the policy validator already constrains hosts.
-        headers: sessionAuthHeader(),
+        // Bundle `/files` and manifests are session-gated, so attach the live
+        // bearer — but only when the request host is the trusted API origin, so
+        // the secret is never sent off-host (defense-in-depth on top of the
+        // entry host-pin and the redirect origin lock in urlPolicy).
+        headers: isTrustedBundleAssetUrl(validatedUrl) ? sessionAuthHeader() : {},
         timeout: BUNDLE_DOWNLOAD_REQUEST_TIMEOUT_MS,
       },
       (res) => {

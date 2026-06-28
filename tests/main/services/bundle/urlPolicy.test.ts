@@ -1,9 +1,19 @@
+import { describe, expect, it, vi } from 'vitest';
+
+// The host-pin is enforced against the configured API origin, so the URL policy
+// now depends on mainConfig. Pin it to api.example.com so the existing
+// cdn.example.com fixtures exercise the non-API-host rejection path.
+vi.mock('@main/config', () => ({
+  mainConfig: { apiUrl: 'https://api.example.com' },
+}));
+
 import {
+  isTrustedBundleAssetUrl,
   resolveBundleManifestEntryUrl,
   resolveBundleRedirectUrl,
+  validateBundleAssetDownloadUrl,
 } from '@main/services/bundle/urlPolicy';
 import { BundleErrorCodes } from '@shared/contracts/bundle';
-import { describe, expect, it } from 'vitest';
 
 const ENTRY_PATH = 'mods/example.jar';
 
@@ -74,6 +84,49 @@ describe('bundle URL policy', () => {
           message: expect.stringContaining('changed origin'),
         }),
       );
+    });
+  });
+
+  describe('host pinning to the API origin', () => {
+    it('accepts an absolute asset URL on the API origin', () => {
+      expect(
+        resolveBundleManifestEntryUrl(
+          'https://api.example.com/bundle-registry/builds/x/files/example.jar',
+          'https://api.example.com',
+          ENTRY_PATH,
+        ),
+      ).toBe('https://api.example.com/bundle-registry/builds/x/files/example.jar');
+    });
+
+    it('rejects an HTTPS asset URL on a non-API host', () => {
+      expect(() =>
+        resolveBundleManifestEntryUrl(
+          'https://cdn.example.com/bundle/files/example.jar',
+          'https://api.example.com',
+          ENTRY_PATH,
+        ),
+      ).toThrowError(
+        expect.objectContaining({
+          code: BundleErrorCodes.MANIFEST_INVALID,
+          message: expect.stringContaining('not the API origin'),
+        }),
+      );
+    });
+
+    it('rejects a download URL on a non-API host', () => {
+      expect(() => validateBundleAssetDownloadUrl('https://evil.example.com/x.jar')).toThrowError(
+        expect.objectContaining({
+          code: BundleErrorCodes.DOWNLOAD_FAILED,
+          message: expect.stringContaining('not the API origin'),
+        }),
+      );
+    });
+
+    it('only trusts the API origin (and local/test hosts) for bearer attachment', () => {
+      expect(isTrustedBundleAssetUrl('https://api.example.com/x.jar')).toBe(true);
+      expect(isTrustedBundleAssetUrl('http://localhost:1337/x.jar')).toBe(true);
+      expect(isTrustedBundleAssetUrl('https://cdn.example.com/x.jar')).toBe(false);
+      expect(isTrustedBundleAssetUrl('not-a-url')).toBe(false);
     });
   });
 });
