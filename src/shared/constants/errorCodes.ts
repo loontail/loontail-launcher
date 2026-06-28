@@ -5,5 +5,3 @@ export const ERROR_CODES = {
   IpcHandlerFailed: 'IPC_HANDLER_FAILED',
   SettingsInvalidPayload: 'SETTINGS_INVALID_PAYLOAD',
 } as const;
-
-export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];

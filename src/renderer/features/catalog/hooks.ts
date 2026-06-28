@@ -59,7 +59,6 @@ const useCatalogMutation = <TInput, TResult>(
 // toast would double-surface them.
 export const useCreateBuild = () =>
   useCatalogMutation(api.createBuild, { skipGlobalErrorToast: true });
-export const useUpdateBuild = () => useCatalogMutation(api.updateBuild);
 export const useDeleteBuild = () => useCatalogMutation(api.deleteBuild);
 
 export const useMinecraftVersions = (enabled: boolean) =>

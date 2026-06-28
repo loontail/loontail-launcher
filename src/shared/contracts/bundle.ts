@@ -76,8 +76,6 @@ export const LocalManifestFileSchema = z.object({
   size: z.number().int().nonnegative(),
 });
 
-export type LocalManifestFile = z.infer<typeof LocalManifestFileSchema>;
-
 export const LocalManifestSchema = z.object({
   bundleSlug: BundleSlugSchema,
   // SHA-256 of the raw remote manifest JSON we synced from. Lets the renderer

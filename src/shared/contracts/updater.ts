@@ -6,8 +6,6 @@ export const UpdaterStates = {
   ERROR: 'error',
 } as const satisfies Record<string, string>;
 
-export type UpdaterState = (typeof UpdaterStates)[keyof typeof UpdaterStates];
-
 export type UpdaterStatusEvent =
   | { state: typeof UpdaterStates.CHECKING }
   | { state: typeof UpdaterStates.AVAILABLE; version?: string }

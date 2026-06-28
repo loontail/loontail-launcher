@@ -1,7 +1,5 @@
 import {
   type CatalogItem,
-  catalogKeyFor,
-  isLocal,
   isOfficial,
   localKey,
   officialKey,
@@ -20,11 +18,6 @@ describe('catalog key composition', () => {
 
   it('does not collide official and local builds sharing a name', () => {
     expect(officialKey(asClientSlug('vanilla'))).not.toBe(localKey(asInstanceId(UUID)));
-  });
-
-  it('derives the key from a ref', () => {
-    expect(catalogKeyFor({ source: 'official', slug: asClientSlug('s') })).toBe('official:s');
-    expect(catalogKeyFor({ source: 'local', id: asInstanceId(UUID) })).toBe(`local:${UUID}`);
   });
 });
 
@@ -58,8 +51,6 @@ describe('catalog item guards', () => {
 
   it('narrows by kind', () => {
     expect(isOfficial(official)).toBe(true);
-    expect(isLocal(official)).toBe(false);
-    expect(isLocal(local)).toBe(true);
     expect(isOfficial(local)).toBe(false);
   });
 });

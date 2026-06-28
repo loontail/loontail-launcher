@@ -7,8 +7,6 @@ export const KeywordSchema = z.object({
   title: z.string(),
 });
 
-export type Keyword = z.infer<typeof KeywordSchema>;
-
 // The native catalog wire shape. Relations are always inlined; media URLs are
 // server-relative (the service layer absolutizes them). Versions and bundleSlug
 // may be null when unset.

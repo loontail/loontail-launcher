@@ -50,13 +50,3 @@ export const formatEta = (seconds: number | null): string => {
   if (h > 0) return `${h}:${pad(m)}:${pad(s)}`;
   return `${m}:${pad(s)}`;
 };
-
-// Never-decreasing display percent: a higher reading wins and the result is
-// clamped to 0..100, so the bar can't visibly walk backwards on a replanning
-// or a stage-boundary recompute.
-export const clampMonotonicPercent = (previous: number, next: number): number => {
-  const raised = Math.max(previous, next);
-  if (raised < 0) return 0;
-  if (raised > 100) return 100;
-  return raised;
-};

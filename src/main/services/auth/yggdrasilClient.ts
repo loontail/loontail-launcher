@@ -7,6 +7,12 @@ export type FetchTextures = (uuid: string) => Promise<TexturesLookupResponse>;
 // threaded through the auth and skin services like `kit` — never a module
 // singleton, so tests can swap in a fake per service.
 export type YggdrasilGateway = {
+  // why: this YggdrasilClient is rooted at the bare API origin so its texture
+  // calls resolve to `${apiUrl}/textures/...`. Use it ONLY for the texture
+  // methods (getTextures/uploadSkin/uploadCape/deleteSkin/deleteCape). Its
+  // authenticate/refresh/validate/invalidate/profile/bulkProfiles methods build
+  // `${apiUrl}/authserver|/api/profiles/...` paths that the backend mounts under
+  // `/api/yggdrasil/*` — calling them through this instance would 404.
   readonly texturesClient: YggdrasilClient;
   readonly fetchTextures: FetchTextures;
 };

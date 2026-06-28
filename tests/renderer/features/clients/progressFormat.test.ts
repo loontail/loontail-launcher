@@ -1,5 +1,4 @@
 import {
-  clampMonotonicPercent,
   computeEtaSeconds,
   formatBytes,
   formatEta,
@@ -80,19 +79,5 @@ describe('formatEta', () => {
 
   it('renders nothing when ETA is unknown', () => {
     expect(formatEta(null)).toBe('');
-  });
-});
-
-describe('clampMonotonicPercent', () => {
-  it('never decreases the displayed percent', () => {
-    expect(clampMonotonicPercent(40, 55)).toBe(55);
-    // A lower reading after a higher one keeps the higher value.
-    expect(clampMonotonicPercent(55, 30)).toBe(55);
-  });
-
-  it('clamps into the 0..100 range', () => {
-    expect(clampMonotonicPercent(0, -5)).toBe(0);
-    expect(clampMonotonicPercent(0, 120)).toBe(100);
-    expect(clampMonotonicPercent(90, 999)).toBe(100);
   });
 });

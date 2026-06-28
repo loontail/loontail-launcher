@@ -70,8 +70,6 @@ export const MojangProfileSchema = z.object({
   skins: z.array(MojangProfileSkinSchema),
 });
 
-export type MojangProfile = z.infer<typeof MojangProfileSchema>;
-
 // `selectedProfile.id` from the Yggdrasil server is the 32-char undashed hex
 // UUID (per the Mojang/Yggdrasil spec). The launcher dashes it before handing
 // it to the kit's launch composer.
@@ -79,7 +77,6 @@ export const YggdrasilProfileSchema = z.object({
   uuid: z.string().refine(isUuidUndashed, 'profile id must be 32-char undashed hex'),
   name: NonEmptyStringSchema,
 });
-export type YggdrasilProfile = z.infer<typeof YggdrasilProfileSchema>;
 
 // Stored session shapes - discriminated by `provider`.
 //

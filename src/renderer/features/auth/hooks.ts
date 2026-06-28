@@ -4,18 +4,10 @@ import {
   type LoginErrorCode,
   type LoginPayload,
   type LoginResult,
-  type RegisterPayload,
 } from '@shared/contracts';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
-import {
-  cancelMojangLogin,
-  fetchCurrentUser,
-  login,
-  logout,
-  register,
-  signInWithMojang,
-} from './api';
+import { cancelMojangLogin, fetchCurrentUser, login, logout, signInWithMojang } from './api';
 
 const CURRENT_USER_STALE_TIME_MS = 5 * 60_000;
 
@@ -30,14 +22,6 @@ export const loginErrorCodeFromRejection = (error: unknown): LoginErrorCode => {
 const loginWithRejectionResult = async (payload: LoginPayload): Promise<LoginResult> => {
   try {
     return await login(payload);
-  } catch (error) {
-    return { ok: false, error: loginErrorCodeFromRejection(error) };
-  }
-};
-
-const registerWithRejectionResult = async (payload: RegisterPayload): Promise<LoginResult> => {
-  try {
-    return await register(payload);
   } catch (error) {
     return { ok: false, error: loginErrorCodeFromRejection(error) };
   }
@@ -62,33 +46,6 @@ export const useLogin = () => {
   const [errorCode, setErrorCode] = useState<LoginErrorCode | null>(null);
   const mutation = useMutation({
     mutationFn: loginWithRejectionResult,
-    onMutate: () => {
-      setErrorCode(null);
-    },
-    onSuccess: (result) => {
-      if (result.ok) {
-        queryClient.setQueryData(QUERY_KEYS.auth.me, result.user);
-      } else {
-        setErrorCode(result.error);
-      }
-    },
-  });
-  return {
-    submit: mutation.mutateAsync,
-    isPending: mutation.isPending,
-    errorCode,
-    clearError: () => setErrorCode(null),
-  };
-};
-
-// Sign-up against the unified auth API. On success the backend returns the same
-// authenticated shape as login, so the new account is seeded straight into the
-// `auth.me` cache — the user is signed in immediately.
-export const useRegister = () => {
-  const queryClient = useQueryClient();
-  const [errorCode, setErrorCode] = useState<LoginErrorCode | null>(null);
-  const mutation = useMutation({
-    mutationFn: registerWithRejectionResult,
     onMutate: () => {
       setErrorCode(null);
     },

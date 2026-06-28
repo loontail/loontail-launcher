@@ -14,10 +14,10 @@ import { scopedLogger } from '@main/infra/logger';
 
 const logger = scopedLogger('auth.verify');
 
-// After the skins-registry → yggdrasil-plugin merge both URLs come from
-// GET /api/yggdrasil/textures/:uuid (now session-gated like every other API
-// read). `email` comes from the login/refresh response, so a bare session keeps
-// it null until the next successful authentication.
+// Skin and cape URLs come from the native textures endpoint
+// (GET /textures/:uuid on the API origin, via `fetchTextures`), session-gated
+// like every other API read. `email` comes from the login/refresh response, so
+// a bare session keeps it null until the next successful authentication.
 export const enrichYggdrasilAccount = async (
   session: YggdrasilSession,
   fallback: Account,

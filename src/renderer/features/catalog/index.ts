@@ -6,6 +6,5 @@ export {
   useDeleteBuild,
   useLoaderVersions,
   useMinecraftVersions,
-  useUpdateBuild,
   type UseCatalogResult,
 } from './hooks';

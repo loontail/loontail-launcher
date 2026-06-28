@@ -162,25 +162,3 @@ export const clearTargetInstallManifest = async (clientFolder: string): Promise<
     }
   }
 };
-
-export const targetInstallManifestMatches = (
-  manifest: TargetInstallManifest,
-  target: Target,
-  kitVersion: string = MINECRAFT_KIT_VERSION,
-): boolean =>
-  manifest.targetId === target.id &&
-  manifest.minecraftVersion === target.minecraft.version &&
-  manifest.loader.type === target.loader.type &&
-  manifest.loader.version === loaderVersionFor(target) &&
-  manifest.runtime.component === target.runtime.component &&
-  manifest.runtime.platformKey === target.runtime.platformKey &&
-  manifest.runtime.versionName === target.runtime.versionName &&
-  manifest.kitVersion === kitVersion;
-
-export const hasCurrentTargetInstallManifest = async (
-  clientFolder: string,
-  target: Target,
-): Promise<boolean> => {
-  const manifest = await loadTargetInstallManifest(clientFolder);
-  return manifest !== null && targetInstallManifestMatches(manifest, target);
-};

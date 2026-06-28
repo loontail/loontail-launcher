@@ -29,8 +29,6 @@ export const StorageSettingsSchema = z.object({
   clientsFolder: z.string(),
 });
 
-export type StorageSettings = z.infer<typeof StorageSettingsSchema>;
-
 export const LaunchSettingsSchema = z.object({
   console: z.boolean(),
   fullscreen: z.boolean(),

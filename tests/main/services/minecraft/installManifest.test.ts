@@ -16,12 +16,10 @@ import { createForgeProcessorCache } from '@main/services/minecraft/forgeProcess
 import { runInstall } from '@main/services/minecraft/install';
 import {
   createTargetInstallManifest,
-  hasCurrentTargetInstallManifest,
   loadTargetInstallManifest,
   persistTargetInstallManifest,
   saveCurrentTargetInstallManifest,
   saveTargetInstallManifest,
-  targetInstallManifestMatches,
   targetInstallManifestPath,
 } from '@main/services/minecraft/installManifest';
 import { type InstallOp, type Op, OpKinds, type RepairOp } from '@main/services/minecraft/ops';
@@ -201,7 +199,6 @@ describe('target install manifest', () => {
       kitVersion: expect.any(String),
       verifiedAt: expect.any(String),
     });
-    await expect(hasCurrentTargetInstallManifest(directory, currentTarget)).resolves.toBe(true);
     await expect(fs.access(targetInstallManifestPath(directory))).resolves.toBeUndefined();
   });
 
@@ -221,7 +218,9 @@ describe('target install manifest', () => {
   it('persistTargetInstallManifest writes the sidecar and swallows write failures', async () => {
     const currentTarget = target(directory);
     await persistTargetInstallManifest(SLUG, directory, currentTarget, 'install');
-    await expect(hasCurrentTargetInstallManifest(directory, currentTarget)).resolves.toBe(true);
+    await expect(loadTargetInstallManifest(directory)).resolves.toMatchObject({
+      targetId: KIT_TARGET_ID,
+    });
 
     // A clientFolder occupied by a regular file makes the sidecar write fail;
     // the helper must warn and resolve rather than re-throw.
@@ -230,29 +229,6 @@ describe('target install manifest', () => {
     await expect(
       persistTargetInstallManifest(SLUG, blocked, currentTarget, 'install'),
     ).resolves.toBeUndefined();
-  });
-
-  it('does not match stale target identity fields', () => {
-    const currentTarget = target(directory);
-    const manifest = createTargetInstallManifest(currentTarget, new Date(0));
-    const changedRuntime = target(directory, {
-      runtime: {
-        ...currentTarget.runtime,
-        component: 'java-runtime-delta',
-      },
-    });
-
-    expect(targetInstallManifestMatches(manifest, currentTarget)).toBe(true);
-    expect(targetInstallManifestMatches(manifest, changedRuntime)).toBe(false);
-  });
-
-  it('matches on an injected kit version without reading the installed kit', () => {
-    const currentTarget = target(directory);
-    const manifest = createTargetInstallManifest(currentTarget, new Date(0), '9.9.9');
-
-    expect(manifest.kitVersion).toBe('9.9.9');
-    expect(targetInstallManifestMatches(manifest, currentTarget, '9.9.9')).toBe(true);
-    expect(targetInstallManifestMatches(manifest, currentTarget, '0.0.1')).toBe(false);
   });
 
   it('writes the manifest after successful install and repair operations', async () => {
@@ -271,9 +247,9 @@ describe('target install manifest', () => {
 
     await runInstall(env(kit, installOps), SLUG, currentContext, installOperation);
 
-    await expect(hasCurrentTargetInstallManifest(directory, currentContext.target)).resolves.toBe(
-      true,
-    );
+    await expect(loadTargetInstallManifest(directory)).resolves.toMatchObject({
+      targetId: KIT_TARGET_ID,
+    });
 
     await fs.unlink(targetInstallManifestPath(directory));
 
@@ -282,9 +258,9 @@ describe('target install manifest', () => {
 
     await runRepair(env(kit, repairOps), SLUG, currentContext, repairOperation);
 
-    await expect(hasCurrentTargetInstallManifest(directory, currentContext.target)).resolves.toBe(
-      true,
-    );
+    await expect(loadTargetInstallManifest(directory)).resolves.toMatchObject({
+      targetId: KIT_TARGET_ID,
+    });
   });
 
   it('removes the cancelled install client folder', async () => {

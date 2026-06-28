@@ -16,7 +16,6 @@ const orchestrationMocks = vi.hoisted(() => {
   return {
     buildContext: vi.fn(),
     getSettings: vi.fn(),
-    hasCurrentTargetInstallManifest: vi.fn(),
     isAnythingInstalled: vi.fn(),
     resolveClientInstallPresence: vi.fn(),
     runInstall: vi.fn(),
@@ -36,10 +35,6 @@ vi.mock('@main/services/minecraft/context', () => ({
 
 vi.mock('@main/services/minecraft/runtimeState', () => ({
   isAnythingInstalled: orchestrationMocks.isAnythingInstalled,
-}));
-
-vi.mock('@main/services/minecraft/installManifest', () => ({
-  hasCurrentTargetInstallManifest: orchestrationMocks.hasCurrentTargetInstallManifest,
 }));
 
 vi.mock('@main/services/minecraft/readinessPolicy', () => ({

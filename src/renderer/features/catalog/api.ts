@@ -5,7 +5,6 @@ import type {
   ListLoaderVersionsArgs,
   LoaderVersionOption,
   MinecraftVersionOption,
-  UpdateInstancePayload,
 } from '@shared/contracts/instance';
 import { IPC_CHANNELS } from '@shared/ipc';
 
@@ -14,9 +13,6 @@ export const getCatalog = (locale?: string): Promise<CatalogListResult> =>
 
 export const createBuild = (payload: CreateInstancePayload): Promise<CatalogItem> =>
   window.api.invoke(IPC_CHANNELS.buildsCreate, payload);
-
-export const updateBuild = (payload: UpdateInstancePayload): Promise<CatalogItem> =>
-  window.api.invoke(IPC_CHANNELS.buildsUpdate, payload);
 
 export const deleteBuild = (id: InstanceId): Promise<void> =>
   window.api.invoke(IPC_CHANNELS.buildsDelete, id);

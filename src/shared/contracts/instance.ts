@@ -20,8 +20,6 @@ export const InstanceBundleRefSchema = z.discriminatedUnion('source', [
   }),
 ]);
 
-export type InstanceBundleRef = z.infer<typeof InstanceBundleRefSchema>;
-
 export const InstancePresentationSchema = z.object({
   description: z.string().default(''),
   // Relative path (under the instance dir) to a user-supplied icon, served via
@@ -33,8 +31,6 @@ export const InstancePresentationSchema = z.object({
   screenshots: z.array(z.string()).default([]),
 });
 
-export type InstancePresentation = z.infer<typeof InstancePresentationSchema>;
-
 export const InstanceLoaderSchema = z.object({
   type: LoaderChoiceSchema,
   // Concrete loader build pinned at create time. Null for vanilla (and allowed
@@ -42,16 +38,12 @@ export const InstanceLoaderSchema = z.object({
   version: z.string().min(1).nullable(),
 });
 
-export type InstanceLoader = z.infer<typeof InstanceLoaderSchema>;
-
 // Optional pointer to the official build this instance was cloned from. Null
 // for builds authored from scratch. Reserved for a future "Save as Local" flow.
 export const InstanceOriginSchema = z.object({
   source: z.literal('official'),
   slug: ClientSlugSchema,
 });
-
-export type InstanceOrigin = z.infer<typeof InstanceOriginSchema>;
 
 export const InstanceManifestSchema = z.object({
   schema: z.literal(INSTANCE_MANIFEST_SCHEMA_VERSION),

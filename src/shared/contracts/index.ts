@@ -17,22 +17,17 @@ export type {
 export {
   BundleSlugSchema,
   CatalogKeySchema,
-  ClientIdSchema,
   ClientSlugSchema,
   InstanceIdSchema,
-  UserIdSchema,
   asBundleSlug,
   asCatalogKey,
   asClientId,
   asClientSlug,
   asInstanceId,
-  asUserId,
 } from './ids';
-export type { BundleSlug, CatalogKey, ClientId, ClientSlug, InstanceId, UserId } from './ids';
+export type { BundleSlug, CatalogKey, ClientId, ClientSlug, InstanceId } from './ids';
 export {
-  catalogKeyFor,
   catalogKeyToRefValue,
-  isLocal,
   isOfficial,
   localKey,
   officialKey,
@@ -68,11 +63,7 @@ export {
 } from './instance';
 export type {
   CreateInstancePayload,
-  InstanceBundleRef,
-  InstanceLoader,
   InstanceManifest,
-  InstanceOrigin,
-  InstancePresentation,
   InstanceRegistry,
   InstanceRegistryEntry,
   ListLoaderVersionsArgs,
@@ -93,11 +84,9 @@ export type {
   LoginPayload,
   LoginResult,
   MojangAssetState,
-  MojangProfile,
   MojangSession,
   RegisterPayload,
   SkinVariant,
-  YggdrasilProfile,
   YggdrasilSession,
 } from './auth';
 export {
@@ -119,18 +108,17 @@ export type {
   PatchLauncherSettings,
   ResolvedClientSettings,
   SetClientOverridePayload,
-  StorageSettings,
 } from './settings';
 export { NotificationPayloadSchema, NotificationVariants } from './notification';
 export type { NotificationPayload, NotificationVariant } from './notification';
 export { DiskInfoSchema, FolderSizeSchema, PickedFolderSchema } from './system';
 export type { DiskInfo, FolderSize, PickedFolder } from './system';
 export { UpdaterStates } from './updater';
-export type { UpdaterState, UpdaterStatusEvent } from './updater';
+export type { UpdaterStatusEvent } from './updater';
 export { SKIN_KINDS, SkinKindSchema, UploadSkinPayloadSchema } from './skin';
 export type { SkinKind, UploadSkinPayload, UploadSkinResult } from './skin';
 export { ClientListResponseSchema, ClientResponseSchema, KeywordSchema } from './client';
-export type { Client, ClientResponse, Keyword } from './client';
+export type { Client, ClientResponse } from './client';
 export {
   BUSY_BUNDLE_STATUSES,
   BundleErrorCodes,
@@ -153,7 +141,6 @@ export type {
   BundleStatusEvent,
   BundleSyncStatus,
   LocalManifest,
-  LocalManifestFile,
   RemoteManifest,
   RemoteManifestEntry,
 } from './bundle';

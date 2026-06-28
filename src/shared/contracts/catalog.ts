@@ -21,9 +21,6 @@ export type CatalogRef =
 export const officialKey = (slug: ClientSlug): CatalogKey => `official:${slug}` as CatalogKey;
 export const localKey = (id: InstanceId): CatalogKey => `local:${id}` as CatalogKey;
 
-export const catalogKeyFor = (ref: CatalogRef): CatalogKey =>
-  ref.source === SourceKinds.OFFICIAL ? officialKey(ref.slug) : localKey(ref.id);
-
 // The bare, source-native ref value for a resolved ref (slug or uuid).
 export const refValue = (ref: CatalogRef): string =>
   ref.source === SourceKinds.OFFICIAL ? ref.slug : ref.id;
@@ -115,8 +112,6 @@ export type CatalogItem = OfficialCatalogItem | LocalCatalogItem;
 
 export const isOfficial = (item: CatalogItem): item is OfficialCatalogItem =>
   item.kind === SourceKinds.OFFICIAL;
-export const isLocal = (item: CatalogItem): item is LocalCatalogItem =>
-  item.kind === SourceKinds.LOCAL;
 
 export type SourceStatus = { readonly id: SourceKind; readonly ok: boolean };
 

@@ -5,7 +5,6 @@ const statusMocks = vi.hoisted(() => {
   return {
     buildContext: vi.fn(),
     getSettings: vi.fn(),
-    hasCurrentTargetInstallManifest: vi.fn(),
     isAnythingInstalled: vi.fn(),
     resolveClientInstallPresence: vi.fn(),
     setClientOverride: vi.fn(),
@@ -22,10 +21,6 @@ vi.mock('@main/services/minecraft/context', () => ({
 
 vi.mock('@main/services/minecraft/runtimeState', () => ({
   isAnythingInstalled: statusMocks.isAnythingInstalled,
-}));
-
-vi.mock('@main/services/minecraft/installManifest', () => ({
-  hasCurrentTargetInstallManifest: statusMocks.hasCurrentTargetInstallManifest,
 }));
 
 vi.mock('@main/services/minecraft/readinessPolicy', () => ({
@@ -73,13 +68,11 @@ const makeManager = (ops?: OpRegistry): MinecraftManager =>
 const resetStatusMocks = (): void => {
   statusMocks.buildContext.mockReset();
   statusMocks.getSettings.mockReset();
-  statusMocks.hasCurrentTargetInstallManifest.mockReset();
   statusMocks.isAnythingInstalled.mockReset();
   statusMocks.resolveClientInstallPresence.mockReset();
   statusMocks.setClientOverride.mockReset();
 
   statusMocks.getSettings.mockReturnValue(launcherSettings());
-  statusMocks.hasCurrentTargetInstallManifest.mockResolvedValue(true);
   statusMocks.isAnythingInstalled.mockResolvedValue(false);
   statusMocks.resolveClientInstallPresence.mockResolvedValue(InstallStatuses.INSTALLED);
 };

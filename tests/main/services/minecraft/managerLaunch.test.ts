@@ -18,7 +18,6 @@ const orchestrationMocks = vi.hoisted(() => {
   return {
     buildContext: vi.fn(),
     getSettings: vi.fn(),
-    hasCurrentTargetInstallManifest: vi.fn(),
     isAnythingInstalled: vi.fn(),
     resolveClientInstallPresence: vi.fn(),
     runInstall: vi.fn(),
@@ -38,10 +37,6 @@ vi.mock('@main/services/minecraft/context', () => ({
 
 vi.mock('@main/services/minecraft/runtimeState', () => ({
   isAnythingInstalled: orchestrationMocks.isAnythingInstalled,
-}));
-
-vi.mock('@main/services/minecraft/installManifest', () => ({
-  hasCurrentTargetInstallManifest: orchestrationMocks.hasCurrentTargetInstallManifest,
 }));
 
 vi.mock('@main/services/minecraft/readinessPolicy', () => ({
@@ -124,7 +119,6 @@ const makeManager = (
 const resetMocks = (): void => {
   orchestrationMocks.buildContext.mockReset();
   orchestrationMocks.getSettings.mockReset();
-  orchestrationMocks.hasCurrentTargetInstallManifest.mockReset();
   orchestrationMocks.isAnythingInstalled.mockReset();
   orchestrationMocks.resolveClientInstallPresence.mockReset();
   orchestrationMocks.runInstall.mockReset();
@@ -134,7 +128,6 @@ const resetMocks = (): void => {
 
   orchestrationMocks.buildContext.mockResolvedValue(context());
   orchestrationMocks.getSettings.mockReturnValue(launcherSettings());
-  orchestrationMocks.hasCurrentTargetInstallManifest.mockResolvedValue(true);
   orchestrationMocks.isAnythingInstalled.mockResolvedValue(false);
   orchestrationMocks.resolveClientInstallPresence.mockResolvedValue(InstallStatuses.INSTALLED);
   orchestrationMocks.runInstall.mockResolvedValue(undefined);
