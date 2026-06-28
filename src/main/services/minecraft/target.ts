@@ -16,7 +16,14 @@ export const buildSpecToTargetInput = (input: {
 }): TargetResolveInput => {
   const { targetId, spec, clientFolder, runtimeRoot, loader } = input;
   // A pinned runtime component wins; falsy → kit picks from javaVersion.component.
-  const runtimeComponent = spec.runtimeVersion?.trim() || undefined;
+  // why: a bare integer (legacy Java major like "25"/"21", pre-Mojang-component
+  // migration) is not a valid runtime component — passing it crashes the install
+  // ("Runtime component 25 not available"). Treat it as unset so the kit falls
+  // back to the Minecraft manifest's javaVersion.component. Real component names
+  // (e.g. "java-runtime-delta") still pass through.
+  const trimmedRuntime = spec.runtimeVersion?.trim() ?? '';
+  const runtimeComponent =
+    trimmedRuntime === '' || /^\d+$/.test(trimmedRuntime) ? undefined : trimmedRuntime;
   return {
     id: targetId,
     directory: clientFolder,
