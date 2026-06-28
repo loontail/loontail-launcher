@@ -100,7 +100,7 @@ OBSOLETE: ~1 (CC-44 core concern)
 
 ### CC-47 — AuthMode JSDoc → inline comments
 - File: `src/main/infra/http.ts:8-22`.
-- 14-line `/** Authorization mode … */` over a 2-member union. Valuable invariant ("Yggdrasil access token is NOT a valid bearer for the Strapi content API") must survive.
+- 14-line `/** Authorization mode … */` over a 2-member union. Valuable invariant ("Yggdrasil access token is NOT a valid bearer for the API content endpoints") must survive.
 - Fix: delete the docblock; add a short `//` above the `'none'` semantics keeping that invariant.
 - Risk: trivial. Effort: trivial. Packages: none. New test: no.
 

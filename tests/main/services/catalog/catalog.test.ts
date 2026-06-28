@@ -52,7 +52,7 @@ describe('createCatalog.list', () => {
     ]);
   });
 
-  it('never blanks local builds when the official source rejects (CMS down)', async () => {
+  it('never blanks local builds when the official source rejects (official source down)', async () => {
     const local = source('local', {
       listItems: async () => [localItem('a', '2026-01-01T00:00:00.000Z')],
     });
@@ -97,7 +97,7 @@ describe('createCatalog.resolveBuildByKey', () => {
     });
     const official = source('official', {
       getItem: async () => {
-        throw new Error('CMS down');
+        throw new Error('official source down');
       },
     });
     const item = await createCatalog([local, official]).resolveBuildByKey('local:uuid' as never);

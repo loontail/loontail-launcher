@@ -56,7 +56,7 @@ renderer-shared, tests-build). All anchors are `file:line` as observed at synthe
 │   │ console(hub adapter)  updater(Squirrel)     │ │ skin (upload/clear, cache prewarm) │ │
 │   └─────────────────────────────────────────────┘ └────────────────────────────────────┘ │
 │   ┌─ catalog ───────────────────────────────────┐ ┌─ operations ───────────────────────┐ │
-│   │ clients(Strapi fetch + offline snapshot)    │ │ minecraft (install/repair/launch/  │ │
+│   │ clients(API fetch + offline snapshot)       │ │ minecraft (install/repair/launch/  │ │
 │   │ catalog (local+official aggregator)         │ │   uninstall; per-slug op machine)  │ │
 │   │ instances (local builds, instance.json)     │ │ bundle (modpack overlay sync:     │ │
 │   │ history (lastPlayed read facade)            │ │   plan → download → delete → heal) │ │
@@ -67,7 +67,7 @@ renderer-shared, tests-build). All anchors are `file:line` as observed at synthe
 │   minecraft internals directly and repairWorkflow imports bundle/manifestRepo (cycle)    │
 │                                                                                          │
 │  infra/  store (better-sqlite3 launcher.db: settings/auth/instances/lastPlayed,          │
-│          safeStorage-encrypted auth secret)   http (Strapi-bound fetch + zod)            │
+│          safeStorage-encrypted auth secret)   http (API-bound fetch + zod)               │
 │          cache (disk snapshots + LRU)   consoleHub + log4jStream + consoleBuffer         │
 │          system  logger  notifier  session(CSP)  atomicFile  throttledEmitter  clipboard │
 │                                                                                          │
@@ -77,7 +77,7 @@ renderer-shared, tests-build). All anchors are `file:line` as observed at synthe
 │  config.ts — build-time-inlined env (API_URL/API_TOKEN/…); kit.ts — ONE MinecraftKit     │
 └────────┬───────────────────┬─────────────────────┬───────────────────┬──────────────────┘
          │                   │                     │                   │
- @loontail/minecraft-kit   Strapi CMS        update.electronjs.org   Minecraft servers
+ @loontail/minecraft-kit   Loontail API      update.electronjs.org   Minecraft servers
  (targets/install/repair/  (clients, bundle- (Squirrel feed over     (raw TCP Server List
   launch/versions/MS auth) registry manifest, GitHub Releases)        Ping, SRV lookup)
  @loontail/yggdrasil-*     Yggdrasil plugin,
@@ -146,8 +146,8 @@ Key boundary facts:
    CLIENT_FOLDER + RUNTIME_COMPONENT (`manager.ts:348`). **Gap:** no op is registered until
    after `buildContext` resolves (concern A1).
 5. `buildContext` (`context.ts:45`): `resolveBuildByOpaqueId` — local source first
-   (network-free, `catalog.ts:89-93` → `localSource.ts:88-94`), official Strapi slug
-   fallback (`strapiSource.ts:21-27` → `clients.ts:16-29` cachedFetch offline snapshot);
+   (network-free, `catalog.ts:89-93` → `localSource.ts:88-94`), official slug
+   fallback (`officialSource.ts:21-27` → `clients.ts:16-29` cachedFetch offline snapshot);
    settings + NO_CLIENT_FOLDER gate (`context.ts:71`); loader resolution with
    stale-override cleanup (`context.ts:78-94`); `kit.targets.resolve` (`context.ts:96`)
    via `buildSpecToTargetInput` (`target.ts`).
@@ -242,7 +242,7 @@ and concurrency-capped by `statusSeeder` (`shared/lib/statusSeeder.ts:15-61`,
    `clientOperationLocks`, OP_IN_FLIGHT if held — `manager.ts:238,420-431`); ActiveSync
    registered (`manager.ts:244-246`, `syncState.ts:35-76`).
 4. FETCHING_MANIFEST → `fetchRemoteManifest` (`api.ts:41-96`): authenticated `httpRequest`
-   to the Strapi bundle-registry route (`shared/constants/apiRoutes.ts`), zod
+   to the bundle-registry route (`shared/constants/apiRoutes.ts`), zod
    `RemoteManifestSchema`, URL absolutization against `mainConfig.apiUrl`, sha256 of the
    raw JSON as the drift signal; stored on the ActiveSync (`manager.ts:263-264`).
 5. PLANNING → `loadLocalManifest` (`.loontail/bundle.json`, `manifestRepo.ts:10-25`) →
@@ -340,7 +340,7 @@ Cycles / inversions to resolve in refactor waves:
    `bundle/healer.ts:4-5` imports `minecraft/bundleHealing` + `minecraft/context`; the
    launch direction is correctly inverted via the injected hook (`index.ts:147-148`).
 2. **infra → config** — `infra/http.ts:1` and `infra/session.ts:1` bind generic infra to
-   the Strapi backend.
+   the API backend.
 3. **skin → auth** (YggdrasilGateway lives under `services/auth/` but is shared infra) and
    **skin → media** (module-function import).
 4. **everything → settings/settings.ts** as a module singleton, unlike the otherwise
@@ -359,7 +359,7 @@ context raises impact.
 | ID | Sev | Concern | Anchors |
 |---|---|---|---|
 | L1 | **high** | Bidirectional minecraft ⇄ bundle coupling with asymmetric mechanisms: bundle healer imports minecraft internals directly while the launch direction uses root-injected hooks; "which paths does the bundle own" is split across both directions with no neutral owner; `bundleHealing.ts` lives in minecraft/ but exists solely for bundle. Flagged independently by both readers (each medium ⇒ raised). Clearest seam to extract: a bundle-ownership/heal port injected like the launch hook. | `repairWorkflow.ts:9,38-44`; `bundle/healer.ts:4-5`; `minecraft/bundleHealing.ts:68-105`; `manager.ts:97`; `index.ts:147-148` |
-| L2 | medium | `infra/http.ts` is Strapi-specific app code in infra: hard-binds `mainConfig.apiUrl + API_PATH_PREFIX` and the static API token; first param named `url` is actually an API path; `httpGetBinary` already bypasses it. `session.ts` computes `new URL(mainConfig.apiUrl).origin` at import time (throws on import for malformed config). | `infra/http.ts:1,41-57,145-157`; `infra/session.ts:4` |
+| L2 | medium | `infra/http.ts` is API-specific app code in infra: hard-binds `mainConfig.apiUrl + API_PATH_PREFIX` and the static API token; first param named `url` is actually an API path; `httpGetBinary` already bypasses it. `session.ts` computes `new URL(mainConfig.apiUrl).origin` at import time (throws on import for malformed config). | `infra/http.ts:1,41-57,145-157`; `infra/session.ts:4` |
 | L3 | medium | Inconsistent singleton vs DI conventions: `settings/settings.ts` reached by module import from minecraft/bundle/instances/system/bootstrap while everything else is constructor-injected; catalog installs a process-global `setActiveCatalog` at construction, never cleared on dispose; notifier is a module-global window holder while consoleHub is deliberately injected. One convention should win. | `system/routes.ts:12`; `catalog/index.ts:36-43`; `infra/notifier.ts:5`; `index.ts:109-112,184` |
 | L4 | medium | AuthSessionPort "single owner of session reads/writes" invariant is not real — only skin uses it; auth internals and minecraft launch read/write the store directly. Widen and enforce, or drop the claim. | `auth/session.ts:19-26`; `auth/verify.ts:2`; `auth/routes.ts:54`; `minecraft/launch.ts:25,304` |
 | L5 | medium | `systemApi` has no home: setup feature deep-imports `features/settings/systemApi` past the barrel (which exports only `openPath`); the system IPC surface straddles the settings feature. | `setup/components/SetupPage.tsx:9`; `settings/index.ts:24` |
@@ -373,7 +373,7 @@ context raises impact.
 
 | ID | Sev | Concern | Anchors |
 |---|---|---|---|
-| D1 | medium | Duplicate catalog surfaces kept mid-migration: `clients.list` AND `catalog.list` channels, parallel routes and QUERY_KEYS; `OfficialCatalogItem.raw` carries the whole Strapi Client "for legacy paths", doubling every catalog payload. The `clients.list` route has **zero renderer callers** (renderer uses `catalog.list`) — route, contract entry, and possibly the ClientsService shell are deletable. (ipc-contracts + catalog readers.) | `shared/ipc/contract.ts:72-73`; `shared/contracts/catalog.ts:86-88`; `clients/routes.ts:13-18`; `shared/constants/queryKeys.ts:8-13` |
+| D1 | medium | Duplicate catalog surfaces kept mid-migration: `clients.list` AND `catalog.list` channels, parallel routes and QUERY_KEYS; `OfficialCatalogItem.raw` carries the whole API Client "for legacy paths", doubling every catalog payload. The `clients.list` route has **zero renderer callers** (renderer uses `catalog.list`) — route, contract entry, and possibly the ClientsService shell are deletable. (ipc-contracts + catalog readers.) | `shared/ipc/contract.ts:72-73`; `shared/contracts/catalog.ts:86-88`; `clients/routes.ts:13-18`; `shared/constants/queryKeys.ts:8-13` |
 | D2 | medium | Renderer reverse-engineers the kit progress contract in three places: stage-byte reconstruction (mixed-scale bytes), renderer-side rolling speed (no throughput signal from kit install events), and monotonic-percent latching (regressing percents). Normalizing progress once in the main process would delete ~100 lines of compensating view logic. | `installSteps.ts:137-149`; `useByteSpeed.ts:14-61`; `progressFormat.ts` |
 | D3 | medium | Loader-ambiguity rule ("both Forge and Fabric ⇒ ask") encoded three ways: canonical `resolveLoader` in shared/domain, hand-rolled boolean in PlayButton, re-encoded `canSwitchLoader` in ClientLoaderSection. Will drift if NeoForge is added. | `shared/domain/loader.ts`; `PlayButton.tsx:164-171`; `ClientLoaderSection.tsx:82` |
 | D4 | medium | Settings validation triplicated: zod schemas, the 103-line imperative `normalizeLauncherSettings` (its own comment admits it can emit a value failing the schema it feeds), and the override compaction/diff logic. A schema-driven normalizer (zod `.catch()`/`.default()`) collapses the first two. | `shared/contracts/settings.ts:22-67`; `settingsNormalization.ts:10-12,64-103`; `settingsOverrides.ts`; `settingsResolution.ts` |
@@ -419,7 +419,7 @@ context raises impact.
 | A13 | medium | Home carousel selects by array index over a self-reordering list (lastPlayed refetch on focus + invalidation on RUNNING) — the featured hero silently swaps builds; key by CatalogKey. | `HomePage.tsx:37,52`; `useRecentBuilds.ts:17-24` |
 | A14 | low | No operation lock held while the game runs: install/repair/uninstall lock, launch does not; other lock-domain writers cannot see the LAUNCH op. Make the asymmetry explicit. | `manager.ts:259-306` |
 | A15 | low | `statusSeeder.reset()` corrupts concurrency accounting if fetches are in flight (activeCount goes negative) — test-only today, latent trap for logout teardown. | `statusSeeder.ts:40-43,55-59` |
-| A16 | low | Inconsistent bundle freshness: `getInstallState` does a network round-trip per IPC call (no TTL) while resume reuses a manifest cached up to 5 minutes without revalidation; official build resolve refetches the entire clients list per launch and ignores locale. | `bundle/manager.ts:207,284`; `strapiSource.ts:21-27`; `clients.ts:13-14` |
+| A16 | low | Inconsistent bundle freshness: `getInstallState` does a network round-trip per IPC call (no TTL) while resume reuses a manifest cached up to 5 minutes without revalidation; official build resolve refetches the entire clients list per launch and ignores locale. | `bundle/manager.ts:207,284`; `officialSource.ts:21-27`; `clients.ts:13-14` |
 | A17 | low | ENOENT deletes skip `processedFiles` so bundle progress can never reach 100% after pause→resume re-plans. | `runner.ts:195-201`; `manager.ts:315` |
 | A18 | low | ConsoleHub batched flush loses ≤50 ms of lines on hard crash; lines ingested with no window attached and evicted past 10 000 are silently dropped (droppedCount only via getInitial); single timestamp per chunk discards log4j per-event timestamps. | `consoleHub.ts:132-150,260-265`; `consoleBuffer.ts:33-38,65-71`; `log4jStream.ts:24` |
 
@@ -480,7 +480,7 @@ context raises impact.
 | S2 | medium | Release pipeline bumps version and pushes the tag **before** verify runs on the tag: a Windows verify failure leaves a bump + artifact-less tag on main and version gaps; every non-release push to main auto-releases with no intent gating. | `release.yml:89-101,119-125` |
 | S3 | medium | PR CI is Linux-only while the product ships Windows-first; platform-conditional code paths (8.3 short paths, drive-letter branches) are first verified post-merge on the release runner. | `ci.yml:10`; `release.yml:105`; `uninstall.test.ts:50-57` |
 | S4 | medium | Coverage holes: zero tests for the preload bridge, bootstrap, window creation, infra/http, and the app/clients/console/history/media/servers/updater handlers (only registration counts); renderer testing is selectors + two static-markup snapshots; vitest include is `.ts` only so `.tsx` tests are impossible; no coverage instrumentation or thresholds anywhere; the screenshot harness is manual. | `vitest.config.ts:14`; `contractCoverage.test.ts` |
-| S5 | low | `lint:i18n` and `lint:strapi` drift checks exist but are not in `verify` or CI; the i18n checker greps ALL src so any string coincidence marks a key used. | `package.json:29-30,35`; `lintI18n.mjs:93-99` |
+| S5 | low | The `lint:i18n` drift check exists but is not in `verify` or CI; the i18n checker greps ALL src so any string coincidence marks a key used. | `package.json:29-30,35`; `lintI18n.mjs:93-99` |
 | S6 | low | Inconsistent path hardening: `system.openPath` is allowlisted to launcher-owned roots but `getDiskSpace`/`getFolderSize` accept any renderer-supplied absolute path (probe existence/size of arbitrary dirs). | `system/routes.ts:20-46`; `infra/system.ts:177-208` |
 | S7 | low | Cache freshness traps: `cache://` serves immutable-1-year with SHA-1-of-URL keys and no TTL (in-place asset changes frozen until full cache clear); react-query persist buster never changes across releases (old payload shapes rehydrate into new code); media body/mime sidecar written non-atomically and evicted independently (orphan sidecars). | `media/protocol.ts:47`; `mediaCache.ts:78-79`; `queryPersister.ts:27`; `infra/cache.ts:109-128` |
 | S8 | low | Import-time side effects force test workarounds and fragile module evaluation: `@main/config` throws on import for missing env; `session.ts` parses apiUrl at import; PlayButton's import chain touches localStorage at module scope; tests build paths from `process.cwd()`. | `config.ts:7-22`; `session.ts:4`; `playButtonState.test.ts:3-13`; `trustedSender.test.ts:16` |
@@ -510,7 +510,7 @@ renderer — grep-verified zero kit imports in `src/renderer`.
 
 **Offline-first design.** Durable sidecar install manifests make open-time status fully
 offline (no network, no hashing — `readinessPolicy.ts`); `cachedFetch` disk snapshots keep
-the catalog alive without the CMS; per-source health flags degrade the UI instead of
+the catalog alive without the official source; per-source health flags degrade the UI instead of
 blanking it (`catalog.ts:50-53`); bundle `getInstallState` deliberately reports
 `signatureMatches:true` on network failure so connectivity never gates Play.
 
@@ -536,7 +536,7 @@ clients → instances → catalog so the aggregator can compose sources.
 normalization/overrides/resolution, loader resolution, recent selection) and renderer
 decision logic is React-free and unit-tested (`selectPlayButtonAction`,
 `selectInstallProgress`, `buildStatus`, toast `stackLayout`); the kit→launcher error-code
-map is enumerated as a drift detector; Strapi/i18n drift checkers exist (gate them — S5 —
+map is enumerated as a drift detector; legacy-backend/i18n drift checkers exist (gate them — S5 —
 but keep them).
 
 **Operational conventions.** Throttled progress emission (100 ms) is the standard on every

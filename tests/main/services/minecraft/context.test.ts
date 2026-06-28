@@ -29,7 +29,7 @@ import { buildContext } from '@main/services/minecraft/context';
 // key is `official:runtime-client`. The on-disk folder must still be the bare
 // ref `runtime-client` (folder-naming decouple), asserted below.
 const SLUG = asCatalogKey('official:runtime-client');
-const STRAPI_SLUG = asClientSlug('runtime-client');
+const OFFICIAL_SLUG = asClientSlug('runtime-client');
 const STALE_RUNTIME_COMPONENT = 'java-runtime-gamma';
 const TARGET_RUNTIME_COMPONENT = 'java-runtime-delta';
 
@@ -49,7 +49,7 @@ const launcherSettings = (): LauncherSettings =>
 
 const client = (): Client =>
   ({
-    slug: STRAPI_SLUG,
+    slug: OFFICIAL_SLUG,
     minecraftVersion: '1.20.1',
     runtimeVersion: TARGET_RUNTIME_COMPONENT,
   }) as Client;
@@ -58,7 +58,7 @@ const officialItem = (): CatalogItem =>
   ({
     kind: 'official',
     key: SLUG,
-    ref: { source: 'official', slug: STRAPI_SLUG },
+    ref: { source: 'official', slug: OFFICIAL_SLUG },
     spec: {
       minecraftVersion: '1.20.1',
       forgeVersion: null,

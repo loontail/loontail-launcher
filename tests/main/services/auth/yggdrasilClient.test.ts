@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Regression guard for the skin/cape 404: textures must resolve to the API's
-// top-level `/textures`, NOT the stale Strapi-era `/api/yggdrasil/textures`.
+// top-level `/textures`, NOT the stale legacy `/api/yggdrasil/textures`.
 vi.mock('@main/config', () => ({
   mainConfig: {
     apiUrl: 'https://api.test.invalid',

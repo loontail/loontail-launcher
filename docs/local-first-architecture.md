@@ -1,22 +1,22 @@
 # Local-first build architecture
 
 > Status: in progress. This document is the source of truth for the migration of
-> Loontail Launcher from a remote-CMS-build-centric launcher into a **local-first
-> Minecraft instance manager** that still surfaces official, Strapi-curated builds
+> Loontail Launcher from a remote-API-build-centric launcher into a **local-first
+> Minecraft instance manager** that still surfaces official, API-curated builds
 > as one source in a unified catalog.
 
 ## Goal
 
 Today the launcher only knows one kind of build: an **official** build defined in
-Strapi and fetched over HTTP. Every install/launch/repair operation re-fetches the
-Strapi client list and resolves the build from it (`getClient(slug)` inside
-`buildContext`). That makes the CMS the de-facto source of truth for the whole app.
+the API and fetched over HTTP. Every install/launch/repair operation re-fetches the
+API client list and resolves the build from it (`getClient(slug)` inside
+`buildContext`). That makes the API the de-facto source of truth for the whole app.
 
 The new model has **two first-class build kinds** behind one catalog:
 
 1. **Local user builds** — created by the user inside the launcher, isolated on
-   disk, described by a local manifest, fully functional with the CMS unreachable.
-2. **Official Loontail builds** — still authored in Strapi/CMS, now exposed as one
+   disk, described by a local manifest, fully functional with the backend unreachable.
+2. **Official Loontail builds** — still authored in the API, now exposed as one
    *source* feeding a unified catalog rather than the launcher's foundation.
 
 Both are projected into a single `CatalogItem` discriminated union that the UI and
@@ -36,7 +36,7 @@ The migration therefore:
 
 - generalizes the identity from `ClientSlug` to a source-namespaced **`CatalogKey`**
   (`official:<slug>` | `local:<instanceId>`) for settings/ops/status routing;
-- generalizes the single Strapi build source into a **catalog aggregator** over
+- generalizes the single official build source into a **catalog aggregator** over
   multiple `CatalogSource`s;
 - adds a **local instance source** (registry + per-instance manifest) as the new
   primary source;
@@ -63,7 +63,7 @@ CatalogRef = {source:'official'; slug} | {source:'local'; id}
 InstanceId = Brand<string,'InstanceId'>   (UUID, == local folder name)
 ```
 
-`Client` (Strapi wire-normalized) and the kit `Target` are unchanged. `BuildSpec`
+`Client` (API wire-normalized) and the kit `Target` are unchanged. `BuildSpec`
 is the structural shape both build kinds expose to the kit bridge.
 
 ## Storage model
@@ -96,13 +96,13 @@ is the structural shape both build kinds expose to the kit bridge.
 | Missing `.loontail/manifest.json` | readiness policy reports NOT_INSTALLED/UNVERIFIED (unchanged) |
 | Corrupt registry index | safeParse fails → rebuild by scanning instance manifests, log warn |
 | Manually deleted folder | listing skips it; registry entry pruned on next sweep |
-| CMS unreachable | official source returns `[]` + `degraded`; local builds always list |
+| Backend unreachable | official source returns `[]` + `degraded`; local builds always list |
 
 ## Catalog service (`src/main/services/catalog`)
 
 ```
 CatalogSource { id; listItems(opts?); getItem(ref) }
-  StrapiCatalogSource  -> wraps existing getClients/getClient, maps Client -> CatalogItem('official')
+  OfficialCatalogSource  -> wraps existing getClients/getClient, maps Client -> CatalogItem('official')
   LocalCatalogSource   -> reads registry + instance manifests, maps -> CatalogItem('local')  [PRIMARY]
 
 CatalogService
@@ -110,8 +110,8 @@ CatalogService
   resolve(ref)   -> dispatch to the named source's getItem (local never touches network)
 ```
 
-`buildContext` calls `catalog.resolve(ref)` instead of `getClient(slug)`. The Strapi
-source's rejection is always swallowed by the aggregator so a CMS outage never blanks
+`buildContext` calls `catalog.resolve(ref)` instead of `getClient(slug)`. The official
+source's rejection is always swallowed by the aggregator so a backend outage never blanks
 local builds.
 
 ## Identity strategy (opaque id, not a full re-key)
@@ -127,10 +127,10 @@ bundle launch hook interpret it semantically. A full re-key of all ~250
   (`settings.clients[id]`, the op map, locks) with no migration.
 - `buildContext` resolves the opaque id via `catalog.resolveBuildByOpaqueId(id)`,
   which tries the **local source first** (network-free) and falls through to the
-  official (Strapi) source — so a local build resolves with the CMS unreachable.
+  official source — so a local build resolves with the backend unreachable.
 - The launch/install/repair bundle hook is skipped when
   `ctx.item.kind === 'local'` (local builds carry no managed overlay; loose mods
-  in `mods/` load natively), which keeps the bundle service Strapi-only and
+  in `mods/` load natively), which keeps the bundle service official-only and
   unchanged.
 
 `CatalogKey` (`official:<slug>` | `local:<uuid>`) is retained for the
@@ -142,7 +142,7 @@ builds; the `official/` `local/` subdir split was dropped as unnecessary.
 
 ## Kit integration
 
-No kit changes. The only Strapi-aware bridge, `clientToTargetInput` (`minecraft/target.ts`),
+No kit changes. The only official-build-aware bridge, `clientToTargetInput` (`minecraft/target.ts`),
 generalizes to `buildSpecToTargetInput({ targetId, spec, clientFolder, runtimeRoot, loader })`.
 Create-flow version pickers use the already-exported read-only APIs
 (`kit.versions.minecraft/fabric/forge/runtime`).
@@ -165,7 +165,7 @@ HOME is a **tile-grid catalog** (`BuildsHomePage`), not an expanded layout:
 
 - Two sections — **My Builds** (local, with a `CreateBuildTile` first) and
   **Official** — each a responsive `BuildGrid`
-  (`grid-cols-[repeat(auto-fill,minmax(200px,1fr))]`). A degraded-CMS banner shows in
+  (`grid-cols-[repeat(auto-fill,minmax(200px,1fr))]`). A degraded-source banner shows in
   the Official section only; local builds always render. Skeleton / empty states handled.
 - `BuildTile` is **icon-centric** (no banner/background art on tiles): the build's
   `poster` is shown as a **centered, uncropped icon** (`BuildIcon`: `object-contain`
@@ -211,7 +211,7 @@ Each phase keeps `npm run verify` (lint + typecheck + test + build) green and ne
 breaks official builds.
 
 0. **Domain groundwork** — `DONE`. Additive contracts (`catalog.ts`, `instance.ts`, ids).
-1. **Catalog aggregator over official only** — `DONE`. `catalog.list` IPC; CMS-down stops blanking.
+1. **Catalog aggregator over official only** — `DONE`. `catalog.list` IPC; backend-down stops blanking.
 2. **Route buildContext through the catalog** — `DONE`. `buildSpecToTargetInput`; `Context.item`.
 3. **Local instance source (read/launch path)** — `DONE`. registry + repo + reconcile + localSource;
    opaque-id resolution; launch-hook skip for local builds.
@@ -220,13 +220,13 @@ breaks official builds.
    loader version via `kit.versions.*`. Renderer create-build modal still pending in Phase 5.
 5. **Unified UI + official detail polish** — `DONE`. New `renderer/features/catalog/` (api/hooks/
    store/`operationalId`); Home reads `catalog.list` with My Builds / Official sections, source
-   chips, a degraded-CMS banner, and a `+ Create build` modal (kit-backed version pickers).
+   chips, a degraded-source banner, and a `+ Create build` modal (kit-backed version pickers).
    `PlayButton`/`ClientOverview`/`ClientSettingsModal`/`ClientListCard`/`ClientsNavigation` and the
    loader/media pieces consume `CatalogItem`, keyed by `operationalId(item)`. `BuildMedia` keeps
-   official's Strapi media pipeline and renders local media URLs. Local builds get a Delete action;
+   official's media pipeline and renders local media URLs. Local builds get a Delete action;
    dead `useClientsList`/renderer `getClients`/clients `store.ts` removed.
    - Optional follow-up: the `clients.list` IPC channel is now unused by the renderer but still
-     registered (the catalog's Strapi source uses the main-side `getClients`, not the IPC route).
+     registered (the catalog's official source uses the main-side `getClients`, not the IPC route).
      Removing the channel + `registerClientsRoutes` is a low-risk cleanup deferred to avoid churn
      in the IPC coverage guard.
 6. **(future) Embedded bundle / mod ecosystem seam** — mods/resourcepacks/shaders overlays.

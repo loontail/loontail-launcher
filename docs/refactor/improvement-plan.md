@@ -658,7 +658,7 @@ All tasks below touch DISJOINT file sets.
   local:). routes tests send CatalogKeys and assert IPC_INVALID_ARGS on bare ids. Migration
   tests: an existing settings.clients keyed by bare slug rehydrates under official:<slug>;
   lastPlayed keys migrate. buildContext('local:<uuid>') resolves local, 'official:<slug>'
-  resolves Strapi. contractCoverage green. Manual: create local build, install/launch/
+  resolves the API. contractCoverage green. Manual: create local build, install/launch/
   uninstall, set RAM override, verify settings key is `local:<uuid>` and the default folder
   is still `<clientsFolder>/<uuid>` (NOT `local:<uuid>`).
 - **Risk:** medium-high (L effort). Single dedicated wave because it touches the widest file
@@ -1001,8 +1001,8 @@ These cannot be completed inside `loontail-launcher` alone and are NOT scheduled
 code tasks:
 
 - **API_TOKEN public-read redesign** (flow-update/DL-6, perf-security/PS-1, S1): the genuine
-  high-value fix is making the Strapi catalog + bundle-registry read endpoints public/anon
-  (or minting a documented read-only token). That is a Strapi/Yggdrasil-plugin server change,
+  high-value fix is making the catalog + bundle-registry read endpoints public/anon
+  (or minting a documented read-only token). That is a legacy-backend/Yggdrasil-plugin server change,
   out of the launcher repo and under the no-kit/yggdrasil-package-changes convention. The
   forked-PR exfiltration premise is moot (`pull_request` does not pass secrets to forks).
   See "needs user decision" below for the in-repo CI/token-rename slice.
@@ -1019,7 +1019,7 @@ code tasks:
 ## Appendix C — Needs user decision (minimal)
 
 1. **API_TOKEN strategy (infra change).** Decide between:
-   (a) Grant the Strapi `public` role `find` on Client + the bundle-registry manifest route,
+   (a) Grant the legacy backend's `public` role `find` on Client + the bundle-registry manifest route,
        then swap clientsApi/bundle api to a no-auth read mode and delete the token plumbing
        (requires a **server-first deploy** — the launcher change cannot merge ahead of it); OR
    (b) Keep a token but rename it `API_READ_TOKEN`, document it as non-secret/read-only, and

@@ -150,8 +150,8 @@ export const useCanGoBack = (): boolean => useNavigationStore((s) => s.stack.len
 
 ### Task 3.3: BuildsPage
 **Files:** Create `src/renderer/features/builds/BuildsPage.tsx` (from `BuildsHomePage.tsx`); index; remove old `BuildsHomePage` usage
-- [ ] Header: title + unified **search** (filters both groups by title) + **grid/list** segmented toggle (persist choice in a small zustand value store). Sections: My Builds (CreateBuildTile + locals), Official (with degraded-CMS inline notice). Auto-hide empty groups → first-run prompt. Search miss → "No builds match 'X' · Clear". Open detail via route push (not modal).
-- [ ] Acceptance: search, toggle, empty/no-results, degraded CMS all correct; build/typecheck clean.
+- [ ] Header: title + unified **search** (filters both groups by title) + **grid/list** segmented toggle (persist choice in a small zustand value store). Sections: My Builds (CreateBuildTile + locals), Official (with degraded-official inline notice). Auto-hide empty groups → first-run prompt. Search miss → "No builds match 'X' · Clear". Open detail via route push (not modal).
+- [ ] Acceptance: search, toggle, empty/no-results, degraded official all correct; build/typecheck clean.
 - [ ] Commit: `feat(launcher): builds catalog page (search, grid/list, two groups)`
 
 ---

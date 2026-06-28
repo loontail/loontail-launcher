@@ -128,7 +128,7 @@ describe('classifyBundleError', () => {
 describe('BundleManager sync error surfacing', () => {
   // DLI-40
   it('maps a client fetch failure to MANIFEST_FETCH_FAILED, not UNKNOWN', async () => {
-    managerMocks.getClient.mockRejectedValue(new Error('ECONNREFUSED 127.0.0.1:1337'));
+    managerMocks.getClient.mockRejectedValue(new Error('ECONNREFUSED 127.0.0.1:8080'));
     const manager = new BundleManager(
       makeBroadcaster(),
       makeHealer(),

@@ -23,10 +23,10 @@ describe('bundle URL policy', () => {
       expect(
         resolveBundleManifestEntryUrl(
           '/bundle/files/example.jar',
-          'http://localhost:1337',
+          'http://localhost:8080',
           ENTRY_PATH,
         ),
-      ).toBe('http://localhost:1337/bundle/files/example.jar');
+      ).toBe('http://localhost:8080/bundle/files/example.jar');
     });
 
     it('rejects plain HTTP asset URLs for remote production hosts', () => {
@@ -124,7 +124,7 @@ describe('bundle URL policy', () => {
 
     it('only trusts the API origin (and local/test hosts) for bearer attachment', () => {
       expect(isTrustedBundleAssetUrl('https://api.example.com/x.jar')).toBe(true);
-      expect(isTrustedBundleAssetUrl('http://localhost:1337/x.jar')).toBe(true);
+      expect(isTrustedBundleAssetUrl('http://localhost:8080/x.jar')).toBe(true);
       expect(isTrustedBundleAssetUrl('https://cdn.example.com/x.jar')).toBe(false);
       expect(isTrustedBundleAssetUrl('not-a-url')).toBe(false);
     });

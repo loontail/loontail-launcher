@@ -343,7 +343,7 @@ describe('pruneClientOverrides', () => {
       },
     };
     // The sweep builds the keep-set from official + local CatalogKeys; a local
-    // build in that set must survive even though no Strapi slug matches it.
+    // build in that set must survive even though no official slug matches it.
     const next = pruneClientOverrides(settings, new Set([localKey]));
     expect(Object.keys(next.clients)).toEqual([localKey]);
   });

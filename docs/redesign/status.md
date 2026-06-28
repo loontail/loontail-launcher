@@ -7,7 +7,7 @@ All gates green: `npm run verify` (Biome lint · `tsc -b` typecheck · 600 Vites
 - **Foundation:** monochrome `@theme` token system (graphite surface ladder, tiered off-white text, white CTA, neutral focus/accent, motion easings, glass/scrim utilities, reduced-motion + reduced-transparency backstops); full-bleed `background.webp` behind a global scrim; route-based navigation store; last-played tracking (electron-store + IPC + write-on-launch).
 - **App shell:** glass title bar (WCO), left icon nav rail (Home/Builds/Settings/Console, roving tabindex), routed content, global Esc/mouse-back.
 - **Home dashboard:** Continue hero + Recently-played (reflowing grid), skeleton + empty states.
-- **Builds catalog:** header search + grid/list toggle (persisted), two auto-hiding groups, monochrome status chips, skeleton/empty/no-results/degraded-CMS states, roving tabindex.
+- **Builds catalog:** header search + grid/list toggle (persisted), two auto-hiding groups, monochrome status chips, skeleton/empty/no-results/degraded-official states, roving tabindex.
 - **Build detail (routed page, replaces the old modals):** fixed key-art backdrop, IntersectionObserver sticky hero (Play always reachable), accessible tabs (About/Media/Servers/Settings), per-build Settings tab reusing the existing RAM/loader/actions controls.
 - **Play/install:** existing FSM preserved, restyled to white CTA + monochrome variants; progress-as-bar with smoothed speed/ETA + monotonic clamp (TDD); stall hint.
 - **Setup + Create flow + Console window + Toasts + Updater badge + Notifications:** restyled to the tokens; behavior unchanged.

@@ -209,7 +209,7 @@ Layer order (bottom→top): `background.webp` → **global scrim** (top/bottom g
 ### 5.4 Builds catalog (rework of `BuildsHomePage` → `features/builds/BuildsPage.tsx`)
 - Header row: title + unified **search** + **grid/list** segmented toggle.
 - **My Builds** group: `CreateBuildTile` first, then local tiles. **Official** group below.
-- Auto-hide an empty group → first-run prompt. Degraded CMS → inline "Official unavailable" notice (keep local builds visible).
+- Auto-hide an empty group → first-run prompt. Degraded official → inline "Official unavailable" notice (keep local builds visible).
 - Skeleton grid while pending; "no results" state for search misses (distinct from empty).
 
 ### 5.5 Build tile (rework `BuildTile` + `BuildGrid`)

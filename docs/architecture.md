@@ -10,13 +10,13 @@ goes where and why**.
 ## 1. Overview
 
 The launcher is an **Electron desktop application** that downloads and
-launches Minecraft clients ("bundles") served by a remote **Strapi**
-backend. It exposes a single UI window (renderer), runs all OS and network
-work in the main process, and ships dark-only.
+launches Minecraft clients ("bundles") served by a remote **native Rust
+API** backend. It exposes a single UI window (renderer), runs all OS and
+network work in the main process, and ships dark-only.
 
 Core responsibilities:
 
-- Discover available clients via Strapi.
+- Discover available clients via the API.
 - Download, verify, and update client bundles from the bundle registry.
 - Persist per-launcher and per-client settings.
 - Launch Minecraft with the right arguments and JVM options.
@@ -55,8 +55,8 @@ Non-goals (by design):
                      │ HTTP(S) (Zod-validated)      │ child_process
                      ▼                              ▼
               ┌──────────────┐               ┌─────────────┐
-              │    Strapi    │               │  Minecraft  │
-              │   backend    │               │   client    │
+              │   Loontail   │               │  Minecraft  │
+              │     API      │               │   client    │
               └──────────────┘               └─────────────┘
 ```
 
@@ -73,7 +73,7 @@ Non-goals (by design):
 Platform-agnostic code reachable from both processes.
 
 - `shared/contracts/` — types and Zod schemas for external data shapes
-  (Strapi responses, bundle manifests, error codes).
+  (API responses, bundle manifests, error codes).
 - `shared/ipc/` — IPC contract: a single `IpcContract` map
   (`channel → { args, result }`) and an `IpcEvents` map for server→client
   events.
@@ -199,7 +199,7 @@ Currently shipping services:
 - `system` — RAM range, disk space, folder pick, OS path open.
 - `settings` — `launcherSettings` CRUD + per-client overrides.
 - `skin` — uploads / clears Minecraft skin & cape via skins-registry.
-- `clients` — Strapi `/api/clients` with on-disk snapshot fallback + in-flight dedup.
+- `clients` — the API `/api/clients` with on-disk snapshot fallback + in-flight dedup.
 - `servers` — Minecraft SLP ping for server status.
 - `media` — `cache://` protocol handler backed by disk-cached image fetches.
 - `minecraft` — wraps `@loontail/minecraft-kit` for install / launch / repair /
@@ -260,7 +260,7 @@ There is no global app store. There is no Redux.
 - Client install directories: `{clientsFolder}/{slug}/` (the user-configured
   folder, or its per-client override). `clientsFolder` lives under
   `app.getPath('userData')` by default.
-- Cached media (Strapi-served images, prewarmed skin/cape uploads):
+- Cached media (API-served images, prewarmed skin/cape uploads):
   `userData/cache/media/<sha1>` (registered as the `cache://` protocol).
 - Java runtimes: `userData/runtimes/<component>/`.
 - Logs: `userData/logs/` (rotated by `electron-log`, 5 MB per file with
@@ -273,12 +273,12 @@ resolve against `app.getPath('userData')` or the user's explicit override
 folder. No relative paths in services.
 
 At startup, `bootstrap/sweepOrphans.ts` fetches the current client list and
-drops `launcherSettings.clients` entries whose slug is no longer in Strapi.
-Best-effort: when Strapi is unreachable the sweep skips silently.
+drops `launcherSettings.clients` entries whose slug is no longer in the API.
+Best-effort: when the API is unreachable the sweep skips silently.
 
 ## 8. External integrations
 
-### 8.1 Strapi backend
+### 8.1 API backend
 
 - Source of truth for clients, bundles, and bundle manifests.
 - Accessed only from `main/infra/http.ts`.

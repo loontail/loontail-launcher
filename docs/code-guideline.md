@@ -236,7 +236,7 @@ Aligned with the official Electron security checklist; non-negotiable.
 - HTTPS / WSS for any non-loopback remote endpoint. Plain HTTP / WS is
   only acceptable for `localhost` / `127.0.0.1` in development.
 - Define a restrictive CSP. `connect-src` is built from the resolved
-  `mainConfig.apiUrl` so the dev origin (`http://localhost:1337`) and the
+  `mainConfig.apiUrl` so the dev origin (`http://localhost:8080`) and the
   prod origin (`https://api.loontail.tld`) both work without editing the
   CSP file. See `src/main/infra/session.ts` for the live definitions.
 
@@ -277,7 +277,7 @@ Aligned with the official Electron security checklist; non-negotiable.
 
 ## 5. Validation at external boundaries
 
-- Every Strapi / HTTP response goes through a Zod schema in `infra/http.ts`.
+- Every API / HTTP response goes through a Zod schema in `infra/http.ts`.
   On shape mismatch — fail fast with a clear error.
 - IPC arguments are validated on entry to the router.
 - Inside the validated boundary, trust the types — do not re-validate.
@@ -476,7 +476,7 @@ constant, not an inline literal.
 - **Keep** — these are the point of the rule, never strip them: platform quirks
   (e.g. "Cloudflare blocks a bare Java user-agent"), race / abort / cleanup
   invariants (cooperative pause/cancel), wire-shape coercions
-  (`exactOptionalPropertyTypes`, Strapi `null` → empty), non-obvious default
+  (`exactOptionalPropertyTypes`, API `null` → empty), non-obvious default
   values, schema-migration gap guards.
 - **Rule of thumb:** if deleting the comment loses information a careful reader
   could not recover from the code in ~10 seconds, keep it; otherwise delete it.

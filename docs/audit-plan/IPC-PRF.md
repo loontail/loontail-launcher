@@ -31,7 +31,7 @@ Counts: **OPEN 7**, **ALREADY-RESOLVED 1** (PRF-02), **OBSOLETE 1** (PRF-01).
   `manifest !== null ? INSTALLED : UNVERIFIED`. It never calls
   `targetInstallManifestMatches`, so a `kitVersion` bump does NOT flip an
   existing install to UNVERIFIED at open.
-- The lines 12-19 comment already documents the intent ("A Strapi version bump
+- The lines 12-19 comment already documents the intent ("An API version bump
   is therefore not detected at open … surfaces at Play").
 - `targetInstallManifestMatches` (`installManifest.ts:151-162`) still includes
   `kitVersion`, but it is only used by `hasCurrentTargetInstallManifest`, which
