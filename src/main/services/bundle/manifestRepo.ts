@@ -1,6 +1,5 @@
 import fs from 'node:fs/promises';
-import path from 'node:path';
-import { atomicReplace } from '@main/infra/atomicFile';
+import { readJsonValidated, writeJsonAtomic } from '@main/infra/atomicFile';
 import { scopedLogger } from '@main/infra/logger';
 import { type LocalManifest, LocalManifestSchema } from '@shared/contracts/bundle';
 import { bundleManifestPath } from './paths';
@@ -9,19 +8,10 @@ const logger = scopedLogger('bundle.manifest');
 
 export const loadLocalManifest = async (clientFolder: string): Promise<LocalManifest | null> => {
   const target = bundleManifestPath(clientFolder);
-  try {
-    const raw = await fs.readFile(target, 'utf8');
-    const parsed = LocalManifestSchema.safeParse(JSON.parse(raw));
-    if (!parsed.success) {
-      logger.warn(`Local bundle manifest at ${target} is malformed; discarding`);
-      return null;
-    }
-    return parsed.data;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    logger.warn(`Failed to read local bundle manifest at ${target}`, err);
-    return null;
-  }
+  return readJsonValidated(target, LocalManifestSchema, {
+    onInvalid: () => logger.warn(`Local bundle manifest at ${target} is malformed; discarding`),
+    onReadError: (err) => logger.warn(`Failed to read local bundle manifest at ${target}`, err),
+  });
 };
 
 export const saveLocalManifest = async (
@@ -29,16 +19,9 @@ export const saveLocalManifest = async (
   manifest: LocalManifest,
 ): Promise<void> => {
   const target = bundleManifestPath(clientFolder);
-  const tmp = `${target}.tmp`;
-  const cleanupTmp = (rmErr: unknown): void => logger.warn(`Failed to remove tmp ${tmp}`, rmErr);
-  await fs.mkdir(path.dirname(target), { recursive: true });
-  try {
-    await fs.writeFile(tmp, JSON.stringify(manifest, null, 2), 'utf8');
-  } catch (err) {
-    await fs.rm(tmp, { force: true }).catch(cleanupTmp);
-    throw err;
-  }
-  await atomicReplace(tmp, target, cleanupTmp);
+  await writeJsonAtomic(target, manifest, (rmErr) =>
+    logger.warn(`Failed to remove tmp ${target}.tmp`, rmErr),
+  );
 };
 
 export const clearLocalManifest = async (clientFolder: string): Promise<void> => {

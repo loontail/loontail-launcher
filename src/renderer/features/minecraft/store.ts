@@ -1,11 +1,10 @@
-import type { CatalogKey } from '@shared/contracts/ids';
+import { createRuntimeStore } from '@renderer/shared/lib/stores/createRuntimeStore';
 import {
   type InstallStatus,
   InstallStatuses,
   type MinecraftErrorCode,
   type ProgressStage,
 } from '@shared/contracts/minecraft';
-import { create } from 'zustand';
 
 export type ClientRuntimeState = {
   status: InstallStatus;
@@ -25,11 +24,6 @@ export const DEFAULT_STATE: ClientRuntimeState = {
   paused: false,
 };
 
-type Store = {
-  entries: Record<string, ClientRuntimeState>;
-  patch: (slug: CatalogKey, change: Partial<ClientRuntimeState>) => void;
-};
-
 const STATUSES_WITHOUT_PROGRESS: ReadonlySet<InstallStatus> = new Set([
   InstallStatuses.INSTALLED,
   InstallStatuses.NOT_INSTALLED,
@@ -45,29 +39,21 @@ const STATUSES_CLEAR_ERROR: ReadonlySet<InstallStatus> = new Set([
   InstallStatuses.NOT_INSTALLED,
 ]);
 
-export const useMinecraftStore = create<Store>((set) => ({
-  entries: {},
-  patch: (slug, change) =>
-    set((state) => {
-      const current = state.entries[slug] ?? DEFAULT_STATE;
-      const merged: ClientRuntimeState = { ...current, ...change };
-      if (change.status && STATUSES_WITHOUT_PROGRESS.has(change.status)) {
-        merged.stage = undefined;
-        merged.stagePercent = undefined;
-        merged.overallPercent = undefined;
-        merged.bytesDownloaded = undefined;
-        merged.totalBytes = undefined;
-        merged.speedBytesPerSec = undefined;
-        merged.currentFile = undefined;
-      }
-      if (change.status && STATUSES_CLEAR_ERROR.has(change.status)) {
-        merged.error = undefined;
-      }
-      return { entries: { ...state.entries, [slug]: merged } };
-    }),
-}));
+const store = createRuntimeStore<InstallStatus, ClientRuntimeState>({
+  default: DEFAULT_STATE,
+  terminalStatuses: STATUSES_WITHOUT_PROGRESS,
+  clearProgressFields: {
+    stage: undefined,
+    stagePercent: undefined,
+    overallPercent: undefined,
+    bytesDownloaded: undefined,
+    totalBytes: undefined,
+    speedBytesPerSec: undefined,
+    currentFile: undefined,
+  },
+  clearErrorStatuses: STATUSES_CLEAR_ERROR,
+  clearErrorFields: { error: undefined },
+});
 
-export const selectClient =
-  (slug: CatalogKey | null | undefined) =>
-  (state: Store): ClientRuntimeState =>
-    (slug && state.entries[slug]) || DEFAULT_STATE;
+export const useMinecraftStore = store.useStore;
+export const selectClient = store.selectEntry;

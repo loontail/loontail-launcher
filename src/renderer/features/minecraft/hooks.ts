@@ -1,4 +1,5 @@
 import { i18n } from '@renderer/i18n';
+import { makeSlugMutationHook } from '@renderer/shared/lib/slugMutation';
 import { createStatusSeeder } from '@renderer/shared/lib/statusSeeder';
 import { QUERY_KEYS } from '@shared/constants';
 import type { CatalogKey } from '@shared/contracts/ids';
@@ -15,6 +16,8 @@ const statusSeeder = createStatusSeeder(api.getStatus);
 const minecraftMutationMeta = {
   errorLocalizer: (error: IpcError) => localizeMinecraftError(error.code, error.message, i18n.t),
 };
+
+const useSlugMutation = makeSlugMutationHook(minecraftMutationMeta);
 
 export const useClientStatus = (slug: CatalogKey | null | undefined): ClientRuntimeState => {
   const state = useMinecraftStore(selectClient(slug));
@@ -49,9 +52,6 @@ export const useInstallClient = () =>
     mutationFn: ({ slug, loader }: { slug: CatalogKey; loader?: LoaderChoice }) =>
       api.install(slug, loader),
   });
-
-const useSlugMutation = <T>(fn: (slug: CatalogKey) => Promise<T>) =>
-  useMutation({ meta: minecraftMutationMeta, mutationFn: fn });
 
 export const usePauseInstall = () => useSlugMutation(api.pauseInstall);
 export const useResumeInstall = () => useSlugMutation(api.resumeInstall);

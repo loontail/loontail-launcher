@@ -195,6 +195,11 @@ const start = async (): Promise<void> => {
     // releases its own listeners/timers/children), so order doesn't matter and
     // a slow one can't block the rest. cancelAll above already stopped in-flight
     // work; the database is closed last, after this settles.
+    //
+    // BUG-7: the database is closed here, after the bundle drain (a 250ms
+    // bounded wait in BundleManager.cancelAll). No sync teardown (`finally`) may
+    // issue a store/DB write — it could be truncated by that timeout or race
+    // this close. See BundleManager.cancelAll for the full invariant.
     await Promise.allSettled(services.map((service) => service.dispose()));
     router.dispose();
     closeDatabase();

@@ -1,4 +1,4 @@
-import { operationalId, useDeleteBuild } from '@renderer/features/catalog';
+import { useDeleteBuild } from '@renderer/features/catalog';
 import { useClientStatus, useRepairClient, useUninstallClient } from '@renderer/features/minecraft';
 import {
   FolderInfoBlock,
@@ -32,7 +32,7 @@ type BuildSettingsTabProps = {
 };
 
 export const BuildSettingsTab = ({ item, onBuildDeleted }: BuildSettingsTabProps) => {
-  const slug = operationalId(item);
+  const slug = item.key;
   const { settings, isPending: settingsPending } = useLauncherSettings();
   const resolved = useResolveFor(slug);
 

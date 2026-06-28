@@ -1,5 +1,4 @@
 import { localizeBundleError, useStartBundle } from '@renderer/features/bundle';
-import { operationalId } from '@renderer/features/catalog';
 import {
   localizeMinecraftError,
   useCancelInstall,
@@ -147,7 +146,7 @@ export const selectPlayButtonAction = ({
 
 export const PlayButton = ({ item }: PlayButtonProps) => {
   const { t } = useTranslation();
-  const slug = operationalId(item);
+  const slug = item.key;
   const spec = item.spec;
   const { install: state, bundle, hasBundle, progress } = useInstallProgress(item);
   const resolved = useResolveFor(slug);

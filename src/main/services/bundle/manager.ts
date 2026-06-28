@@ -625,6 +625,14 @@ export class BundleManager {
   // directly, then await each sync's real completion (its finally block running
   // tmp cleanup + manifest writes) rather than a fixed grace timer. A timeout
   // bounds the wait so a wedged sync can't block process exit indefinitely.
+  //
+  // BUG-7 durability invariant: on shutdown this is awaited for at most `maxMs`
+  // (250ms), and the database is closed right after the drain settles
+  // (index.ts). A sync's `finally` must therefore NOT perform store/DB writes —
+  // a slow write could be truncated by the timeout, or race a closing DB
+  // handle. Keep `finally` to in-process state + best-effort fs cleanup only;
+  // durable state (the local bundle manifest) is written on the success path,
+  // not in teardown.
   async cancelAll(maxMs = 250): Promise<void> {
     const actives = [...this.activeSyncs.values()];
     const slugs = actives.map((active) => active.task.slug);

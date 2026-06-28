@@ -1,4 +1,3 @@
-import { operationalId } from '@renderer/features/catalog';
 import { useClientStatus } from '@renderer/features/minecraft';
 import type { CatalogItem } from '@shared/contracts/catalog';
 import type { InstallStatus } from '@shared/contracts/minecraft';
@@ -14,6 +13,6 @@ export type BuildStatusView = {
 };
 
 export const useBuildStatus = (item: CatalogItem): BuildStatusView => {
-  const { status } = useClientStatus(operationalId(item));
+  const { status } = useClientStatus(item.key);
   return { status, ...describeBuildStatus(status) };
 };

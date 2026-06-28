@@ -3,6 +3,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { Loaders, type Target, assertNever } from '@loontail/minecraft-kit';
 import { SIDECAR_DIR } from '@main/constants/paths';
+import { readJsonValidated, writeJsonAtomic } from '@main/infra/atomicFile';
 import { scopedLogger } from '@main/infra/logger';
 import type { CatalogKey } from '@shared/contracts/ids';
 import { z } from 'zod';
@@ -96,38 +97,18 @@ export const loadTargetInstallManifest = async (
   clientFolder: string,
 ): Promise<TargetInstallManifest | null> => {
   const target = targetInstallManifestPath(clientFolder);
-  try {
-    const raw = await fs.readFile(target, 'utf8');
-    const parsed = TargetInstallManifestSchema.safeParse(JSON.parse(raw) as unknown);
-    if (!parsed.success) {
-      logger.warn(`Target install manifest at ${target} is malformed; discarding`);
-      return null;
-    }
-    return parsed.data;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
-    logger.warn(`Failed to read target install manifest at ${target}`, error);
-    return null;
-  }
+  return readJsonValidated(target, TargetInstallManifestSchema, {
+    onInvalid: () => logger.warn(`Target install manifest at ${target} is malformed; discarding`),
+    onReadError: (error) =>
+      logger.warn(`Failed to read target install manifest at ${target}`, error),
+  });
 };
 
 export const saveTargetInstallManifest = async (
   clientFolder: string,
   manifest: TargetInstallManifest,
 ): Promise<void> => {
-  const target = targetInstallManifestPath(clientFolder);
-  const temporaryTarget = `${target}.tmp`;
-  await fs.mkdir(path.dirname(target), { recursive: true });
-  try {
-    await fs.writeFile(temporaryTarget, JSON.stringify(manifest, null, 2), 'utf8');
-    // Atomic swap. On Windows fs.rename fails when the target exists; remove
-    // first (idempotent on ENOENT) then rename so a retry starts clean.
-    await fs.rm(target, { force: true });
-    await fs.rename(temporaryTarget, target);
-  } catch (error) {
-    await fs.rm(temporaryTarget, { force: true }).catch(() => {});
-    throw error;
-  }
+  await writeJsonAtomic(targetInstallManifestPath(clientFolder), manifest);
 };
 
 export const saveCurrentTargetInstallManifest = async (

@@ -1,5 +1,4 @@
 import { type BundleRuntimeState, useBundleStatus } from '@renderer/features/bundle';
-import { operationalId } from '@renderer/features/catalog';
 import { type ClientRuntimeState, useClientStatus } from '@renderer/features/minecraft';
 import { useLauncherSettings } from '@renderer/features/settings';
 import type { CatalogItem } from '@shared/contracts/catalog';
@@ -19,7 +18,7 @@ export type ClientInstallProgress = {
 // `hasLoader` is derived the same way the main-process install pipeline picks
 // the loader: persisted override → the build's loader fields → vanilla.
 export const useInstallProgress = (item: CatalogItem): ClientInstallProgress => {
-  const slug = operationalId(item);
+  const slug = item.key;
   const spec = item.spec;
   const install = useClientStatus(slug);
   const bundle = useBundleStatus(slug);

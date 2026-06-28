@@ -1,5 +1,5 @@
+import { type SpeedWindow, createSpeedWindow } from '@shared/lib/speedWindow';
 import { useEffect, useRef, useState } from 'react';
-import { rollingSpeed } from './progressFormat';
 
 // 4s rolling window — wide enough to smooth the install kit's per-second jitter,
 // short enough to react to a genuine slowdown within a few ticks.
@@ -13,30 +13,17 @@ const WINDOW_MS = 4000;
 // A backwards jump (resume after pause, or replanning) resets the window so
 // the rate doesn't dip negative and recover slowly.
 export const useByteSpeed = (bytes: number | undefined, active: boolean): number => {
-  const samplesRef = useRef<Array<[number, number]>>([]);
+  const windowRef = useRef<SpeedWindow>(undefined as unknown as SpeedWindow);
+  if (!windowRef.current) windowRef.current = createSpeedWindow(WINDOW_MS);
   const [speed, setSpeed] = useState(0);
 
   useEffect(() => {
     if (!active || bytes === undefined) {
-      samplesRef.current = [];
+      windowRef.current.reset();
       setSpeed(0);
       return;
     }
-    const now = Date.now();
-    const samples = samplesRef.current;
-    const prev = samples[samples.length - 1];
-    if (prev && bytes < prev[1]) {
-      samplesRef.current = [[now, bytes]];
-      setSpeed(0);
-      return;
-    }
-    samples.push([now, bytes]);
-    while (samples.length > 0) {
-      const head = samples[0];
-      if (!head || now - head[0] <= WINDOW_MS) break;
-      samples.shift();
-    }
-    setSpeed(rollingSpeed(samples, now, WINDOW_MS));
+    setSpeed(windowRef.current.sample(bytes, Date.now()));
   }, [bytes, active]);
 
   return speed;

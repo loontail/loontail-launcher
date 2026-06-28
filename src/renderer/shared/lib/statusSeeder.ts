@@ -1,4 +1,5 @@
 import type { CatalogKey } from '@shared/contracts/ids';
+import { createLimiter } from '@shared/lib/limiter';
 
 const DEFAULT_MAX_CONCURRENCY = 3;
 
@@ -11,39 +12,20 @@ export type StatusSeeder<TResult> = {
 // the source of truth; this only fills the initial gap before the first event,
 // so concurrent mounts of N build cards don't fire N simultaneous status IPCs.
 // Generic over the fetched shape so both the bundle and minecraft features share
-// one implementation, each instantiated with its own status fetcher.
+// one implementation, each instantiated with its own status fetcher. The pool is
+// the shared `createLimiter` primitive; this layers a per-slug dedup map on top.
 export const createStatusSeeder = <TResult>(
   fetchStatus: (slug: CatalogKey) => Promise<TResult>,
   maxConcurrency: number = DEFAULT_MAX_CONCURRENCY,
 ): StatusSeeder<TResult> => {
-  let activeCount = 0;
-  const queue: Array<() => void> = [];
+  let limit = createLimiter(maxConcurrency);
   const requests = new Map<CatalogKey, Promise<TResult>>();
-
-  const flush = (): void => {
-    while (activeCount < maxConcurrency) {
-      const runSeed = queue.shift();
-      if (!runSeed) return;
-      activeCount += 1;
-      runSeed();
-    }
-  };
 
   const seedStatus = (slug: CatalogKey): Promise<TResult> => {
     const existing = requests.get(slug);
     if (existing) return existing;
 
-    const request = new Promise<TResult>((resolve, reject) => {
-      queue.push(() => {
-        void fetchStatus(slug)
-          .then(resolve, reject)
-          .finally(() => {
-            activeCount -= 1;
-            flush();
-          });
-      });
-      flush();
-    }).finally(() => {
+    const request = limit(() => fetchStatus(slug)).finally(() => {
       requests.delete(slug);
     });
     requests.set(slug, request);
@@ -52,9 +34,10 @@ export const createStatusSeeder = <TResult>(
 
   return {
     seedStatus,
+    // A fresh limiter abandons any queued (not-yet-started) work so the next
+    // seed starts from an empty pool, matching the prior hand-rolled reset.
     reset: () => {
-      activeCount = 0;
-      queue.length = 0;
+      limit = createLimiter(maxConcurrency);
       requests.clear();
     },
   };

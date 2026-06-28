@@ -1,4 +1,5 @@
 import { i18n } from '@renderer/i18n';
+import { makeSlugMutationHook } from '@renderer/shared/lib/slugMutation';
 import type { CatalogKey } from '@shared/contracts/ids';
 import type { IpcError } from '@shared/ipc';
 import { useMutation } from '@tanstack/react-query';
@@ -11,6 +12,8 @@ import { type BundleRuntimeState, selectBundle, useBundleStore } from './store';
 const bundleMutationMeta = {
   errorLocalizer: (error: IpcError) => localizeBundleError(error.code, error.message, i18n.t),
 };
+
+const useSlugMutation = makeSlugMutationHook(bundleMutationMeta);
 
 export const useBundleStatus = (slug: CatalogKey | null | undefined): BundleRuntimeState => {
   const state = useBundleStore(selectBundle(slug));
@@ -43,9 +46,6 @@ export const useStartBundle = () =>
     meta: bundleMutationMeta,
     mutationFn: ({ slug, force }: { slug: CatalogKey; force?: boolean }) => api.start(slug, force),
   });
-
-const useSlugMutation = <T>(fn: (slug: CatalogKey) => Promise<T>) =>
-  useMutation({ meta: bundleMutationMeta, mutationFn: fn });
 
 export const usePauseBundle = () => useSlugMutation(api.pause);
 export const useResumeBundle = () => useSlugMutation(api.resume);

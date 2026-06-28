@@ -1,3 +1,4 @@
+import { createRuntimeStore } from '@renderer/shared/lib/stores/createRuntimeStore';
 import {
   BUSY_BUNDLE_STATUSES,
   type BundleErrorCode,
@@ -5,8 +6,6 @@ import {
   type BundleSyncStatus,
   BundleSyncStatuses,
 } from '@shared/contracts/bundle';
-import type { CatalogKey } from '@shared/contracts/ids';
-import { create } from 'zustand';
 
 export type BundleRuntimeState = {
   status: BundleSyncStatus;
@@ -23,12 +22,6 @@ export const DEFAULT_BUNDLE_STATE: BundleRuntimeState = {
   progress: null,
 };
 
-type Store = {
-  entries: Record<string, BundleRuntimeState>;
-  patch: (slug: CatalogKey, change: Partial<BundleRuntimeState>) => void;
-  reset: (slug: CatalogKey) => void;
-};
-
 const TERMINAL_STATUSES: ReadonlySet<BundleSyncStatus> = new Set([
   BundleSyncStatuses.COMPLETED,
   BundleSyncStatuses.UP_TO_DATE,
@@ -43,30 +36,16 @@ const STATUSES_CLEAR_ERROR: ReadonlySet<BundleSyncStatus> = new Set([
   BundleSyncStatuses.NO_BUNDLE,
 ]);
 
-export const useBundleStore = create<Store>((set) => ({
-  entries: {},
-  patch: (slug, change) =>
-    set((state) => {
-      const current = state.entries[slug] ?? DEFAULT_BUNDLE_STATE;
-      const merged: BundleRuntimeState = { ...current, ...change };
-      if (change.status && TERMINAL_STATUSES.has(change.status)) {
-        merged.progress = null;
-      }
-      if (change.status && STATUSES_CLEAR_ERROR.has(change.status)) {
-        merged.error = undefined;
-        merged.installed = true;
-        merged.signatureMatches = true;
-      }
-      return { entries: { ...state.entries, [slug]: merged } };
-    }),
-  reset: (slug) =>
-    set((state) => ({ entries: { ...state.entries, [slug]: DEFAULT_BUNDLE_STATE } })),
-}));
+const store = createRuntimeStore<BundleSyncStatus, BundleRuntimeState>({
+  default: DEFAULT_BUNDLE_STATE,
+  terminalStatuses: TERMINAL_STATUSES,
+  clearProgressFields: { progress: null },
+  clearErrorStatuses: STATUSES_CLEAR_ERROR,
+  clearErrorFields: { error: undefined, installed: true, signatureMatches: true },
+});
 
-export const selectBundle =
-  (slug: CatalogKey | null | undefined) =>
-  (state: Store): BundleRuntimeState =>
-    (slug && state.entries[slug]) || DEFAULT_BUNDLE_STATE;
+export const useBundleStore = store.useStore;
+export const selectBundle = store.selectEntry;
 
 export const isBundleBusy = (status: BundleSyncStatus): boolean =>
   BUSY_BUNDLE_STATUSES.has(status) || status === BundleSyncStatuses.PAUSED;

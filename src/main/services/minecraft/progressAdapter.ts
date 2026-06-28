@@ -17,6 +17,7 @@ import {
   type ProgressStage,
   ProgressStages,
 } from '@shared/contracts/minecraft';
+import { createSpeedWindow } from '@shared/lib/speedWindow';
 import type { ManagerEnv } from './env';
 
 const PROGRESS_STAGE_FOR_ASPECT: Record<VerificationKind, ProgressStage> = {
@@ -33,22 +34,9 @@ export type MinecraftProgressAdapter = {
 
 export type PlannedInstallProgressRunner = (plan: InstallPlan) => Promise<void>;
 
-// 4s rolling window, mirroring the renderer's former useByteSpeed: wide enough
-// to smooth the kit's per-second jitter, short enough to react to a slowdown.
+// 4s rolling window, mirroring the renderer's useByteSpeed: wide enough to
+// smooth the kit's per-second jitter, short enough to react to a slowdown.
 const SPEED_WINDOW_MS = 4000;
-
-// Bytes/sec averaged over the first→last sample already pruned to the window.
-// A whole-window average (rather than the last delta) keeps the readout steady
-// against the kit's per-second jitter. `samples` are `[ms, bytes]` ascending.
-const windowSpeed = (samples: ReadonlyArray<readonly [number, number]>): number => {
-  const first = samples[0];
-  const last = samples[samples.length - 1];
-  if (!first || !last) return 0;
-  const dt = (last[0] - first[0]) / 1000;
-  if (dt <= 0) return 0;
-  const rate = (last[1] - first[1]) / dt;
-  return rate > 0 ? rate : 0;
-};
 
 // The kit reports `bytesDownloaded` install-wide but `totalBytes` per stage, so
 // the two are mixed-scale. Reconstruct per-stage bytes from stagePercent so the
@@ -57,7 +45,7 @@ const windowSpeed = (samples: ReadonlyArray<readonly [number, number]>): number 
 // don't dip negative when the next stage restarts at 0%.
 const createSnapshotEmitter = (env: ManagerEnv, slug: CatalogKey) => {
   let stage: ProgressStage | null = null;
-  let samples: Array<[number, number]> = [];
+  const speedWindow = createSpeedWindow(SPEED_WINDOW_MS);
 
   return (snapshot: ProgressSnapshot): void => {
     const stageTotal = snapshot.totalBytes;
@@ -66,21 +54,9 @@ const createSnapshotEmitter = (env: ManagerEnv, slug: CatalogKey) => {
 
     if (snapshot.stage !== stage) {
       stage = snapshot.stage;
-      samples = [];
+      speedWindow.reset();
     }
-    const now = Date.now();
-    const prev = samples[samples.length - 1];
-    if (prev && stageDone < prev[1]) {
-      samples = [[now, stageDone]];
-    } else {
-      samples.push([now, stageDone]);
-      while (samples.length > 0) {
-        const head = samples[0];
-        if (!head || now - head[0] <= SPEED_WINDOW_MS) break;
-        samples.shift();
-      }
-    }
-    const speedBytesPerSec = Math.max(0, Math.round(windowSpeed(samples)));
+    const speedBytesPerSec = Math.max(0, Math.round(speedWindow.sample(stageDone, Date.now())));
 
     env.broadcaster.progress({
       slug,

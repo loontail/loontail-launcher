@@ -3,7 +3,6 @@ import {
   formatBytes,
   formatEta,
   formatSpeed,
-  rollingSpeed,
 } from '@renderer/features/clients/components/install/progressFormat';
 import { describe, expect, it } from 'vitest';
 
@@ -25,36 +24,6 @@ describe('formatSpeed', () => {
   it('appends /s for positive rates and is empty otherwise', () => {
     expect(formatSpeed(1024)).toBe('1.0 KB/s');
     expect(formatSpeed(0)).toBe('');
-  });
-});
-
-describe('rollingSpeed', () => {
-  it('averages bytes/sec across all samples in the window', () => {
-    // 4 KB gained over 4s -> 1 KB/s, regardless of intra-window jitter.
-    const samples: Array<[number, number]> = [
-      [0, 0],
-      [1000, 100],
-      [2000, 4000],
-      [4000, 4096],
-    ];
-    expect(rollingSpeed(samples, 4000, 5000)).toBeCloseTo(1024, 0);
-  });
-
-  it('drops samples older than the window so a past burst does not skew the rate', () => {
-    // Old burst (0..1000) sits outside a 3s window ending at 5000; only the
-    // steady tail (2000..5000, 3 KB over 3s) counts.
-    const samples: Array<[number, number]> = [
-      [0, 0],
-      [1000, 1_000_000],
-      [2000, 1_003_072],
-      [5000, 1_006_144],
-    ];
-    expect(rollingSpeed(samples, 5000, 3000)).toBeCloseTo(1024, 0);
-  });
-
-  it('returns 0 with fewer than two in-window samples', () => {
-    expect(rollingSpeed([[1000, 500]], 1000, 3000)).toBe(0);
-    expect(rollingSpeed([], 0, 3000)).toBe(0);
   });
 });
 

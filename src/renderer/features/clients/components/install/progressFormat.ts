@@ -12,26 +12,6 @@ export const formatBytes = (bytes: number): string => {
 export const formatSpeed = (bytesPerSec: number): string =>
   bytesPerSec > 0 ? `${formatBytes(bytesPerSec)}/s` : '';
 
-// Bytes/sec averaged over the first→last sample inside the window. A whole-window
-// average (rather than the last delta) smooths the per-second jitter the install
-// kit produces, so the speed/ETA readout stays steady. Samples are `[ms, bytes]`
-// in ascending time order; callers prune backwards jumps before sampling.
-export const rollingSpeed = (
-  samples: ReadonlyArray<readonly [number, number]>,
-  nowMs: number,
-  windowMs: number,
-): number => {
-  const inWindow = samples.filter(([t]) => nowMs - t <= windowMs);
-  if (inWindow.length < 2) return 0;
-  const first = inWindow[0];
-  const last = inWindow[inWindow.length - 1];
-  if (!first || !last) return 0;
-  const dt = (last[0] - first[0]) / 1000;
-  if (dt <= 0) return 0;
-  const rate = (last[1] - first[1]) / dt;
-  return rate > 0 ? rate : 0;
-};
-
 // Seconds remaining from a smoothed rate; null whenever the estimate is
 // meaningless (stalled, complete, or a negative remainder) so the UI can hide it.
 export const computeEtaSeconds = (bytesRemaining: number, bytesPerSec: number): number | null => {

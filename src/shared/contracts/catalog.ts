@@ -91,6 +91,12 @@ export type CatalogPresentation = {
 
 export type OfficialCatalogItem = {
   readonly kind: typeof SourceKinds.OFFICIAL;
+  /**
+   * The cross-kind operational id that flows through the install / launch /
+   * repair / settings / bundle chain over IPC (`official:<slug>` or
+   * `local:<uuid>`). Every downstream channel, store, and settings record is
+   * keyed by it, so the renderer never down-casts to a bare slug/uuid.
+   */
   readonly key: CatalogKey;
   readonly ref: { readonly source: typeof SourceKinds.OFFICIAL; readonly slug: ClientSlug };
   readonly spec: BuildSpec;
@@ -101,6 +107,7 @@ export type OfficialCatalogItem = {
 
 export type LocalCatalogItem = {
   readonly kind: typeof SourceKinds.LOCAL;
+  /** The operational CatalogKey — see {@link OfficialCatalogItem.key}. */
   readonly key: CatalogKey;
   readonly ref: { readonly source: typeof SourceKinds.LOCAL; readonly id: InstanceId };
   readonly spec: BuildSpec;
