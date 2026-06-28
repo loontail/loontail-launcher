@@ -9,12 +9,20 @@ import type { ProgressControlsKind } from './installSteps';
 type ControlButtonsProps = {
   slug: CatalogKey;
   paused: boolean;
+  pausable: boolean;
   onPause: (slug: CatalogKey) => Promise<unknown>;
   onResume: (slug: CatalogKey) => Promise<unknown>;
   onCancel: (slug: CatalogKey) => Promise<unknown>;
 };
 
-const ControlButtons = ({ slug, paused, onPause, onResume, onCancel }: ControlButtonsProps) => {
+const ControlButtons = ({
+  slug,
+  paused,
+  pausable,
+  onPause,
+  onResume,
+  onCancel,
+}: ControlButtonsProps) => {
   const { t } = useTranslation();
 
   return (
@@ -25,7 +33,10 @@ const ControlButtons = ({ slug, paused, onPause, onResume, onCancel }: ControlBu
           {t('clients.resume')}
         </ActionButton>
       ) : (
-        <ActionButton variant="ghost" onClick={() => void onPause(slug)}>
+        // Pausing a launch-time (forLaunch) bundle sync parks it and would freeze
+        // the Play flow, so the Pause control is disabled for it — the user can
+        // still Cancel (BUG-2).
+        <ActionButton variant="ghost" disabled={!pausable} onClick={() => void onPause(slug)}>
           <Pause size={12} />
           {t('clients.pause')}
         </ActionButton>
@@ -38,7 +49,9 @@ const ControlButtons = ({ slug, paused, onPause, onResume, onCancel }: ControlBu
   );
 };
 
-const InstallControls = ({ slug, paused }: { slug: CatalogKey; paused: boolean }) => {
+type ControlsProps = { slug: CatalogKey; paused: boolean; pausable: boolean };
+
+const InstallControls = ({ slug, paused, pausable }: ControlsProps) => {
   const pause = usePauseInstall();
   const resume = useResumeInstall();
   const cancel = useCancelInstall();
@@ -47,6 +60,7 @@ const InstallControls = ({ slug, paused }: { slug: CatalogKey; paused: boolean }
     <ControlButtons
       slug={slug}
       paused={paused}
+      pausable={pausable}
       onPause={pause.mutateAsync}
       onResume={resume.mutateAsync}
       onCancel={cancel.mutateAsync}
@@ -54,7 +68,7 @@ const InstallControls = ({ slug, paused }: { slug: CatalogKey; paused: boolean }
   );
 };
 
-const BundleControls = ({ slug, paused }: { slug: CatalogKey; paused: boolean }) => {
+const BundleControls = ({ slug, paused, pausable }: ControlsProps) => {
   const pause = usePauseBundle();
   const resume = useResumeBundle();
   const cancel = useCancelBundle();
@@ -63,6 +77,7 @@ const BundleControls = ({ slug, paused }: { slug: CatalogKey; paused: boolean })
     <ControlButtons
       slug={slug}
       paused={paused}
+      pausable={pausable}
       onPause={pause.mutateAsync}
       onResume={resume.mutateAsync}
       onCancel={cancel.mutateAsync}
@@ -73,11 +88,13 @@ const BundleControls = ({ slug, paused }: { slug: CatalogKey; paused: boolean })
 type ProgressControlsProps = {
   kind: ProgressControlsKind;
   paused: boolean;
+  pausable: boolean;
   slug: CatalogKey;
 };
 
-export const ProgressControls = ({ kind, paused, slug }: ProgressControlsProps) => {
-  if (kind === 'install') return <InstallControls slug={slug} paused={paused} />;
-  if (kind === 'bundle') return <BundleControls slug={slug} paused={paused} />;
+export const ProgressControls = ({ kind, paused, pausable, slug }: ProgressControlsProps) => {
+  if (kind === 'install')
+    return <InstallControls slug={slug} paused={paused} pausable={pausable} />;
+  if (kind === 'bundle') return <BundleControls slug={slug} paused={paused} pausable={pausable} />;
   return null;
 };

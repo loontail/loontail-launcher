@@ -14,7 +14,6 @@ const managerMocks = vi.hoisted(() => {
 
 import { MANIFEST_DRIFT_TTL_MS } from '@main/constants/bundle';
 import { BundleManager, type GetClient } from '@main/services/bundle/manager';
-import { SyncStateStore } from '@main/services/bundle/syncState';
 import { createClientOperationLocks } from '@main/services/clientOperationLocks';
 import { asCatalogKey } from '@shared/contracts/ids';
 import { makeBroadcaster, makeHealer, makeLauncherSettings } from '../../../helpers/fixtures';
@@ -67,7 +66,7 @@ const localManifest = (manifestHash: string) => ({
   files: {},
 });
 
-const makeManager = (activeSyncs = new SyncStateStore()) =>
+const makeManager = (activeSyncs = new Map()) =>
   new BundleManager(
     makeBroadcaster(),
     makeHealer(),

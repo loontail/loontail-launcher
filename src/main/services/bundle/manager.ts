@@ -35,13 +35,18 @@ import { createHealProgressListener } from './healProgress';
 import type { Healer } from './healer';
 import { loadLocalManifest, saveLocalManifest } from './manifestRepo';
 import { flattenRemote } from './manifestSnapshot';
-import { type SyncPlan, buildPlan } from './plan';
+import { buildPlan } from './plan';
 import { type EmitProgress, type SyncTask, runSyncPhases } from './runner';
 import {
   type ActiveSync,
-  SyncStateStore,
+  type SyncStateMap,
   createActiveSync,
   createSyncTask,
+  isCancelled,
+  isPaused,
+  isRunning,
+  markCancelled,
+  markPaused,
   resetTaskForResume,
 } from './syncState';
 
@@ -54,6 +59,16 @@ const BUNDLE_WRITE_RESOURCES = [
 type PreparedPlanSource = {
   force: boolean;
 };
+
+// Outcome of resolveSyncTarget: either the full target (client + bundle +
+// folder) or a reason it is unavailable. Each entry-point maps the reason to its
+// own behavior (UI install-state vs. sync status/error).
+type SyncTargetResult =
+  | { kind: 'ok'; client: Client; bundleSlug: BundleSlug; clientFolder: string }
+  | { kind: 'no-client' }
+  | { kind: 'fetch-failed'; slug: ClientSlug; cause: unknown }
+  | { kind: 'no-bundle'; client: Client }
+  | { kind: 'no-folder'; client: Client; bundleSlug: BundleSlug };
 
 export type GetClient = (slug: ClientSlug) => Promise<Client>;
 
@@ -105,7 +120,7 @@ export class BundleManager {
     private readonly broadcaster: BundleBroadcaster,
     private readonly healer: Healer,
     private readonly operationLocks: ClientOperationLocks,
-    private readonly activeSyncs: SyncStateStore = new SyncStateStore(),
+    private readonly activeSyncs: SyncStateMap = new Map(),
     private readonly getClient: GetClient = defaultGetClient,
   ) {}
 
@@ -139,13 +154,13 @@ export class BundleManager {
   pauseSync(slug: CatalogKey): void {
     const active = this.activeSyncs.get(slug);
     if (!active) return;
-    if (active.task.cancelled) return;
-    // Idempotent: a second pause must not re-arm the idle timer (resetting the
-    // expiry window) or re-emit PAUSED.
-    if (active.task.paused) return;
-    active.task.paused = true;
+    // markPaused is a no-op on a cancelled (terminal) or already-paused task, so
+    // a second pause won't re-arm the idle timer or re-emit PAUSED — but guard
+    // explicitly so the abort/emit/timer side effects below don't re-run either.
+    if (!isRunning(active.task)) return;
+    markPaused(active.task);
     // Abort current downloads — the runner rethrows ABORTED for the now-paused
-    // task, which executePreparedSync's catch decodes (ABORTED + task.paused) by
+    // task, which executePreparedSync's catch decodes (ABORTED + paused phase) by
     // returning without dropping the active sync, parking the partial state for resume.
     active.task.abort.abort();
     this.emitStatus(slug, BundleSyncStatuses.PAUSED);
@@ -161,8 +176,7 @@ export class BundleManager {
       await this.startSync({ slug });
       return;
     }
-    if (active.task.cancelled) return;
-    if (!active.task.paused) return;
+    if (!isPaused(active.task)) return;
     this.clearPauseIdleTimer(active);
     // Re-plan from current disk state — if files were finished before pause,
     // they're now hash-matched and will be skipped. Fire-and-forget: the paused
@@ -177,8 +191,9 @@ export class BundleManager {
     const active = this.activeSyncs.get(slug);
     if (!active) return;
     this.clearPauseIdleTimer(active);
-    const wasPaused = active.task.paused;
-    active.task.cancelled = true;
+    const wasPaused = isPaused(active.task);
+    // markCancelled is terminal and overrides a pause; a later pause cannot revive it.
+    markCancelled(active.task);
     active.task.abort.abort();
     // Destroy any sockets the runner might still hold (defensive — abort()
     // should already have triggered cleanup via the signal listener).
@@ -207,14 +222,21 @@ export class BundleManager {
         progress: active.lastProgress,
       };
     }
-    const client = await this.tryGetClient(slug);
-    if (!client?.bundleSlug) {
+    const target = await this.resolveSyncTarget(slug, 'swallow');
+    // No client record or no bundle attached → nothing to manage, report installed.
+    if (target.kind === 'no-client' || target.kind === 'no-bundle') {
       return { installed: true, signatureMatches: true, progress: null };
     }
-    const clientFolder = this.resolveClientFolder(slug);
-    if (!clientFolder) {
+    // Bundle exists but no install folder is set yet → not installed.
+    if (target.kind === 'no-folder') {
       return { installed: false, signatureMatches: true, progress: null };
     }
+    // 'fetch-failed' cannot occur under the 'swallow' policy; collapse it to the
+    // best-effort installed answer so the UI never gates on a probe error.
+    if (target.kind !== 'ok') {
+      return { installed: true, signatureMatches: true, progress: null };
+    }
+    const { bundleSlug, clientFolder } = target;
     const local = await loadLocalManifest(clientFolder);
     if (!local) {
       return { installed: false, signatureMatches: false, progress: null };
@@ -223,7 +245,7 @@ export class BundleManager {
     // the UI on it — return signatureMatches=true and let the next sync sort
     // it out. The remote hash is cached for a short TTL to bound the per-IPC
     // round-trip; the local hash above is always read fresh.
-    const remoteHash = await this.remoteHashForDriftCheck(slug, client.bundleSlug);
+    const remoteHash = await this.remoteHashForDriftCheck(slug, bundleSlug);
     if (remoteHash === null) {
       return { installed: true, signatureMatches: true, progress: null };
     }
@@ -266,25 +288,30 @@ export class BundleManager {
     const { slug } = req;
     // The write lock (acquireWriteLock below) is the single source of truth for
     // in-flight dedup — it throws OP_IN_FLIGHT when another sync holds the lease.
-    // A fetch failure (CMS offline) surfaces as MANIFEST_FETCH_FAILED, not
-    // the opaque UNKNOWN "client not found" path.
-    const client = await this.fetchClient(slug);
-    if (!client) {
+    // A fetch failure (bundle-registry backend offline) surfaces as
+    // MANIFEST_FETCH_FAILED, not the opaque UNKNOWN "client not found" path.
+    const target = await this.resolveSyncTarget(slug, 'classify');
+    if (target.kind === 'no-client') {
       throw new BundleError(BundleErrorCodes.UNKNOWN, `Client "${slug}" not found`);
     }
-    const bundleSlug = client.bundleSlug ?? null;
-    if (!bundleSlug) {
+    if (target.kind === 'fetch-failed') {
+      throw new BundleError(
+        BundleErrorCodes.MANIFEST_FETCH_FAILED,
+        `Failed to load client "${target.slug}": ${errorMessage(target.cause)}`,
+      );
+    }
+    if (target.kind === 'no-bundle') {
       // No bundle attached — treat as a successful no-op so launch can proceed.
       this.emitStatus(slug, BundleSyncStatuses.NO_BUNDLE);
       return;
     }
-    const clientFolder = this.resolveClientFolder(slug);
-    if (!clientFolder) {
+    if (target.kind === 'no-folder') {
       throw new BundleError(
         BundleErrorCodes.NO_CLIENT_FOLDER,
         'Set the launcher install folder in System settings first',
       );
     }
+    const { bundleSlug, clientFolder } = target;
     const lock = this.acquireWriteLock(slug);
     // If task/active-sync construction throws before the sync is registered,
     // release the lease here — dropActiveSync only runs once an ActiveSync owns
@@ -352,7 +379,7 @@ export class BundleManager {
 
       // why: a cancel landing after buildPlan resolves but before the empty-plan
       // shortcut must surface CANCELLED to forLaunch awaiters, not UP_TO_DATE.
-      if (task.cancelled)
+      if (isCancelled(task))
         throw new BundleError(BundleErrorCodes.ABORTED, 'cancelled during planning');
 
       if (task.totalFiles === 0) {
@@ -376,9 +403,16 @@ export class BundleManager {
           progress.dispose();
         }
       }
-      // A pause can still land mid-heal; the heal call observes task.abort but
-      // returns rather than throwing, so re-check before settling COMPLETED.
-      if (task.paused) {
+      // A cancel/pause can still land between heal resolving and settling
+      // COMPLETED (the heal call observes task.abort but returns rather than
+      // throwing if the abort fires right as it finishes). Re-check phase: a
+      // cancel is terminal, so re-throw ABORTED to route through the catch's
+      // CANCELLED branch (BUG-5 — emit CANCELLED, reject forLaunch awaiters, not
+      // COMPLETED); a pause parks the sync for resume.
+      if (isCancelled(task)) {
+        throw new BundleError(BundleErrorCodes.ABORTED, 'cancelled after heal');
+      }
+      if (isPaused(task)) {
         return;
       }
       await this.completePreparedSync(active, BundleSyncStatuses.COMPLETED);
@@ -388,12 +422,13 @@ export class BundleManager {
       // cancel lands (terminal → emit CANCELLED) or a worker rejects mid-pause
       // (cooperative stop → swallow, leaving the parked sync for resume).
       const code = classifyBundleError(err, task.abort.signal);
-      if (code === BundleErrorCodes.ABORTED && task.cancelled) {
+      // Check cancel before pause: cancel is terminal and overrides a pause.
+      if (code === BundleErrorCodes.ABORTED && isCancelled(task)) {
         this.emitStatus(task.slug, BundleSyncStatuses.CANCELLED);
         this.rejectAwaiters(active, this.toBundleError(err, code));
         return;
       }
-      if (code === BundleErrorCodes.ABORTED && task.paused) {
+      if (code === BundleErrorCodes.ABORTED && isPaused(task)) {
         return;
       }
       logger.error(`[${task.slug}] bundle sync failed (${code}) — ${errorMessage(err)}`, err);
@@ -401,7 +436,9 @@ export class BundleManager {
       this.emitStatus(task.slug, BundleSyncStatuses.ERROR);
       this.rejectAwaiters(active, this.toBundleError(err, code));
     } finally {
-      if (!task.paused || task.cancelled) {
+      // Keep the active sync registered only while parked for resume (paused).
+      // A cancelled task is terminal, so it drops here like a completed one.
+      if (!isPaused(task)) {
         this.dropActiveSync(task.slug);
       }
     }
@@ -472,33 +509,32 @@ export class BundleManager {
     return ref && ref.source === SourceKinds.OFFICIAL ? ref.slug : null;
   }
 
-  // getInstallState's best-effort probe — a fetch failure must not gate the UI,
-  // so any error collapses to null (treated as "no client record").
-  private async tryGetClient(key: CatalogKey) {
+  // Resolve the client + bundle + install folder a sync needs, unifying the
+  // preamble of getInstallState and runSync. `fetchPolicy` decides how a getClient
+  // failure surfaces: 'swallow' collapses it to no-client (getInstallState's
+  // best-effort probe must not gate the UI), 'classify' splits a genuine
+  // not-found (no-client) from a real fetch failure (fetch-failed →
+  // MANIFEST_FETCH_FAILED) so the sync path can react to each.
+  private async resolveSyncTarget(
+    key: CatalogKey,
+    fetchPolicy: 'swallow' | 'classify',
+  ): Promise<SyncTargetResult> {
     const slug = this.officialSlugFor(key);
-    if (!slug) return null;
+    if (!slug) return { kind: 'no-client' };
+    let client: Client;
     try {
-      return await this.getClient(slug);
-    } catch {
-      return null;
-    }
-  }
-
-  // Sync path: distinguish a genuine "no such client" (null) from a fetch
-  // failure (network/CMS down) so the renderer sees MANIFEST_FETCH_FAILED
-  // rather than an undifferentiated UNKNOWN.
-  private async fetchClient(key: CatalogKey) {
-    const slug = this.officialSlugFor(key);
-    if (!slug) return null;
-    try {
-      return await this.getClient(slug);
+      client = await this.getClient(slug);
     } catch (err) {
-      if (isClientNotFound(err, slug)) return null;
-      throw new BundleError(
-        BundleErrorCodes.MANIFEST_FETCH_FAILED,
-        `Failed to load client "${slug}": ${errorMessage(err)}`,
-      );
+      if (fetchPolicy === 'swallow' || isClientNotFound(err, slug)) {
+        return { kind: 'no-client' };
+      }
+      return { kind: 'fetch-failed', slug, cause: err };
     }
+    const bundleSlug = client.bundleSlug ?? null;
+    if (!bundleSlug) return { kind: 'no-bundle', client };
+    const clientFolder = this.resolveClientFolder(key);
+    if (!clientFolder) return { kind: 'no-folder', client, bundleSlug };
+    return { kind: 'ok', client, bundleSlug, clientFolder };
   }
 
   private resolveClientFolder(slug: CatalogKey): string | null {
@@ -570,7 +606,7 @@ export class BundleManager {
 
   private expirePausedSync(slug: CatalogKey): void {
     const active = this.activeSyncs.get(slug);
-    if (!active || !active.task.paused) return;
+    if (!active || !isPaused(active.task)) return;
     logger.info(`[${slug}] paused sync idle timeout reached — auto-cancelling`);
     this.emitStatus(slug, BundleSyncStatuses.CANCELLED);
     this.rejectAwaiters(
@@ -609,7 +645,3 @@ export class BundleManager {
     if (timer) clearTimeout(timer);
   }
 }
-
-// Plan helpers — exported only for tests.
-export const _internals = { flattenRemote };
-export type { ActiveSync, SyncPlan };

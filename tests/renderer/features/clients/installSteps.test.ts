@@ -97,7 +97,42 @@ describe('selectInstallProgress', () => {
       { hasBundle: true, hasLoader: false },
     );
 
-    expect(view).toMatchObject({ mode: 'bundle', activeStep: InstallStepKeys.BUNDLE });
+    expect(view).toMatchObject({
+      mode: 'bundle',
+      activeStep: InstallStepKeys.BUNDLE,
+      pausable: true,
+    });
+  });
+
+  // BUG-2: a launch-time bundle sync (client is LAUNCHING) must not be pausable —
+  // pause parks it and would freeze Play, so the UI offers Resume/Cancel only.
+  it('marks a launch-time bundle sync as not pausable', () => {
+    const progress: BundleProgressEvent = {
+      slug: asCatalogKey('official:demo'),
+      status: BundleSyncStatuses.DOWNLOADING,
+      processedFiles: 1,
+      totalFiles: 4,
+      toDownload: 3,
+      toUpdate: 0,
+      toDelete: 0,
+      toSkip: 0,
+      bytesDownloaded: 100,
+      bytesTotal: 1_000,
+      speedBytesPerSec: 500,
+    };
+
+    const launchingClient: ClientRuntimeState = {
+      status: InstallStatuses.LAUNCHING,
+      paused: false,
+    };
+
+    const view = selectInstallProgress(
+      launchingClient,
+      bundleAt(BundleSyncStatuses.DOWNLOADING, progress),
+      { hasBundle: true, hasLoader: false },
+    );
+
+    expect(view).toMatchObject({ mode: 'bundle', controls: 'bundle', pausable: false });
   });
 
   it('reads the adapter-emitted per-stage bytes and speed directly', () => {

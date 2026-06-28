@@ -53,6 +53,10 @@ export type InstallProgressView = {
   activeStep: InstallStepKey | null;
   paused: boolean;
   controls: ProgressControlsKind;
+  // False when the sync must not be paused — a launch-time (Play) bundle sync
+  // parks on pause and would freeze the Play flow, so the UI offers only
+  // Resume/Cancel during it (BUG-2). Install/repair are always pausable.
+  pausable: boolean;
 };
 
 // `finalize` is folded into the *last* scheduled step — loader if present,
@@ -159,6 +163,7 @@ export const selectInstallProgress = (
   let activeStep: InstallStepKey | null = null;
   let paused = false;
   let controls: ProgressControlsKind = null;
+  let pausable = true;
   let mode: InstallProgressMode = 'install';
 
   if (installDownloadRunning || repairDownloadRunning) {
@@ -198,6 +203,10 @@ export const selectInstallProgress = (
     mode = 'bundle';
     paused = bundle.status === BundleSyncStatuses.PAUSED;
     controls = 'bundle';
+    // A launch-time bundle sync (the client is LAUNCHING while the bundle syncs)
+    // is parked on pause and would freeze Play, so the user gets Resume/Cancel
+    // only — never an initial Pause (BUG-2).
+    pausable = client.status !== InstallStatuses.LAUNCHING;
     activeStep = InstallStepKeys.BUNDLE;
     markPrecedingDone(steps, InstallStepKeys.BUNDLE);
     const bundleStep = steps.find((s) => s.key === InstallStepKeys.BUNDLE);
@@ -219,5 +228,5 @@ export const selectInstallProgress = (
     }
   }
 
-  return { mode, steps, activeStep, paused, controls };
+  return { mode, steps, activeStep, paused, controls, pausable };
 };

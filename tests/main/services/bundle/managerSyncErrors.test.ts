@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+﻿import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const managerMocks = vi.hoisted(() => {
   return {
@@ -16,7 +16,6 @@ const managerMocks = vi.hoisted(() => {
 import type { BundleBroadcaster } from '@main/services/bundle/broadcast';
 import { BundleError, classifyBundleError } from '@main/services/bundle/errors';
 import { BundleManager, type GetClient } from '@main/services/bundle/manager';
-import { SyncStateStore } from '@main/services/bundle/syncState';
 import { createClientOperationLocks } from '@main/services/clientOperationLocks';
 import { BundleErrorCodes, BundleSyncStatuses } from '@shared/contracts/bundle';
 import { asCatalogKey } from '@shared/contracts/ids';
@@ -134,7 +133,7 @@ describe('BundleManager sync error surfacing', () => {
       makeBroadcaster(),
       makeHealer(),
       createClientOperationLocks(),
-      new SyncStateStore(),
+      new Map(),
       fakeGetClient,
     );
 
@@ -152,7 +151,7 @@ describe('BundleManager sync error surfacing', () => {
       makeBroadcaster(),
       makeHealer(),
       createClientOperationLocks(),
-      new SyncStateStore(),
+      new Map(),
       fakeGetClient,
     );
 
@@ -172,7 +171,7 @@ describe('BundleManager sync error surfacing', () => {
       broadcaster,
       makeHealer(),
       createClientOperationLocks(),
-      new SyncStateStore(),
+      new Map(),
       fakeGetClient,
     );
 
@@ -199,7 +198,7 @@ describe('BundleManager sync error surfacing', () => {
       broadcaster,
       makeHealer(),
       createClientOperationLocks(),
-      new SyncStateStore(),
+      new Map(),
       fakeGetClient,
     );
 
@@ -218,7 +217,7 @@ describe('BundleManager sync error surfacing', () => {
       makeBroadcaster(),
       makeHealer(),
       createClientOperationLocks(),
-      new SyncStateStore(),
+      new Map(),
       fakeGetClient,
     );
 
@@ -242,7 +241,7 @@ describe('BundleManager sync error surfacing', () => {
     });
 
     const broadcaster = makeBroadcaster();
-    const activeSyncs = new SyncStateStore();
+    const activeSyncs = new Map();
     const manager = new BundleManager(
       broadcaster,
       makeHealer(),
@@ -283,7 +282,7 @@ describe('BundleManager sync error surfacing', () => {
       makeBroadcaster(),
       makeHealer(),
       createClientOperationLocks(),
-      new SyncStateStore(),
+      new Map(),
       fakeGetClient,
     );
     void manager.startSync({ slug: SLUG });

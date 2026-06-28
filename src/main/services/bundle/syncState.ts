@@ -1,8 +1,5 @@
 import type { ClientRequest } from 'node:http';
-import {
-  ClientOperationDomains,
-  type ClientOperationLease,
-} from '@main/services/clientOperationLocks';
+import type { ClientOperationLease } from '@main/services/clientOperationLocks';
 import type { BundleProgressEvent, RemoteManifest } from '@shared/contracts/bundle';
 import type { BundleSlug, CatalogKey } from '@shared/contracts/ids';
 import type { SyncPlan } from './plan';
@@ -51,6 +48,14 @@ export const markRunning = (task: SyncTask): void => {
   if (task.phase === 'paused') task.phase = 'running';
 };
 
+// Phase reads go through these predicates rather than inlined `task.phase === …`
+// comparisons: the mark* helpers mutate task.phase through an aliased reference
+// across the runner/heal awaits, which TS control-flow narrowing cannot track —
+// a function boundary keeps each read independent.
+export const isCancelled = (task: SyncTask): boolean => task.phase === 'cancelled';
+export const isPaused = (task: SyncTask): boolean => task.phase === 'paused';
+export const isRunning = (task: SyncTask): boolean => task.phase === 'running';
+
 export const createSyncTask = (slug: CatalogKey, clientFolder: string): SyncTask => {
   const task: SyncTask = {
     slug,
@@ -59,21 +64,6 @@ export const createSyncTask = (slug: CatalogKey, clientFolder: string): SyncTask
     abort: new AbortController(),
     currentRequests: new Set<ClientRequest>(),
     phase: 'running',
-    get paused() {
-      return task.phase === 'paused';
-    },
-    set paused(value: boolean) {
-      if (value) markPaused(task);
-      else markRunning(task);
-    },
-    get cancelled() {
-      return task.phase === 'cancelled';
-    },
-    // Cancellation is terminal: a `false` write is a no-op (use markRunning to
-    // resume a paused task) so the compat setter can never revive a cancel.
-    set cancelled(value: boolean) {
-      if (value) markCancelled(task);
-    },
     bytesDownloaded: 0,
     speedWindowStart: Date.now(),
     speedWindowBytes: 0,
@@ -126,65 +116,4 @@ export const resetTaskForResume = (task: SyncTask): void => {
   task.speedWindowBytes = 0;
 };
 
-export class SyncStateStore {
-  private readonly entries = new Map<CatalogKey, ActiveSync>();
-
-  get(slug: CatalogKey): ActiveSync | undefined {
-    return this.entries.get(slug);
-  }
-
-  set(slug: CatalogKey, active: ActiveSync): void {
-    this.entries.set(slug, active);
-  }
-
-  delete(slug: CatalogKey): boolean {
-    return this.entries.delete(slug);
-  }
-
-  has(slug: CatalogKey): boolean {
-    return this.entries.has(slug);
-  }
-
-  get size(): number {
-    return this.entries.size;
-  }
-
-  values(): IterableIterator<ActiveSync> {
-    return this.entries.values();
-  }
-}
-
-const noopLease = (slug: CatalogKey): ClientOperationLease => ({
-  slug,
-  domain: ClientOperationDomains.BUNDLE,
-  resources: [],
-  setCancel: () => {},
-  release: () => {},
-});
-
-// Test-only: builds an ActiveSync through the real createSyncTask/createActiveSync
-// so the seeded record shape lives in one place and tracks ActiveSync at compile
-// time. A real ClientOperationLease can be supplied when the test asserts on lock
-// release; otherwise a no-op lease is used.
-export const seedActiveSync = (
-  store: SyncStateStore,
-  opts: {
-    slug: CatalogKey;
-    clientFolder: string;
-    bundleSlug: BundleSlug;
-    forLaunch: boolean;
-    paused?: boolean;
-    lock?: ClientOperationLease;
-  },
-): ActiveSync => {
-  const task = createSyncTask(opts.slug, opts.clientFolder);
-  if (opts.paused) markPaused(task);
-  const active = createActiveSync(
-    task,
-    opts.lock ?? noopLease(opts.slug),
-    opts.bundleSlug,
-    opts.forLaunch,
-  );
-  store.set(opts.slug, active);
-  return active;
-};
+export type SyncStateMap = Map<CatalogKey, ActiveSync>;

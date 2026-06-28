@@ -12,7 +12,7 @@ export type InstallProgressProps = {
 
 export const InstallProgress = ({ slug, view }: InstallProgressProps) => {
   const { t } = useTranslation();
-  const { steps, activeStep, paused, controls, mode } = view;
+  const { steps, activeStep, paused, controls, pausable, mode } = view;
   const active = steps.find((step) => step.key === activeStep) ?? null;
   const activeIndex = active ? steps.findIndex((step) => step.key === active.key) + 1 : 0;
   const stepIndicator = active
@@ -35,7 +35,15 @@ export const InstallProgress = ({ slug, view }: InstallProgressProps) => {
 
       <InstallStepper steps={steps} />
 
-      {active && <ProgressBody active={active} paused={paused} controls={controls} slug={slug} />}
+      {active && (
+        <ProgressBody
+          active={active}
+          paused={paused}
+          pausable={pausable}
+          controls={controls}
+          slug={slug}
+        />
+      )}
     </div>
   );
 };

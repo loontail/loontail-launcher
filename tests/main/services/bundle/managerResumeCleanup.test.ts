@@ -20,12 +20,11 @@ import { BundleError } from '@main/services/bundle/errors';
 import { BundleManager } from '@main/services/bundle/manager';
 import { runSyncPhases } from '@main/services/bundle/runner';
 import {
-  SyncStateStore,
+  type SyncStateMap,
   createSyncTask,
   markCancelled,
   markPaused,
   markRunning,
-  seedActiveSync,
 } from '@main/services/bundle/syncState';
 import {
   ClientOperationDomains,
@@ -35,6 +34,7 @@ import {
 } from '@main/services/clientOperationLocks';
 import { BundleErrorCodes, BundleSyncStatuses } from '@shared/contracts/bundle';
 import { type BundleSlug, asCatalogKey } from '@shared/contracts/ids';
+import { seedActiveSync } from '../../../helpers/bundleSync';
 import { makeBroadcaster, makeHealer, makeLauncherSettings } from '../../../helpers/fixtures';
 
 vi.mock('@main/infra/logger', () => ({
@@ -78,7 +78,7 @@ const launcherSettings = () =>
   makeLauncherSettings({ clients: { [SLUG]: { storage: { clientFolder: CLIENT_FOLDER } } } });
 
 const seedPausedActiveWithLock = (
-  activeSyncs: SyncStateStore,
+  activeSyncs: SyncStateMap,
   operationLocks: ClientOperationLocks,
 ): void => {
   const acquired = operationLocks.acquire({
@@ -157,7 +157,7 @@ describe('BundleManager resume cleanup', () => {
       throw new Error('re-plan setup failed');
     });
     const operationLocks = createClientOperationLocks();
-    const activeSyncs = new SyncStateStore();
+    const activeSyncs: SyncStateMap = new Map();
     const manager = new BundleManager(makeBroadcaster(), makeHealer(), operationLocks, activeSyncs);
     seedPausedActiveWithLock(activeSyncs, operationLocks);
 
@@ -180,11 +180,9 @@ describe('BundleManager resume cleanup', () => {
 });
 
 describe('SyncTask phase transitions', () => {
-  it('starts running with derived paused/cancelled false', () => {
+  it('starts running', () => {
     const task = createSyncTask(SLUG, CLIENT_FOLDER);
     expect(task.phase).toBe('running');
-    expect(task.paused).toBe(false);
-    expect(task.cancelled).toBe(false);
   });
 
   it('treats a cancel after cancel as a no-op (stays cancelled)', () => {
@@ -192,7 +190,6 @@ describe('SyncTask phase transitions', () => {
     markCancelled(task);
     markCancelled(task);
     expect(task.phase).toBe('cancelled');
-    expect(task.cancelled).toBe(true);
   });
 
   it('treats a resume from running as a no-op', () => {
@@ -207,14 +204,19 @@ describe('SyncTask phase transitions', () => {
     expect(task.phase).toBe('paused');
     markCancelled(task);
     expect(task.phase).toBe('cancelled');
-    expect(task.cancelled).toBe(true);
-    expect(task.paused).toBe(false);
   });
 
-  it('cannot pause a cancelled task', () => {
+  it('cannot pause a cancelled task (cancel is terminal)', () => {
     const task = createSyncTask(SLUG, CLIENT_FOLDER);
     markCancelled(task);
     markPaused(task);
+    expect(task.phase).toBe('cancelled');
+  });
+
+  it('cannot resume a cancelled task (cancel is terminal)', () => {
+    const task = createSyncTask(SLUG, CLIENT_FOLDER);
+    markCancelled(task);
+    markRunning(task);
     expect(task.phase).toBe('cancelled');
   });
 
@@ -223,17 +225,6 @@ describe('SyncTask phase transitions', () => {
     markPaused(task);
     markRunning(task);
     expect(task.phase).toBe('running');
-    expect(task.paused).toBe(false);
-  });
-
-  it('routes the compat paused setter through the transition guards', () => {
-    const task = createSyncTask(SLUG, CLIENT_FOLDER);
-    task.paused = true;
-    expect(task.phase).toBe('paused');
-    task.cancelled = true;
-    // A subsequent compat pause-write must not revive the cancelled task.
-    task.paused = true;
-    expect(task.phase).toBe('cancelled');
   });
 });
 
@@ -260,13 +251,13 @@ describe('runSyncPhases secondary worker errors (DLI-26)', () => {
 // Public-API integration: drive a real startSync into a genuine PAUSED state via
 // pauseSync (no seedActiveSync, no armPauseIdleTimer reflection), then exercise
 // the pause-terminal branches through the public surface against the real
-// runner, injected SyncStateStore (W0 seam), and real operation locks. The
-// seeded equivalents live in managerPauseCleanup; these prove the same branches
-// from the public entry points.
+// runner, injected activeSyncs Map, and real operation locks. The seeded
+// equivalents live in managerPauseCleanup; these prove the same branches from
+// the public entry points.
 describe('BundleManager pause terminal branches (public API)', () => {
   const driveToPause = async (
     broadcaster: BundleBroadcaster,
-    activeSyncs: SyncStateStore,
+    activeSyncs: SyncStateMap,
     operationLocks: ClientOperationLocks,
   ): Promise<BundleManager> => {
     blockingDownloadUntilAbort();
@@ -287,7 +278,7 @@ describe('BundleManager pause terminal branches (public API)', () => {
 
   it('cancel after a public pause emits CANCELLED, frees the slot, and releases the lock', async () => {
     const broadcaster = makeBroadcaster();
-    const activeSyncs = new SyncStateStore();
+    const activeSyncs: SyncStateMap = new Map();
     const operationLocks = createClientOperationLocks();
     const manager = await driveToPause(broadcaster, activeSyncs, operationLocks);
 
@@ -306,7 +297,7 @@ describe('BundleManager pause terminal branches (public API)', () => {
 
   it('public pause arms an unref-ed real idle auto-cancel timer on the active sync', async () => {
     const broadcaster = makeBroadcaster();
-    const activeSyncs = new SyncStateStore();
+    const activeSyncs: SyncStateMap = new Map();
     await driveToPause(broadcaster, activeSyncs, createClientOperationLocks());
 
     // The idle window (BUNDLE_PAUSED_SYNC_MAX_IDLE_MS) is too long to wait out on
@@ -322,7 +313,7 @@ describe('BundleManager pause terminal branches (public API)', () => {
 
   it('cancelAll aborts a publicly paused sync and frees its slot', async () => {
     const broadcaster = makeBroadcaster();
-    const activeSyncs = new SyncStateStore();
+    const activeSyncs: SyncStateMap = new Map();
     const manager = await driveToPause(broadcaster, activeSyncs, createClientOperationLocks());
 
     await manager.cancelAll(0);

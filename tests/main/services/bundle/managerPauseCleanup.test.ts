@@ -1,4 +1,4 @@
-import {
+﻿import {
   EventTypes,
   type ProgressEvent,
   VerifyFileCategories,
@@ -26,7 +26,7 @@ import type { Healer } from '@main/services/bundle/healer';
 import { BundleManager } from '@main/services/bundle/manager';
 import type { SyncPlan } from '@main/services/bundle/plan';
 import type { SyncPhasesResult, SyncTask } from '@main/services/bundle/runner';
-import { type ActiveSync, SyncStateStore, seedActiveSync } from '@main/services/bundle/syncState';
+import { type ActiveSync, type SyncStateMap, markPaused } from '@main/services/bundle/syncState';
 import {
   ClientOperationDomains,
   ClientOperationResources,
@@ -34,6 +34,7 @@ import {
 } from '@main/services/clientOperationLocks';
 import { BundleErrorCodes, BundleSyncStatuses } from '@shared/contracts/bundle';
 import { type BundleSlug, type CatalogKey, asCatalogKey } from '@shared/contracts/ids';
+import { seedActiveSync } from '../../../helpers/bundleSync';
 import { makeBroadcaster, makeHealer, makeLauncherSettings } from '../../../helpers/fixtures';
 
 vi.mock('@main/infra/logger', () => ({
@@ -82,8 +83,6 @@ const syncResult = (
 ): SyncPhasesResult => ({
   outcome,
   deletedAny,
-  paused: outcome === 'paused',
-  cancelled: outcome === 'cancelled',
 });
 
 const EMPTY_PLAN: SyncPlan = {
@@ -118,7 +117,7 @@ const launcherSettings = () =>
 
 const seedPausedActive = (
   manager: BundleManager,
-  activeSyncs: SyncStateStore,
+  activeSyncs: SyncStateMap,
   awaiter: Awaiter,
 ): ActiveSync => {
   const active = seedActiveSync(activeSyncs, {
@@ -192,7 +191,7 @@ describe('BundleManager pause cleanup', () => {
 
   it('cancel after pause rejects awaiters and frees the slot', async () => {
     const broadcaster = makeBroadcaster();
-    const activeSyncs = new SyncStateStore();
+    const activeSyncs = new Map();
     const manager = new BundleManager(
       broadcaster,
       makeHealer(),
@@ -247,7 +246,7 @@ describe('BundleManager pause cleanup', () => {
   it('cancelAll aborts every active sync and frees all slots', async () => {
     vi.useRealTimers();
     const broadcaster = makeBroadcaster();
-    const activeSyncs = new SyncStateStore();
+    const activeSyncs = new Map();
     const manager = new BundleManager(
       broadcaster,
       makeHealer(),
@@ -271,7 +270,7 @@ describe('BundleManager pause cleanup', () => {
 
   it('idle timeout drops paused entry and rejects awaiters', async () => {
     const broadcaster = makeBroadcaster();
-    const activeSyncs = new SyncStateStore();
+    const activeSyncs = new Map();
     const manager = new BundleManager(
       broadcaster,
       makeHealer(),
@@ -322,7 +321,7 @@ describe('BundleManager pause cleanup', () => {
     ]);
 
     const resumeBroadcaster = makeBroadcaster();
-    const activeSyncs = new SyncStateStore();
+    const activeSyncs = new Map();
     const resumeManager = new BundleManager(
       resumeBroadcaster,
       makeHealer(),
@@ -345,7 +344,7 @@ describe('BundleManager pause cleanup', () => {
 
     // The seeded paused sync carries an empty remote-manifest hash (the
     // pause-during-fetch sentinel), so resume refetches the manifest instead of
-    // planning against {} — matching the fresh sync's status sequence exactly.
+    // planning against {} â€” matching the fresh sync's status sequence exactly.
     const resumeStatuses = statusEvents(resumeBroadcaster);
     expect(resumeStatuses).toEqual([
       BundleSyncStatuses.FETCHING_MANIFEST,
@@ -364,14 +363,14 @@ describe('BundleManager pause cleanup', () => {
       toDelete: ['mods/old.jar'],
     });
     managerMocks.runSyncPhases.mockImplementationOnce(async (task: SyncTask) => {
-      task.paused = true;
+      markPaused(task);
       task.pendingDeletes = ['mods/old.jar'];
       return syncResult('paused', true);
     });
 
     const broadcaster = makeBroadcaster();
     const healer = makeHealer();
-    const activeSyncs = new SyncStateStore();
+    const activeSyncs = new Map();
     const manager = new BundleManager(
       broadcaster,
       healer,
@@ -433,6 +432,45 @@ describe('BundleManager pause cleanup', () => {
     vi.advanceTimersByTime(101);
 
     expect(broadcaster.progress).toHaveBeenCalledTimes(1);
+  });
+
+  // BUG-5: a cancel that lands after heal resolves but before the COMPLETED
+  // settle must surface CANCELLED (and reject a forLaunch awaiter), not COMPLETED.
+  it('emits CANCELLED and rejects the launch awaiter when cancel lands after heal', async () => {
+    vi.useRealTimers();
+    managerMocks.getClient.mockResolvedValue({ bundleSlug: BUNDLE_SLUG });
+    managerMocks.buildPlan.mockResolvedValueOnce({
+      ...EMPTY_PLAN,
+      toDelete: ['mods/old.jar'],
+      bundleOwnedRelativePaths: new Set(['mods/old.jar']),
+    });
+    managerMocks.runSyncPhases.mockResolvedValueOnce(syncResult('completed', true));
+
+    // The real healer returns (rather than throwing) when the abort fires right
+    // as it finishes; cancel mid-heal then return to hit the post-heal guard.
+    const ref: { manager?: BundleManager } = {};
+    const healer: Healer = {
+      healAfterDeletes: vi.fn(async () => {
+        ref.manager?.cancelSync(SLUG);
+      }),
+    };
+    const broadcaster = makeBroadcaster();
+    const manager = new BundleManager(broadcaster, healer, createClientOperationLocks());
+    ref.manager = manager;
+
+    const result = await manager.syncForLaunch(SLUG).then(
+      () => ({ kind: 'resolved' as const }),
+      (error: unknown) => ({ kind: 'rejected' as const, error }),
+    );
+
+    expect(result.kind).toBe('rejected');
+    if (result.kind === 'rejected') {
+      expect(result.error).toMatchObject({ code: BundleErrorCodes.ABORTED });
+    }
+    const statuses = statusEvents(broadcaster);
+    expect(statuses).toContain(BundleSyncStatuses.CANCELLED);
+    expect(statuses).not.toContain(BundleSyncStatuses.COMPLETED);
+    expect(managerMocks.saveLocalManifest).not.toHaveBeenCalled();
   });
 
   it('keeps syncForLaunch pending across pause and resolves after resume completes', async () => {

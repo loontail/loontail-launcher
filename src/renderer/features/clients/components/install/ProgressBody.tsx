@@ -13,6 +13,7 @@ import { useByteSpeed, useMonotonicPercent } from './useByteSpeed';
 type ProgressBodyProps = {
   active: InstallStep;
   paused: boolean;
+  pausable: boolean;
   controls: ProgressControlsKind;
   slug: CatalogKey;
 };
@@ -44,7 +45,7 @@ const useStalled = (bytes: number | undefined, active: boolean): boolean => {
   return stalled;
 };
 
-export const ProgressBody = ({ active, paused, controls, slug }: ProgressBodyProps) => {
+export const ProgressBody = ({ active, paused, pausable, controls, slug }: ProgressBodyProps) => {
   const { t } = useTranslation();
   const isDownloading = !paused && active.state === StepStates.ACTIVE;
   const computedSpeed = useByteSpeed(active.bytesDownloaded, isDownloading);
@@ -137,7 +138,7 @@ export const ProgressBody = ({ active, paused, controls, slug }: ProgressBodyPro
 
       {controls && (
         <div className="flex gap-2">
-          <ProgressControls kind={controls} paused={paused} slug={slug} />
+          <ProgressControls kind={controls} paused={paused} pausable={pausable} slug={slug} />
         </div>
       )}
     </div>

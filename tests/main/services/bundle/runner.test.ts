@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { SyncPlan } from '@main/services/bundle/plan';
 import { type EmitProgress, runSyncPhases } from '@main/services/bundle/runner';
-import { createSyncTask } from '@main/services/bundle/syncState';
+import { createSyncTask, markPaused, markRunning } from '@main/services/bundle/syncState';
 import { BundleSyncStatuses } from '@shared/contracts/bundle';
 import { asCatalogKey } from '@shared/contracts/ids';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -60,14 +60,12 @@ describe('runSyncPhases delete pause handling', () => {
         task.lastEmittedAt = 0;
         return;
       }
-      task.paused = true;
+      markPaused(task);
     };
 
     await expect(runSyncPhases(task, pauseAfterFirstDelete)).resolves.toEqual({
       outcome: 'paused',
       deletedAny: true,
-      paused: true,
-      cancelled: false,
     });
 
     expect(task.pendingDeletes).toEqual([OLD_TWO_PATH]);
@@ -75,13 +73,11 @@ describe('runSyncPhases delete pause handling', () => {
     expect(await exists(path.join(clientFolder, OLD_ONE_PATH))).toBe(false);
     expect(await exists(path.join(clientFolder, OLD_TWO_PATH))).toBe(true);
 
-    task.paused = false;
+    markRunning(task);
 
     await expect(runSyncPhases(task, noopEmit)).resolves.toEqual({
       outcome: 'completed',
       deletedAny: true,
-      paused: false,
-      cancelled: false,
     });
 
     expect(task.pendingDeletes).toEqual([]);
@@ -101,8 +97,6 @@ describe('runSyncPhases delete pause handling', () => {
     await expect(runSyncPhases(task, noopEmit)).resolves.toEqual({
       outcome: 'completed',
       deletedAny: true,
-      paused: false,
-      cancelled: false,
     });
     expect(task.pendingDeletes).toEqual([]);
     expect(task.processedFiles).toBe(2);
@@ -119,8 +113,6 @@ describe('runSyncPhases delete pause handling', () => {
     await expect(runSyncPhases(task, noopEmit)).resolves.toEqual({
       outcome: 'completed',
       deletedAny: true,
-      paused: false,
-      cancelled: false,
     });
     expect(task.processedFiles).toBe(2);
     expect(await exists(path.join(clientFolder, OLD_ONE_PATH))).toBe(false);

@@ -20,7 +20,7 @@ import { downloadEntry } from './download';
 import { BundleError } from './errors';
 import { isAncestor, resolveSafeEntryPath } from './paths';
 import type { SyncPlan } from './plan';
-import type { SyncPhase } from './syncState';
+import { type SyncPhase, isCancelled, isPaused, isRunning } from './syncState';
 
 const logger = scopedLogger('bundle.runner');
 
@@ -31,13 +31,10 @@ export type SyncTask = {
   abort: AbortController;
   // Set of in-flight HTTP requests for synchronous cancellation.
   currentRequests: Set<ClientRequest>;
-  // Cooperative lifecycle phase. Workers check it between file boundaries, not mid-chunk.
+  // Cooperative lifecycle phase. Workers check it between file boundaries, not
+  // mid-chunk. Transition through the syncState mark* helpers (cancel overrides
+  // pause; cancel is terminal) — never assign 'cancelled'→'running' directly.
   phase: SyncPhase;
-  // Backward-compatible views over `phase`; the setters route through the
-  // transition guards (cancel overrides pause). Kept until W5-T5 collapses the
-  // manager catch-decode onto the discriminated outcome.
-  paused: boolean;
-  cancelled: boolean;
   bytesDownloaded: number;
   speedWindowStart: number;
   speedWindowBytes: number;
@@ -59,14 +56,11 @@ export type PhaseResult = {
   deletedAny: boolean;
 };
 
-// Discriminated outcome of a full sync run. The `paused`/`cancelled` fields are
-// a backward-compatible view of `outcome` so manager.ts can keep destructuring
-// the legacy shape until W5-T5 threads the union through its catch-decode.
+// Discriminated outcome of a full sync run. The manager reads `outcome` on the
+// resolved path; the thrown ABORTED on cancel is decoded against `task.phase`.
 export type SyncPhasesResult = {
   outcome: 'completed' | 'paused' | 'cancelled';
   deletedAny: boolean;
-  paused: boolean;
-  cancelled: boolean;
 };
 
 const syncPhasesResult = (
@@ -75,8 +69,6 @@ const syncPhasesResult = (
 ): SyncPhasesResult => ({
   outcome,
   deletedAny,
-  paused: outcome === 'paused',
-  cancelled: outcome === 'cancelled',
 });
 
 // Coalesce progress emissions to one every BUNDLE_DOWNLOAD_PROGRESS_THROTTLE_MS,
@@ -106,7 +98,7 @@ const maybeEmit = (
 };
 
 const runDownloadWorker = async (task: SyncTask, emit: EmitProgress): Promise<void> => {
-  while (!task.cancelled && !task.paused) {
+  while (isRunning(task)) {
     const entry = task.pendingDownloads.shift();
     if (!entry) return;
     task.currentFile = entry.path;
@@ -158,7 +150,7 @@ const runDownloadPhase = async (task: SyncTask, emit: EmitProgress): Promise<voi
     // Only user-initiated cancel/pause maps to ABORTED. The internal
     // failure-abort above also flips signal.aborted, so it must not be confused
     // with a genuine cancel — a non-BundleError failure stays DOWNLOAD_FAILED.
-    if (task.cancelled || task.paused) {
+    if (!isRunning(task)) {
       throw new BundleError(BundleErrorCodes.ABORTED, 'Sync cancelled');
     }
     throw new BundleError(
@@ -198,7 +190,7 @@ const runDeletePhase = async (task: SyncTask, emit: EmitProgress): Promise<Phase
   let deletedAny = false;
   let completedDeletes = 0;
   for (const relativePath of task.pendingDeletes) {
-    if (task.cancelled || task.paused) break;
+    if (!isRunning(task)) break;
     let target: string;
     try {
       target = resolveSafeEntryPath(task.clientFolder, relativePath);
@@ -237,7 +229,7 @@ const runDeletePhase = async (task: SyncTask, emit: EmitProgress): Promise<Phase
     task.processedFiles += 1;
     maybeEmit(task, BundleSyncStatuses.DELETING, emit);
   }
-  if (task.cancelled || task.paused) {
+  if (!isRunning(task)) {
     task.pendingDeletes = task.pendingDeletes.slice(completedDeletes);
     return { deletedAny };
   }
@@ -250,15 +242,15 @@ export const runSyncPhases = async (
   emit: EmitProgress,
 ): Promise<SyncPhasesResult> => {
   await runDownloadPhase(task, emit);
-  // why: cancel still throws ABORTED (manager.ts decodes the thrown error until
-  // W5-T5 consumes the discriminated outcome); the cancelled variant is reserved
-  // for that closeout.
-  if (task.cancelled) throw new BundleError(BundleErrorCodes.ABORTED, 'Sync cancelled');
-  if (task.paused) {
+  // why: cancel throws ABORTED (cancel is terminal — manager.ts decodes the
+  // thrown error against the phase); a pause returns the 'paused' outcome and
+  // leaves deletes for resume. Check cancel first so it overrides a pause.
+  if (isCancelled(task)) throw new BundleError(BundleErrorCodes.ABORTED, 'Sync cancelled');
+  if (isPaused(task)) {
     // Leave deletes for resume.
     return syncPhasesResult('paused', false);
   }
   const deleteResult = await runDeletePhase(task, emit);
-  if (task.cancelled) throw new BundleError(BundleErrorCodes.ABORTED, 'Sync cancelled');
-  return syncPhasesResult(task.paused ? 'paused' : 'completed', deleteResult.deletedAny);
+  if (isCancelled(task)) throw new BundleError(BundleErrorCodes.ABORTED, 'Sync cancelled');
+  return syncPhasesResult(isPaused(task) ? 'paused' : 'completed', deleteResult.deletedAny);
 };

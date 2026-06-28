@@ -15,7 +15,7 @@ const managerMocks = vi.hoisted(() => {
 import { BundleError } from '@main/services/bundle/errors';
 import { BundleManager } from '@main/services/bundle/manager';
 import { bundleManifestPath } from '@main/services/bundle/paths';
-import { type ActiveSync, SyncStateStore, seedActiveSync } from '@main/services/bundle/syncState';
+import type { ActiveSync } from '@main/services/bundle/syncState';
 import { createClientOperationLocks } from '@main/services/clientOperationLocks';
 import {
   BundleErrorCodes,
@@ -24,6 +24,7 @@ import {
   type RemoteManifest,
 } from '@shared/contracts/bundle';
 import { type BundleSlug, asCatalogKey } from '@shared/contracts/ids';
+import { seedActiveSync } from '../../../helpers/bundleSync';
 import { makeBroadcaster, makeHealer, makeLauncherSettings } from '../../../helpers/fixtures';
 
 vi.mock('@main/infra/logger', () => ({
@@ -165,7 +166,7 @@ describe('BundleManager pause-during-fetch resume', () => {
 
 describe('BundleManager persistLocalManifest guard', () => {
   it('skips the sidecar write when the remote manifest hash is empty', async () => {
-    const store = new SyncStateStore();
+    const store = new Map();
     const active = seedActiveSync(store, {
       slug: SLUG,
       clientFolder,
