@@ -12,7 +12,7 @@ vi.mock('@main/infra/logger', () => ({
   scopedLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
 
-import { MOJANG_BROWSER_OPEN_ERROR_CODE, createMojangAuth } from '@main/services/auth/mojangAuth';
+import { createMojangAuth, MOJANG_BROWSER_OPEN_ERROR_CODE } from '@main/services/auth/mojangAuth';
 
 const FAR_FUTURE = Date.UTC(2099, 0, 1);
 const MICROSOFT_AUTHORIZE_URL =

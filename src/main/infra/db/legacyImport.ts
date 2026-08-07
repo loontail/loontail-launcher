@@ -9,7 +9,7 @@ import {
   STORE_KEY_LAUNCHER_SETTINGS,
   STORE_KEY_SCHEMA_VERSION,
 } from '@shared/constants';
-import { InstanceRegistrySchema } from '@shared/contracts/instance';
+import { LocalBuildRegistrySchema } from '@shared/contracts/localBuild';
 import { normalizeLauncherSettings } from '@shared/domain/settings';
 import type { Db } from './connection';
 import {
@@ -73,7 +73,7 @@ const importAuth = (db: Db, raw: Record<string, unknown>, userDataDir: string): 
 };
 
 const importInstances = (db: Db, raw: Record<string, unknown>): void => {
-  const parsed = InstanceRegistrySchema.safeParse(raw[STORE_KEY_INSTANCE_REGISTRY]);
+  const parsed = LocalBuildRegistrySchema.safeParse(raw[STORE_KEY_INSTANCE_REGISTRY]);
   if (!parsed.success) return;
   replaceInstanceEntries(
     db,

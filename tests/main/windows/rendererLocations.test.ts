@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { RENDERER_ENTRY_FILES, createRendererLocation } from '@main/windows/rendererLocations';
+import { createRendererLocation, RENDERER_ENTRY_FILES } from '@main/windows/rendererLocations';
 import { describe, expect, it } from 'vitest';
 
 const rendererRoot = join(process.cwd(), 'out', 'renderer');

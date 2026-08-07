@@ -1,4 +1,5 @@
 import type { ClientRequest } from 'node:http';
+import { markRunning } from '@main/infra/lifecyclePhase';
 import type { ClientOperationLease } from '@main/services/clientOperationLocks';
 import type { BundleProgressEvent, RemoteManifest } from '@shared/contracts/bundle';
 import type { BundleSlug, CatalogKey } from '@shared/contracts/ids';
@@ -7,7 +8,7 @@ import type { SyncTask } from './runner';
 
 export type ActiveSync = {
   task: SyncTask;
-  // Lock + state are one record so a slug can't leave activeSyncs without
+  // Lock + state are one record so a key can't leave activeSyncs without
   // releasing the lease (dropActiveSync owns both).
   lock: ClientOperationLease;
   lastProgress: BundleProgressEvent | null;
@@ -32,40 +33,15 @@ const createEmptySyncPlan = (): SyncPlan => ({
   bytesTotal: 0,
 });
 
-export type SyncPhase = 'running' | 'paused' | 'cancelled';
-
-// Cancel overrides pause: a paused sync can still be cancelled, but a cancelled
-// sync is terminal and never reverts.
-export const markPaused = (task: SyncTask): void => {
-  if (task.phase === 'running') task.phase = 'paused';
-};
-
-export const markCancelled = (task: SyncTask): void => {
-  task.phase = 'cancelled';
-};
-
-export const markRunning = (task: SyncTask): void => {
-  if (task.phase === 'paused') task.phase = 'running';
-};
-
-// Read phase through these predicates, not inlined `task.phase === …`: the mark*
-// helpers mutate it across awaits via an aliased reference, which TS control-flow
-// narrowing can't track — a function boundary keeps each read independent.
-export const isCancelled = (task: SyncTask): boolean => task.phase === 'cancelled';
-export const isPaused = (task: SyncTask): boolean => task.phase === 'paused';
-export const isRunning = (task: SyncTask): boolean => task.phase === 'running';
-
-export const createSyncTask = (slug: CatalogKey, clientFolder: string): SyncTask => {
+export const createSyncTask = (key: CatalogKey, clientFolder: string): SyncTask => {
   const task: SyncTask = {
-    slug,
+    key,
     clientFolder,
     plan: createEmptySyncPlan(),
     abort: new AbortController(),
     currentRequests: new Set<ClientRequest>(),
     phase: 'running',
     bytesDownloaded: 0,
-    speedWindowStart: Date.now(),
-    speedWindowBytes: 0,
     processedFiles: 0,
     totalFiles: 0,
     lastEmittedAt: 0,
@@ -109,8 +85,6 @@ export const resetTaskForResume = (task: SyncTask): void => {
   task.bytesDownloaded = 0;
   task.processedFiles = 0;
   task.lastEmittedAt = 0;
-  task.speedWindowStart = Date.now();
-  task.speedWindowBytes = 0;
 };
 
 export type SyncStateMap = Map<CatalogKey, ActiveSync>;

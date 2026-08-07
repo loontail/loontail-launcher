@@ -23,7 +23,7 @@ import {
   type LocalManifest,
   type RemoteManifest,
 } from '@shared/contracts/bundle';
-import { type BundleSlug, asCatalogKey } from '@shared/contracts/ids';
+import { asCatalogKey, type BundleSlug } from '@shared/contracts/ids';
 import { seedActiveSync } from '../../../helpers/bundleSync';
 import { makeBroadcaster, makeHealer, makeLauncherSettings } from '../../../helpers/fixtures';
 
@@ -43,7 +43,7 @@ vi.mock('@main/services/bundle/api', () => ({
   fetchRemoteManifest: managerMocks.fetchRemoteManifest,
 }));
 
-const SLUG = asCatalogKey('official:test-client');
+const KEY = asCatalogKey('official:test-client');
 const BUNDLE_SLUG = 'bundle-x' as BundleSlug;
 const KEEP_FILE = 'mods/keep.jar';
 const KEEP_CONTENT = 'keep-this-file';
@@ -52,7 +52,7 @@ const REAL_HASH = '0'.repeat(64);
 let clientFolder: string;
 
 const launcherSettings = () =>
-  makeLauncherSettings({ clients: { [SLUG]: { storage: { clientFolder } } } });
+  makeLauncherSettings({ clients: { [KEY]: { storage: { clientFolder } } } });
 
 const sha256 = (input: string): string => createHash('sha256').update(input, 'utf8').digest('hex');
 
@@ -118,7 +118,7 @@ describe('BundleManager pause-during-fetch resume', () => {
     // real manifest so resume plans against it instead of {}.
     managerMocks.fetchRemoteManifest
       .mockImplementationOnce(
-        (_slug: BundleSlug, signal?: AbortSignal) =>
+        (_key: BundleSlug, signal?: AbortSignal) =>
           new Promise((_resolve, reject) => {
             const fail = () =>
               reject(new BundleError(BundleErrorCodes.ABORTED, 'Bundle manifest fetch aborted'));
@@ -134,20 +134,20 @@ describe('BundleManager pause-during-fetch resume', () => {
     const broadcaster = makeBroadcaster();
     const manager = new BundleManager(broadcaster, makeHealer(), createClientOperationLocks());
 
-    void manager.startSync({ slug: SLUG });
+    void manager.start({ key: KEY });
 
     await vi.waitFor(() => {
       expect(managerMocks.fetchRemoteManifest).toHaveBeenCalledTimes(1);
     });
 
-    manager.pauseSync(SLUG);
+    manager.pause(KEY);
 
     await vi.waitFor(() => {
       const statuses = vi.mocked(broadcaster.status).mock.calls.map(([e]) => e.status);
       expect(statuses).toContain(BundleSyncStatuses.PAUSED);
     });
 
-    await manager.resumeSync(SLUG);
+    await manager.resume(KEY);
 
     await vi.waitFor(() => {
       const statuses = vi.mocked(broadcaster.status).mock.calls.map(([e]) => e.status);
@@ -168,7 +168,7 @@ describe('BundleManager persistLocalManifest guard', () => {
   it('skips the sidecar write when the remote manifest hash is empty', async () => {
     const store = new Map();
     const active = seedActiveSync(store, {
-      slug: SLUG,
+      key: KEY,
       clientFolder,
       bundleSlug: BUNDLE_SLUG,
       forLaunch: false,

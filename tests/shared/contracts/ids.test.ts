@@ -1,10 +1,10 @@
 import { localKey, officialKey, parseCatalogKey } from '@shared/contracts/catalog';
 import {
-  BundleSlugSchema,
-  CatalogKeySchema,
   asBundleSlug,
   asClientSlug,
-  asInstanceId,
+  asLocalBuildId,
+  BundleSlugSchema,
+  CatalogKeySchema,
 } from '@shared/contracts/ids';
 import { describe, expect, it } from 'vitest';
 
@@ -51,7 +51,7 @@ describe('CatalogKeySchema', () => {
   it('round-trips through the composition helpers and parseCatalogKey', () => {
     const officialParsed = CatalogKeySchema.parse(officialKey(asClientSlug('survival')));
     expect(parseCatalogKey(officialParsed)).toEqual({ source: 'official', slug: 'survival' });
-    const localParsed = CatalogKeySchema.parse(localKey(asInstanceId(UUID)));
+    const localParsed = CatalogKeySchema.parse(localKey(asLocalBuildId(UUID)));
     expect(parseCatalogKey(localParsed)).toEqual({ source: 'local', id: UUID });
   });
 });

@@ -11,7 +11,7 @@ const official = (overrides: Record<string, unknown> = {}): CatalogItem =>
   ({
     kind: 'official',
     key: 'official:survival',
-    ref: { source: 'official', slug: 'survival' },
+    ref: { source: 'official', key: 'survival' },
     spec: { minecraftVersion: '1.21.4', forgeVersion: null, fabricVersion: null },
     presentation: { title: 'Survival' },
     raw: { poster: { url: 'p' }, background: { url: 'b' }, screenshots: [] },

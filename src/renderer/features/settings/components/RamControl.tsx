@@ -34,23 +34,23 @@ export const RamControl = ({
   const isDirty = value !== saved;
 
   return (
-    <div className="flex flex-col gap-4 rounded-md border border-border bg-card p-4">
+    <div className="flex flex-col gap-4 rounded-md border border-edge bg-surface-1 p-4">
       <div className="flex items-start gap-3">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-sm bg-muted text-foreground">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-sm bg-surface-2 text-text-hi">
           <MemoryStick className="size-5" strokeWidth={1.75} aria-hidden="true" />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <h4 className="text-sm font-semibold text-foreground">
+          <h4 className="text-sm font-semibold text-text-hi">
             {t('settings.system.allocatedRam')}
             <OverrideMark shown={overridden} />
           </h4>
-          <p className="text-xs text-muted-foreground">{t('settings.system.ramDesc')}</p>
+          <p className="text-xs text-text-mute">{t('settings.system.ramDesc')}</p>
         </div>
         <div className="flex w-24 shrink-0 flex-col items-stretch gap-2">
           {loading ? (
             <Skeleton className="h-8 w-full" />
           ) : (
-            <span className="flex h-8 items-center justify-center whitespace-nowrap rounded-sm border border-border bg-background px-3 text-sm font-medium tabular-nums">
+            <span className="flex h-8 items-center justify-center whitespace-nowrap rounded-sm border border-edge bg-canvas px-3 text-sm font-medium tabular-nums">
               {value} MB
             </span>
           )}
@@ -72,7 +72,7 @@ export const RamControl = ({
             <Slider value={value} onValueChange={onChange} min={min} max={max} step={step} />
           )}
         </div>
-        <div className="flex h-4 items-center justify-between text-xs text-muted-foreground">
+        <div className="flex h-4 items-center justify-between text-xs text-text-mute">
           {loading ? (
             <>
               <Skeleton className="h-3 w-14" />

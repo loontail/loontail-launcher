@@ -38,10 +38,10 @@ export const Segmented = <T extends string>({
       const active = option.value === value;
       const iconOnly = !option.label && Boolean(Icon);
       return (
+        // biome-ignore lint/a11y/useSemanticElements: styled segment, not a native radio input
         <button
           key={option.value}
           type="button"
-          // biome-ignore lint/a11y/useSemanticElements: styled segment, not a native radio input
           role="radio"
           aria-checked={active}
           aria-label={option.ariaLabel ?? option.label}
@@ -50,7 +50,8 @@ export const Segmented = <T extends string>({
             'inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-sm font-semibold transition-colors duration-150 ease-standard',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60',
             size === 'sm' ? 'h-7 text-caption' : 'h-8 text-body',
-            iconOnly ? (size === 'sm' ? 'w-7' : 'w-8') : 'px-3',
+            !iconOnly && 'px-3',
+            iconOnly && (size === 'sm' ? 'w-7' : 'w-8'),
             active
               ? 'bg-cta text-on-cta shadow-sm'
               : 'text-text-mute hover:bg-ghost-hover hover:text-text',

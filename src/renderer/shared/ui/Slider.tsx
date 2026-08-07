@@ -1,5 +1,5 @@
 import { cn } from '@renderer/shared/lib/cn';
-import type { CSSProperties, ChangeEvent } from 'react';
+import type { ChangeEvent, CSSProperties } from 'react';
 
 type SliderProps = {
   value: number;
@@ -36,8 +36,8 @@ export const Slider = ({
       step={step}
       disabled={disabled}
       className={cn(
-        'slider-track h-1.5 w-full cursor-pointer appearance-none rounded-full accent-primary',
-        '[&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110',
+        'slider-track h-1.5 w-full cursor-pointer appearance-none rounded-full accent-cta',
+        '[&::-webkit-slider-thumb]:size-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-cta [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110',
         'focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         'disabled:cursor-not-allowed disabled:opacity-50',
         className,

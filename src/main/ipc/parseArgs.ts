@@ -13,7 +13,7 @@ export const parseIpcArgs = <Schema extends ZodTypeAny>(
   const parsed = schema.safeParse(rawArgs);
   if (!parsed.success) {
     const error: IpcError = {
-      code: ERROR_CODES.IpcInvalidArgs,
+      code: ERROR_CODES.IPC_INVALID_ARGS,
       message,
       ...(app.isPackaged ? {} : { details: parsed.error.format() }),
     };
@@ -25,7 +25,7 @@ export const parseIpcArgs = <Schema extends ZodTypeAny>(
 export const assertNoIpcArgs = (rawArgs: unknown, message: string): void => {
   if (rawArgs === undefined) return;
   const error: IpcError = {
-    code: ERROR_CODES.IpcInvalidArgs,
+    code: ERROR_CODES.IPC_INVALID_ARGS,
     message,
     ...(app.isPackaged ? {} : { details: { received: rawArgs } }),
   };

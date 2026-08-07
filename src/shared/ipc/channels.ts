@@ -45,7 +45,7 @@ export const IPC_CHANNELS = {
   bundlePause: 'bundle.pause',
   bundleResume: 'bundle.resume',
   bundleCancel: 'bundle.cancel',
-  bundleCheckStatus: 'bundle.checkStatus',
+  bundleGetStatus: 'bundle.getStatus',
   consoleOpen: 'console.open',
   consoleGetInitial: 'console.getInitial',
   consoleClear: 'console.clear',
@@ -70,11 +70,12 @@ export const CONSOLE_TRUSTED_CHANNELS: ReadonlySet<IpcChannel> = new Set([
 
 // Compile-time guard: channel values and IpcContract keys must match exactly, so
 // adding/removing one without the other fails tsc.
-type IpcChannelsCoverContract = Exclude<keyof IpcContract, IpcChannel> extends never
-  ? Exclude<IpcChannel, keyof IpcContract> extends never
-    ? true
-    : ['channel missing in IpcContract:', Exclude<IpcChannel, keyof IpcContract>]
-  : ['contract channel missing in IPC_CHANNELS:', Exclude<keyof IpcContract, IpcChannel>];
+type IpcChannelsCoverContract =
+  Exclude<keyof IpcContract, IpcChannel> extends never
+    ? Exclude<IpcChannel, keyof IpcContract> extends never
+      ? true
+      : ['channel missing in IpcContract:', Exclude<IpcChannel, keyof IpcContract>]
+    : ['contract channel missing in IPC_CHANNELS:', Exclude<keyof IpcContract, IpcChannel>];
 
 const _ipcChannelsCoverageCheck: IpcChannelsCoverContract = true;
 void _ipcChannelsCoverageCheck;
@@ -97,11 +98,12 @@ type IpcEventValue = (typeof IPC_EVENTS)[keyof typeof IPC_EVENTS];
 
 // Compile-time guard: IPC_EVENTS values and IpcEventPayloads keys must match
 // exactly, so adding or renaming an event without its payload type fails tsc.
-type IpcEventsCoverPayloads = Exclude<keyof IpcEventPayloads, IpcEventValue> extends never
-  ? Exclude<IpcEventValue, keyof IpcEventPayloads> extends never
-    ? true
-    : ['event missing in IpcEventPayloads:', Exclude<IpcEventValue, keyof IpcEventPayloads>]
-  : ['payload event missing in IPC_EVENTS:', Exclude<keyof IpcEventPayloads, IpcEventValue>];
+type IpcEventsCoverPayloads =
+  Exclude<keyof IpcEventPayloads, IpcEventValue> extends never
+    ? Exclude<IpcEventValue, keyof IpcEventPayloads> extends never
+      ? true
+      : ['event missing in IpcEventPayloads:', Exclude<IpcEventValue, keyof IpcEventPayloads>]
+    : ['payload event missing in IPC_EVENTS:', Exclude<keyof IpcEventPayloads, IpcEventValue>];
 
 const _ipcEventsCoverageCheck: IpcEventsCoverPayloads = true;
 void _ipcEventsCoverageCheck;

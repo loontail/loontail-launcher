@@ -1,6 +1,6 @@
 import { scopedLogger } from '@main/infra/logger';
 import { getClients } from '@main/services/clients';
-import { listInstanceEntries } from '@main/services/instances/registry';
+import { listLocalBuildEntries } from '@main/services/localBuilds/registry';
 import { getSettings, writeSettings } from '@main/services/settings/settings';
 import { localKey, officialKey } from '@shared/contracts/catalog';
 import { asClientSlug } from '@shared/contracts/ids';
@@ -27,7 +27,7 @@ export const sweepOrphanClientOverrides = async (): Promise<void> => {
   const knownKeys = new Set<string>(
     list.map((client) => officialKey(asClientSlug(client.slug)) as string),
   );
-  for (const entry of listInstanceEntries()) {
+  for (const entry of listLocalBuildEntries()) {
     knownKeys.add(localKey(entry.id) as string);
   }
   const current = getSettings();

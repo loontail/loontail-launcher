@@ -17,7 +17,7 @@ type HealProgress = {
 };
 
 export const createHealProgressListener = (
-  slug: CatalogKey,
+  key: CatalogKey,
   emit: EmitProgress,
 ): HealProgressListener => {
   let verifiedFiles = 0;
@@ -28,7 +28,7 @@ export const createHealProgressListener = (
   const emitter = createThrottledEmitter<HealProgress>((value) => {
     // Patch bytes explicitly (even 0/0): makeProgressEvent's defaults pull the
     // just-finished download phase's totals, which would leak into HEALING events.
-    emit(slug, BundleSyncStatuses.HEALING, {
+    emit(key, BundleSyncStatuses.HEALING, {
       processedFiles: value.verifiedFiles,
       bytesDownloaded: value.bytesDownloaded,
       bytesTotal: value.totalBytes,

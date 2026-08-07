@@ -121,6 +121,35 @@ describe('cachedFetch', () => {
       networkError,
     );
   });
+
+  // A snapshot outlives the release that wrote it and sits in a user-writable file,
+  // so well-formed JSON of the wrong shape used to be cast to T and blow up in the
+  // caller instead of here.
+  it('rethrows the fetcher error when the snapshot fails parseSnapshot', async () => {
+    await writeBuffer(NAMESPACE, KEY, Buffer.from(JSON.stringify({ clients: [] }), 'utf8'));
+    const networkError = new TypeError('fetch failed');
+    const fetcher = vi.fn().mockRejectedValue(networkError);
+    const parseSnapshot = vi.fn((value: unknown) => (Array.isArray(value) ? value : null));
+
+    await expect(
+      cachedFetch({ namespace: NAMESPACE, key: KEY, fetcher, parseSnapshot }),
+    ).rejects.toBe(networkError);
+    expect(parseSnapshot).toHaveBeenCalledWith({ clients: [] });
+  });
+
+  it('serves a snapshot that passes parseSnapshot', async () => {
+    await writeBuffer(NAMESPACE, KEY, Buffer.from(JSON.stringify([{ key: 'a' }]), 'utf8'));
+    const fetcher = vi.fn().mockRejectedValue(new TypeError('fetch failed'));
+
+    const result = await cachedFetch({
+      namespace: NAMESPACE,
+      key: KEY,
+      fetcher,
+      parseSnapshot: (value: unknown) => (Array.isArray(value) ? value : null),
+    });
+
+    expect(result).toEqual([{ key: 'a' }]);
+  });
 });
 
 describe('enforceSizeBound', () => {
@@ -154,5 +183,55 @@ describe('enforceSizeBound', () => {
 
   it('silently returns when the namespace does not exist yet', async () => {
     await expect(enforceSizeBound('does/not/exist', 1024)).resolves.toBeUndefined();
+  });
+
+  it('evicts a companion sidecar together with its body, never on its own', async () => {
+    // A body without its sidecar renders as application/octet-stream and a
+    // sidecar without a body is dead weight, so the pair must live and die
+    // together (LM-17).
+    await writeWithMtime('old', 400, new Date(1000));
+    await writeWithMtime('old.type', 20, new Date(1000));
+    await writeWithMtime('new', 400, new Date(3000));
+    await writeWithMtime('new.type', 20, new Date(500));
+
+    await enforceSizeBound(NAMESPACE, 500, { companionSuffix: '.type' });
+
+    expect(await readBuffer(NAMESPACE, 'old')).toBeNull();
+    expect(await readBuffer(NAMESPACE, 'old.type')).toBeNull();
+    expect(await readBuffer(NAMESPACE, 'new')).not.toBeNull();
+    // The surviving body keeps its sidecar even though the sidecar is the oldest
+    // file in the namespace.
+    expect(await readBuffer(NAMESPACE, 'new.type')).not.toBeNull();
+  });
+
+  it('drops an orphan sidecar even when the namespace fits under the bound', async () => {
+    await writeWithMtime('kept', 100, new Date(1000));
+    await writeWithMtime('kept.type', 20, new Date(1000));
+    await writeWithMtime('vanished.type', 20, new Date(1000));
+
+    await enforceSizeBound(NAMESPACE, 1024, { companionSuffix: '.type' });
+
+    expect(await readBuffer(NAMESPACE, 'vanished.type')).toBeNull();
+    expect(await readBuffer(NAMESPACE, 'kept')).not.toBeNull();
+    expect(await readBuffer(NAMESPACE, 'kept.type')).not.toBeNull();
+  });
+
+  it('keeps a just-written sidecar whose body is still being written', async () => {
+    // A body and its sidecar are two separate fs operations, so a pass triggered by
+    // another entry can observe the sidecar first; deleting it left the body with no
+    // metadata (wrong Content-Type, and nothing ever revalidates it).
+    await writeBuffer(NAMESPACE, 'in-flight.type', Buffer.alloc(20, 1));
+
+    await enforceSizeBound(NAMESPACE, 1024, { companionSuffix: '.type' });
+
+    expect(await readBuffer(NAMESPACE, 'in-flight.type')).not.toBeNull();
+  });
+
+  it('still drops a young orphan once the write can no longer be in flight', async () => {
+    await writeWithMtime('gone.type', 20, new Date(Date.now() - 5 * 60_000));
+
+    await enforceSizeBound(NAMESPACE, 1024, { companionSuffix: '.type' });
+
+    expect(await readBuffer(NAMESPACE, 'gone.type')).toBeNull();
   });
 });

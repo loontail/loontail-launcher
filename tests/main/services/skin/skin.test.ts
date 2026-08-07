@@ -41,7 +41,7 @@ vi.mock('@main/infra/logger', () => ({
   scopedLogger: () => loggerMocks,
 }));
 
-vi.mock('@loontail/yggdrasil-core', () => ({
+vi.mock('@shared/yggdrasil/png', () => ({
   validatePngBuffer: () => ({ ok: true }),
 }));
 

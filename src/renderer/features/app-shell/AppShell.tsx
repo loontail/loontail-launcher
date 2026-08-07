@@ -1,5 +1,5 @@
+import { BuildDetailPage, BuildsHomePage } from '@renderer/features/builds';
 import { useCatalog } from '@renderer/features/catalog';
-import { BuildDetailPage, BuildsHomePage } from '@renderer/features/clients';
 import { HomePage } from '@renderer/features/home';
 import {
   useCanGoBack,
@@ -9,7 +9,7 @@ import {
 import { isAnyModalOpen } from '@renderer/shared/ui/Modal';
 import type { CatalogKey } from '@shared/contracts/ids';
 import { Loader2 } from 'lucide-react';
-import { Suspense, lazy, useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { TopNav } from './TopNav';
 
 const SettingsPage = lazy(() =>

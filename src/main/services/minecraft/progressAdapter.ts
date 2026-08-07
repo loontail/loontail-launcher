@@ -1,4 +1,5 @@
 import {
+  createInstallProgressTracker,
   DownloadCategories,
   EventTypes,
   type InstallPlan,
@@ -8,7 +9,6 @@ import {
   VerificationKinds,
   VerifyFileCategories,
   type VerifyFileCategory,
-  createInstallProgressTracker,
 } from '@loontail/minecraft-kit';
 import { createThrottledEmitter } from '@main/infra/throttledEmitter';
 import type { CatalogKey } from '@shared/contracts/ids';
@@ -17,8 +17,7 @@ import {
   type ProgressStage,
   ProgressStages,
 } from '@shared/contracts/minecraft';
-import { createSpeedWindow } from '@shared/lib/speedWindow';
-import type { ManagerEnv } from './env';
+import type { MinecraftEnv } from './env';
 
 const PROGRESS_STAGE_FOR_ASPECT: Record<VerificationKind, ProgressStage> = {
   [VerificationKinds.MINECRAFT]: ProgressStages.MINECRAFT,
@@ -34,48 +33,33 @@ export type MinecraftProgressAdapter = {
 
 export type PlannedInstallProgressRunner = (plan: InstallPlan) => Promise<void>;
 
-// 4s rolling window mirroring the renderer's useByteSpeed: smooths the kit's
-// per-second jitter while still reacting to a slowdown.
-const SPEED_WINDOW_MS = 4000;
-
 // The kit reports `bytesDownloaded` install-wide but `totalBytes` per stage, so
-// reconstruct per-stage bytes from stagePercent for a self-consistent "X / Y" and
-// reset throughput at each stage boundary so the rate doesn't dip negative on restart.
-const createSnapshotEmitter = (env: ManagerEnv, slug: CatalogKey) => {
-  let stage: ProgressStage | null = null;
-  const speedWindow = createSpeedWindow(SPEED_WINDOW_MS);
-
-  return (snapshot: ProgressSnapshot): void => {
+// reconstruct per-stage bytes from stagePercent for a self-consistent "X / Y".
+const createSnapshotEmitter =
+  (env: MinecraftEnv, key: CatalogKey) =>
+  (snapshot: ProgressSnapshot): void => {
     const stageTotal = snapshot.totalBytes;
     const fraction = Math.min(100, Math.max(0, snapshot.stagePercent)) / 100;
     const stageDone = stageTotal > 0 ? Math.round(fraction * stageTotal) : 0;
 
-    if (snapshot.stage !== stage) {
-      stage = snapshot.stage;
-      speedWindow.reset();
-    }
-    const speedBytesPerSec = Math.max(0, Math.round(speedWindow.sample(stageDone, Date.now())));
-
     env.broadcaster.progress({
-      slug,
+      key,
       stage: snapshot.stage,
       stagePercent: snapshot.stagePercent,
       overallPercent: snapshot.overallPercent,
       bytesDownloaded: stageDone,
       totalBytes: stageTotal,
-      speedBytesPerSec,
       ...(snapshot.currentFile !== undefined ? { currentFile: snapshot.currentFile } : {}),
     });
   };
-};
 
 export const createPlannedProgressAdapter = (
-  env: ManagerEnv,
-  slug: CatalogKey,
+  env: MinecraftEnv,
+  key: CatalogKey,
   plan: Pick<InstallPlan, 'actions'>,
 ): MinecraftProgressAdapter => {
   const tracker = createInstallProgressTracker(plan);
-  const unsubscribe = tracker.subscribe(createSnapshotEmitter(env, slug));
+  const unsubscribe = tracker.subscribe(createSnapshotEmitter(env, key));
 
   return {
     onEvent: tracker.onEvent,
@@ -134,14 +118,14 @@ type ThrottledProgress = {
 };
 
 export const createRepairProgressAdapter = (
-  env: ManagerEnv,
-  slug: CatalogKey,
+  env: MinecraftEnv,
+  key: CatalogKey,
 ): MinecraftProgressAdapter => {
   const emitter = createThrottledEmitter<ThrottledProgress>((progress) => {
     const { stage, bytesDownloaded, totalBytes, currentFile } = progress;
     const percent = totalBytes > 0 ? Math.min(100, (bytesDownloaded / totalBytes) * 100) : 0;
     const event: MinecraftProgressEvent = {
-      slug,
+      key,
       stage,
       stagePercent: percent,
       overallPercent: percent,

@@ -17,9 +17,11 @@ export const SystemSection = () => {
 
   const { settings, isPending: settingsPending } = useLauncherSettings();
   const { range, isPending: rangePending } = useRamRange();
-  const { mutate: setLauncherMutate, isPending: isSavingLauncher } = useSetLauncher();
+  const { mutateAsync: saveLauncher, isPending: isSavingLauncher } = useSetLauncher();
   const { mutate: pickFolder } = usePickInstallFolder();
-  const { info: diskInfo } = useDiskSpace(settings?.storage.clientsFolder);
+  const { info: diskInfo, isPending: diskInfoPending } = useDiskSpace(
+    settings?.storage.clientsFolder,
+  );
   const { info: folderSize, isPending: folderSizePending } = useFolderSize(
     settings?.storage.clientsFolder,
   );
@@ -30,7 +32,7 @@ export const SystemSection = () => {
   const { ramValue, setRam, handleSave } = useRamPending({
     savedRam,
     resetKey: savedRam,
-    persist: (allocatedRamMb) => setLauncherMutate({ memory: { allocatedRamMb } }),
+    persist: (allocatedRamMb) => saveLauncher({ memory: { allocatedRamMb } }),
   });
 
   const settingsReady = settings !== undefined && !settingsPending;
@@ -50,6 +52,7 @@ export const SystemSection = () => {
 
       <FolderInfoBlock
         folder={diskInfo}
+        diskInfoPending={diskInfoPending}
         folderSize={folderSize}
         folderSizeLoading={folderSizePending}
         pathLoading={!settingsReady}
@@ -59,8 +62,7 @@ export const SystemSection = () => {
         onOpen={() => {
           if (clientsFolder) void openPath(clientsFolder);
         }}
-        onChange={() => void pickFolder()}
-        showDiskUsage={clientsFolder.length > 0}
+        onChange={() => pickFolder()}
       />
     </div>
   );

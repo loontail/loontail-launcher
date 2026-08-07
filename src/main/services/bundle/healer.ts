@@ -22,18 +22,18 @@ export type Healer = {
   // Verify the minecraft slice and re-download any vanilla file the bundle no
   // longer owns; bundle-owned files are skipped so deliberate overrides survive.
   healAfterDeletes: (
-    slug: CatalogKey,
+    key: CatalogKey,
     bundleOwnedPaths: ReadonlySet<string>,
     options?: HealOptions,
   ) => Promise<void>;
 };
 
-export type ResolvedHealContext = { target: Target; clientFolder: string };
+export type InstallContextRef = { target: Target; clientFolder: string };
 
 // Injection seam so the bundle service does not import minecraft to resolve the
 // heal target; the composition root injects this from the minecraft manager.
 export type CreateHealerDeps = {
-  resolveContext: (slug: CatalogKey) => Promise<ResolvedHealContext>;
+  resolveContext: (key: CatalogKey) => Promise<InstallContextRef>;
 };
 
 type HealOutcome = {
@@ -98,9 +98,9 @@ const verifyAndRepairExceptBundle = async (
 };
 
 export const createHealer = (kit: MinecraftKit, deps: CreateHealerDeps): Healer => ({
-  healAfterDeletes: async (slug, bundleOwnedPaths, options) => {
+  healAfterDeletes: async (key, bundleOwnedPaths, options) => {
     try {
-      const { target, clientFolder } = await deps.resolveContext(slug);
+      const { target, clientFolder } = await deps.resolveContext(key);
       const outcome = await verifyAndRepairExceptBundle(
         kit,
         target,
@@ -109,13 +109,13 @@ export const createHealer = (kit: MinecraftKit, deps: CreateHealerDeps): Healer 
         options,
       );
       logger.info(
-        `[${slug}] heal complete (repaired=${outcome.repaired}, ignoredByBundle=${outcome.ignoredByBundle})`,
+        `[${key}] heal complete (repaired=${outcome.repaired}, ignoredByBundle=${outcome.ignoredByBundle})`,
       );
     } catch (err) {
       if (options?.signal?.aborted) {
         throw new BundleError(BundleErrorCodes.ABORTED, 'Heal aborted');
       }
-      logger.error(`[${slug}] heal failed`, err);
+      logger.error(`[${key}] heal failed`, err);
       throw new BundleError(
         BundleErrorCodes.HEAL_FAILED,
         `Heal after delete failed: ${errorMessage(err)}`,

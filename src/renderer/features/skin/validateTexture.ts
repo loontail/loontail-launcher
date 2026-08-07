@@ -1,7 +1,7 @@
-import { type SkinAssetKind, validatePngBuffer } from '@loontail/yggdrasil-core';
 import type { SkinKind } from '@shared/contracts/skin';
+import { type SkinAssetKind, validatePngBuffer } from '@shared/yggdrasil/png';
 
-// SkinKind shares yggdrasil-core's 'skin'|'cape' literals, so it is always a valid SkinAssetKind.
+// SkinKind shares SkinAssetKind's 'skin'|'cape' literals, so it is always a valid SkinAssetKind.
 const toAssetKind = (kind: SkinKind): SkinAssetKind => kind;
 
 // Defence-in-depth: fail fast in the renderer before the IPC round-trip; the main-side check stays authoritative.

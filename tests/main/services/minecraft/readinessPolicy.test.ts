@@ -7,7 +7,7 @@ const policyMocks = vi.hoisted(() => {
   return {
     getSettings: vi.fn(),
     loadTargetInstallManifest: vi.fn(),
-    isAnythingInstalled: vi.fn(),
+    hasAnyVersionInstalled: vi.fn(),
   };
 });
 
@@ -15,8 +15,8 @@ vi.mock('@main/services/minecraft/installManifest', () => ({
   loadTargetInstallManifest: policyMocks.loadTargetInstallManifest,
 }));
 
-vi.mock('@main/services/minecraft/runtimeState', () => ({
-  isAnythingInstalled: policyMocks.isAnythingInstalled,
+vi.mock('@main/services/minecraft/installedVersions', () => ({
+  hasAnyVersionInstalled: policyMocks.hasAnyVersionInstalled,
 }));
 
 vi.mock('@main/services/settings/settings', () => ({
@@ -25,7 +25,7 @@ vi.mock('@main/services/settings/settings', () => ({
 
 import { resolveClientInstallPresence } from '@main/services/minecraft/readinessPolicy';
 
-const SLUG = asCatalogKey('official:test-client');
+const KEY = asCatalogKey('official:test-client');
 const CLIENT_FOLDER = 'Z:/clients/test-client';
 
 const launcherSettings = (clientsFolder = 'Z:/clients') =>
@@ -34,11 +34,11 @@ const launcherSettings = (clientsFolder = 'Z:/clients') =>
 const resetPolicyMocks = (): void => {
   policyMocks.getSettings.mockReset();
   policyMocks.loadTargetInstallManifest.mockReset();
-  policyMocks.isAnythingInstalled.mockReset();
+  policyMocks.hasAnyVersionInstalled.mockReset();
 
   policyMocks.getSettings.mockReturnValue(launcherSettings());
   policyMocks.loadTargetInstallManifest.mockResolvedValue({ targetId: 'target-id' });
-  policyMocks.isAnythingInstalled.mockResolvedValue(true);
+  policyMocks.hasAnyVersionInstalled.mockResolvedValue(true);
 };
 
 describe('resolveClientInstallPresence', () => {
@@ -47,33 +47,33 @@ describe('resolveClientInstallPresence', () => {
   });
 
   it('seeds installed from a durable manifest without scanning version files', async () => {
-    await expect(resolveClientInstallPresence(SLUG)).resolves.toBe(InstallStatuses.INSTALLED);
+    await expect(resolveClientInstallPresence(KEY)).resolves.toBe(InstallStatuses.INSTALLED);
     // Fully offline: only the manifest is read — no kit, no target resolve.
     expect(policyMocks.loadTargetInstallManifest).toHaveBeenCalledWith(CLIENT_FOLDER);
     // The durable manifest implies on-disk files, so the version scan is skipped
     // on the happy path.
-    expect(policyMocks.isAnythingInstalled).not.toHaveBeenCalled();
+    expect(policyMocks.hasAnyVersionInstalled).not.toHaveBeenCalled();
   });
 
   it('seeds unverified for a legacy install with on-disk files but no durable manifest', async () => {
     policyMocks.loadTargetInstallManifest.mockResolvedValue(null);
-    policyMocks.isAnythingInstalled.mockResolvedValue(true);
+    policyMocks.hasAnyVersionInstalled.mockResolvedValue(true);
 
-    await expect(resolveClientInstallPresence(SLUG)).resolves.toBe(InstallStatuses.UNVERIFIED);
+    await expect(resolveClientInstallPresence(KEY)).resolves.toBe(InstallStatuses.UNVERIFIED);
   });
 
   it('seeds not-installed when no version files are present', async () => {
     policyMocks.loadTargetInstallManifest.mockResolvedValue(null);
-    policyMocks.isAnythingInstalled.mockResolvedValue(false);
+    policyMocks.hasAnyVersionInstalled.mockResolvedValue(false);
 
-    await expect(resolveClientInstallPresence(SLUG)).resolves.toBe(InstallStatuses.NOT_INSTALLED);
+    await expect(resolveClientInstallPresence(KEY)).resolves.toBe(InstallStatuses.NOT_INSTALLED);
   });
 
   it('seeds not-installed without reading files when no client folder is configured', async () => {
     policyMocks.getSettings.mockReturnValue(launcherSettings(''));
 
-    await expect(resolveClientInstallPresence(SLUG)).resolves.toBe(InstallStatuses.NOT_INSTALLED);
+    await expect(resolveClientInstallPresence(KEY)).resolves.toBe(InstallStatuses.NOT_INSTALLED);
     expect(policyMocks.loadTargetInstallManifest).not.toHaveBeenCalled();
-    expect(policyMocks.isAnythingInstalled).not.toHaveBeenCalled();
+    expect(policyMocks.hasAnyVersionInstalled).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,7 @@
 import type { LoaderKind } from '@loontail/minecraft-kit';
 import { z } from 'zod';
-import { CatalogKeySchema } from './ids';
 import type { CatalogKey } from './ids';
+import { CatalogKeySchema } from './ids';
 
 export type { LoaderKind as LoaderChoice } from '@loontail/minecraft-kit';
 
@@ -60,7 +60,7 @@ export const LauncherSettingsSchema = z.object({
   storage: StorageSettingsSchema,
   launch: LaunchSettingsSchema,
   // Keyed by CatalogKey at runtime, but the key schema stays a permissive string
-  // so a legacy store keyed by a bare slug still validates on read until
+  // so a legacy store keyed by a bare key still validates on read until
   // `normalizeLauncherSettings` rehydrates it.
   clients: z.record(z.string(), ClientSettingsOverrideSchema),
 });
@@ -82,12 +82,12 @@ export type ResolvedClientSettings = {
 };
 
 export const SetClientOverridePayloadSchema = z.object({
-  slug: CatalogKeySchema,
+  key: CatalogKeySchema,
   patch: ClientSettingsOverrideSchema,
 });
 
 export type SetClientOverridePayload = {
-  slug: CatalogKey;
+  key: CatalogKey;
   patch: ClientSettingsOverride;
 };
 

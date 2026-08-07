@@ -8,7 +8,7 @@ vi.mock('@main/infra/logger', () => ({
 
 import { type CreateHealerDeps, createHealer } from '@main/services/bundle/healer';
 
-const SLUG = asCatalogKey('official:heal-client');
+const KEY = asCatalogKey('official:heal-client');
 const CLIENT_FOLDER = '/clients/heal-client';
 const TARGET = { id: 'fake-target' } as unknown as Target;
 
@@ -31,10 +31,10 @@ describe('createHealer.healAfterDeletes', () => {
     const deps: CreateHealerDeps = { resolveContext };
     const healer = createHealer(kit, deps);
 
-    await healer.healAfterDeletes(SLUG, new Set<string>());
+    await healer.healAfterDeletes(KEY, new Set<string>());
 
     expect(resolveContext).toHaveBeenCalledTimes(1);
-    expect(resolveContext).toHaveBeenCalledWith(SLUG);
+    expect(resolveContext).toHaveBeenCalledWith(KEY);
     // The injected target flows straight into the verify call — no second
     // target resolution inside the heal bridge.
     expect(kit.targets.resolve).not.toHaveBeenCalled();

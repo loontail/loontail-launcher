@@ -36,7 +36,7 @@ describe('assertNoIpcArgs', () => {
       assertNoIpcArgs({ malicious: true }, 'auth.me takes no arguments'),
     );
     expect(thrown).toEqual({
-      code: ERROR_CODES.IpcInvalidArgs,
+      code: ERROR_CODES.IPC_INVALID_ARGS,
       message: 'auth.me takes no arguments',
       details: { received: { malicious: true } },
     });
@@ -44,13 +44,13 @@ describe('assertNoIpcArgs', () => {
 
   it('rejects null as a payload (only undefined is allowed)', () => {
     const thrown = captureThrow(() => assertNoIpcArgs(null, 'no args')) as IpcError;
-    expect(thrown.code).toBe(ERROR_CODES.IpcInvalidArgs);
+    expect(thrown.code).toBe(ERROR_CODES.IPC_INVALID_ARGS);
   });
 
   it('omits dev details when packaged', () => {
     appMock.isPackaged = true;
     const thrown = captureThrow(() => assertNoIpcArgs('payload', 'no args')) as IpcError;
-    expect(thrown).toEqual({ code: ERROR_CODES.IpcInvalidArgs, message: 'no args' });
+    expect(thrown).toEqual({ code: ERROR_CODES.IPC_INVALID_ARGS, message: 'no args' });
   });
 });
 
@@ -61,7 +61,7 @@ describe('parseIpcArgs', () => {
 
   it('throws IPC_INVALID_ARGS with formatted details in dev on a shape mismatch', () => {
     const thrown = captureThrow(() => parseIpcArgs(z.string(), 42, 'must be a string')) as IpcError;
-    expect(thrown.code).toBe(ERROR_CODES.IpcInvalidArgs);
+    expect(thrown.code).toBe(ERROR_CODES.IPC_INVALID_ARGS);
     expect(thrown.message).toBe('must be a string');
     expect(thrown.details).toBeDefined();
   });
@@ -69,6 +69,6 @@ describe('parseIpcArgs', () => {
   it('omits details when packaged', () => {
     appMock.isPackaged = true;
     const thrown = captureThrow(() => parseIpcArgs(z.string(), 42, 'must be a string')) as IpcError;
-    expect(thrown).toEqual({ code: ERROR_CODES.IpcInvalidArgs, message: 'must be a string' });
+    expect(thrown).toEqual({ code: ERROR_CODES.IPC_INVALID_ARGS, message: 'must be a string' });
   });
 });

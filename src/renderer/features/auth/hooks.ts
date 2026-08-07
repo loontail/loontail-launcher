@@ -1,29 +1,21 @@
 import { QUERY_KEYS } from '@shared/constants';
-import {
-  LOGIN_ERROR_CODE,
-  type LoginErrorCode,
-  type LoginPayload,
-  type LoginResult,
-} from '@shared/contracts';
+import { LOGIN_ERROR_CODE, type LoginErrorCode } from '@shared/contracts';
+import { isIpcError } from '@shared/ipc';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useState } from 'react';
 import { cancelMojangLogin, fetchCurrentUser, login, logout, signInWithMojang } from './api';
 
 const CURRENT_USER_STALE_TIME_MS = 5 * 60_000;
 
-// login resolves to a LoginResult rather than throwing, so the only rejections
-// are transport-level: undici reports a dropped connection as a bare TypeError.
-export const loginErrorCodeFromRejection = (error: unknown): LoginErrorCode => {
-  if (error instanceof TypeError) return LOGIN_ERROR_CODE.NetworkError;
-  return LOGIN_ERROR_CODE.Unknown;
-};
+const LOGIN_ERROR_CODES: ReadonlySet<string> = new Set(Object.values(LOGIN_ERROR_CODE));
 
-const loginWithRejectionResult = async (payload: LoginPayload): Promise<LoginResult> => {
-  try {
-    return await login(payload);
-  } catch (error) {
-    return { ok: false, error: loginErrorCodeFromRejection(error) };
-  }
+// Every sign-in failure arrives as a coded IpcError: main maps undici's
+// `TypeError: fetch failed` to NETWORK_ERROR before it crosses the bridge
+// (loontailAuth.errorToLoginCode, routes.mojangFailureCode), and the preload
+// rethrows either an unwrapped IpcError or a plain Error — never a TypeError.
+export const loginErrorCodeFromRejection = (error: unknown): LoginErrorCode => {
+  if (isIpcError(error) && LOGIN_ERROR_CODES.has(error.code)) return error.code as LoginErrorCode;
+  return LOGIN_ERROR_CODE.UNKNOWN;
 };
 
 export const useCurrentUser = () => {
@@ -44,16 +36,18 @@ export const useLogin = () => {
   const queryClient = useQueryClient();
   const [errorCode, setErrorCode] = useState<LoginErrorCode | null>(null);
   const mutation = useMutation({
-    mutationFn: loginWithRejectionResult,
+    // The form renders the code inline, so the global mutation toast would
+    // double-report every wrong password.
+    meta: { skipGlobalErrorToast: true },
+    mutationFn: login,
     onMutate: () => {
       setErrorCode(null);
     },
-    onSuccess: (result) => {
-      if (result.ok) {
-        queryClient.setQueryData(QUERY_KEYS.auth.me, result.user);
-      } else {
-        setErrorCode(result.error);
-      }
+    onSuccess: (account) => {
+      queryClient.setQueryData(QUERY_KEYS.auth.me, account);
+    },
+    onError: (error) => {
+      setErrorCode(loginErrorCodeFromRejection(error));
     },
   });
   return {
@@ -94,14 +88,11 @@ export const useMojangLogin = () => {
     setErrorCode(null);
     setIsPending(true);
     try {
-      const result = await signInWithMojang();
-      if (result.ok) {
-        queryClient.setQueryData(QUERY_KEYS.auth.me, result.user);
-      } else if (result.error !== LOGIN_ERROR_CODE.Cancelled) {
-        setErrorCode(result.error);
-      }
-    } catch {
-      setErrorCode(LOGIN_ERROR_CODE.Unknown);
+      queryClient.setQueryData(QUERY_KEYS.auth.me, await signInWithMojang());
+    } catch (error) {
+      const code = loginErrorCodeFromRejection(error);
+      // A user-cancelled browser flow is not a failure to report.
+      if (code !== LOGIN_ERROR_CODE.CANCELLED) setErrorCode(code);
     } finally {
       setIsPending(false);
     }

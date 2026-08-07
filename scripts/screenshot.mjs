@@ -5,7 +5,8 @@
  * Launches the *built* launcher as a real Electron app, drives it to each
  * defined screen, and writes a PNG per screen. Unlike a plain browser, this
  * runs the actual app with its preload bridge and IPC intact, so screens that
- * depend on `window.api`/electron-store (home, settings) render for real.
+ * depend on `window.api` and the sqlite-backed store (home, settings) render for
+ * real.
  *
  * Usage:
  *   npm run shots            # build, then screenshot into .shots/

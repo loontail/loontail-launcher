@@ -1,16 +1,18 @@
 import { isErrorCode } from '@loontail/minecraft-kit';
+import { errorMessage } from '@main/infra/errorMessage';
 import { setStoredAuth } from '@main/infra/store';
-import { assertNoIpcArgs, parseIpcArgs } from '@main/ipc/parseArgs';
+import { parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
+import type { Account } from '@shared/contracts/account';
 import {
   LOGIN_ERROR_CODE,
   type LoginErrorCode,
   LoginPayloadSchema,
-  type LoginResult,
   RegisterPayloadSchema,
 } from '@shared/contracts/auth';
 import { IPC_CHANNELS } from '@shared/ipc';
-import { buildLoginResult, fetchCurrentUser, login, logout, register } from './auth';
+import { buildAccount, fetchCurrentUser, login, logout, register } from './auth';
+import { AuthError } from './errors';
 import type { LoontailAuth } from './loontailAuth';
 import { type MojangAuth, MojangBrowserOpenError } from './mojangAuth';
 import type { SessionRefresher } from './sessionRefresh';
@@ -20,10 +22,10 @@ import type { FetchTextures } from './yggdrasilClient';
 // Network failures surface as `TypeError: fetch failed` from undici and map to a
 // distinct code so the UI can prompt about connectivity.
 const mojangFailureCode = (error: unknown): LoginErrorCode => {
-  if (error instanceof MojangBrowserOpenError) return LOGIN_ERROR_CODE.BrowserOpenFailed;
-  if (isErrorCode(error, 'AUTH_CANCELLED')) return LOGIN_ERROR_CODE.Cancelled;
-  if (error instanceof TypeError) return LOGIN_ERROR_CODE.NetworkError;
-  return LOGIN_ERROR_CODE.Unknown;
+  if (error instanceof MojangBrowserOpenError) return LOGIN_ERROR_CODE.BROWSER_OPEN_FAILED;
+  if (isErrorCode(error, 'AUTH_CANCELLED')) return LOGIN_ERROR_CODE.CANCELLED;
+  if (error instanceof TypeError) return LOGIN_ERROR_CODE.NETWORK_ERROR;
+  return LOGIN_ERROR_CODE.UNKNOWN;
 };
 
 export const registerAuthRoutes = (
@@ -43,29 +45,25 @@ export const registerAuthRoutes = (
     return register(loontailAuth, payload, fetchTextures);
   });
 
-  router.handle(IPC_CHANNELS.authMe, (rawArgs) => {
-    assertNoIpcArgs(rawArgs, 'auth.me takes no arguments');
-    return fetchCurrentUser(refresher, mojangAuth, fetchTextures);
+  router.handleNoArgs(IPC_CHANNELS.authMe, () => {
+    return fetchCurrentUser(refresher, loontailAuth.validate, mojangAuth, fetchTextures);
   });
 
-  router.handle(IPC_CHANNELS.authLogout, (rawArgs) => {
-    assertNoIpcArgs(rawArgs, 'auth.logout takes no arguments');
+  router.handleNoArgs(IPC_CHANNELS.authLogout, () => {
     return logout(loontailAuth);
   });
 
-  router.handle(IPC_CHANNELS.authMojangSignIn, async (rawArgs): Promise<LoginResult> => {
-    assertNoIpcArgs(rawArgs, 'auth.mojang.signIn takes no arguments');
+  router.handleNoArgs(IPC_CHANNELS.authMojangSignIn, async (): Promise<Account> => {
     try {
       const session = await mojangAuth.signInWithMojang();
       setStoredAuth(session);
-      return buildLoginResult(session, fetchTextures);
+      return await buildAccount(session, fetchTextures);
     } catch (error) {
-      return { ok: false, error: mojangFailureCode(error) };
+      throw new AuthError(mojangFailureCode(error), errorMessage(error));
     }
   });
 
-  router.handle(IPC_CHANNELS.authMojangCancel, (rawArgs) => {
-    assertNoIpcArgs(rawArgs, 'auth.mojang.cancel takes no arguments');
+  router.handleNoArgs(IPC_CHANNELS.authMojangCancel, () => {
     mojangAuth.cancelMojangLogin();
   });
 };

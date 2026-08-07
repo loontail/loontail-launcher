@@ -1,52 +1,37 @@
 import { i18n } from '@renderer/i18n';
-import { makeSlugMutationHook } from '@renderer/shared/lib/slugMutation';
+import { makeKeyMutationHook } from '@renderer/shared/lib/keyMutation';
+import { makeSeededStatusHook } from '@renderer/shared/lib/makeSeededStatusHook';
+import { createStatusSeeder } from '@renderer/shared/lib/statusSeeder';
 import type { CatalogKey } from '@shared/contracts/ids';
 import type { IpcError } from '@shared/ipc';
 import { useMutation } from '@tanstack/react-query';
-import { useEffect } from 'react';
 import * as api from './api';
 import { localizeBundleError } from './errorCopy';
-import { statusSeeder } from './statusSeeder';
-import { type BundleRuntimeState, selectBundle, useBundleStore } from './store';
+import { selectBundle, useBundleStore } from './store';
 
 const bundleMutationMeta = {
   errorLocalizer: (error: IpcError) => localizeBundleError(error.code, error.message, i18n.t),
 };
 
-const useSlugMutation = makeSlugMutationHook(bundleMutationMeta);
+const useKeyMutation = makeKeyMutationHook(bundleMutationMeta);
 
-export const useBundleStatus = (slug: CatalogKey | null | undefined): BundleRuntimeState => {
-  const state = useBundleStore(selectBundle(slug));
-
-  useEffect(() => {
-    if (!slug) return;
-    // Live events are source of truth — only seed when the store has no entry.
-    if (useBundleStore.getState().entries[slug]) return;
-    void statusSeeder
-      .seedStatus(slug)
-      .then((data) => {
-        if (useBundleStore.getState().entries[slug]) return;
-        useBundleStore.getState().patch(slug, {
-          installed: data.installed,
-          signatureMatches: data.signatureMatches,
-          progress: data.progress,
-        });
-      })
-      .catch((error: unknown) => {
-        // biome-ignore lint/suspicious/noConsole: best-effort seed — main logger unreachable from renderer
-        console.warn('[bundle] failed to seed status', error);
-      });
-  }, [slug]);
-
-  return state;
-};
+export const useBundleStatus = makeSeededStatusHook({
+  store: { useStore: useBundleStore, selectEntry: selectBundle },
+  seeder: createStatusSeeder(api.getStatus),
+  toPatch: (data) => ({
+    installed: data.installed,
+    signatureMatches: data.signatureMatches,
+    progress: data.progress,
+  }),
+  label: 'bundle',
+});
 
 export const useStartBundle = () =>
   useMutation({
     meta: bundleMutationMeta,
-    mutationFn: ({ slug, force }: { slug: CatalogKey; force?: boolean }) => api.start(slug, force),
+    mutationFn: ({ key, force }: { key: CatalogKey; force?: boolean }) => api.start(key, force),
   });
 
-export const usePauseBundle = () => useSlugMutation(api.pause);
-export const useResumeBundle = () => useSlugMutation(api.resume);
-export const useCancelBundle = () => useSlugMutation(api.cancel);
+export const usePauseBundle = () => useKeyMutation(api.pause);
+export const useResumeBundle = () => useKeyMutation(api.resume);
+export const useCancelBundle = () => useKeyMutation(api.cancel);

@@ -14,10 +14,8 @@ export const SettingsRow = ({ label, description, right, onClick }: SettingsRowP
   const content = (
     <>
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-sm text-foreground">{label}</span>
-        {description !== undefined && (
-          <span className="text-xs text-muted-foreground">{description}</span>
-        )}
+        <span className="text-sm text-text-hi">{label}</span>
+        {description !== undefined && <span className="text-xs text-text-mute">{description}</span>}
       </div>
       {right !== undefined && <div className="shrink-0">{right}</div>}
     </>
@@ -30,7 +28,7 @@ export const SettingsRow = ({ label, description, right, onClick }: SettingsRowP
         onClick={onClick}
         className={cn(
           'flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors',
-          'hover:bg-muted focus:outline-none focus-visible:bg-muted',
+          'hover:bg-surface-2 focus:outline-none focus-visible:bg-surface-2',
         )}
       >
         {content}
@@ -66,15 +64,13 @@ export const SettingsSwitchRow = ({
       onClick={() => onCheckedChange(!checked)}
       className={cn(
         'flex w-full items-center justify-between gap-4 px-4 py-3 text-left transition-colors',
-        'hover:bg-muted focus:outline-none focus-visible:bg-muted',
+        'hover:bg-surface-2 focus:outline-none focus-visible:bg-surface-2',
         'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent',
       )}
     >
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-sm text-foreground">{label}</span>
-        {description !== undefined && (
-          <span className="text-xs text-muted-foreground">{description}</span>
-        )}
+        <span className="text-sm text-text-hi">{label}</span>
+        {description !== undefined && <span className="text-xs text-text-mute">{description}</span>}
       </div>
       <div className="shrink-0">
         <Switch checked={checked} disabled={isDisabled} />

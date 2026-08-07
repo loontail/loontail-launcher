@@ -32,7 +32,7 @@ vi.mock('@main/infra/logger', () => ({
 
 import { createRouter } from '@main/ipc/router';
 import { BundleError } from '@main/services/bundle/errors';
-import { ManagerError } from '@main/services/minecraft/errors';
+import { MinecraftError } from '@main/services/minecraft/errors';
 import { SkinError } from '@main/services/skin/errors';
 import { ERROR_CODES } from '@shared/constants';
 import { BundleErrorCodes } from '@shared/contracts/bundle';
@@ -82,7 +82,7 @@ describe('createRouter', () => {
     const message = (captured as Error).message;
     expect(message.startsWith(IPC_ERROR_SENTINEL)).toBe(true);
     const ipcError = tryUnwrapIpcError(message);
-    expect(ipcError?.code).toBe(ERROR_CODES.IpcUntrustedSender);
+    expect(ipcError?.code).toBe(ERROR_CODES.IPC_UNTRUSTED_SENDER);
   });
 
   it('wraps thrown Errors as IPC_HANDLER_FAILED with dev stack details', async () => {
@@ -101,7 +101,7 @@ describe('createRouter', () => {
     }
 
     const ipcError = tryUnwrapIpcError((captured as Error).message);
-    expect(ipcError?.code).toBe(ERROR_CODES.IpcHandlerFailed);
+    expect(ipcError?.code).toBe(ERROR_CODES.IPC_HANDLER_FAILED);
     expect(ipcError?.message).toBe('boom');
     expect(ipcError?.details).toMatchObject({ stack: expect.any(String) });
   });
@@ -127,7 +127,7 @@ describe('createRouter', () => {
   it('preserves a thrown IpcError shape ({code, message})', async () => {
     const router = createRouter(() => true);
     router.handle('app.getVersion', () => {
-      throw { code: ERROR_CODES.IpcInvalidArgs, message: 'bad args' };
+      throw { code: ERROR_CODES.IPC_INVALID_ARGS, message: 'bad args' };
     });
 
     const handler = handlers.get('app.getVersion');
@@ -138,7 +138,7 @@ describe('createRouter', () => {
       captured = error;
     }
     const ipcError = tryUnwrapIpcError((captured as Error).message);
-    expect(ipcError?.code).toBe(ERROR_CODES.IpcInvalidArgs);
+    expect(ipcError?.code).toBe(ERROR_CODES.IPC_INVALID_ARGS);
     expect(ipcError?.message).toBe('bad args');
   });
 
@@ -168,7 +168,7 @@ describe('createRouter', () => {
     appMock.isPackaged = true;
     const router = createRouter(() => true);
     router.handle('minecraft.install', () => {
-      throw new ManagerError(MinecraftErrorCodes.OP_IN_FLIGHT, 'Operation already running');
+      throw new MinecraftError(MinecraftErrorCodes.OP_IN_FLIGHT, 'Operation already running');
     });
 
     const handler = handlers.get('minecraft.install');
@@ -220,7 +220,7 @@ describe('createRouter', () => {
   it('logs a recoverable domain failure (OP_IN_FLIGHT) at warn, not error', async () => {
     const router = createRouter(() => true);
     router.handle('minecraft.install', () => {
-      throw new ManagerError(MinecraftErrorCodes.OP_IN_FLIGHT, 'Operation already running');
+      throw new MinecraftError(MinecraftErrorCodes.OP_IN_FLIGHT, 'Operation already running');
     });
     const handler = handlers.get('minecraft.install');
     await expect(handler?.(fakeEvent(), undefined)).rejects.toBeDefined();

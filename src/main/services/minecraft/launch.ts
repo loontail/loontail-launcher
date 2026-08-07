@@ -1,37 +1,36 @@
 import fs from 'node:fs/promises';
-import path from 'node:path';
 import {
   AuthModes,
+  asAzureClientId,
+  asPlayerUuid,
   EventTypes,
+  isMinecraftKitError,
   type LaunchAuth,
   type LaunchComposition,
   type LaunchExit,
   type MinecraftKitErrorCode,
   MinecraftKitErrorCodes,
-  asAzureClientId,
-  asPlayerUuid,
-  isMinecraftKitError,
   toOnlineAuth,
 } from '@loontail/minecraft-kit';
-import {
-  AUTHLIB_INJECTOR_VERSION,
-  buildAuthlibInjectorJvmArg,
-  resolveAuthlibInjectorJarPath,
-} from '@loontail/yggdrasil-client';
-import { dashUuid } from '@loontail/yggdrasil-core';
 import { mainConfig } from '@main/config';
 import { errorMessage } from '@main/infra/errorMessage';
 import { scopedLogger } from '@main/infra/logger';
 import { getStoredAuth, getStoredSessionToken, recordPlayed } from '@main/infra/store';
+import {
+  buildAuthlibInjectorJvmArg,
+  resolveAuthlibInjectorJarPath,
+} from '@main/services/yggdrasil/authlibInjector';
 import type { Account } from '@shared/contracts/account';
 import type { AuthSession } from '@shared/contracts/auth';
+import { type CatalogItem, SourceKinds } from '@shared/contracts/catalog';
 import { ConsoleSources, ConsoleStatuses } from '@shared/contracts/console';
 import type { CatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraft';
+import { dashUuid } from '@shared/yggdrasil/uuid';
 import { app } from 'electron';
 import type { Context } from './context';
-import type { ManagerEnv } from './env';
-import { ManagerError, classifyError } from './errors';
+import type { MinecraftEnv } from './env';
+import { classifyError, MinecraftError } from './errors';
 import { type LaunchStartingOp, OpKinds } from './ops';
 
 const launchLogger = scopedLogger('minecraft.launch');
@@ -42,7 +41,7 @@ const YGGDRASIL_PLACEHOLDER_CLIENT_ID = asAzureClientId('00000000-0000-0000-0000
 // Cloudflare blocks authlib-injector's bare `Java/...` UA, so give it a launcher UA.
 const YGGDRASIL_HTTP_AGENT_NAME = 'LoontailLauncher';
 
-class LaunchPreflightError extends ManagerError {}
+class LaunchPreflightError extends MinecraftError {}
 
 const isLaunchPreflightError = (error: unknown): error is LaunchPreflightError =>
   error instanceof LaunchPreflightError;
@@ -65,12 +64,6 @@ const toComposeFailure = (error: unknown): unknown => {
   return new LaunchPreflightError(code, errorMessage(error));
 };
 
-// The full launch command is logged to disk, so redact the session bearer it
-// embeds (-Dloontail.network.serviceToken=) before it ever hits the log file.
-const SERVICE_TOKEN_PROP = '-Dloontail.network.serviceToken=';
-const redactServiceToken = (command: string): string =>
-  command.replace(/-Dloontail\.network\.serviceToken=\S+/g, `${SERVICE_TOKEN_PROP}<redacted>`);
-
 const sanitizeHttpAgentToken = (value: string): string => {
   const token = value.trim().replace(/[^0-9A-Za-z.+_-]/g, '-');
   return token.length > 0 ? token : 'dev';
@@ -79,74 +72,32 @@ const sanitizeHttpAgentToken = (value: string): string => {
 const buildYggdrasilHttpAgentJvmArg = (): string =>
   `-Dhttp.agent=${YGGDRASIL_HTTP_AGENT_NAME}/${sanitizeHttpAgentToken(app.getVersion())}`;
 
-const resolveAuthlibInjectorJar = (): string => {
-  if (app.isPackaged) {
-    return path.join(
-      process.resourcesPath,
-      'authlib-injector',
-      `authlib-injector-${AUTHLIB_INJECTOR_VERSION}.jar`,
-    );
-  }
-  return resolveAuthlibInjectorJarPath();
-};
-
-const LOONTAIL_AGENT_JAR = 'loontail-network-agent.jar';
-
-// The agent jar is built `--release 21`, so attaching it via `-javaagent` on an
-// older JVM (Java 8/17) would abort startup. Only attach on Java 21+.
-const NETWORK_AGENT_MIN_JAVA = 21;
-
-const resolveNetworkAgentJar = (): string =>
-  app.isPackaged
-    ? path.join(process.resourcesPath, 'loontail-agent', LOONTAIL_AGENT_JAR)
-    : path.join(app.getAppPath(), 'resources', 'agent', LOONTAIL_AGENT_JAR);
-
-// The env var the agent reads the session token from (AgentSettings reads it via
-// PropertySource.SYSTEM, which falls back from -D properties to System.getenv).
+// The env var the in-game network mod reads the session token from.
 const SERVICE_TOKEN_ENV = 'LOONTAIL_NETWORK_SERVICE_TOKEN';
 
-type NetworkAgentAttachment = {
-  // JVM args that attach the in-game agent (the -javaagent jar + non-secret -D props).
+type NetworkOverlayConfig = {
+  // Non-secret -D props the network mod reads from the game JVM.
   readonly jvmArgs: readonly string[];
   // Env vars to set on the spawned game process. The session token rides here, NOT
   // on a -D arg, so it never appears in the OS process list.
   readonly env: Readonly<Record<string, string>>;
 };
 
-const NO_NETWORK_AGENT: NetworkAgentAttachment = { jvmArgs: [], env: {} };
+const EMPTY_NETWORK_OVERLAY: NetworkOverlayConfig = { jvmArgs: [], env: {} };
 
-// Resolves how to attach the in-game network agent, or NO_NETWORK_AGENT when it must
-// not attach. The overlay is strictly best-effort: a wrong Java or missing jar never
-// blocks launch.
-const buildNetworkAgentAttachment = async (
-  slug: CatalogKey,
-  javaMajor: number | undefined,
-): Promise<NetworkAgentAttachment> => {
-  if (javaMajor === undefined || javaMajor < NETWORK_AGENT_MIN_JAVA) {
-    launchLogger.info(
-      `[${slug}] launch: network agent not attached (Java ${javaMajor ?? '?'} < ${NETWORK_AGENT_MIN_JAVA})`,
-    );
-    return NO_NETWORK_AGENT;
-  }
-  try {
-    const jarPath = resolveNetworkAgentJar();
-    await fs.access(jarPath);
-    const jvmArgs = [`-javaagent:${jarPath}`];
-    if (mainConfig.networkServiceUrl) {
-      jvmArgs.push(`-Dloontail.network.serviceUrl=${mainConfig.networkServiceUrl}`);
-    }
-    // Hand the agent the same session token so it authenticates as this user. The
-    // token is the player's API bearer, so it must not ride on a `-D` property
-    // (readable in the OS process list). Deliver it through the child JVM's
-    // environment instead; the agent reads LOONTAIL_NETWORK_SERVICE_TOKEN via
-    // PropertySource.SYSTEM's getenv fallback.
-    const sessionToken = getStoredSessionToken();
-    const env = sessionToken ? { [SERVICE_TOKEN_ENV]: sessionToken } : {};
-    return { jvmArgs, env };
-  } catch (error) {
-    launchLogger.warn(`[${slug}] launch: network agent not attached (${errorMessage(error)})`);
-    return NO_NETWORK_AGENT;
-  }
+// Service URL and session token handed to the in-game network mod. The token is
+// the full API bearer and ANY class in the game JVM can read it via
+// System.getenv, so it is gated exactly like the URL: no NETWORK_API_URL means
+// in-game networking is switched off and nothing is handed over. LOCAL builds
+// run user-supplied loose mods the launcher never vetted, so they never get the
+// bearer either — the managed overlay that ships the network mod is
+// official-only (see MinecraftManager.bundleHookFor).
+const buildNetworkOverlayConfig = (item: CatalogItem): NetworkOverlayConfig => {
+  if (!mainConfig.networkServiceUrl) return EMPTY_NETWORK_OVERLAY;
+  const jvmArgs = [`-Dloontail.network.serviceUrl=${mainConfig.networkServiceUrl}`];
+  if (item.kind === SourceKinds.LOCAL) return { jvmArgs, env: {} };
+  const sessionToken = getStoredSessionToken();
+  return { jvmArgs, env: sessionToken ? { [SERVICE_TOKEN_ENV]: sessionToken } : {} };
 };
 
 const requireLaunchFile = async (
@@ -203,21 +154,21 @@ const launchExitCode = (error: unknown): number | null => {
 };
 
 export const endLaunch = (
-  env: ManagerEnv,
-  slug: CatalogKey,
+  env: MinecraftEnv,
+  key: CatalogKey,
   error?: unknown,
   exit?: LaunchExit,
 ): void => {
-  env.ops.delete(slug);
+  env.ops.delete(key);
   // Flush the log4j parser before the terminal state so a crash event split
   // across the final lines is ingested, not dropped.
-  env.console.endSession(slug);
+  env.console.endSession(key);
   if (error) {
     const message = errorMessage(error);
-    env.logger.error(`[${slug}] launch: game process failed — ${message}`, error);
-    env.emitError(slug, classifyError(error), message);
+    env.logger.error(`[${key}] launch: game process failed — ${message}`, error);
+    env.emitError(key, classifyError(error), message);
     env.console.emitState({
-      slug,
+      key,
       status: ConsoleStatuses.CRASHED,
       message,
       exitCode: launchExitCode(error),
@@ -225,21 +176,21 @@ export const endLaunch = (
     env.console.recordSystem(`Process crashed: ${message}`, {
       code: 'console.system.processCrashedWithMessage',
       args: { detail: message },
-      slug,
+      key,
     });
     // Surface crash details even if auto-open is off — user needs the backlog.
     if (!env.console.hasWindow()) env.openConsole();
   } else {
     // The kit resolves `exited` for both a clean exit and a user stop; only the
     // latter sets `aborted`.
-    env.logger.info(`[${slug}] launch: game ${exit?.aborted ? 'stopped' : 'exited'}`);
-    env.console.emitState({ slug, status: ConsoleStatuses.EXITED, exitCode: exit?.code ?? null });
+    env.logger.info(`[${key}] launch: game ${exit?.aborted ? 'stopped' : 'exited'}`);
+    env.console.emitState({ key, status: ConsoleStatuses.EXITED, exitCode: exit?.code ?? null });
     env.console.recordSystem('Process exited', {
       code: 'console.system.processExited',
-      slug,
+      key,
     });
   }
-  env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
+  env.emitStatus({ key, status: InstallStatuses.INSTALLED, paused: false });
 };
 
 type ResolvedLaunchAuth = {
@@ -274,7 +225,7 @@ export const resolveLaunchAuth = (
     };
   }
   if (session?.provider === 'yggdrasil') {
-    const jarPath = resolveAuthlibInjectorJar();
+    const jarPath = resolveAuthlibInjectorJarPath();
     return {
       auth: {
         mode: AuthModes.ONLINE,
@@ -298,8 +249,8 @@ export const resolveLaunchAuth = (
 };
 
 export const runLaunch = async (
-  env: ManagerEnv,
-  slug: CatalogKey,
+  env: MinecraftEnv,
+  key: CatalogKey,
   ctx: Context,
   account: Account,
   // Reuse the caller's LAUNCH_STARTING op so a Stop during buildContext aborts
@@ -309,21 +260,18 @@ export const runLaunch = async (
 ): Promise<void> => {
   const startupSignal = startupOp.abort.signal;
   const restoreInstalled = (): void => {
-    env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
+    env.emitStatus({ key, status: InstallStatuses.INSTALLED, paused: false });
   };
 
-  env.ops.set(slug, startupOp);
-  env.emitStatus({ slug, status: InstallStatuses.LAUNCHING, paused: false });
+  env.ops.set(key, startupOp);
+  env.emitStatus({ key, status: InstallStatuses.LAUNCHING, paused: false });
   try {
     const resolved = resolveLaunchAuth(account, getStoredAuth());
     if (resolved.extraJvmArgs.length > 0) {
-      launchLogger.info(`[${slug}] launch: injecting authlib-injector (yggdrasil session)`);
+      launchLogger.info(`[${key}] launch: injecting authlib-injector (yggdrasil session)`);
     }
-    const networkAgent = await buildNetworkAgentAttachment(slug, ctx.target.runtime.majorVersion);
-    if (networkAgent.jvmArgs.length > 0) {
-      launchLogger.info(`[${slug}] launch: attaching Loontail network agent (in-game overlay)`);
-    }
-    const extraJvmArgs = [...resolved.extraJvmArgs, ...networkAgent.jvmArgs];
+    const networkOverlay = buildNetworkOverlayConfig(ctx.item);
+    const extraJvmArgs = [...resolved.extraJvmArgs, ...networkOverlay.jvmArgs];
     let composition: LaunchComposition;
     try {
       composition = await env.kit.launch.compose(ctx.target, {
@@ -337,59 +285,52 @@ export const runLaunch = async (
         launcherVersion: app.getVersion(),
       });
     } catch (error) {
-      if (startupSignal.aborted) {
-        restoreInstalled();
-        return;
-      }
       throw toComposeFailure(error);
     }
-    // Merge the agent's env (the session token) into the composition so the kit's
-    // spawner sets it on the child JVM. The default ChildProcessSpawner merges this
-    // over process.env, so the rest of the environment is preserved.
-    if (Object.keys(networkAgent.env).length > 0) {
+    // Merge the overlay env (the session token for the network mod) into the
+    // composition so the kit's spawner sets it on the child JVM. The default
+    // ChildProcessSpawner merges this over process.env, so the rest of the
+    // environment is preserved.
+    if (Object.keys(networkOverlay.env).length > 0) {
       composition = {
         ...composition,
-        env: { ...composition.env, ...networkAgent.env },
+        env: { ...composition.env, ...networkOverlay.env },
       };
     }
-    if (startupSignal.aborted) {
-      restoreInstalled();
-      return;
-    }
+    // One rule, one place: a Stop anywhere during startup settles back to
+    // INSTALLED and emits nothing. throwIfAborted routes it to the outer catch,
+    // whose abort branch is byte-identical — so a newly inserted await between
+    // these points cannot silently lose its checkpoint.
+    startupSignal.throwIfAborted();
     await verifyLaunchPreflight(composition);
-    if (startupSignal.aborted) {
-      restoreInstalled();
-      return;
-    }
+    startupSignal.throwIfAborted();
     const consoleEnabled = ctx.resolved.launch.console;
-    const clientTitle = ctx.item.presentation.title || slug;
+    const clientTitle = ctx.item.presentation.title || key;
     env.console.setActiveSession({
-      slug,
+      key,
       clientTitle,
-      state: { slug, status: ConsoleStatuses.LAUNCHING, clientTitle },
+      state: { key, status: ConsoleStatuses.LAUNCHING, clientTitle },
     });
-    env.console.emitState({ slug, status: ConsoleStatuses.LAUNCHING, clientTitle });
-    env.console.recordSystem('Launching…', { code: 'console.system.launching', slug });
+    env.console.emitState({ key, status: ConsoleStatuses.LAUNCHING, clientTitle });
+    env.console.recordSystem('Launching…', { code: 'console.system.launching', key });
     if (consoleEnabled) env.openConsole();
     const session = env.kit.launch.run(composition, {
       signal: startupSignal,
       onEvent: (event) => {
         switch (event.type) {
           case EventTypes.LAUNCH_STARTING:
-            env.logger.info(
-              `[${slug}] launch: starting ${redactServiceToken(event.command)} (cwd ${event.cwd})`,
-            );
+            env.logger.info(`[${key}] launch: starting ${event.command} (cwd ${event.cwd})`);
             return;
           case EventTypes.LAUNCH_STARTED:
-            env.logger.info(`[${slug}] launch: started pid=${event.pid}`);
+            env.logger.info(`[${key}] launch: started pid=${event.pid}`);
             return;
           case EventTypes.LAUNCH_EXITED:
             env.logger.info(
-              `[${slug}] launch: exited code=${event.code ?? 'null'} signal=${event.signal ?? 'null'}`,
+              `[${key}] launch: exited code=${event.code ?? 'null'} signal=${event.signal ?? 'null'}`,
             );
             return;
           case EventTypes.LAUNCH_ABORTED:
-            env.logger.info(`[${slug}] launch: aborted (${event.reason})`);
+            env.logger.info(`[${key}] launch: aborted (${event.reason})`);
             return;
           case EventTypes.LAUNCH_STDOUT:
           case EventTypes.LAUNCH_STDERR: {
@@ -397,7 +338,7 @@ export const runLaunch = async (
               event.type === EventTypes.LAUNCH_STDOUT
                 ? ConsoleSources.STDOUT
                 : ConsoleSources.STDERR;
-            env.console.recordMinecraft(slug, stream, event.line);
+            env.console.recordMinecraft(key, stream, event.line);
             return;
           }
           default:
@@ -410,33 +351,33 @@ export const runLaunch = async (
       restoreInstalled();
       return;
     }
-    env.ops.set(slug, { kind: OpKinds.LAUNCH, session });
+    env.ops.set(key, { kind: OpKinds.LAUNCH, session });
     // Observe termination before any post-spawn bookkeeping that could throw, else
     // a failure below leaves the process unobserved or the LAUNCH op stranded
-    // (bricking the slug via requireIdle). The trailing .catch guards endLaunch.
+    // (bricking the key via requireIdle). The trailing .catch guards endLaunch.
     void session.exited
       .then((exit) => {
-        endLaunch(env, slug, undefined, exit);
+        endLaunch(env, key, undefined, exit);
       })
       .catch((error: unknown) => {
-        endLaunch(env, slug, error);
+        endLaunch(env, key, error);
       })
       .catch((error: unknown) => {
-        env.logger.error(`[${slug}] endLaunch threw`, error);
+        env.logger.error(`[${key}] endLaunch threw`, error);
       });
 
-    // Stamp Home recents keyed by the resolved CatalogKey (not the operational
-    // slug) so the renderer matches it against the catalog. Best-effort.
+    // Stamp Home recents with the resolved item's key (not the requested one) so
+    // the renderer matches it against the catalog. Best-effort.
     try {
       recordPlayed(ctx.item.key);
     } catch (error) {
-      env.logger.warn(`[${slug}] failed to record last-played`, error);
+      env.logger.warn(`[${key}] failed to record last-played`, error);
     }
-    env.emitStatus({ slug, status: InstallStatuses.RUNNING, paused: false });
-    env.console.emitState({ slug, status: ConsoleStatuses.RUNNING, clientTitle });
+    env.emitStatus({ key, status: InstallStatuses.RUNNING, paused: false });
+    env.console.emitState({ key, status: ConsoleStatuses.RUNNING, clientTitle });
     env.console.recordSystem('Process started', {
       code: 'console.system.processStarted',
-      slug,
+      key,
     });
   } catch (error) {
     if (startupSignal.aborted) {
@@ -445,30 +386,30 @@ export const runLaunch = async (
     }
     if (isLaunchPreflightError(error)) {
       const message = errorMessage(error);
-      launchLogger.warn(`[${slug}] launch preflight failed - ${message}`, error);
+      launchLogger.warn(`[${key}] launch preflight failed - ${message}`, error);
       // Keep the client INSTALLED (affordance stays "Play"); the renderer turns the
       // error event into a repair toast rather than us silently reinstalling.
-      env.console.recordSystem(`Launch check failed: ${message}`, { slug });
+      env.console.recordSystem(`Launch check failed: ${message}`, { key });
       if (!env.console.hasWindow()) env.openConsole();
-      env.emitError(slug, error.code, message);
-      env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
+      env.emitError(key, error.code, message);
+      env.emitStatus({ key, status: InstallStatuses.INSTALLED, paused: false });
       return;
     }
-    env.logger.error(`[${slug}] launch failed`, error);
-    env.emitError(slug, classifyError(error, startupSignal), errorMessage(error));
-    env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
+    env.logger.error(`[${key}] launch failed`, error);
+    env.emitError(key, classifyError(error, startupSignal), errorMessage(error));
+    env.emitStatus({ key, status: InstallStatuses.INSTALLED, paused: false });
     const message = errorMessage(error);
-    env.console.emitState({ slug, status: ConsoleStatuses.ERROR, message });
-    env.console.recordSystem(`Process error: ${message}`, { slug });
+    env.console.emitState({ key, status: ConsoleStatuses.ERROR, message });
+    env.console.recordSystem(`Process error: ${message}`, { key });
     if (!env.console.hasWindow()) env.openConsole();
     // Already surfaced via emitError; re-throwing would double-surface it as an
     // IPC rejection (second toast) plus an error-level handler log.
   } finally {
-    if (env.ops.get(slug) === startupOp) env.ops.delete(slug);
+    if (env.ops.get(key) === startupOp) env.ops.delete(key);
   }
 };
 
 export const requireAccount = (account: Account | null): Account => {
   if (account) return account;
-  throw new ManagerError(MinecraftErrorCodes.NO_ACCOUNT, 'Sign in before launching');
+  throw new MinecraftError(MinecraftErrorCodes.NO_ACCOUNT, 'Sign in before launching');
 };

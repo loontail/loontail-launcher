@@ -1,4 +1,4 @@
-import { type ToastPayload, subscribeToToasts, toast } from '@renderer/shared/ui/Toast/toast';
+import { subscribeToToasts, type ToastPayload, toast } from '@renderer/shared/ui/Toast/toast';
 import { describe, expect, it, vi } from 'vitest';
 
 const capture = (run: () => void): ToastPayload[] => {

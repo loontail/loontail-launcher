@@ -8,7 +8,7 @@ vi.mock('@main/config', () => ({
 }));
 
 import {
-  isTrustedBundleAssetUrl,
+  bundleAssetTrust,
   resolveBundleManifestEntryUrl,
   resolveBundleRedirectUrl,
   validateBundleAssetDownloadUrl,
@@ -50,10 +50,10 @@ describe('bundle URL policy', () => {
       expect(
         resolveBundleRedirectUrl(
           '/bundle/files/example-v2.jar',
-          'https://cdn.example.com/bundle/files/example.jar',
-          'https://cdn.example.com/bundle/files/example.jar',
+          'https://api.example.com/bundle/files/example.jar',
+          'https://api.example.com/bundle/files/example.jar',
         ),
-      ).toBe('https://cdn.example.com/bundle/files/example-v2.jar');
+      ).toBe('https://api.example.com/bundle/files/example-v2.jar');
     });
 
     it('rejects HTTPS to HTTP redirect downgrades', () => {
@@ -74,14 +74,29 @@ describe('bundle URL policy', () => {
     it('rejects redirects to origins outside the manifest asset origin', () => {
       expect(() =>
         resolveBundleRedirectUrl(
-          'https://other-cdn.example.com/bundle/files/example.jar',
-          'https://cdn.example.com/bundle/files/example.jar',
-          'https://cdn.example.com/bundle/files/example.jar',
+          'https://other.example.test/bundle/files/example.jar',
+          'https://api.example.com/bundle/files/example.jar',
+          'https://api.example.com/bundle/files/example.jar',
         ),
       ).toThrowError(
         expect.objectContaining({
           code: BundleErrorCodes.DOWNLOAD_FAILED,
           message: expect.stringContaining('changed origin'),
+        }),
+      );
+    });
+
+    it('rejects a redirect hop onto a host the policy does not allow at all', () => {
+      expect(() =>
+        resolveBundleRedirectUrl(
+          'https://cdn.example.com/bundle/files/example.jar',
+          'https://api.example.com/bundle/files/example.jar',
+          'https://api.example.com/bundle/files/example.jar',
+        ),
+      ).toThrowError(
+        expect.objectContaining({
+          code: BundleErrorCodes.DOWNLOAD_FAILED,
+          message: expect.stringContaining('not the API origin'),
         }),
       );
     });
@@ -122,11 +137,14 @@ describe('bundle URL policy', () => {
       );
     });
 
-    it('only trusts the API origin (and local/test hosts) for bearer attachment', () => {
-      expect(isTrustedBundleAssetUrl('https://api.example.com/x.jar')).toBe(true);
-      expect(isTrustedBundleAssetUrl('http://localhost:8080/x.jar')).toBe(true);
-      expect(isTrustedBundleAssetUrl('https://cdn.example.com/x.jar')).toBe(false);
-      expect(isTrustedBundleAssetUrl('not-a-url')).toBe(false);
+    it('grants the bearer to the API origin only; local/test hosts stay reachable but bare', () => {
+      expect(bundleAssetTrust('https://api.example.com/x.jar')).toBe('api');
+      // A crafted manifest entry can name any local/test host. It downloads, but
+      // as `public` it must never carry the session bearer.
+      expect(bundleAssetTrust('http://localhost:8080/x.jar')).toBe('public');
+      expect(bundleAssetTrust('https://anything.test/x.jar')).toBe('public');
+      expect(bundleAssetTrust('https://cdn.example.com/x.jar')).toBe(null);
+      expect(bundleAssetTrust('not-a-url')).toBe(null);
     });
   });
 });

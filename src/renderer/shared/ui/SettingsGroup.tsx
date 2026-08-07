@@ -1,7 +1,7 @@
 import { cn } from '@renderer/shared/lib/cn';
 import type { ReactNode } from 'react';
 
-const DEFAULT_FOOTER_CLASS = 'border-t border-border bg-background/40 px-4 py-3';
+const DEFAULT_FOOTER_CLASS = 'border-t border-edge bg-canvas/40 px-4 py-3';
 
 type SettingsGroupProps = {
   title?: string | undefined;
@@ -17,17 +17,17 @@ export const SettingsGroup = ({
   title,
   rightSlot,
   footer,
-  bodyClassName = 'divide-y divide-border',
+  bodyClassName = 'divide-y divide-edge',
   footerClassName = DEFAULT_FOOTER_CLASS,
   children,
 }: SettingsGroupProps) => {
   const hasHeader = title !== undefined || rightSlot !== undefined;
   return (
-    <section className="overflow-hidden rounded-md border border-border bg-card">
+    <section className="overflow-hidden rounded-md border border-edge bg-surface-1">
       {hasHeader && (
-        <div className="flex items-center justify-between gap-4 border-b border-border px-4 py-3">
+        <div className="flex items-center justify-between gap-4 border-b border-edge px-4 py-3">
           {title !== undefined ? (
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-text-mute">
               {title}
             </h2>
           ) : (

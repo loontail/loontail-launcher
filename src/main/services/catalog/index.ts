@@ -1,4 +1,5 @@
 import type { Router } from '@main/ipc/router';
+import type { LauncherService } from '@main/services/service';
 import type { Client } from '@shared/contracts/client';
 import { type CatalogService, createCatalog } from './catalog';
 import { createOfficialCatalogSource } from './officialSource';
@@ -6,10 +7,10 @@ import { registerCatalogRoutes } from './routes';
 import type { CatalogSource } from './source';
 
 export type { CatalogService } from './catalog';
+export { createCatalog } from './catalog';
+export { createOfficialCatalogSource } from './officialSource';
 export type { CatalogSource } from './source';
 export { clientToCatalogItem } from './source';
-export { createOfficialCatalogSource } from './officialSource';
-export { createCatalog } from './catalog';
 
 export type CatalogServiceDeps = {
   listClients: (locale?: string) => Promise<Client[]>;
@@ -18,9 +19,7 @@ export type CatalogServiceDeps = {
   extraSources?: readonly CatalogSource[];
 };
 
-export type CatalogServiceHandle = {
-  init: () => Promise<void>;
-  dispose: () => Promise<void>;
+export type CatalogServiceHandle = LauncherService & {
   catalog: CatalogService;
 };
 

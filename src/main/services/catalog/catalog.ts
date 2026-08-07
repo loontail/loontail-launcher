@@ -5,7 +5,7 @@ import type {
   CatalogRef,
   SourceStatus,
 } from '@shared/contracts/catalog';
-import { SourceKinds, parseCatalogKey } from '@shared/contracts/catalog';
+import { parseCatalogKey, SourceKinds } from '@shared/contracts/catalog';
 import type { CatalogKey } from '@shared/contracts/ids';
 import type { CatalogSource } from './source';
 
@@ -40,7 +40,13 @@ export type CatalogService = {
 };
 
 export const createCatalog = (sources: readonly CatalogSource[]): CatalogService => {
+  // resolve/resolveBuildByKey are reached from launch and console paths that have
+  // no locale in hand, so the catalog remembers the one the renderer last listed
+  // with. Without it, every resolve fetches (and caches) the default locale.
+  let lastLocale: string | undefined;
+
   const list = async (locale?: string): Promise<CatalogListResult> => {
+    lastLocale = locale;
     const settled = await Promise.allSettled(
       sources.map((source) => source.listItems(locale ? { locale } : {})),
     );
@@ -63,7 +69,7 @@ export const createCatalog = (sources: readonly CatalogSource[]): CatalogService
   const resolve = async (ref: CatalogRef): Promise<CatalogItem | null> => {
     const source = sources.find((candidate) => candidate.id === ref.source);
     if (!source) return null;
-    return source.getItem(ref);
+    return source.getItem(ref, lastLocale ? { locale: lastLocale } : {});
   };
 
   const resolveBuildByKey = async (key: CatalogKey): Promise<CatalogItem | null> => {

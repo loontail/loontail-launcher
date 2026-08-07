@@ -37,7 +37,7 @@ vi.mock('@main/services/bundle/runner', async (importOriginal) => {
   return { ...actual, runSyncPhases: managerMocks.runSyncPhases };
 });
 
-const SLUG = asCatalogKey('official:test-client');
+const KEY = asCatalogKey('official:test-client');
 const BUNDLE_SLUG = 'bundle-x';
 const CLIENT_FOLDER = '/tmp/client';
 const REMOTE_HASH = 'a'.repeat(64);
@@ -56,7 +56,7 @@ const EMPTY_PLAN = {
 const launcherSettings = () =>
   makeLauncherSettings({
     storage: { clientsFolder: '' },
-    clients: { [SLUG]: { storage: { clientFolder: CLIENT_FOLDER } } },
+    clients: { [KEY]: { storage: { clientFolder: CLIENT_FOLDER } } },
   });
 
 const localManifest = (manifestHash: string) => ({
@@ -92,12 +92,12 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-describe('BundleManager.getInstallState manifest-hash TTL cache', () => {
+describe('BundleManager.getStatus manifest-hash TTL cache', () => {
   it('reuses the cached remote hash for a second call inside the TTL (one fetch)', async () => {
     const manager = makeManager();
 
-    const first = await manager.getInstallState(SLUG);
-    const second = await manager.getInstallState(SLUG);
+    const first = await manager.getStatus(KEY);
+    const second = await manager.getStatus(KEY);
 
     expect(managerMocks.fetchRemoteManifest).toHaveBeenCalledTimes(1);
     expect(first.signatureMatches).toBe(true);
@@ -107,9 +107,9 @@ describe('BundleManager.getInstallState manifest-hash TTL cache', () => {
   it('refetches once the TTL has elapsed', async () => {
     const manager = makeManager();
 
-    await manager.getInstallState(SLUG);
+    await manager.getStatus(KEY);
     vi.advanceTimersByTime(MANIFEST_DRIFT_TTL_MS + 1);
-    await manager.getInstallState(SLUG);
+    await manager.getStatus(KEY);
 
     expect(managerMocks.fetchRemoteManifest).toHaveBeenCalledTimes(2);
   });
@@ -123,8 +123,8 @@ describe('BundleManager.getInstallState manifest-hash TTL cache', () => {
       .mockResolvedValueOnce(localManifest(REMOTE_HASH))
       .mockResolvedValueOnce(localManifest('b'.repeat(64)));
 
-    const matched = await manager.getInstallState(SLUG);
-    const drifted = await manager.getInstallState(SLUG);
+    const matched = await manager.getStatus(KEY);
+    const drifted = await manager.getStatus(KEY);
 
     expect(managerMocks.fetchRemoteManifest).toHaveBeenCalledTimes(1);
     expect(managerMocks.loadLocalManifest).toHaveBeenCalledTimes(2);
@@ -139,13 +139,13 @@ describe('BundleManager.getInstallState manifest-hash TTL cache', () => {
     // produce) collapses to the non-gating fallback. Assert the timeout signal
     // is wired, then drive the rejection.
     let passedSignal: AbortSignal | undefined;
-    managerMocks.fetchRemoteManifest.mockImplementation((_slug, signal?: AbortSignal) => {
+    managerMocks.fetchRemoteManifest.mockImplementation((_key, signal?: AbortSignal) => {
       passedSignal = signal;
       return Promise.reject(new Error('aborted by timeout'));
     });
     managerMocks.loadLocalManifest.mockResolvedValue(localManifest('b'.repeat(64)));
 
-    const state = await manager.getInstallState(SLUG);
+    const state = await manager.getStatus(KEY);
 
     expect(passedSignal).toBeInstanceOf(AbortSignal);
     expect(state).toEqual({ installed: true, signatureMatches: true, progress: null });
@@ -154,10 +154,10 @@ describe('BundleManager.getInstallState manifest-hash TTL cache', () => {
   it('reuses the hash a completed sync primed — zero fetches within the TTL', async () => {
     const manager = makeManager();
 
-    await manager.startSync({ slug: SLUG });
+    await manager.start({ key: KEY });
     expect(managerMocks.fetchRemoteManifest).toHaveBeenCalledTimes(1);
 
-    const state = await manager.getInstallState(SLUG);
+    const state = await manager.getStatus(KEY);
 
     // The sync's fetch seeded the cache, so the status probe adds no round-trip.
     expect(managerMocks.fetchRemoteManifest).toHaveBeenCalledTimes(1);
@@ -169,10 +169,10 @@ describe('BundleManager.getInstallState manifest-hash TTL cache', () => {
 
     // Prime the cache via a status probe, then run a sync: the sync must NOT
     // reuse the cached hash — it always fetches the manifest fresh.
-    await manager.getInstallState(SLUG);
+    await manager.getStatus(KEY);
     expect(managerMocks.fetchRemoteManifest).toHaveBeenCalledTimes(1);
 
-    await manager.startSync({ slug: SLUG });
+    await manager.start({ key: KEY });
 
     expect(managerMocks.fetchRemoteManifest).toHaveBeenCalledTimes(2);
   });

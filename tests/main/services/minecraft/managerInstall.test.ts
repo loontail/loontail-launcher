@@ -10,13 +10,13 @@ import type { Context } from '@main/services/minecraft/context';
 import { asCatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraft';
 import { LoaderChoices } from '@shared/contracts/settings';
-import { type MockInstance, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
 const orchestrationMocks = vi.hoisted(() => {
   return {
     buildContext: vi.fn(),
     getSettings: vi.fn(),
-    isAnythingInstalled: vi.fn(),
+    hasAnyVersionInstalled: vi.fn(),
     resolveClientInstallPresence: vi.fn(),
     runInstall: vi.fn(),
     runLaunch: vi.fn(),
@@ -33,8 +33,8 @@ vi.mock('@main/services/minecraft/context', () => ({
   buildContext: orchestrationMocks.buildContext,
 }));
 
-vi.mock('@main/services/minecraft/runtimeState', () => ({
-  isAnythingInstalled: orchestrationMocks.isAnythingInstalled,
+vi.mock('@main/services/minecraft/installedVersions', () => ({
+  hasAnyVersionInstalled: orchestrationMocks.hasAnyVersionInstalled,
 }));
 
 vi.mock('@main/services/minecraft/readinessPolicy', () => ({
@@ -65,13 +65,14 @@ import { OP_TO_STATUS, OpKinds, type OpMap } from '@main/services/minecraft/ops'
 import { makeLauncherSettings, makeMinecraftBroadcaster } from '../../../helpers/fixtures';
 import {
   stubAccountProvider,
-  stubConsolePort,
+  stubClearBundleManifest,
+  stubConsoleSink,
   stubOpenConsole,
   stubResolveBuild,
   stubResolveBundleRepairFilter,
 } from './managerStubs';
 
-const SLUG = asCatalogKey('official:test-client');
+const KEY = asCatalogKey('official:test-client');
 const CLIENT_FOLDER = 'Z:/clients/test-client';
 const CLIENTS_FOLDER = 'Z:/clients';
 
@@ -99,10 +100,11 @@ const makeManager = (
     broadcaster,
     { targets: { resolve: vi.fn() } } as unknown as MinecraftKit,
     operationLocks,
-    stubConsolePort(),
+    stubConsoleSink(),
     stubOpenConsole(),
     stubAccountProvider(),
     stubResolveBundleRepairFilter(),
+    stubClearBundleManifest(),
     stubResolveBuild(),
     ops,
   );
@@ -140,7 +142,7 @@ describe('MinecraftManager.startInstall', () => {
     let hookAcquiredClientFolder = false;
     const hook = vi.fn(async () => {
       const bundleLock = operationLocks.acquire({
-        slug: SLUG,
+        key: KEY,
         domain: ClientOperationDomains.BUNDLE,
         resources: [ClientOperationResources.CLIENT_FOLDER],
       });
@@ -151,9 +153,9 @@ describe('MinecraftManager.startInstall', () => {
     });
     manager.attachLaunchHook(hook);
 
-    await manager.startInstall(SLUG);
+    await manager.startInstall(KEY);
     await vi.waitFor(() => {
-      expect(hook).toHaveBeenCalledWith(SLUG, expect.any(AbortSignal));
+      expect(hook).toHaveBeenCalledWith(KEY, expect.any(AbortSignal));
     });
 
     expect(hookAcquiredClientFolder).toBe(true);
@@ -169,7 +171,7 @@ describe('MinecraftManager.startInstall', () => {
     const hook = vi.fn();
     manager.attachLaunchHook(hook);
 
-    await manager.startInstall(SLUG);
+    await manager.startInstall(KEY);
     await vi.waitFor(() => {
       expect(releases[0]).toHaveBeenCalledTimes(1);
     });
@@ -192,31 +194,31 @@ describe('MinecraftManager.startInstall — post-install BUNDLE_SYNCING op', () 
     );
     manager.attachLaunchHook(hook);
 
-    await manager.startInstall(SLUG);
+    await manager.startInstall(KEY);
     await vi.waitFor(() => {
-      expect(hook).toHaveBeenCalledWith(SLUG, expect.any(AbortSignal));
+      expect(hook).toHaveBeenCalledWith(KEY, expect.any(AbortSignal));
     });
 
-    expect(await manager.getStatus(SLUG)).toEqual({
+    expect(await manager.getStatus(KEY)).toEqual({
       status: OP_TO_STATUS[OpKinds.BUNDLE_SYNCING],
       paused: false,
     });
 
     resolveHook();
     await vi.waitFor(async () => {
-      expect(await manager.getStatus(SLUG)).toEqual({
+      expect(await manager.getStatus(KEY)).toEqual({
         status: InstallStatuses.INSTALLED,
         paused: false,
       });
     });
   });
 
-  it('aborts the hook signal on cancel(slug) and settles to presence without logging an error', async () => {
+  it('aborts the hook signal on cancel(key) and settles to presence without logging an error', async () => {
     orchestrationMocks.resolveClientInstallPresence.mockResolvedValue(InstallStatuses.INSTALLED);
     const manager = makeManager(makeMinecraftBroadcaster(), createClientOperationLocks());
     let capturedSignal: AbortSignal | undefined;
     const hook = vi.fn(
-      (_slug, signal?: AbortSignal) =>
+      (_key, signal?: AbortSignal) =>
         new Promise<void>((_resolve, reject) => {
           capturedSignal = signal;
           signal?.addEventListener('abort', () => reject(new Error('aborted')));
@@ -224,16 +226,16 @@ describe('MinecraftManager.startInstall — post-install BUNDLE_SYNCING op', () 
     );
     manager.attachLaunchHook(hook);
 
-    await manager.startInstall(SLUG);
+    await manager.startInstall(KEY);
     await vi.waitFor(() => {
-      expect(hook).toHaveBeenCalledWith(SLUG, expect.any(AbortSignal));
+      expect(hook).toHaveBeenCalledWith(KEY, expect.any(AbortSignal));
     });
 
-    manager.cancel(SLUG);
+    manager.cancel(KEY);
     expect(capturedSignal?.aborted).toBe(true);
 
     await vi.waitFor(async () => {
-      expect(await manager.getStatus(SLUG)).toEqual({
+      expect(await manager.getStatus(KEY)).toEqual({
         status: InstallStatuses.INSTALLED,
         paused: false,
       });
@@ -249,9 +251,9 @@ describe('MinecraftManager.startInstall — INSTALLED → launchHook ordering + 
     const hook = vi.fn().mockResolvedValue(undefined);
     manager.attachLaunchHook(hook);
 
-    await manager.startInstall(SLUG);
+    await manager.startInstall(KEY);
     await vi.waitFor(() => {
-      expect(hook).toHaveBeenCalledWith(SLUG, expect.any(AbortSignal));
+      expect(hook).toHaveBeenCalledWith(KEY, expect.any(AbortSignal));
     });
 
     // beginInstall/startInstall emit INSTALLING first, so isolate the INSTALLED
@@ -276,13 +278,13 @@ describe('MinecraftManager.startInstall — INSTALLED → launchHook ordering + 
     const hook = vi.fn().mockRejectedValue(new Error('bundle boom'));
     manager.attachLaunchHook(hook);
 
-    await manager.startInstall(SLUG);
+    await manager.startInstall(KEY);
     await vi.waitFor(() => {
-      expect(hook).toHaveBeenCalledWith(SLUG, expect.any(AbortSignal));
+      expect(hook).toHaveBeenCalledWith(KEY, expect.any(AbortSignal));
     });
 
     await vi.waitFor(async () => {
-      expect(await manager.getStatus(SLUG)).toEqual({
+      expect(await manager.getStatus(KEY)).toEqual({
         status: InstallStatuses.INSTALLED,
         paused: false,
       });
@@ -304,8 +306,8 @@ describe('MinecraftManager.startInstall — INSTALLED → launchHook ordering + 
       }),
     );
 
-    const install = manager.startInstall(SLUG);
-    manager.cancel(SLUG);
+    const install = manager.startInstall(KEY);
+    manager.cancel(KEY);
     resolveContext(context());
     await install;
 
@@ -325,15 +327,15 @@ describe('MinecraftManager.startInstall — INSTALL_STARTING placeholder op', ()
       }),
     );
 
-    const install = manager.startInstall(SLUG);
+    const install = manager.startInstall(KEY);
 
     // While the first buildContext is still pending, status already reads
     // INSTALLING and a second concurrent launch must reject synchronously.
-    expect(await manager.getStatus(SLUG)).toEqual({
+    expect(await manager.getStatus(KEY)).toEqual({
       status: InstallStatuses.INSTALLING,
       paused: false,
     });
-    await expect(manager.startLaunch(SLUG)).rejects.toMatchObject({
+    await expect(manager.startLaunch(KEY)).rejects.toMatchObject({
       code: MinecraftErrorCodes.OP_IN_FLIGHT,
     });
     expect(orchestrationMocks.runInstall).not.toHaveBeenCalled();
@@ -346,7 +348,7 @@ describe('MinecraftManager.startInstall — INSTALL_STARTING placeholder op', ()
     // beginInstall carried the placeholder controller forward into the real op.
     expect(orchestrationMocks.runInstall).toHaveBeenCalledWith(
       expect.any(Object),
-      SLUG,
+      KEY,
       expect.any(Object),
       expect.objectContaining({ kind: OpKinds.INSTALL }),
     );
@@ -367,22 +369,22 @@ describe('MinecraftManager.startInstall — INSTALL_STARTING placeholder op', ()
       }),
     );
 
-    const install = manager.startInstall(SLUG);
+    const install = manager.startInstall(KEY);
     // Stop aborts the INSTALL_STARTING placeholder controller; buildContext then
     // resolves and the after-await guard short-circuits before beginInstall.
-    manager.cancel(SLUG);
+    manager.cancel(KEY);
     resolveContext(context());
     await install;
 
     expect(orchestrationMocks.runInstall).not.toHaveBeenCalled();
-    expect(await manager.getStatus(SLUG)).toEqual({
+    expect(await manager.getStatus(KEY)).toEqual({
       status: InstallStatuses.NOT_INSTALLED,
       paused: false,
     });
     expect(releases).toHaveLength(1);
     expect(releases[0]).toHaveBeenCalledTimes(1);
     expect(broadcaster.status).toHaveBeenLastCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: InstallStatuses.NOT_INSTALLED,
       paused: false,
     });

@@ -5,24 +5,43 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: npm
+
+      # Guards the removal of the dead API_TOKEN injection (finding S1, recorded
+      # in docs/refactor/architecture-map.md). A build-time token here would be
+      # baked into the shipped bundles by electron.vite.config.ts `define()` and
+      # therefore extractable from any installer.
+      - name: No build-time API token
+        run: |
+          if grep -rn 'API_TOKEN' src electron.vite.config.ts; then
+            echo "::error::API_TOKEN must not be reintroduced — it would ship inside the installer."
+            exit 1
+          fi
 
       - name: Install
         run: npm ci
 
       - name: Verify
         env:
-          API_URL: ${{ secrets.API_URL }}
-          API_TOKEN: ${{ secrets.API_TOKEN }}
-          MOJANG_CLIENT_ID: ${{ secrets.MOJANG_CLIENT_ID }}
-          NETWORK_API_URL: ${{ secrets.NETWORK_API_URL }}
+          API_URL: ${{ vars.API_URL }}
+          MOJANG_CLIENT_ID: ${{ vars.MOJANG_CLIENT_ID }}
+          NETWORK_API_URL: ${{ vars.NETWORK_API_URL }}
         run: npm run verify

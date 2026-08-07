@@ -1,14 +1,15 @@
 import fs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { markPaused, markRunning } from '@main/infra/lifecyclePhase';
 import type { SyncPlan } from '@main/services/bundle/plan';
 import { type EmitProgress, runSyncPhases } from '@main/services/bundle/runner';
-import { createSyncTask, markPaused, markRunning } from '@main/services/bundle/syncState';
+import { createSyncTask } from '@main/services/bundle/syncState';
 import { BundleSyncStatuses } from '@shared/contracts/bundle';
 import { asCatalogKey } from '@shared/contracts/ids';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-const SLUG = asCatalogKey('official:delete-client');
+const KEY = asCatalogKey('official:delete-client');
 const OLD_ONE_PATH = 'mods/old-one.jar';
 const OLD_TWO_PATH = 'mods/old-two.jar';
 
@@ -47,13 +48,13 @@ describe('runSyncPhases delete pause handling', () => {
   });
 
   it('keeps remaining deletes pending when paused during the delete phase', async () => {
-    const task = createSyncTask(SLUG, clientFolder);
+    const task = createSyncTask(KEY, clientFolder);
     task.plan = deleteOnlyPlan([OLD_ONE_PATH, OLD_TWO_PATH]);
     task.pendingDeletes = [...task.plan.toDelete];
     task.totalFiles = task.pendingDeletes.length;
 
     let deleteEmits = 0;
-    const pauseAfterFirstDelete: EmitProgress = (_slug, status) => {
+    const pauseAfterFirstDelete: EmitProgress = (_key, status) => {
       if (status !== BundleSyncStatuses.DELETING) return;
       deleteEmits += 1;
       if (deleteEmits === 1) {
@@ -89,7 +90,7 @@ describe('runSyncPhases delete pause handling', () => {
     await fs.rm(path.join(clientFolder, OLD_ONE_PATH));
     await fs.rm(path.join(clientFolder, OLD_TWO_PATH));
 
-    const task = createSyncTask(SLUG, clientFolder);
+    const task = createSyncTask(KEY, clientFolder);
     task.plan = deleteOnlyPlan([OLD_ONE_PATH, OLD_TWO_PATH]);
     task.pendingDeletes = [...task.plan.toDelete];
     task.totalFiles = task.pendingDeletes.length;
@@ -105,7 +106,7 @@ describe('runSyncPhases delete pause handling', () => {
   it('counts processedFiles for a mix of one existing and one missing target', async () => {
     await fs.rm(path.join(clientFolder, OLD_TWO_PATH));
 
-    const task = createSyncTask(SLUG, clientFolder);
+    const task = createSyncTask(KEY, clientFolder);
     task.plan = deleteOnlyPlan([OLD_ONE_PATH, OLD_TWO_PATH]);
     task.pendingDeletes = [...task.plan.toDelete];
     task.totalFiles = task.pendingDeletes.length;

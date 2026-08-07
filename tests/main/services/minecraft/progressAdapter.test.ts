@@ -1,4 +1,5 @@
 import {
+  createInstallProgressTracker,
   DownloadCategories,
   EventTypes,
   type InstallPlan,
@@ -8,14 +9,13 @@ import {
   VerificationKinds,
   VerifyFileCategories,
   VerifyFileStatuses,
-  createInstallProgressTracker,
 } from '@loontail/minecraft-kit';
-import type { ManagerEnv } from '@main/services/minecraft/env';
+import type { MinecraftEnv } from '@main/services/minecraft/env';
 import {
   createPlannedProgressAdapter,
   createRepairProgressAdapter,
 } from '@main/services/minecraft/progressAdapter';
-import { type CatalogKey, asCatalogKey } from '@shared/contracts/ids';
+import { asCatalogKey, type CatalogKey } from '@shared/contracts/ids';
 import { type ProgressStage, ProgressStages } from '@shared/contracts/minecraft';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -24,7 +24,7 @@ vi.mock('@loontail/minecraft-kit', async (importOriginal) => {
   return { ...actual, createInstallProgressTracker: vi.fn() };
 });
 
-const SLUG = asCatalogKey('official:test-client');
+const KEY = asCatalogKey('official:test-client');
 const CLIENT_FOLDER = 'Z:/client';
 
 const makeEnv = () => {
@@ -52,7 +52,7 @@ const makeEnv = () => {
     emitError: vi.fn(),
     persistRuntime: vi.fn(),
     clearRuntimeOverride: vi.fn(),
-  } as unknown as ManagerEnv;
+  } as unknown as MinecraftEnv;
   return { env, progress };
 };
 
@@ -85,14 +85,14 @@ describe('createRepairProgressAdapter', () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
     const { env, progress } = makeEnv();
-    const adapter = createRepairProgressAdapter(env, SLUG);
+    const adapter = createRepairProgressAdapter(env, KEY);
     const file = `${CLIENT_FOLDER}/versions/1.20.1/1.20.1.jar`;
 
     adapter.onEvent(verifyEvent(file));
 
     expect(progress).toHaveBeenCalledTimes(1);
     expect(progress).toHaveBeenCalledWith({
-      slug: SLUG,
+      key: KEY,
       stage: ProgressStages.MINECRAFT,
       stagePercent: 0,
       overallPercent: 0,
@@ -108,7 +108,7 @@ describe('createRepairProgressAdapter', () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
     const { env, progress } = makeEnv();
-    const adapter = createRepairProgressAdapter(env, SLUG);
+    const adapter = createRepairProgressAdapter(env, KEY);
 
     // CLIENT_JAR normally maps to MINECRAFT, but a RUNTIME aspect tag wins.
     adapter.onEvent({
@@ -127,7 +127,7 @@ describe('createRepairProgressAdapter', () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
     const { env, progress } = makeEnv();
-    const adapter = createRepairProgressAdapter(env, SLUG);
+    const adapter = createRepairProgressAdapter(env, KEY);
 
     adapter.onEvent(verifyEvent(`${CLIENT_FOLDER}/a.jar`));
 
@@ -142,7 +142,7 @@ describe('createRepairProgressAdapter', () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
     const { env, progress } = makeEnv();
-    const adapter = createRepairProgressAdapter(env, SLUG);
+    const adapter = createRepairProgressAdapter(env, KEY);
 
     // First event emits immediately; later events within the throttle window are
     // coalesced and surfaced by dispose's flush.
@@ -167,7 +167,7 @@ describe('createRepairProgressAdapter', () => {
     vi.useFakeTimers();
     vi.setSystemTime(1_000);
     const { env, progress } = makeEnv();
-    const adapter = createRepairProgressAdapter(env, SLUG);
+    const adapter = createRepairProgressAdapter(env, KEY);
 
     adapter.onEvent(verifyEvent(`${CLIENT_FOLDER}/a.jar`));
     expect(progress).toHaveBeenCalledTimes(1);
@@ -202,7 +202,7 @@ const emptyPlan: Pick<InstallPlan, 'actions'> = { actions: [] };
 
 // Captures the listener the planned adapter registers so the test can feed it
 // synthetic snapshots without building a real InstallPlan.
-const mountPlannedAdapter = (env: ManagerEnv) => {
+const mountPlannedAdapter = (env: MinecraftEnv) => {
   let listener: ((s: ProgressSnapshot) => void) | undefined;
   vi.mocked(createInstallProgressTracker).mockReturnValue({
     onEvent: vi.fn(),
@@ -213,7 +213,7 @@ const mountPlannedAdapter = (env: ManagerEnv) => {
       return vi.fn();
     },
   });
-  createPlannedProgressAdapter(env, SLUG, emptyPlan);
+  createPlannedProgressAdapter(env, KEY, emptyPlan);
   return { emit: (s: ProgressSnapshot) => listener?.(s) };
 };
 
@@ -234,13 +234,12 @@ describe('createPlannedProgressAdapter', () => {
     expect(progress).toHaveBeenCalledTimes(1);
     const event = progress.mock.calls[0]?.[0];
     expect(event).toMatchObject({
-      slug: SLUG,
+      key: KEY,
       stage: ProgressStages.MINECRAFT,
       stagePercent: 33.333,
       // 33.333% of 1000 bytes, rounded.
       bytesDownloaded: 333,
       totalBytes: 1_000,
-      speedBytesPerSec: 0,
     });
     expect(Number.isInteger(event?.bytesDownloaded)).toBe(true);
   });
@@ -274,59 +273,21 @@ describe('createPlannedProgressAdapter', () => {
     expect(progress.mock.calls[0]?.[0]).toMatchObject({
       bytesDownloaded: 0,
       totalBytes: 0,
-      speedBytesPerSec: 0,
     });
   });
 
-  it('reports a non-negative speed sampled over reconstructed per-stage bytes', () => {
+  it('derives bytes from the snapshot alone, so a stage change carries nothing forward', () => {
     vi.useFakeTimers();
     vi.setSystemTime(0);
     const { env, progress } = makeEnv();
     const { emit } = mountPlannedAdapter(env);
 
-    emit(snapshot(ProgressStages.MINECRAFT, 0, 1_000)); // 0 bytes @ t=0
-    vi.setSystemTime(1_000);
-    emit(snapshot(ProgressStages.MINECRAFT, 50, 1_000)); // 500 bytes @ t=1s
-
-    const last = progress.mock.calls.at(-1)?.[0];
-    // 500 bytes over 1s → 500 B/s, never negative.
-    expect(last?.speedBytesPerSec).toBe(500);
-    expect(last?.speedBytesPerSec).toBeGreaterThanOrEqual(0);
-  });
-
-  it('resets the speed window at a stage boundary so the rate does not dip negative', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(0);
-    const { env, progress } = makeEnv();
-    const { emit } = mountPlannedAdapter(env);
-
-    emit(snapshot(ProgressStages.RUNTIME, 0, 2_000));
-    vi.setSystemTime(1_000);
-    emit(snapshot(ProgressStages.RUNTIME, 100, 2_000)); // 2000 bytes @ t=1s, fast
-    vi.setSystemTime(1_500);
-    // Next stage restarts at a smaller reconstructed byte count; without a reset
-    // this would compute a negative rate.
+    emit(snapshot(ProgressStages.RUNTIME, 100, 2_000));
     emit(snapshot(ProgressStages.MINECRAFT, 0, 5_000));
 
     const last = progress.mock.calls.at(-1)?.[0];
     expect(last?.stage).toBe(ProgressStages.MINECRAFT);
     expect(last?.bytesDownloaded).toBe(0);
-    // Single fresh sample in the new stage window → no rate yet, never negative.
-    expect(last?.speedBytesPerSec).toBe(0);
-  });
-
-  it('resets the window on a backwards byte jump within a stage', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(0);
-    const { env, progress } = makeEnv();
-    const { emit } = mountPlannedAdapter(env);
-
-    emit(snapshot(ProgressStages.MINECRAFT, 80, 1_000)); // 800 bytes
-    vi.setSystemTime(1_000);
-    emit(snapshot(ProgressStages.MINECRAFT, 20, 1_000)); // 200 bytes (replan)
-
-    const last = progress.mock.calls.at(-1)?.[0];
-    expect(last?.bytesDownloaded).toBe(200);
-    expect(last?.speedBytesPerSec).toBe(0);
+    expect(last?.totalBytes).toBe(5_000);
   });
 });

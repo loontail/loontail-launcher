@@ -9,6 +9,7 @@ import http, {
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { registerSessionAuthPort } from '@main/infra/http';
 import { downloadEntry } from '@main/services/bundle/download';
 import { BundleErrorCodes, type RemoteManifestEntry } from '@shared/contracts/bundle';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -130,6 +131,31 @@ describe('downloadEntry URL policy', () => {
     // fail()'s shared cleanup path removes the tmp and never installs the file.
     await expect(exists(targetPath)).resolves.toBe(false);
     await expect(exists(`${targetPath}.tmp`)).resolves.toBe(false);
+  });
+
+  it('never sends the session bearer to a non-API host, even a reachable local one', async () => {
+    // The loopback host is reachable (dev servers, these tests) but classifies as
+    // `public`, so a crafted manifest entry pointing at it must download bare.
+    // API_URL in tests is http://test.invalid, so 127.0.0.1 is NOT the API origin.
+    registerSessionAuthPort({
+      getToken: () => 'live-session-token',
+      refresh: () => Promise.resolve('live-session-token'),
+    });
+    let seenAuthorization: string | undefined = 'unset';
+    const { server, origin } = await startServer((request, response) => {
+      seenAuthorization = request.headers.authorization;
+      response.writeHead(200, { 'Content-Type': 'application/octet-stream' });
+      response.end(TEST_FILE_BODY);
+    });
+    servers.push(server);
+
+    await downloadEntry(
+      makeEntry(`${origin}/files/example.jar`),
+      path.join(tempDir, TEST_ENTRY_PATH),
+      { currentRequests: new Set() },
+    );
+
+    expect(seenAuthorization).toBeUndefined();
   });
 
   it('rejects redirects to unexpected origins before writing the file', async () => {

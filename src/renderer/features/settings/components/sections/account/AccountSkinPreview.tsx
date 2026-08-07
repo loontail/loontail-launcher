@@ -14,10 +14,10 @@ export const AccountSkinPreview = ({ skinUrl, capeUrl }: AccountSkinPreviewProps
   <Suspense
     fallback={
       <div
-        className="flex shrink-0 items-center justify-center rounded-md border border-border bg-background"
+        className="flex shrink-0 items-center justify-center rounded-md border border-edge bg-canvas"
         style={{ width: VIEWER_WIDTH, height: VIEWER_HEIGHT }}
       >
-        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+        <Loader2 className="size-5 animate-spin text-text-mute" />
       </div>
     }
   >
@@ -26,7 +26,7 @@ export const AccountSkinPreview = ({ skinUrl, capeUrl }: AccountSkinPreviewProps
       height={VIEWER_HEIGHT}
       skinUrl={skinUrl}
       capeUrl={capeUrl}
-      className="bg-background"
+      className="bg-canvas"
     />
   </Suspense>
 );

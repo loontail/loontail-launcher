@@ -53,7 +53,7 @@ vi.mock('@main/infra/logger', () => ({
 import { createUpdaterService } from '@main/services/updater';
 import { UpdaterStates, type UpdaterStatusEvent } from '@shared/contracts/updater';
 import type { BrowserWindow } from 'electron';
-import { type StoredHandler, createTestRouter } from '../../../helpers/router';
+import { createTestRouter, type StoredHandler } from '../../../helpers/router';
 
 const makeWindow = (sent: UpdaterStatusEvent[]): BrowserWindow =>
   ({
@@ -251,6 +251,35 @@ describe('createUpdaterService lifecycle broadcasts', () => {
 });
 
 describe('createUpdaterService in-flight gate', () => {
+  it('skips a second check that lands before Squirrel emits checking-for-update', async () => {
+    // The flag must be claimed at the call site: `checking-for-update` arrives a
+    // tick later, so two invokes in the same tick would both spawn Update.exe.
+    const sent: UpdaterStatusEvent[] = [];
+    const { router, handlers } = createTestRouter();
+    const service = createUpdaterService(router, () => makeWindow(sent));
+    await service.init();
+
+    await Promise.all([getCheckHandler(handlers)(undefined), getCheckHandler(handlers)(undefined)]);
+
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears in-flight on an error event so a later check runs again', async () => {
+    const sent: UpdaterStatusEvent[] = [];
+    const { router, handlers } = createTestRouter();
+    const service = createUpdaterService(router, () => makeWindow(sent));
+    await service.init();
+
+    await getCheckHandler(handlers)(undefined);
+    await getCheckHandler(handlers)(undefined);
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(1);
+
+    autoUpdaterMock.emit('error', new Error('feed unreachable'));
+    await getCheckHandler(handlers)(undefined);
+
+    expect(autoUpdaterMock.checkForUpdates).toHaveBeenCalledTimes(2);
+  });
+
   it('skips a second check while a check is already in flight', async () => {
     const sent: UpdaterStatusEvent[] = [];
     const { router, handlers } = createTestRouter();

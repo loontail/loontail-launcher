@@ -29,7 +29,7 @@ vi.mock('@main/services/minecraft/readinessPolicy', () => ({
 
 import { createBundleRepairIssueFilter } from '@main/services/bundle/ownership';
 import type { Context } from '@main/services/minecraft/context';
-import type { ManagerEnv } from '@main/services/minecraft/env';
+import type { MinecraftEnv } from '@main/services/minecraft/env';
 import { createForgeProcessorCache } from '@main/services/minecraft/forgeProcessorHealing';
 import {
   ensureLaunchable,
@@ -37,11 +37,11 @@ import {
   finalizeRepairFailure,
   verifyAndRepairBase,
 } from '@main/services/minecraft/repairWorkflow';
-import { type CatalogKey, asCatalogKey } from '@shared/contracts/ids';
+import { asCatalogKey, type CatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraft';
-import { stubConsolePort, stubOpenConsole } from './managerStubs';
+import { stubConsoleSink, stubOpenConsole } from './managerStubs';
 
-const SLUG = asCatalogKey('official:test-client');
+const KEY = asCatalogKey('official:test-client');
 const CLIENT_FOLDER = 'Z:/client';
 
 const target = {
@@ -67,7 +67,7 @@ const logger = () => ({
   warn: vi.fn(),
 });
 
-const env = (): ManagerEnv => {
+const env = (): MinecraftEnv => {
   const broadcaster = {
     status: vi.fn(),
     progress: vi.fn(),
@@ -79,7 +79,7 @@ const env = (): ManagerEnv => {
     broadcaster,
     ops: new Map<CatalogKey, never>(),
     forgeProcessorCache: createForgeProcessorCache(),
-    console: stubConsolePort(),
+    console: stubConsoleSink(),
     openConsole: stubOpenConsole(),
     logger: logger(),
     emitStatus: broadcaster.status,
@@ -87,6 +87,7 @@ const env = (): ManagerEnv => {
     persistRuntime: vi.fn(),
     clearRuntimeOverride: vi.fn(),
     resolveBundleRepairFilter: vi.fn(async () => null),
+    clearBundleManifest: vi.fn(async () => undefined),
   };
 };
 
@@ -101,12 +102,12 @@ describe('repair workflow finalization', () => {
     presence(InstallStatuses.NOT_INSTALLED);
     const operationEnv = env();
 
-    await finalizeRepairCancellation(operationEnv, SLUG);
+    await finalizeRepairCancellation(operationEnv, KEY);
 
-    expect(workflowMocks.resolveClientInstallPresence).toHaveBeenCalledWith(SLUG);
+    expect(workflowMocks.resolveClientInstallPresence).toHaveBeenCalledWith(KEY);
     expect(operationEnv.emitError).not.toHaveBeenCalled();
     expect(operationEnv.broadcaster.status).toHaveBeenLastCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: InstallStatuses.NOT_INSTALLED,
       paused: false,
     });
@@ -116,10 +117,10 @@ describe('repair workflow finalization', () => {
     presence(InstallStatuses.INSTALLED);
     const operationEnv = env();
 
-    await finalizeRepairCancellation(operationEnv, SLUG);
+    await finalizeRepairCancellation(operationEnv, KEY);
 
     expect(operationEnv.broadcaster.status).toHaveBeenLastCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: InstallStatuses.INSTALLED,
       paused: false,
     });
@@ -129,10 +130,10 @@ describe('repair workflow finalization', () => {
     presence(InstallStatuses.UNVERIFIED);
     const operationEnv = env();
 
-    await finalizeRepairCancellation(operationEnv, SLUG);
+    await finalizeRepairCancellation(operationEnv, KEY);
 
     expect(operationEnv.broadcaster.status).toHaveBeenLastCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: InstallStatuses.NOT_INSTALLED,
       paused: false,
     });
@@ -148,18 +149,18 @@ describe('repair workflow finalization', () => {
 
     await finalizeRepairFailure({
       env: operationEnv,
-      slug: SLUG,
+      key: KEY,
       error,
       signal: new AbortController().signal,
     });
 
     expect(operationEnv.emitError).toHaveBeenCalledWith(
-      SLUG,
+      KEY,
       MinecraftErrorCodes.INTEGRITY_ERROR,
       error.message,
     );
     expect(operationEnv.broadcaster.status).toHaveBeenLastCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: InstallStatuses.ERROR,
       paused: false,
     });
@@ -172,12 +173,12 @@ describe('ensureLaunchable', () => {
     const plan = { totalActions: 3 };
     const installPlan = vi.fn(async () => plan);
     const runPlan = vi.fn(async () => undefined);
-    const operationEnv: ManagerEnv = {
+    const operationEnv: MinecraftEnv = {
       ...env(),
       kit: { install: { plan: installPlan } } as unknown as MinecraftKit,
     };
 
-    await ensureLaunchable(operationEnv, SLUG, context(), {
+    await ensureLaunchable(operationEnv, KEY, context(), {
       signal: new AbortController().signal,
       runPlan,
     });
@@ -197,12 +198,12 @@ describe('ensureLaunchable', () => {
     });
     const installPlan = vi.fn();
     const runPlan = vi.fn();
-    const operationEnv: ManagerEnv = {
+    const operationEnv: MinecraftEnv = {
       ...env(),
       kit: { install: { plan: installPlan } } as unknown as MinecraftKit,
     };
 
-    await ensureLaunchable(operationEnv, SLUG, context(), {
+    await ensureLaunchable(operationEnv, KEY, context(), {
       signal: new AbortController().signal,
       runPlan,
     });
@@ -231,13 +232,13 @@ describe('verifyAndRepairBase bundle ownership', () => {
     const repairAll = vi.fn(async (_target: unknown, _options: unknown) => ({
       repairs: new Map(),
     }));
-    const operationEnv: ManagerEnv = {
+    const operationEnv: MinecraftEnv = {
       ...env(),
       kit: { repair: { all: repairAll } } as unknown as MinecraftKit,
       resolveBundleRepairFilter,
     };
 
-    await verifyAndRepairBase(operationEnv, SLUG, bundleContext(), repairOptions());
+    await verifyAndRepairBase(operationEnv, KEY, bundleContext(), repairOptions());
 
     expect(resolveBundleRepairFilter).toHaveBeenCalledWith(CLIENT_FOLDER, 'pack-a');
     expect(repairAll).toHaveBeenCalledWith(
@@ -260,13 +261,13 @@ describe('verifyAndRepairBase bundle ownership', () => {
     const repairAll = vi.fn(async (_target: unknown, _options: unknown) => ({
       repairs: new Map(),
     }));
-    const operationEnv: ManagerEnv = {
+    const operationEnv: MinecraftEnv = {
       ...env(),
       kit: { repair: { all: repairAll } } as unknown as MinecraftKit,
       resolveBundleRepairFilter,
     };
 
-    await verifyAndRepairBase(operationEnv, SLUG, context(), repairOptions());
+    await verifyAndRepairBase(operationEnv, KEY, context(), repairOptions());
 
     expect(resolveBundleRepairFilter).not.toHaveBeenCalled();
     expect(repairAll.mock.calls[0]?.[1]).not.toHaveProperty('shouldRepairIssue');

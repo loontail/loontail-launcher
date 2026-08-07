@@ -48,10 +48,10 @@ const build = (code: string, message: string, details?: unknown): IpcError =>
 // reaches the renderer; domain and already-structured errors keep their codes.
 export const toIpcError = (error: unknown): IpcError => {
   if (isMinecraftKitError(error)) {
-    return build(ERROR_CODES.IpcHandlerFailed, error.message, devDetailsForError(error));
+    return build(ERROR_CODES.IPC_HANDLER_FAILED, error.message, devDetailsForError(error));
   }
   if (error instanceof Error && isNodeErrnoException(error)) {
-    return build(ERROR_CODES.IpcHandlerFailed, 'Operation failed', devDetailsForError(error));
+    return build(ERROR_CODES.IPC_HANDLER_FAILED, 'Operation failed', devDetailsForError(error));
   }
   if (isCodedError(error)) {
     return build(error.code, error.message, devDetailsForError(error));
@@ -60,7 +60,7 @@ export const toIpcError = (error: unknown): IpcError => {
     return build(error.code, error.message, error.details);
   }
   if (error instanceof Error) {
-    return build(ERROR_CODES.IpcHandlerFailed, error.message, devDetailsForError(error));
+    return build(ERROR_CODES.IPC_HANDLER_FAILED, error.message, devDetailsForError(error));
   }
-  return build(ERROR_CODES.Unknown, 'Unknown error', isDev() ? { error } : undefined);
+  return build(ERROR_CODES.UNKNOWN, 'Unknown error', isDev() ? { error } : undefined);
 };

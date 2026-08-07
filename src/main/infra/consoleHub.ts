@@ -9,11 +9,10 @@ import {
   ConsoleSources,
 } from '@shared/contracts/console';
 import type { CatalogKey } from '@shared/contracts/ids';
-import { IPC_EVENTS, type IpcEventPayloads } from '@shared/ipc';
+import { emit, IPC_EVENTS, type IpcEventPayloads } from '@shared/ipc';
 import type { BrowserWindow } from 'electron';
 import { ConsoleBuffer, type ConsoleLineInput } from './consoleBuffer';
-import { ConsoleWindowSink } from './consoleWindowSink';
-import { type Log4jEvent, Log4jStreamParser, formatLog4jLine, mapLog4jLevel } from './log4jStream';
+import { formatLog4jLine, type Log4jEvent, Log4jStreamParser, mapLog4jLevel } from './log4jStream';
 
 type ConsoleEventChannel = (typeof IPC_EVENTS)[
   | 'consoleLines'
@@ -52,7 +51,7 @@ export const buildLineInput = (args: {
   level: ConsoleLevel;
   source: ConsoleSource;
   message: string;
-  slug?: CatalogKey | undefined;
+  key?: CatalogKey | undefined;
   code?: string | undefined;
   args?: ConsoleLineArgs | undefined;
 }): ConsoleLineInput => {
@@ -61,7 +60,7 @@ export const buildLineInput = (args: {
     source: args.source,
     message: args.message,
   };
-  if (args.slug) line.slug = args.slug;
+  if (args.key) line.key = args.key;
   if (args.code) {
     line.code = args.code;
     if (args.args) line.args = args.args;
@@ -70,31 +69,37 @@ export const buildLineInput = (args: {
 };
 
 export type SessionInfo = {
-  slug: CatalogKey;
+  key: CatalogKey;
   clientTitle: string;
   state: ConsoleProcessState;
 };
 
 export class ConsoleHub {
   private readonly buffer = new ConsoleBuffer({ limit: CONSOLE_BUFFER_LIMIT });
-  private readonly sink = new ConsoleWindowSink(() => {
-    this.clearFlushTimer();
-    this.buffer.clearPending();
-  });
+  private window: BrowserWindow | null = null;
   private flushTimer: NodeJS.Timeout | null = null;
   private activeSession: SessionInfo | null = null;
   private readonly log4j = new Log4jStreamParser();
 
   attach(window: BrowserWindow): void {
-    this.sink.attach(window);
+    this.window = window;
+    window.on('closed', () => {
+      // Guard against a stale handler from a previously attached window: a reopen
+      // races the old window's `closed`, which would otherwise drop the new one.
+      if (this.window !== window) return;
+      this.window = null;
+      this.clearFlushTimer();
+      this.buffer.clearPending();
+    });
   }
 
   hasWindow(): boolean {
-    return this.sink.hasWindow();
+    return this.window != null && !this.window.isDestroyed();
   }
 
   getWindow(): BrowserWindow | null {
-    return this.sink.getWindow();
+    if (!this.window || this.window.isDestroyed()) return null;
+    return this.window;
   }
 
   getInitial(): ConsoleInitialPayload {
@@ -116,22 +121,22 @@ export class ConsoleHub {
   }
 
   recordMinecraft(
-    slug: CatalogKey,
+    key: CatalogKey,
     stream: typeof ConsoleSources.STDOUT | typeof ConsoleSources.STDERR,
     text: string,
   ): void {
     for (const chunk of this.log4j.feed(stream, text)) {
       if (chunk.kind === 'text') {
-        this.ingest({ source: stream, raw: chunk.text, slug });
+        this.ingest({ source: stream, raw: chunk.text, key });
       } else {
-        this.ingestLog4jEvent(stream, slug, chunk.event);
+        this.ingestLog4jEvent(stream, key, chunk.event);
       }
     }
   }
 
   private ingestLog4jEvent(
     source: typeof ConsoleSources.STDOUT | typeof ConsoleSources.STDERR,
-    slug: CatalogKey,
+    key: CatalogKey,
     event: Log4jEvent,
   ): void {
     const level = LEVEL_FROM_LOG4J[mapLog4jLevel(event.level)];
@@ -144,20 +149,20 @@ export class ConsoleHub {
         source,
         raw: formatLog4jLine(event, line),
         forcedLevel: level,
-        slug,
+        key,
       });
     }
   }
 
   recordSystem(
     message: string,
-    options?: { code?: string; args?: ConsoleLineArgs; slug?: CatalogKey },
+    options?: { code?: string; args?: ConsoleLineArgs; key?: CatalogKey },
   ): void {
     this.ingest({
       source: ConsoleSources.SYSTEM,
       raw: message,
       forcedLevel: ConsoleLevels.SYSTEM,
-      slug: options?.slug,
+      key: options?.key,
       code: options?.code,
       args: options?.args,
     });
@@ -166,7 +171,7 @@ export class ConsoleHub {
   setActiveSession(session: SessionInfo | null): void {
     // Drain partial XML from the previous session before reset, else a trailing
     // fragment leaks into the new session.
-    if (this.activeSession) this.drainLog4j(this.activeSession.slug);
+    if (this.activeSession) this.drainLog4j(this.activeSession.key);
     this.clearFlushTimer();
     this.log4j.reset();
     this.activeSession = session;
@@ -175,18 +180,18 @@ export class ConsoleHub {
   // Flush the parsers on process exit: a FATAL crash event is often split across
   // the final lines and would otherwise be held in the parser buffer until the
   // next reset (i.e. discarded). Called before emitting EXITED/CRASHED.
-  endSession(slug: CatalogKey): void {
-    this.drainLog4j(slug);
+  endSession(key: CatalogKey): void {
+    this.drainLog4j(key);
     this.log4j.reset();
   }
 
-  private drainLog4j(slug: CatalogKey): void {
+  private drainLog4j(key: CatalogKey): void {
     for (const stream of [ConsoleSources.STDOUT, ConsoleSources.STDERR] as const) {
       for (const chunk of this.log4j.flush(stream)) {
         if (chunk.kind === 'text' && chunk.text.length > 0) {
-          this.ingest({ source: stream, raw: chunk.text, slug });
+          this.ingest({ source: stream, raw: chunk.text, key });
         } else if (chunk.kind === 'event') {
-          this.ingestLog4jEvent(stream, slug, chunk.event);
+          this.ingestLog4jEvent(stream, key, chunk.event);
         }
       }
     }
@@ -194,9 +199,9 @@ export class ConsoleHub {
 
   emitState(state: ConsoleProcessState): void {
     // Tag with the active session's title only when the state belongs to it; a
-    // terminal state for a different slug (an older client exiting after a newer
+    // terminal state for a different key (an older client exiting after a newer
     // launch became active) must keep its own title.
-    const matchesActive = this.activeSession?.slug === state.slug;
+    const matchesActive = this.activeSession?.key === state.key;
     if (this.activeSession && matchesActive) {
       this.activeSession = {
         ...this.activeSession,
@@ -214,11 +219,11 @@ export class ConsoleHub {
     source: ConsoleSource;
     raw: string;
     forcedLevel?: ConsoleLevel | undefined;
-    slug?: CatalogKey | undefined;
+    key?: CatalogKey | undefined;
     code?: string | undefined;
     args?: ConsoleLineArgs | undefined;
   }): void {
-    const { source, raw, forcedLevel, slug, code, args: lineArgs } = args;
+    const { source, raw, forcedLevel, key, code, args: lineArgs } = args;
     if (!raw) return;
     const cleaned = stripAnsi(raw);
     // XMLLayout puts `\n  ` (indent) between events; bare length check would
@@ -231,7 +236,7 @@ export class ConsoleHub {
         level: forcedLevel ?? guessLevel(source, segment),
         source,
         message: segment,
-        slug,
+        key,
         code,
         args: lineArgs,
       }),
@@ -272,7 +277,7 @@ export class ConsoleHub {
     channel: E,
     payload: IpcEventPayloads[E],
   ): void {
-    this.sink.send(channel, payload);
+    emit(this.window, channel, payload);
   }
 }
 

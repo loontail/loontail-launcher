@@ -20,7 +20,7 @@ const AlphaTag = () => {
       </span>
       <span
         role="tooltip"
-        className="pointer-events-none absolute right-0 top-full z-50 mt-2 w-64 whitespace-normal rounded-md bg-popover px-3 py-2 text-eyebrow font-medium leading-snug text-popover-foreground opacity-0 shadow-overlay ring-1 ring-edge-md transition-opacity duration-150 group-hover:opacity-100"
+        className="pointer-events-none absolute right-0 top-full z-50 mt-2 w-64 whitespace-normal rounded-md bg-surface-2 px-3 py-2 text-eyebrow font-medium leading-snug text-text-hi opacity-0 shadow-overlay ring-1 ring-edge-md transition-opacity duration-150 group-hover:opacity-100"
       >
         {t('appBar.alphaTooltip')}
       </span>
@@ -112,6 +112,25 @@ const IconAction = ({
   </button>
 );
 
+// Pinned to the window edge and kept clear of the native window controls via
+// title-bar-safe. One component so the two rails can never drift apart.
+const RightRail = ({
+  customTitleBar,
+  children,
+}: {
+  customTitleBar: boolean;
+  children: ReactNode;
+}) => (
+  <div
+    className={cn(
+      'absolute inset-y-0 right-0 flex items-center',
+      customTitleBar && 'title-bar-safe',
+    )}
+  >
+    {children}
+  </div>
+);
+
 export const TopNav = ({ customTitleBar }: TopNavProps) => {
   const { t } = useTranslation();
   const route = useCurrentRoute();
@@ -153,6 +172,45 @@ export const TopNav = ({ customTitleBar }: TopNavProps) => {
     );
   }
 
+  // The build route renders no rail at all; settings renders a back button only.
+  let rightRail: ReactNode = null;
+  if (isSettings) {
+    rightRail = (
+      <RightRail customTitleBar={customTitleBar}>
+        <button
+          type="button"
+          onClick={pop}
+          aria-label={t('nav.back')}
+          className={cn(
+            barItem,
+            'group w-12 justify-center text-text-mute hover:bg-ghost-hover hover:text-text-hi',
+          )}
+        >
+          <ArrowLeft
+            className="size-4.5 transition-transform duration-150 group-hover:-translate-x-0.5"
+            strokeWidth={2}
+            aria-hidden
+          />
+        </button>
+      </RightRail>
+    );
+  } else if (!isBuildBack) {
+    rightRail = (
+      <RightRail customTitleBar={customTitleBar}>
+        <div className="app-region-no-drag flex items-center gap-2.5 pr-2">
+          <AlphaTag />
+          <UpdaterBadge />
+        </div>
+        <IconAction label={t('nav.console')} onClick={openConsoleWindow} icon={Terminal} />
+        <IconAction
+          label={t('nav.settings')}
+          onClick={() => push({ name: 'settings' })}
+          icon={Settings}
+        />
+      </RightRail>
+    );
+  }
+
   return (
     <header
       className={cn(
@@ -171,51 +229,7 @@ export const TopNav = ({ customTitleBar }: TopNavProps) => {
       {/* -ml-4 cancels the first item's hover padding so its text aligns to the content gutter. */}
       <div className={cn(PAGE_CONTAINER, 'flex h-full items-center')}>{leftContent}</div>
 
-      {/* Pinned to the window edge, kept clear of the native window controls via title-bar-safe. */}
-      {isSettings ? (
-        <div
-          className={cn(
-            'absolute inset-y-0 right-0 flex items-center',
-            customTitleBar && 'title-bar-safe',
-          )}
-        >
-          <button
-            type="button"
-            onClick={pop}
-            aria-label={t('nav.back')}
-            className={cn(
-              barItem,
-              'group w-12 justify-center text-text-mute hover:bg-ghost-hover hover:text-text-hi',
-            )}
-          >
-            <ArrowLeft
-              className="size-4.5 transition-transform duration-150 group-hover:-translate-x-0.5"
-              strokeWidth={2}
-              aria-hidden
-            />
-          </button>
-        </div>
-      ) : (
-        !isBuildBack && (
-          <div
-            className={cn(
-              'absolute inset-y-0 right-0 flex items-center',
-              customTitleBar && 'title-bar-safe',
-            )}
-          >
-            <div className="app-region-no-drag flex items-center gap-2.5 pr-2">
-              <AlphaTag />
-              <UpdaterBadge />
-            </div>
-            <IconAction label={t('nav.console')} onClick={openConsoleWindow} icon={Terminal} />
-            <IconAction
-              label={t('nav.settings')}
-              onClick={() => push({ name: 'settings' })}
-              icon={Settings}
-            />
-          </div>
-        )
-      )}
+      {rightRail}
     </header>
   );
 };

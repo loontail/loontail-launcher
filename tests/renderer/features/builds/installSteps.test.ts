@@ -1,0 +1,208 @@
+import {
+  InstallStepKeys,
+  StepStates,
+  selectInstallProgress,
+} from '@renderer/features/builds/components/install/installSteps';
+import type { BundleSyncState } from '@renderer/features/bundle';
+import type { BuildInstallState } from '@renderer/features/minecraft';
+import { type BundleProgressEvent, BundleSyncStatuses } from '@shared/contracts/bundle';
+import { asCatalogKey } from '@shared/contracts/ids';
+import { InstallStatuses, ProgressStages } from '@shared/contracts/minecraft';
+import { describe, expect, it } from 'vitest';
+
+const idleBundle = (): BundleSyncState => ({
+  status: BundleSyncStatuses.UNKNOWN,
+  installed: false,
+  signatureMatches: true,
+  progress: null,
+});
+
+const bundleAt = (
+  status: BundleSyncState['status'],
+  progress: BundleSyncState['progress'] = null,
+): BundleSyncState => ({
+  status,
+  installed: true,
+  signatureMatches: true,
+  progress,
+});
+
+const installedClient = (): BuildInstallState => ({
+  status: InstallStatuses.INSTALLED,
+  paused: false,
+});
+
+describe('selectInstallProgress', () => {
+  it('keeps install planning out of the download progress card', () => {
+    const client: BuildInstallState = {
+      status: InstallStatuses.INSTALLING,
+      paused: false,
+    };
+
+    const view = selectInstallProgress(client, idleBundle(), {
+      hasBundle: true,
+      hasLoader: true,
+    });
+
+    expect(view).toBeNull();
+  });
+
+  it('shows the install progress card once bytes are flowing', () => {
+    const client: BuildInstallState = {
+      status: InstallStatuses.INSTALLING,
+      paused: false,
+      stage: ProgressStages.MINECRAFT,
+      stagePercent: 30,
+      overallPercent: 30,
+      bytesDownloaded: 300,
+      totalBytes: 1_000,
+    };
+
+    const view = selectInstallProgress(client, idleBundle(), {
+      hasBundle: true,
+      hasLoader: false,
+    });
+
+    expect(view).toMatchObject({ mode: 'install', activeStep: InstallStepKeys.MINECRAFT });
+  });
+
+  it('keeps bundle manifest/plan checks out of the download progress card', () => {
+    for (const status of [BundleSyncStatuses.FETCHING_MANIFEST, BundleSyncStatuses.PLANNING]) {
+      const view = selectInstallProgress(installedClient(), bundleAt(status), {
+        hasBundle: true,
+        hasLoader: false,
+      });
+      expect(view).toBeNull();
+    }
+  });
+
+  it('shows the bundle progress card once bundle files are downloading', () => {
+    const progress: BundleProgressEvent = {
+      key: asCatalogKey('official:demo'),
+      status: BundleSyncStatuses.DOWNLOADING,
+      processedFiles: 2,
+      totalFiles: 10,
+      toDownload: 8,
+      toUpdate: 0,
+      toDelete: 0,
+      toSkip: 0,
+      bytesDownloaded: 500,
+      bytesTotal: 2_000,
+    };
+
+    const view = selectInstallProgress(
+      installedClient(),
+      bundleAt(BundleSyncStatuses.DOWNLOADING, progress),
+      { hasBundle: true, hasLoader: false },
+    );
+
+    expect(view).toMatchObject({
+      mode: 'bundle',
+      activeStep: InstallStepKeys.BUNDLE,
+      pausable: true,
+    });
+  });
+
+  // A launch-time bundle sync (client is LAUNCHING) must not be pausable —
+  // pause parks it and would freeze Play, so the UI offers Resume/Cancel only.
+  it('marks a launch-time bundle sync as not pausable', () => {
+    const progress: BundleProgressEvent = {
+      key: asCatalogKey('official:demo'),
+      status: BundleSyncStatuses.DOWNLOADING,
+      processedFiles: 1,
+      totalFiles: 4,
+      toDownload: 3,
+      toUpdate: 0,
+      toDelete: 0,
+      toSkip: 0,
+      bytesDownloaded: 100,
+      bytesTotal: 1_000,
+    };
+
+    const launchingClient: BuildInstallState = {
+      status: InstallStatuses.LAUNCHING,
+      paused: false,
+    };
+
+    const view = selectInstallProgress(
+      launchingClient,
+      bundleAt(BundleSyncStatuses.DOWNLOADING, progress),
+      { hasBundle: true, hasLoader: false },
+    );
+
+    expect(view).toMatchObject({ mode: 'bundle', controls: 'bundle', pausable: false });
+  });
+
+  it('reads the adapter-emitted per-stage bytes directly', () => {
+    const client: BuildInstallState = {
+      status: InstallStatuses.INSTALLING,
+      paused: false,
+      stage: ProgressStages.MINECRAFT,
+      stagePercent: 30,
+      overallPercent: 30,
+      // Deliberately not equal to stagePercent/100 * totalBytes — proves the
+      // selector passes the emitted bytes through rather than reconstructing.
+      bytesDownloaded: 411,
+      totalBytes: 1_000,
+    };
+
+    const view = selectInstallProgress(client, idleBundle(), {
+      hasBundle: false,
+      hasLoader: false,
+    });
+
+    const minecraft = view?.steps.find((step) => step.key === InstallStepKeys.MINECRAFT);
+    expect(minecraft).toMatchObject({
+      state: StepStates.ACTIVE,
+      bytesDownloaded: 411,
+      bytesTotal: 1_000,
+    });
+  });
+
+  it('keeps repair verification out of the download progress card', () => {
+    const client: BuildInstallState = {
+      status: InstallStatuses.REPAIRING,
+      paused: false,
+    };
+
+    const view = selectInstallProgress(client, idleBundle(), {
+      hasBundle: true,
+      hasLoader: true,
+    });
+
+    expect(view).toBeNull();
+  });
+
+  it('shows the repair progress card once repair is actually downloading', () => {
+    const client: BuildInstallState = {
+      status: InstallStatuses.REPAIRING,
+      paused: false,
+      stage: ProgressStages.LOADER,
+      stagePercent: 45,
+      overallPercent: 60,
+      bytesDownloaded: 900,
+      totalBytes: 2_000,
+      currentFile: 'libraries/loader.jar',
+    };
+
+    const view = selectInstallProgress(client, idleBundle(), {
+      hasBundle: true,
+      hasLoader: true,
+    });
+
+    expect(view).toMatchObject({
+      mode: 'repair',
+      activeStep: InstallStepKeys.LOADER,
+      controls: null,
+    });
+    const loader = view?.steps.find((step) => step.key === InstallStepKeys.LOADER);
+    expect(loader).toMatchObject({
+      state: StepStates.ACTIVE,
+      percent: 45,
+      bytesDownloaded: 900,
+      bytesTotal: 2_000,
+      currentFile: 'libraries/loader.jar',
+      subStage: ProgressStages.LOADER,
+    });
+  });
+});

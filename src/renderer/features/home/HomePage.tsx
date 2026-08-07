@@ -1,4 +1,4 @@
-import { BuildSettingsModal } from '@renderer/features/clients';
+import { BuildSettingsModal } from '@renderer/features/builds';
 import { cn } from '@renderer/shared/lib/cn';
 import { PAGE_CONTAINER } from '@renderer/shared/lib/layout';
 import { useNavigationStore } from '@renderer/shared/lib/stores/navigation';

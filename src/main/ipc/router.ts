@@ -10,6 +10,7 @@ import {
   type IpcResult,
 } from '@shared/ipc';
 import { type IpcMainInvokeEvent, ipcMain } from 'electron';
+import { assertNoIpcArgs } from './parseArgs';
 import { toIpcError } from './toIpcError';
 
 type Handler<TChannel extends keyof IpcContract> = (
@@ -19,10 +20,20 @@ type Handler<TChannel extends keyof IpcContract> = (
 
 export type SenderValidator = (event: IpcMainInvokeEvent, channel: keyof IpcContract) => boolean;
 
+type NoArgsHandler<TChannel extends keyof IpcContract> = () =>
+  | Promise<IpcResult<TChannel>>
+  | IpcResult<TChannel>;
+
 export type Router = {
   handle: <TChannel extends keyof IpcContract>(
     channel: TChannel,
     handler: Handler<TChannel>,
+  ) => void;
+  // For the ~20 channels that take no arguments. The rejection message is derived
+  // from the channel, so it can never name a channel it did not reject.
+  handleNoArgs: <TChannel extends keyof IpcContract>(
+    channel: TChannel,
+    handler: NoArgsHandler<TChannel>,
   ) => void;
   dispose: () => void;
 };
@@ -33,8 +44,8 @@ const logger = scopedLogger('ipc');
 // OP_IN_FLIGHT, user ABORTED) log at warn so logger.error stays a signal for
 // genuine unrecovered handler crashes (code-guideline §9).
 const RECOVERABLE_CODES: ReadonlySet<string> = new Set<string>([
-  ERROR_CODES.IpcUntrustedSender,
-  ERROR_CODES.IpcInvalidArgs,
+  ERROR_CODES.IPC_UNTRUSTED_SENDER,
+  ERROR_CODES.IPC_INVALID_ARGS,
   MinecraftErrorCodes.OP_IN_FLIGHT,
   MinecraftErrorCodes.ABORTED,
   BundleErrorCodes.OP_IN_FLIGHT,
@@ -67,7 +78,7 @@ export const createRouter = (isTrustedSender: SenderValidator): Router => {
       try {
         if (!isTrustedSender(event, channel)) {
           const untrusted: IpcError = {
-            code: ERROR_CODES.IpcUntrustedSender,
+            code: ERROR_CODES.IPC_UNTRUSTED_SENDER,
             message: 'Sender frame is not trusted',
           };
           throw untrusted;
@@ -83,6 +94,16 @@ export const createRouter = (isTrustedSender: SenderValidator): Router => {
     registered.push(channel);
   };
 
+  const handleNoArgs = <TChannel extends keyof IpcContract>(
+    channel: TChannel,
+    handler: NoArgsHandler<TChannel>,
+  ): void => {
+    handle(channel, (rawArgs) => {
+      assertNoIpcArgs(rawArgs, `${channel} takes no arguments`);
+      return handler();
+    });
+  };
+
   const dispose = (): void => {
     for (const channel of registered) {
       ipcMain.removeHandler(channel);
@@ -90,5 +111,5 @@ export const createRouter = (isTrustedSender: SenderValidator): Router => {
     registered.length = 0;
   };
 
-  return { handle, dispose };
+  return { handle, handleNoArgs, dispose };
 };

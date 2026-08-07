@@ -20,16 +20,19 @@ const bundleLocalizer = (error: IpcError) => localizeBundleError(error.code, err
 describe('resolveErrorToastMessage', () => {
   it('localizes a coded IpcError with its mutation localizer', () => {
     expect(
-      resolveErrorToastMessage(ipcError('noAccount', 'Sign in first'), minecraftLocalizer),
-    ).toBe('clients.error.noAccount');
+      resolveErrorToastMessage(
+        ipcError('minecraft/noAccount', 'Sign in first'),
+        minecraftLocalizer,
+      ),
+    ).toBe('builds.error.noAccount');
     expect(
-      resolveErrorToastMessage(ipcError('manifestFetchFailed', 'offline'), bundleLocalizer),
-    ).toBe('clients.bundleError.manifestFetchFailed');
+      resolveErrorToastMessage(ipcError('bundle/manifestFetchFailed', 'offline'), bundleLocalizer),
+    ).toBe('builds.bundleError.manifestFetchFailed');
   });
 
   it('falls back to the domain unknown key for an unrecognized code', () => {
     expect(resolveErrorToastMessage(ipcError('NOT_A_REAL_CODE', 'boom'), minecraftLocalizer)).toBe(
-      'clients.error.unknown',
+      'builds.error.unknown',
     );
   });
 
@@ -40,8 +43,8 @@ describe('resolveErrorToastMessage', () => {
   });
 
   it('uses formatError when no localizer is provided', () => {
-    expect(resolveErrorToastMessage(ipcError('noAccount', 'Sign in first'), undefined)).toBe(
-      'Sign in first',
-    );
+    expect(
+      resolveErrorToastMessage(ipcError('minecraft/noAccount', 'Sign in first'), undefined),
+    ).toBe('Sign in first');
   });
 });

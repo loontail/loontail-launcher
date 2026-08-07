@@ -9,17 +9,17 @@ import type { Op } from './ops';
 
 // Injected (not the module singleton) so a launch can be tested with a spy and
 // never pulls a live ConsoleHub's timer/window refs into the test process.
-export type ConsolePort = Pick<
+export type ConsoleSink = Pick<
   ConsoleHub,
   'setActiveSession' | 'emitState' | 'recordSystem' | 'recordMinecraft' | 'hasWindow' | 'endSession'
 >;
 
-export type ManagerEnv = {
+export type MinecraftEnv = {
   kit: MinecraftKit;
   broadcaster: Broadcaster;
   ops: Map<CatalogKey, Op>;
   forgeProcessorCache: ForgeProcessorCache;
-  console: ConsolePort;
+  console: ConsoleSink;
   openConsole: () => void;
   logger: ReturnType<typeof scopedLogger>;
   emitStatus: (payload: MinecraftStatusEvent) => void;
@@ -35,4 +35,7 @@ export type ManagerEnv = {
     clientFolder: string,
     expectedBundleSlug: string,
   ) => Promise<RepairIssueFilter | null>;
+  // Same seam for the uninstall path: drops the client's bundle manifest sidecar
+  // without minecraft/ importing bundle/.
+  clearBundleManifest: (clientFolder: string) => Promise<void>;
 };

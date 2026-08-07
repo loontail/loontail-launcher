@@ -1,15 +1,16 @@
-import { type TexturesLookupResponse, YggdrasilClient } from '@loontail/yggdrasil-client';
 import { mainConfig } from '@main/config';
+import {
+  type TexturesLookupResponse,
+  YggdrasilTexturesClient,
+} from '@main/services/yggdrasil/texturesClient';
 
 export type FetchTextures = (uuid: string) => Promise<TexturesLookupResponse>;
 
 export type YggdrasilGateway = {
   // Rooted at the bare API origin so texture calls resolve to
-  // `${apiUrl}/textures/...`. Use ONLY for the texture methods
-  // (getTextures/uploadSkin/uploadCape/deleteSkin/deleteCape); the
-  // authenticate/refresh/validate/invalidate/profile/bulkProfiles methods build
-  // paths the backend mounts under `/api/yggdrasil/*` and would 404 here.
-  readonly texturesClient: YggdrasilClient;
+  // `${apiUrl}/textures/...`, NOT the `/api/yggdrasil/*` mount the auth half
+  // of the protocol lives under.
+  readonly texturesClient: YggdrasilTexturesClient;
   readonly fetchTextures: FetchTextures;
 };
 
@@ -17,7 +18,7 @@ export const createYggdrasilClient = (deps: { fetch?: typeof fetch } = {}): Yggd
   // Textures are served at the API origin's top-level `/textures`; point the
   // client at the bare `apiUrl` so skin/cape upload, lookup, and delete resolve
   // to `${apiUrl}/textures/...`.
-  const texturesClient = new YggdrasilClient(
+  const texturesClient = new YggdrasilTexturesClient(
     deps.fetch ? { apiRoot: mainConfig.apiUrl, fetch: deps.fetch } : { apiRoot: mainConfig.apiUrl },
   );
 

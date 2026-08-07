@@ -7,8 +7,8 @@ body,
 }
 
 .console-mono {
-  font-family: "Cascadia Mono", ui-monospace, "SFMono-Regular", Menlo, Monaco, "Courier New",
-    monospace;
+  font-family:
+    "Cascadia Mono", ui-monospace, "SFMono-Regular", Menlo, Monaco, "Courier New", monospace;
   font-feature-settings: "tnum";
 }
 
@@ -44,7 +44,7 @@ body,
   border: 0;
   background: transparent;
   cursor: default;
-  color: var(--color-foreground);
+  color: var(--color-text-hi);
 }
 .console-row:hover {
   background: var(--color-ghost);
@@ -80,17 +80,17 @@ body,
 }
 
 .console-row[data-level="warn"] .console-message {
-  color: color-mix(in srgb, var(--color-destructive) 50%, var(--color-foreground) 50%);
+  color: color-mix(in srgb, var(--color-destructive) 50%, var(--color-text-hi) 50%);
 }
 .console-row[data-level="error"] .console-message,
 .console-row[data-source="stderr"] .console-message {
   color: var(--color-destructive);
 }
 .console-row[data-level="debug"] .console-message {
-  color: color-mix(in srgb, var(--color-foreground) 55%, transparent);
+  color: color-mix(in srgb, var(--color-text-hi) 55%, transparent);
 }
 .console-row[data-source="system"] .console-message {
-  color: color-mix(in srgb, var(--color-foreground) 70%, transparent);
+  color: color-mix(in srgb, var(--color-text-hi) 70%, transparent);
   font-style: italic;
 }
 
@@ -99,7 +99,7 @@ body,
   color: var(--color-destructive);
 }
 .console-row[data-source="system"] .console-source {
-  color: var(--color-foreground);
+  color: var(--color-text-hi);
   opacity: 0.55;
   font-style: italic;
 }
@@ -109,7 +109,7 @@ body,
 
 .console-highlight {
   background: color-mix(in srgb, var(--color-success) 50%, transparent);
-  color: var(--color-primary-foreground);
+  color: var(--color-on-cta);
   border-radius: 2px;
   padding: 0 1px;
 }

@@ -1,8 +1,8 @@
 import type { ConsoleHub } from '@main/infra/consoleHub';
 import {
+  createRendererLocation,
   RENDERER_ENTRY_FILES,
   type RendererLocation,
-  createRendererLocation,
 } from '@main/windows/rendererLocations';
 import { CONSOLE_TRUSTED_CHANNELS, type IpcContract } from '@shared/ipc';
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron';

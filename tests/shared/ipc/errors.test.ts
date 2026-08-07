@@ -28,12 +28,12 @@ describe('tryUnwrapIpcError', () => {
 
   it('preserves details when present', () => {
     const unwrapped = tryUnwrapIpcError(
-      wrap({ code: 'IPC_INVALID_ARGS', message: 'bad', details: { field: 'slug' } }),
+      wrap({ code: 'IPC_INVALID_ARGS', message: 'bad', details: { field: 'key' } }),
     );
     expect(unwrapped).toEqual({
       code: 'IPC_INVALID_ARGS',
       message: 'bad',
-      details: { field: 'slug' },
+      details: { field: 'key' },
     });
   });
 

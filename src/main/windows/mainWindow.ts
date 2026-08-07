@@ -3,7 +3,7 @@ import { mainConfig } from '@main/config';
 import type { ConsoleHub } from '@main/infra/consoleHub';
 import { scopedLogger } from '@main/infra/logger';
 import { type App, BrowserWindow, shell } from 'electron';
-import { RENDERER_ENTRY_FILES, createRendererLocation, safeParseUrl } from './rendererLocations';
+import { createRendererLocation, RENDERER_ENTRY_FILES, safeParseUrl } from './rendererLocations';
 import { applyNavigationGuards, withFrameOptions } from './secureWindow';
 import { WINDOW_BACKGROUND_COLOR } from './windowColors';
 

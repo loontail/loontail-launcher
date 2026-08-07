@@ -67,12 +67,12 @@ const { createSyncTask: realCreateSyncTask } = await vi.importActual<
   typeof import('@main/services/bundle/syncState')
 >('@main/services/bundle/syncState');
 
-const SLUG = asCatalogKey('official:test-client');
+const KEY = asCatalogKey('official:test-client');
 const BUNDLE_SLUG = 'bundle-x';
 const CLIENT_FOLDER = '/tmp/client';
 
 const launcherSettings = () =>
-  makeLauncherSettings({ clients: { [SLUG]: { storage: { clientFolder: CLIENT_FOLDER } } } });
+  makeLauncherSettings({ clients: { [KEY]: { storage: { clientFolder: CLIENT_FOLDER } } } });
 
 const EMPTY_PLAN = {
   toDownload: [],
@@ -85,7 +85,7 @@ const EMPTY_PLAN = {
 
 const isBundleLockFree = (locks: ReturnType<typeof createClientOperationLocks>): boolean => {
   const probe = locks.acquire({
-    slug: SLUG,
+    key: KEY,
     domain: ClientOperationDomains.BUNDLE,
     resources: [ClientOperationResources.CLIENT_FOLDER, ClientOperationResources.BUNDLE_MANIFEST],
   });
@@ -114,7 +114,7 @@ describe('BundleManager lock + awaiter cleanup', () => {
     const manager = new BundleManager(broadcaster, makeHealer(), locks);
     managerMocks.saveLocalManifest.mockRejectedValue(new Error('disk full'));
 
-    await expect(manager.syncForLaunch(SLUG)).resolves.toBeUndefined();
+    await expect(manager.syncForLaunch(KEY)).resolves.toBeUndefined();
 
     const statuses = vi.mocked(broadcaster.status).mock.calls.map(([event]) => event.status);
     expect(statuses).toContain(BundleSyncStatuses.UP_TO_DATE);
@@ -128,7 +128,7 @@ describe('BundleManager lock + awaiter cleanup', () => {
       throw new Error('task construction blew up');
     });
 
-    await expect(manager.startSync({ slug: SLUG })).rejects.toThrow('task construction blew up');
+    await expect(manager.start({ key: KEY })).rejects.toThrow('task construction blew up');
 
     expect(isBundleLockFree(locks)).toBe(true);
   });

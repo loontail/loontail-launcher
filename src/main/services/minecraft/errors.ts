@@ -1,13 +1,13 @@
-import { type MinecraftKitErrorCode, isMinecraftKitError } from '@loontail/minecraft-kit';
+import { isMinecraftKitError, type MinecraftKitErrorCode } from '@loontail/minecraft-kit';
 import { type MinecraftErrorCode, MinecraftErrorCodes } from '@shared/contracts/minecraft';
 
-export class ManagerError extends Error {
+export class MinecraftError extends Error {
   constructor(
     readonly code: MinecraftErrorCode,
     message: string,
   ) {
     super(message);
-    this.name = 'ManagerError';
+    this.name = 'MinecraftError';
   }
 }
 
@@ -41,7 +41,7 @@ const KIT_CODE_TO_LAUNCHER_CODE: Partial<Record<MinecraftKitErrorCode, Minecraft
 
 export const classifyError = (error: unknown, signal?: AbortSignal): MinecraftErrorCode => {
   if (signal?.aborted) return MinecraftErrorCodes.ABORTED;
-  if (error instanceof ManagerError) return error.code;
+  if (error instanceof MinecraftError) return error.code;
   if (isMinecraftKitError(error)) {
     return KIT_CODE_TO_LAUNCHER_CODE[error.code] ?? MinecraftErrorCodes.KIT_ERROR;
   }

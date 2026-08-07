@@ -34,21 +34,21 @@ export const ProgressStages = {
 export const ProgressStageSchema = enumFromConst(ProgressStages);
 
 export const MinecraftErrorCodes = {
-  NO_ACCOUNT: 'noAccount',
-  NO_CLIENT_FOLDER: 'noClientFolder',
-  LOADER_AMBIGUOUS: 'loaderAmbiguous',
-  OP_IN_FLIGHT: 'opInFlight',
-  NOT_INSTALLED: 'notInstalled',
-  ABORTED: 'aborted',
-  NETWORK_ERROR: 'networkError',
-  INTEGRITY_ERROR: 'integrityError',
-  DISK_ERROR: 'diskError',
-  RUNTIME_ERROR: 'runtimeError',
-  FORGE_ERROR: 'forgeError',
-  LAUNCH_FAILED: 'launchFailed',
-  KIT_ERROR: 'kitError',
-  UNINSTALL_LOCKED: 'uninstallLocked',
-  UNKNOWN: 'unknown',
+  NO_ACCOUNT: 'minecraft/noAccount',
+  NO_CLIENT_FOLDER: 'minecraft/noClientFolder',
+  LOADER_AMBIGUOUS: 'minecraft/loaderAmbiguous',
+  OP_IN_FLIGHT: 'minecraft/opInFlight',
+  NOT_INSTALLED: 'minecraft/notInstalled',
+  ABORTED: 'minecraft/aborted',
+  NETWORK_ERROR: 'minecraft/networkError',
+  INTEGRITY_ERROR: 'minecraft/integrityError',
+  DISK_ERROR: 'minecraft/diskError',
+  RUNTIME_ERROR: 'minecraft/runtimeError',
+  FORGE_ERROR: 'minecraft/forgeError',
+  LAUNCH_FAILED: 'minecraft/launchFailed',
+  KIT_ERROR: 'minecraft/kitError',
+  UNINSTALL_LOCKED: 'minecraft/uninstallLocked',
+  UNKNOWN: 'minecraft/unknown',
 } as const;
 
 export type MinecraftErrorCode = (typeof MinecraftErrorCodes)[keyof typeof MinecraftErrorCodes];
@@ -56,7 +56,7 @@ export type MinecraftErrorCode = (typeof MinecraftErrorCodes)[keyof typeof Minec
 export const MinecraftErrorCodeSchema = enumFromConst(MinecraftErrorCodes);
 
 export const MinecraftStatusEventSchema = z.object({
-  slug: CatalogKeySchema,
+  key: CatalogKeySchema,
   status: InstallStatusSchema,
   paused: z.boolean().optional(),
   loader: LoaderChoiceSchema.optional(),
@@ -65,21 +65,20 @@ export const MinecraftStatusEventSchema = z.object({
 export type MinecraftStatusEvent = z.infer<typeof MinecraftStatusEventSchema>;
 
 export const MinecraftProgressEventSchema = z.object({
-  slug: CatalogKeySchema,
+  key: CatalogKeySchema,
   stage: ProgressStageSchema,
   stagePercent: z.number().min(0).max(100),
   overallPercent: z.number().min(0).max(100),
   // Reconstructed bytes (stagePercent × stage total), so non-negative reals not ints.
   bytesDownloaded: z.number().nonnegative(),
   totalBytes: z.number().nonnegative(),
-  speedBytesPerSec: z.number().nonnegative().optional(),
   currentFile: z.string().optional(),
 });
 
 export type MinecraftProgressEvent = z.infer<typeof MinecraftProgressEventSchema>;
 
 export const MinecraftErrorEventSchema = z.object({
-  slug: CatalogKeySchema,
+  key: CatalogKeySchema,
   code: MinecraftErrorCodeSchema,
   message: z.string(),
 });
@@ -87,7 +86,7 @@ export const MinecraftErrorEventSchema = z.object({
 export type MinecraftErrorEvent = z.infer<typeof MinecraftErrorEventSchema>;
 
 export const InstallRequestSchema = z.object({
-  slug: CatalogKeySchema,
+  key: CatalogKeySchema,
   loader: LoaderChoiceSchema.optional(),
 });
 

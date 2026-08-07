@@ -62,16 +62,27 @@ describe('httpRequest session auth', () => {
     expect(authHeader(1)).toBe('Bearer rotated-token');
   });
 
-  it('triggers exactly one refresh for two concurrent 401s and retries both with the rotated token', async () => {
+  it('triggers exactly one rotation for two concurrent 401s and retries both with the rotated token', async () => {
     // Both requests fly with the same stale token; the rotation is single-use,
-    // so only ONE refresh may fire and both retries must reuse its result.
-    let resolveRefresh: (token: string) => void = () => {};
-    const refresh = vi.fn(
+    // so only ONE rotation may fire and both retries must reuse its result. The
+    // single-flight lives in the port (createSessionRefresher), so the fake
+    // memoizes like the real one — http.ts must consume that guarantee instead
+    // of stacking a second guard of its own.
+    let resolveRotation: (token: string) => void = () => {};
+    const rotate = vi.fn(
       () =>
         new Promise<string>((resolve) => {
-          resolveRefresh = resolve;
+          resolveRotation = resolve;
         }),
     );
+    let inFlight: Promise<string | null> | null = null;
+    const refresh = vi.fn((): Promise<string | null> => {
+      if (inFlight) return inFlight;
+      inFlight = rotate().finally(() => {
+        inFlight = null;
+      });
+      return inFlight;
+    });
     registerSessionAuthPort({ getToken: () => 'stale-token', refresh });
     fetchMock
       .mockResolvedValueOnce(unauthorized()) // request A initial
@@ -84,13 +95,13 @@ describe('httpRequest session auth', () => {
     // Let both initial fetches settle and both land on the shared refresh.
     await Promise.resolve();
     await Promise.resolve();
-    resolveRefresh('rotated-token');
+    resolveRotation('rotated-token');
 
     const [ra, rb] = await Promise.all([a, b]);
 
     expect(ra.status).toBe(200);
     expect(rb.status).toBe(200);
-    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(rotate).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledTimes(4);
     // Both retries carry the single rotated token.
     expect(authHeader(2)).toBe('Bearer rotated-token');

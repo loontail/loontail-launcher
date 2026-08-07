@@ -1,8 +1,6 @@
 import type { DiskInfo } from '@shared/contracts/system';
 
 type DiskUsageRatios = {
-  diskUsedRatio: number;
-  folderRatio: number;
   clampedFolderRatio: number;
   restUsedRatio: number;
 };
@@ -25,5 +23,5 @@ export const computeDiskUsageRatios = ({
   // Clamp so a lagging folder-size scan can't overshoot the total-used segment.
   const clampedFolderRatio = Math.min(folderRatio, diskUsedRatio);
   const restUsedRatio = Math.max(0, diskUsedRatio - clampedFolderRatio);
-  return { diskUsedRatio, folderRatio, clampedFolderRatio, restUsedRatio };
+  return { clampedFolderRatio, restUsedRatio };
 };

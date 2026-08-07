@@ -1,5 +1,5 @@
+import { BuildMedia, PlayButton } from '@renderer/features/builds';
 import { primaryLoader } from '@renderer/features/catalog';
-import { BuildMedia, PlayButton } from '@renderer/features/clients';
 import { cn } from '@renderer/shared/lib/cn';
 import { PAGE_CONTAINER } from '@renderer/shared/lib/layout';
 import { Button } from '@renderer/shared/ui/Button';
@@ -48,13 +48,13 @@ export const HomeHero = ({ item, onOpenSettings, onOpenDetails }: HomeHeroProps)
               <span className="inline-flex items-center gap-1.5">
                 <Gamepad2 className="size-4 text-text" strokeWidth={2} />
                 <span className="tabular-nums">
-                  {t('clients.versionChip.full', { version: minecraftVersion })}
+                  {t('builds.versionChip.full', { version: minecraftVersion })}
                 </span>
               </span>
             )}
             <span className="inline-flex items-center gap-1.5">
               <Package className="size-4 text-text" strokeWidth={2} />
-              {t(`clientSettings.loader.${loader}`)}
+              {t(`buildSettings.loader.${loader}`)}
             </span>
           </div>
 
@@ -65,13 +65,13 @@ export const HomeHero = ({ item, onOpenSettings, onOpenDetails }: HomeHeroProps)
               size="icon"
               className="size-11"
               onClick={onOpenSettings}
-              aria-label={t('clients.tabs.settings')}
+              aria-label={t('builds.tabs.settings')}
             >
               <Settings className="size-4.5" strokeWidth={2} />
             </Button>
             <Button variant="secondary" size="lg" onClick={onOpenDetails}>
               <Boxes className="size-4" strokeWidth={2} />
-              {t('clients.details')}
+              {t('builds.details')}
             </Button>
           </div>
         </div>

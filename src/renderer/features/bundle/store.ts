@@ -1,4 +1,4 @@
-import { createRuntimeStore } from '@renderer/shared/lib/stores/createRuntimeStore';
+import { createLiveStatusStore } from '@renderer/shared/lib/stores/createLiveStatusStore';
 import {
   BUSY_BUNDLE_STATUSES,
   type BundleErrorCode,
@@ -7,7 +7,7 @@ import {
   BundleSyncStatuses,
 } from '@shared/contracts/bundle';
 
-export type BundleRuntimeState = {
+export type BundleSyncState = {
   status: BundleSyncStatus;
   installed: boolean;
   signatureMatches: boolean;
@@ -15,7 +15,7 @@ export type BundleRuntimeState = {
   error?: { code: BundleErrorCode; message: string } | undefined;
 };
 
-export const DEFAULT_BUNDLE_STATE: BundleRuntimeState = {
+export const DEFAULT_BUNDLE_STATE: BundleSyncState = {
   status: BundleSyncStatuses.UNKNOWN,
   installed: false,
   signatureMatches: true,
@@ -36,7 +36,7 @@ const STATUSES_CLEAR_ERROR: ReadonlySet<BundleSyncStatus> = new Set([
   BundleSyncStatuses.NO_BUNDLE,
 ]);
 
-const store = createRuntimeStore<BundleSyncStatus, BundleRuntimeState>({
+const store = createLiveStatusStore<BundleSyncStatus, BundleSyncState>({
   default: DEFAULT_BUNDLE_STATE,
   terminalStatuses: TERMINAL_STATUSES,
   clearProgressFields: { progress: null },

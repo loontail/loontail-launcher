@@ -2,16 +2,17 @@ import fs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
+  asMinecraftVersionId,
   type InstallPlan,
   Loaders,
   type MinecraftKit,
   type RepairAllReport,
   type Target,
   VerificationKinds,
-  asMinecraftVersionId,
 } from '@loontail/minecraft-kit';
+import { markCancelled } from '@main/infra/lifecyclePhase';
 import type { Context } from '@main/services/minecraft/context';
-import type { ManagerEnv } from '@main/services/minecraft/env';
+import type { MinecraftEnv } from '@main/services/minecraft/env';
 import { createForgeProcessorCache } from '@main/services/minecraft/forgeProcessorHealing';
 import { runInstall } from '@main/services/minecraft/install';
 import {
@@ -25,11 +26,11 @@ import {
 import { type InstallOp, type Op, OpKinds, type RepairOp } from '@main/services/minecraft/ops';
 import { runRepair } from '@main/services/minecraft/repair';
 import { runUninstall } from '@main/services/minecraft/uninstall';
-import { type CatalogKey, asCatalogKey } from '@shared/contracts/ids';
+import { asCatalogKey, type CatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
 import { LoaderChoices } from '@shared/contracts/settings';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { stubConsolePort, stubOpenConsole } from './managerStubs';
+import { stubConsoleSink, stubOpenConsole } from './managerStubs';
 
 const electronMocks = vi.hoisted(() => ({
   getPath: vi.fn(() => 'Z:/userData'),
@@ -45,7 +46,7 @@ vi.mock('@main/infra/logger', () => ({
   scopedLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
 
-const SLUG = asCatalogKey('official:test-client');
+const KEY = asCatalogKey('official:test-client');
 const MINECRAFT_VERSION = asMinecraftVersionId('1.20.1');
 const RUNTIME_COMPONENT = 'java-runtime-gamma';
 const FABRIC_VERSION = '0.16.9';
@@ -122,8 +123,7 @@ const installOp = (): InstallOp => ({
     resume: vi.fn(),
   } as unknown as InstallOp['pauseController'],
   abort: new AbortController(),
-  paused: false,
-  cancelled: false,
+  phase: 'running',
 });
 
 const logger = () => ({
@@ -136,7 +136,7 @@ const logger = () => ({
   warn: vi.fn(),
 });
 
-const env = (kit: MinecraftKit, ops: Map<CatalogKey, Op>): ManagerEnv => {
+const env = (kit: MinecraftKit, ops: Map<CatalogKey, Op>): MinecraftEnv => {
   const broadcaster = {
     status: vi.fn(),
     progress: vi.fn(),
@@ -148,7 +148,7 @@ const env = (kit: MinecraftKit, ops: Map<CatalogKey, Op>): ManagerEnv => {
     broadcaster,
     ops,
     forgeProcessorCache: createForgeProcessorCache(),
-    console: stubConsolePort(),
+    console: stubConsoleSink(),
     openConsole: stubOpenConsole(),
     logger: logger(),
     emitStatus: broadcaster.status,
@@ -156,6 +156,7 @@ const env = (kit: MinecraftKit, ops: Map<CatalogKey, Op>): ManagerEnv => {
     persistRuntime: vi.fn(),
     clearRuntimeOverride: vi.fn(),
     resolveBundleRepairFilter: vi.fn(async () => null),
+    clearBundleManifest: vi.fn(async () => undefined),
   };
 };
 
@@ -217,7 +218,7 @@ describe('target install manifest', () => {
 
   it('persistTargetInstallManifest writes the sidecar and swallows write failures', async () => {
     const currentTarget = target(directory);
-    await persistTargetInstallManifest(SLUG, directory, currentTarget, 'install');
+    await persistTargetInstallManifest(KEY, directory, currentTarget, 'install');
     await expect(loadTargetInstallManifest(directory)).resolves.toMatchObject({
       targetId: KIT_TARGET_ID,
     });
@@ -227,7 +228,7 @@ describe('target install manifest', () => {
     const blocked = path.join(directory, 'blocked');
     await fs.writeFile(blocked, 'x');
     await expect(
-      persistTargetInstallManifest(SLUG, blocked, currentTarget, 'install'),
+      persistTargetInstallManifest(KEY, blocked, currentTarget, 'install'),
     ).resolves.toBeUndefined();
   });
 
@@ -243,9 +244,9 @@ describe('target install manifest', () => {
       },
     } as unknown as MinecraftKit;
     const installOperation = installOp();
-    const installOps = new Map<CatalogKey, Op>([[SLUG, installOperation]]);
+    const installOps = new Map<CatalogKey, Op>([[KEY, installOperation]]);
 
-    await runInstall(env(kit, installOps), SLUG, currentContext, installOperation);
+    await runInstall(env(kit, installOps), KEY, currentContext, installOperation);
 
     await expect(loadTargetInstallManifest(directory)).resolves.toMatchObject({
       targetId: KIT_TARGET_ID,
@@ -254,9 +255,9 @@ describe('target install manifest', () => {
     await fs.unlink(targetInstallManifestPath(directory));
 
     const repairOperation: RepairOp = { kind: OpKinds.REPAIR, abort: new AbortController() };
-    const repairOps = new Map<CatalogKey, Op>([[SLUG, repairOperation]]);
+    const repairOps = new Map<CatalogKey, Op>([[KEY, repairOperation]]);
 
-    await runRepair(env(kit, repairOps), SLUG, currentContext, repairOperation);
+    await runRepair(env(kit, repairOps), KEY, currentContext, repairOperation);
 
     await expect(loadTargetInstallManifest(directory)).resolves.toMatchObject({
       targetId: KIT_TARGET_ID,
@@ -272,15 +273,15 @@ describe('target install manifest', () => {
         plan: vi.fn(async () => installPlan(directory)),
         run: vi.fn(async () => {
           installOperation.abort.abort();
-          installOperation.cancelled = true;
+          markCancelled(installOperation);
           throw new Error('Cancelled');
         }),
       },
     } as unknown as MinecraftKit;
-    const installOps = new Map<CatalogKey, Op>([[SLUG, installOperation]]);
+    const installOps = new Map<CatalogKey, Op>([[KEY, installOperation]]);
 
     await expect(
-      runInstall(env(kit, installOps), SLUG, currentContext, installOperation),
+      runInstall(env(kit, installOps), KEY, currentContext, installOperation),
     ).rejects.toThrow('Cancelled');
 
     await expect(fs.access(directory)).rejects.toMatchObject({ code: 'ENOENT' });
@@ -294,13 +295,13 @@ describe('target install manifest', () => {
     await saveCurrentTargetInstallManifest(clientFolder, target(clientFolder));
     const operationEnv = env({} as MinecraftKit, new Map<CatalogKey, Op>());
 
-    await runUninstall(operationEnv, SLUG, clientFolder, clientsRoot);
+    await runUninstall(operationEnv, KEY, clientFolder, clientsRoot);
 
     await expect(loadTargetInstallManifest(clientFolder)).resolves.toBeNull();
     await expect(fs.access(clientFolder)).rejects.toMatchObject({ code: 'ENOENT' });
-    expect(operationEnv.clearRuntimeOverride).toHaveBeenCalledWith(SLUG);
+    expect(operationEnv.clearRuntimeOverride).toHaveBeenCalledWith(KEY);
     expect(operationEnv.broadcaster.status).toHaveBeenLastCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: InstallStatuses.NOT_INSTALLED,
       paused: false,
     });

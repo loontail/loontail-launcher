@@ -5,7 +5,7 @@ import {
   officialKey,
   parseCatalogKey,
 } from '@shared/contracts/catalog';
-import { asCatalogKey, asClientSlug, asInstanceId } from '@shared/contracts/ids';
+import { asCatalogKey, asClientSlug, asLocalBuildId } from '@shared/contracts/ids';
 import { describe, expect, it } from 'vitest';
 
 const UUID = '550e8400-e29b-41d4-a716-446655440000';
@@ -13,11 +13,11 @@ const UUID = '550e8400-e29b-41d4-a716-446655440000';
 describe('catalog key composition', () => {
   it('builds source-namespaced keys', () => {
     expect(officialKey(asClientSlug('survival'))).toBe('official:survival');
-    expect(localKey(asInstanceId(UUID))).toBe(`local:${UUID}`);
+    expect(localKey(asLocalBuildId(UUID))).toBe(`local:${UUID}`);
   });
 
   it('does not collide official and local builds sharing a name', () => {
-    expect(officialKey(asClientSlug('vanilla'))).not.toBe(localKey(asInstanceId(UUID)));
+    expect(officialKey(asClientSlug('vanilla'))).not.toBe(localKey(asLocalBuildId(UUID)));
   });
 });
 
@@ -28,7 +28,7 @@ describe('parseCatalogKey', () => {
   });
 
   it('round-trips a local key', () => {
-    const ref = parseCatalogKey(localKey(asInstanceId(UUID)));
+    const ref = parseCatalogKey(localKey(asLocalBuildId(UUID)));
     expect(ref).toEqual({ source: 'local', id: UUID });
   });
 

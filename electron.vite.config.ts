@@ -32,6 +32,12 @@ export default defineConfig(({ mode }) => {
     'process.env.NETWORK_API_URL': JSON.stringify(env.NETWORK_API_URL ?? ''),
     __MINECRAFT_KIT_VERSION__: JSON.stringify(resolveKitVersion()),
   };
+  // The renderer only needs the two values that drive the description-link
+  // allowlist; nothing else from the main env is exposed to the window bundle.
+  const rendererDefine = {
+    'process.env.API_URL': JSON.stringify(env.API_URL ?? ''),
+    'process.env.DESCRIPTION_LINK_HOSTS': JSON.stringify(env.DESCRIPTION_LINK_HOSTS ?? ''),
+  };
 
   return {
     main: {
@@ -68,6 +74,7 @@ export default defineConfig(({ mode }) => {
     renderer: {
       root: resolve(__dirname, 'src/renderer'),
       plugins: [react(), tailwindcss()],
+      define: rendererDefine,
       resolve: {
         alias: {
           ...sharedAlias,
@@ -76,6 +83,11 @@ export default defineConfig(({ mode }) => {
       },
       build: {
         outDir: 'out/renderer',
+        // electron-vite defaults the renderer to `minify: false` to keep stack
+        // traces readable; the shipped window bundle pays ~1.1 MB for that, so
+        // minify explicitly. Renderer errors are still identifiable through the
+        // error boundary and the main-process log.
+        minify: 'esbuild',
         rollupOptions: {
           input: {
             index: resolve(__dirname, 'src/renderer/index.html'),

@@ -8,7 +8,7 @@ export type Db = Database.Database;
 
 export const DB_FILE_NAME = 'launcher.db';
 
-let instance: Db | null = null;
+let connection: Db | null = null;
 
 // The parent directory is created first because a custom path may not exist. WAL
 // keeps reads non-blocking during the store's synchronous writes.
@@ -24,20 +24,20 @@ export const openDatabase = (filePath: string): Db => {
 // Lazily-opened process-wide handle, so importing this module triggers no
 // filesystem I/O until first use.
 export const getDb = (): Db => {
-  if (!instance) {
-    instance = openDatabase(path.join(app.getPath('userData'), DB_FILE_NAME));
+  if (!connection) {
+    connection = openDatabase(path.join(app.getPath('userData'), DB_FILE_NAME));
   }
-  return instance;
+  return connection;
 };
 
 // Checkpoint and truncate the WAL before closing so the last synchronous writes
 // land in the main file on clean shutdown instead of lingering in `-wal`. A
 // checkpoint failure must not block the close; WAL recovers on next open.
 export const closeDatabase = (): void => {
-  if (!instance) return;
+  if (!connection) return;
   try {
-    instance.pragma('wal_checkpoint(TRUNCATE)');
+    connection.pragma('wal_checkpoint(TRUNCATE)');
   } catch {}
-  instance.close();
-  instance = null;
+  connection.close();
+  connection = null;
 };

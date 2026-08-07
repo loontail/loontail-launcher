@@ -14,7 +14,7 @@ import type {
 } from '@shared/contracts/settings';
 import { isLoaderAvailable } from '@shared/domain/loader';
 import { clearStaleClientRuntimeRef, resolveClientSettings } from '@shared/domain/settings';
-import { ManagerError } from './errors';
+import { MinecraftError } from './errors';
 import { getRuntimeRoot } from './runtimeFs';
 import { buildSpecToTargetInput, resolveLoader } from './target';
 
@@ -42,7 +42,7 @@ export type BuildContextDeps = {
 
 export const buildContext = async (
   kit: MinecraftKit,
-  slug: CatalogKey,
+  key: CatalogKey,
   loaderOverride: LoaderChoice | undefined,
   deps: BuildContextDeps,
 ): Promise<Context> => {
@@ -50,44 +50,44 @@ export const buildContext = async (
   const persistClientOverride = deps.persistClientOverride ?? defaultPersistClientOverride;
   const resolveBuild = deps.resolveBuild;
 
-  // The id flowing through the slug-keyed chain is an opaque build id: a local
+  // The id flowing through the key-keyed chain is an opaque build id: a local
   // instance UUID or an official slug. The resolver disambiguates by source
   // (local first, network-free), so local builds resolve with the backend down.
   let item: CatalogItem | null;
   try {
-    item = await resolveBuild(slug);
+    item = await resolveBuild(key);
   } catch {
-    throw new ManagerError(MinecraftErrorCodes.UNKNOWN, `Build "${slug}" not found`);
+    throw new MinecraftError(MinecraftErrorCodes.UNKNOWN, `Build "${key}" not found`);
   }
   if (!item) {
-    throw new ManagerError(MinecraftErrorCodes.UNKNOWN, `Build "${slug}" not found`);
+    throw new MinecraftError(MinecraftErrorCodes.UNKNOWN, `Build "${key}" not found`);
   }
   const spec = item.spec;
 
   const settings = getSettings();
-  let resolved = resolveClientSettings(settings, slug);
+  let resolved = resolveClientSettings(settings, key);
   if (!resolved.storage.clientFolder) {
-    throw new ManagerError(
+    throw new MinecraftError(
       MinecraftErrorCodes.NO_CLIENT_FOLDER,
       'Set the launcher install folder in System settings first',
     );
   }
 
-  const rawPersisted = settings.clients[slug]?.loader ?? null;
+  const rawPersisted = settings.clients[key]?.loader ?? null;
   const persisted = rawPersisted && isLoaderAvailable(spec, rawPersisted) ? rawPersisted : null;
   if (rawPersisted && !persisted) {
     // The build no longer offers the loader the user once picked — drop the stale override.
-    persistClientOverride(slug, { loader: undefined });
+    persistClientOverride(key, { loader: undefined });
   }
   const resolution = resolveLoader(spec, loaderOverride ?? persisted);
   if (resolution.kind === 'ambiguous') {
-    throw new ManagerError(
+    throw new MinecraftError(
       MinecraftErrorCodes.LOADER_AMBIGUOUS,
       'Pick a loader (Forge or Fabric) before installing',
     );
   }
   if (loaderOverride && loaderOverride !== persisted) {
-    persistClientOverride(slug, { loader: loaderOverride });
+    persistClientOverride(key, { loader: loaderOverride });
   }
 
   const target = await kit.targets.resolve(
@@ -103,12 +103,12 @@ export const buildContext = async (
   );
   const runtimeCheckedSettings = clearStaleClientRuntimeRef(
     settings,
-    slug,
+    key,
     target.runtime.component,
   );
   if (runtimeCheckedSettings !== settings) {
-    const persistedSettings = persistClientOverride(slug, { runtime: undefined });
-    resolved = resolveClientSettings(persistedSettings, slug);
+    const persistedSettings = persistClientOverride(key, { runtime: undefined });
+    resolved = resolveClientSettings(persistedSettings, key);
   }
   return {
     item,

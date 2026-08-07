@@ -1,10 +1,9 @@
+import { buildLineInput, createConsoleHub } from '@main/infra/consoleHub';
 import { ConsoleLevels, ConsoleSources } from '@shared/contracts/console';
 import { asCatalogKey } from '@shared/contracts/ids';
 import { describe, expect, it } from 'vitest';
 
-import { buildLineInput, createConsoleHub } from '@main/infra/consoleHub';
-
-const SLUG = asCatalogKey('official:test-client');
+const KEY = asCatalogKey('official:test-client');
 
 const PARTIAL_EVENT =
   '<log4j:Event logger="net.minecraft.crash" timestamp="1" level="ERROR" thread="main">';
@@ -28,10 +27,10 @@ describe('createConsoleHub', () => {
     const hub = createConsoleHub();
 
     // A partial event holds in the stream parser: feed alone ingests nothing.
-    hub.recordMinecraft(SLUG, ConsoleSources.STDERR, PARTIAL_EVENT);
+    hub.recordMinecraft(KEY, ConsoleSources.STDERR, PARTIAL_EVENT);
     expect(hub.getInitial().lines).toHaveLength(0);
 
-    hub.endSession(SLUG);
+    hub.endSession(KEY);
 
     const lines = hub.getInitial().lines;
     expect(lines).toHaveLength(1);
@@ -43,12 +42,12 @@ describe('createConsoleHub', () => {
 
     // The closing tag arrives, so the parser emits the event on the same feed;
     // endSession then resets cleanly without re-emitting it.
-    hub.recordMinecraft(SLUG, ConsoleSources.STDERR, COMPLETE_EVENT);
+    hub.recordMinecraft(KEY, ConsoleSources.STDERR, COMPLETE_EVENT);
     const beforeEnd = hub.getInitial().lines.length;
     expect(beforeEnd).toBe(1);
     expect(hub.getInitial().lines[0]?.message).toContain('Fatal: game crashed');
 
-    hub.endSession(SLUG);
+    hub.endSession(KEY);
     expect(hub.getInitial().lines).toHaveLength(beforeEnd);
   });
 });
@@ -64,8 +63,8 @@ describe('buildLineInput', () => {
     expect(buildLineInput({ ...BASE })).toEqual(BASE);
   });
 
-  it('includes slug when provided', () => {
-    expect(buildLineInput({ ...BASE, slug: SLUG })).toEqual({ ...BASE, slug: SLUG });
+  it('includes key when provided', () => {
+    expect(buildLineInput({ ...BASE, key: KEY })).toEqual({ ...BASE, key: KEY });
   });
 
   it('includes code without args', () => {

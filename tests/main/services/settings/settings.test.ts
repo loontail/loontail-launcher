@@ -1,5 +1,5 @@
 import { applyLauncherPatch } from '@main/services/settings/settings';
-import { asClientSlug } from '@shared/contracts/ids';
+import { asCatalogKey } from '@shared/contracts/ids';
 import type { LauncherSettings, PatchLauncherSettings } from '@shared/contracts/settings';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -13,7 +13,7 @@ const baseSettings = (): LauncherSettings => ({
   memory: { allocatedRamMb: 2048 },
   storage: { clientsFolder: '/clients' },
   launch: { console: false, fullscreen: true },
-  clients: { [asClientSlug('foo')]: { memory: { allocatedRamMb: 4096 } } },
+  clients: { [asCatalogKey('official:foo')]: { memory: { allocatedRamMb: 4096 } } },
 });
 
 describe('applyLauncherPatch', () => {

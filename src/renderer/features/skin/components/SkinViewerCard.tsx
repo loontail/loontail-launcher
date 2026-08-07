@@ -27,7 +27,7 @@ export const SkinViewerCard = ({
   return (
     <div
       className={cn(
-        'relative shrink-0 overflow-hidden rounded-md border border-border bg-card',
+        'relative shrink-0 overflow-hidden rounded-md border border-edge bg-surface-1',
         className,
       )}
       style={{ width, height }}

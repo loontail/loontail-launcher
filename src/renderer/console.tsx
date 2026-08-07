@@ -9,6 +9,7 @@ import './i18n';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ConsoleApp } from './console/App';
+import { ConsoleErrorBoundary } from './console/ConsoleErrorBoundary';
 
 const rootElement = document.getElementById('console-root');
 if (rootElement === null) {
@@ -17,6 +18,8 @@ if (rootElement === null) {
 
 createRoot(rootElement).render(
   <StrictMode>
-    <ConsoleApp />
+    <ConsoleErrorBoundary>
+      <ConsoleApp />
+    </ConsoleErrorBoundary>
   </StrictMode>,
 );

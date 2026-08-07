@@ -1,9 +1,9 @@
 import { scopedLogger } from '@main/infra/logger';
-import { assertNoIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
+import type { LauncherService } from '@main/services/service';
 import { UpdaterStates, type UpdaterStatusEvent } from '@shared/contracts/updater';
 import { IPC_CHANNELS, IPC_EVENTS } from '@shared/ipc';
-import { type BrowserWindow, app, autoUpdater } from 'electron';
+import { app, autoUpdater, type BrowserWindow } from 'electron';
 
 const logger = scopedLogger('updater');
 
@@ -17,10 +17,7 @@ const REPO_NAME = 'minecraft-launcher';
 // bound the check phase so a stall recovers on its own.
 const CHECK_TIMEOUT_MS = 60_000;
 
-export type UpdaterService = {
-  init: () => Promise<void>;
-  dispose: () => Promise<void>;
-};
+export type UpdaterService = LauncherService;
 
 const isSquirrelEnabled = (): boolean => app.isPackaged && process.platform === 'win32';
 
@@ -34,8 +31,8 @@ export const createUpdaterService = (
     mainWindow.webContents.send(IPC_EVENTS.updaterStatus, payload);
   };
 
-  // Driven by autoUpdater lifecycle events (not the synchronous checkForUpdates()
-  // return): in-flight from CHECKING through READY or terminal NOT_AVAILABLE/ERROR.
+  // Claimed synchronously by the check handler and released by the terminal
+  // lifecycle events (READY / NOT_AVAILABLE / ERROR) or the watchdog.
   let inFlight = false;
   let registered = false;
   let watchdog: ReturnType<typeof setTimeout> | null = null;
@@ -57,14 +54,20 @@ export const createUpdaterService = (
     watchdog.unref();
   };
 
+  // Every terminal outcome must release the slot AND the watchdog together:
+  // forget the disarm and a stale 60s timer later broadcasts ERROR over a finished
+  // update; forget the flag and every future check is refused as in-flight.
+  const settle = (payload: UpdaterStatusEvent): void => {
+    disarmWatchdog();
+    inFlight = false;
+    broadcast(payload);
+  };
+
   const onCheckingForUpdate = (): void => {
-    inFlight = true;
     broadcast({ state: UpdaterStates.CHECKING });
   };
   const onUpdateNotAvailable = (): void => {
-    disarmWatchdog();
-    inFlight = false;
-    broadcast({ state: UpdaterStates.NOT_AVAILABLE });
+    settle({ state: UpdaterStates.NOT_AVAILABLE });
   };
   // Squirrel exposes no progress event or version until `update-downloaded`, so
   // emit AVAILABLE (no version) for a "downloading…" UI. Disarm the watchdog: the
@@ -78,15 +81,11 @@ export const createUpdaterService = (
     _releaseNotes: string,
     releaseName: string,
   ): void => {
-    disarmWatchdog();
-    inFlight = false;
-    broadcast({ state: UpdaterStates.READY, version: releaseName || app.getVersion() });
+    settle({ state: UpdaterStates.READY, version: releaseName || app.getVersion() });
   };
   const onError = (error: Error): void => {
     logger.error('autoUpdater error', error);
-    disarmWatchdog();
-    inFlight = false;
-    broadcast({ state: UpdaterStates.ERROR, message: error.message });
+    settle({ state: UpdaterStates.ERROR, message: error.message });
   };
 
   return {
@@ -108,14 +107,12 @@ export const createUpdaterService = (
         logger.info('autoUpdater disabled (not a packaged Windows build)');
       }
 
-      router.handle(IPC_CHANNELS.updaterInstall, (rawArgs) => {
-        assertNoIpcArgs(rawArgs, 'updater.install takes no arguments');
+      router.handleNoArgs(IPC_CHANNELS.updaterInstall, () => {
         if (!isSquirrelEnabled()) return;
         autoUpdater.quitAndInstall();
       });
 
-      router.handle(IPC_CHANNELS.updaterCheck, async (rawArgs) => {
-        assertNoIpcArgs(rawArgs, 'updater.check takes no arguments');
+      router.handleNoArgs(IPC_CHANNELS.updaterCheck, () => {
         // Gate on `registered`, not `isSquirrelEnabled()`: setFeedURL can throw,
         // leaving listeners unattached. Ack with a terminal event, don't drop it.
         if (!registered) {
@@ -128,14 +125,17 @@ export const createUpdaterService = (
         }
         try {
           logger.info('updaterCheck: invoking autoUpdater.checkForUpdates()');
+          // Claim the slot before the call, not from the async
+          // `checking-for-update` event: Squirrel emits that a tick later, so two
+          // invokes in the same tick would both pass the gate above and spawn two
+          // Update.exe cycles.
+          inFlight = true;
           armWatchdog();
           autoUpdater.checkForUpdates();
         } catch (error) {
           const err = error instanceof Error ? error : new Error(String(error));
           logger.error('autoUpdater check failed', err);
-          disarmWatchdog();
-          inFlight = false;
-          broadcast({ state: UpdaterStates.ERROR, message: err.message });
+          settle({ state: UpdaterStates.ERROR, message: err.message });
         }
       });
     },

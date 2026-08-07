@@ -11,8 +11,8 @@ export const GameSection = () => {
   const launchConsole = settings?.launch.console ?? false;
   const launchFullscreen = settings?.launch.fullscreen ?? false;
 
-  const handleToggle = async (key: 'console' | 'fullscreen', value: boolean) => {
-    await mutate({ launch: { [key]: value } });
+  const handleToggle = (key: 'console' | 'fullscreen', value: boolean): void => {
+    mutate({ launch: { [key]: value } });
   };
 
   return (
@@ -21,14 +21,14 @@ export const GameSection = () => {
         label={t('settings.game.console')}
         description={t('settings.game.consoleDesc')}
         checked={launchConsole}
-        onCheckedChange={(value) => void handleToggle('console', value)}
+        onCheckedChange={(value) => handleToggle('console', value)}
         disabled={isPending}
       />
       <SettingsSwitchRow
         label={t('settings.game.fullscreen')}
         description={t('settings.game.fullscreenDesc')}
         checked={launchFullscreen}
-        onCheckedChange={(value) => void handleToggle('fullscreen', value)}
+        onCheckedChange={(value) => handleToggle('fullscreen', value)}
         disabled={isPending}
       />
     </SettingsGroup>

@@ -1,4 +1,4 @@
-import { type IpcEventPayloads, emit } from '@shared/ipc';
+import { emit, type IpcEventPayloads } from '@shared/ipc';
 import type { BrowserWindow } from 'electron';
 
 type EventChannel = keyof IpcEventPayloads;

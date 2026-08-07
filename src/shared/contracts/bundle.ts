@@ -32,17 +32,17 @@ export const BUSY_BUNDLE_STATUSES: ReadonlySet<BundleSyncStatus> = new Set([
 ]);
 
 export const BundleErrorCodes = {
-  NO_CLIENT_FOLDER: 'noClientFolder',
-  MANIFEST_FETCH_FAILED: 'manifestFetchFailed',
-  MANIFEST_INVALID: 'manifestInvalid',
-  DOWNLOAD_FAILED: 'downloadFailed',
-  DOWNLOAD_INTEGRITY_FAILED: 'downloadIntegrityFailed',
-  DELETE_FAILED: 'deleteFailed',
-  UNSAFE_PATH: 'unsafePath',
-  HEAL_FAILED: 'healFailed',
-  ABORTED: 'aborted',
-  OP_IN_FLIGHT: 'opInFlight',
-  UNKNOWN: 'unknown',
+  NO_CLIENT_FOLDER: 'bundle/noClientFolder',
+  MANIFEST_FETCH_FAILED: 'bundle/manifestFetchFailed',
+  MANIFEST_INVALID: 'bundle/manifestInvalid',
+  DOWNLOAD_FAILED: 'bundle/downloadFailed',
+  DOWNLOAD_INTEGRITY_FAILED: 'bundle/downloadIntegrityFailed',
+  DELETE_FAILED: 'bundle/deleteFailed',
+  UNSAFE_PATH: 'bundle/unsafePath',
+  HEAL_FAILED: 'bundle/healFailed',
+  ABORTED: 'bundle/aborted',
+  OP_IN_FLIGHT: 'bundle/opInFlight',
+  UNKNOWN: 'bundle/unknown',
 } as const;
 
 export type BundleErrorCode = (typeof BundleErrorCodes)[keyof typeof BundleErrorCodes];
@@ -75,7 +75,7 @@ export const LocalManifestFileSchema = z.object({
 export const LocalManifestSchema = z.object({
   bundleSlug: BundleSlugSchema,
   // SHA-256 of the raw remote manifest JSON we synced from, for cheap
-  // upstream-change detection on the next checkStatus.
+  // upstream-change detection on the next getStatus.
   manifestHash: z.string(),
   syncedAt: z.string(),
   files: z.record(z.string(), LocalManifestFileSchema),
@@ -84,14 +84,14 @@ export const LocalManifestSchema = z.object({
 export type LocalManifest = z.infer<typeof LocalManifestSchema>;
 
 export const BundleStatusEventSchema = z.object({
-  slug: CatalogKeySchema,
+  key: CatalogKeySchema,
   status: BundleSyncStatusSchema,
 });
 
 export type BundleStatusEvent = z.infer<typeof BundleStatusEventSchema>;
 
 export const BundleProgressEventSchema = z.object({
-  slug: CatalogKeySchema,
+  key: CatalogKeySchema,
   status: BundleSyncStatusSchema,
   processedFiles: z.number().int().nonnegative(),
   totalFiles: z.number().int().nonnegative(),
@@ -101,14 +101,13 @@ export const BundleProgressEventSchema = z.object({
   toSkip: z.number().int().nonnegative(),
   bytesDownloaded: z.number().int().nonnegative(),
   bytesTotal: z.number().int().nonnegative(),
-  speedBytesPerSec: z.number().nonnegative(),
   currentFile: z.string().optional(),
 });
 
 export type BundleProgressEvent = z.infer<typeof BundleProgressEventSchema>;
 
 export const BundleErrorEventSchema = z.object({
-  slug: CatalogKeySchema,
+  key: CatalogKeySchema,
   code: BundleErrorCodeSchema,
   message: z.string(),
 });
@@ -125,7 +124,7 @@ export type BundleInstallState = {
 };
 
 export const BundleStartRequestSchema = z.object({
-  slug: CatalogKeySchema,
+  key: CatalogKeySchema,
   force: z.boolean().optional(),
 });
 

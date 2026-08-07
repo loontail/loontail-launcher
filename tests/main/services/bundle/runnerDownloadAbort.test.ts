@@ -16,7 +16,7 @@ import { createSyncTask } from '@main/services/bundle/syncState';
 import { BundleErrorCodes } from '@shared/contracts/bundle';
 import { asCatalogKey } from '@shared/contracts/ids';
 
-const SLUG = asCatalogKey('official:abort-client');
+const KEY = asCatalogKey('official:abort-client');
 const noopEmit: EmitProgress = () => undefined;
 
 const downloadPlan = (count: number): SyncPlan => ({
@@ -36,9 +36,8 @@ const downloadPlan = (count: number): SyncPlan => ({
 });
 
 describe('runDownloadPhase aborts siblings on first failure', () => {
-  // DLI-58
   it('aborts the task and stops sibling workers when a download fails', async () => {
-    const task = createSyncTask(SLUG, '/tmp/abort-client');
+    const task = createSyncTask(KEY, '/tmp/abort-client');
     // More files than workers, so without the abort each worker would shift a
     // second file after its first resolves.
     task.plan = downloadPlan(BUNDLE_DOWNLOAD_CONCURRENCY * 3);

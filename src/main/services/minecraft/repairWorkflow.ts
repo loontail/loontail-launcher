@@ -9,7 +9,7 @@ import { errorMessage } from '@main/infra/errorMessage';
 import type { CatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
 import type { Context } from './context';
-import type { ManagerEnv } from './env';
+import type { MinecraftEnv } from './env';
 import { classifyError } from './errors';
 import { repairMissingForgeProcessorOutputs } from './forgeProcessorHealing';
 import { persistTargetInstallManifest } from './installManifest';
@@ -27,8 +27,8 @@ type ForgeProcessorHealOptions = {
 };
 
 export type RepairFailureFinalizationInput = {
-  readonly env: ManagerEnv;
-  readonly slug: CatalogKey;
+  readonly env: MinecraftEnv;
+  readonly key: CatalogKey;
   readonly error: unknown;
   readonly signal: AbortSignal;
 };
@@ -37,18 +37,18 @@ export type RepairFailureFinalizationInput = {
 // finds on disk; UNVERIFIED collapses to the caller's not-ready status rather
 // than claiming INSTALLED.
 const emitPostOpStatus = async (
-  env: ManagerEnv,
-  slug: CatalogKey,
+  env: MinecraftEnv,
+  key: CatalogKey,
   notReadyStatus: typeof InstallStatuses.ERROR | typeof InstallStatuses.NOT_INSTALLED,
 ): Promise<void> => {
-  const presence = await resolveClientInstallPresence(slug);
+  const presence = await resolveClientInstallPresence(key);
   const status = presence === InstallStatuses.INSTALLED ? presence : notReadyStatus;
-  env.emitStatus({ slug, status, paused: false });
+  env.emitStatus({ key, status, paused: false });
 };
 
 export const verifyAndRepairBase = async (
-  env: ManagerEnv,
-  slug: CatalogKey,
+  env: MinecraftEnv,
+  key: CatalogKey,
   ctx: Context,
   options: RepairOptions,
 ): Promise<RepairAllReport> => {
@@ -62,9 +62,7 @@ export const verifyAndRepairBase = async (
       : await env.kit.repair.all(ctx.target, { ...options, shouldRepairIssue });
   const broken = [...report.repairs.keys()];
   env.logger.info(
-    broken.length === 0
-      ? `[${slug}] repair: clean`
-      : `[${slug}] repair: fixed ${broken.join(', ')}`,
+    broken.length === 0 ? `[${key}] repair: clean` : `[${key}] repair: fixed ${broken.join(', ')}`,
   );
   return report;
 };
@@ -87,22 +85,22 @@ const launchVersionResolvable = async (ctx: Context): Promise<boolean> =>
 // still cannot resolve, run the full idempotent install plan to build it; a thrown
 // error here surfaces as a real repair failure rather than a silent broken success.
 export const ensureLaunchable = async (
-  env: ManagerEnv,
-  slug: CatalogKey,
+  env: MinecraftEnv,
+  key: CatalogKey,
   ctx: Context,
   options: EnsureLaunchableOptions,
 ): Promise<void> => {
   if (await launchVersionResolvable(ctx)) return;
   env.logger.info(
-    `[${slug}] repair: launch version JSON missing — running a full install to rebuild it`,
+    `[${key}] repair: launch version JSON missing — running a full install to rebuild it`,
   );
   const plan = await env.kit.install.plan(ctx.target, { signal: options.signal });
   await options.runPlan(plan);
 };
 
 export const healForgeProcessors = async (
-  env: ManagerEnv,
-  slug: CatalogKey,
+  env: MinecraftEnv,
+  key: CatalogKey,
   ctx: Context,
   options: ForgeProcessorHealOptions,
 ): Promise<void> => {
@@ -111,35 +109,35 @@ export const healForgeProcessors = async (
   }
   const processorOutcome = await repairMissingForgeProcessorOutputs(
     env.kit,
-    slug,
+    key,
     ctx.target,
     env.forgeProcessorCache,
     options,
   );
   if (processorOutcome.ranProcessors) {
-    env.logger.info(`[${slug}] repair: re-ran ${processorOutcome.reranCount} forge processor(s)`);
+    env.logger.info(`[${key}] repair: re-ran ${processorOutcome.reranCount} forge processor(s)`);
   }
 };
 
 export const finalizeRepairSuccess = async (
-  env: ManagerEnv,
-  slug: CatalogKey,
+  env: MinecraftEnv,
+  key: CatalogKey,
   ctx: Context,
 ): Promise<void> => {
-  env.persistRuntime(slug, {
+  env.persistRuntime(key, {
     component: ctx.target.runtime.component,
     path: runtimePathFor(ctx.target.runtime.component),
   });
-  await persistTargetInstallManifest(slug, ctx.clientFolder, ctx.target, 'repair');
-  env.emitStatus({ slug, status: InstallStatuses.INSTALLED, paused: false });
+  await persistTargetInstallManifest(key, ctx.clientFolder, ctx.target, 'repair');
+  env.emitStatus({ key, status: InstallStatuses.INSTALLED, paused: false });
 };
 
 export const finalizeRepairCancellation = async (
-  env: ManagerEnv,
-  slug: CatalogKey,
+  env: MinecraftEnv,
+  key: CatalogKey,
 ): Promise<void> => {
-  env.logger.info(`[${slug}] repair: cancelled`);
-  await emitPostOpStatus(env, slug, InstallStatuses.NOT_INSTALLED);
+  env.logger.info(`[${key}] repair: cancelled`);
+  await emitPostOpStatus(env, key, InstallStatuses.NOT_INSTALLED);
 };
 
 export const finalizeRepairFailure = async (
@@ -147,7 +145,7 @@ export const finalizeRepairFailure = async (
 ): Promise<void> => {
   const code = classifyError(input.error, input.signal);
   const message = errorMessage(input.error);
-  input.env.logger.error(`[${input.slug}] repair: failed (${code}) - ${message}`, input.error);
-  input.env.emitError(input.slug, code, message);
-  await emitPostOpStatus(input.env, input.slug, InstallStatuses.ERROR);
+  input.env.logger.error(`[${input.key}] repair: failed (${code}) - ${message}`, input.error);
+  input.env.emitError(input.key, code, message);
+  await emitPostOpStatus(input.env, input.key, InstallStatuses.ERROR);
 };

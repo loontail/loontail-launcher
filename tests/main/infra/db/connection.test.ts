@@ -13,7 +13,7 @@ vi.mock('electron', () => ({
 
 import { existsSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { DB_FILE_NAME, closeDatabase, getDb } from '@main/infra/db/connection';
+import { closeDatabase, DB_FILE_NAME, getDb } from '@main/infra/db/connection';
 
 // Exercises the real better-sqlite3 binding under the Node ABI (vitest), so a
 // failure here also surfaces a missing/mismatched native build.

@@ -52,7 +52,7 @@ export const AccountIdleToolbar = ({
         size="sm"
         onClick={onReset}
         disabled={isBusy || !canReset}
-        className="ml-auto gap-1.5 whitespace-nowrap text-muted-foreground hover:text-foreground"
+        className="ml-auto gap-1.5 whitespace-nowrap text-text-mute hover:text-text-hi"
         title={t('settings.account.resetToDefault')}
       >
         <RotateCcw className="size-3.5" />
@@ -77,9 +77,7 @@ export const AccountPendingToolbar = ({
 
   return (
     <>
-      <span className="mr-auto text-xs text-muted-foreground">
-        {t('settings.account.unsavedHint')}
-      </span>
+      <span className="mr-auto text-xs text-text-mute">{t('settings.account.unsavedHint')}</span>
       <Button
         variant="ghost"
         size="sm"

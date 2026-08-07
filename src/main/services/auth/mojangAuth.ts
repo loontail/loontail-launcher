@@ -1,5 +1,5 @@
-import { asAzureClientId, isErrorCode, isMinecraftKitError } from '@loontail/minecraft-kit';
 import type { MojangSession as KitMojangSession, MinecraftKit } from '@loontail/minecraft-kit';
+import { asAzureClientId, isErrorCode, isMinecraftKitError } from '@loontail/minecraft-kit';
 import { mainConfig } from '@main/config';
 import { HTTP_UNAUTHORIZED } from '@main/constants/http';
 import { scopedLogger } from '@main/infra/logger';

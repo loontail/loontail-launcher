@@ -23,7 +23,7 @@ const formatCacheSize = (bytes: number | undefined): string =>
 const VersionRow = () => {
   const versionQuery = useAppVersion();
   return (
-    <span className="text-sm text-muted-foreground">
+    <span className="text-sm text-text-mute">
       {versionQuery.isPending ? '…' : (versionQuery.data ?? 'unknown')}
     </span>
   );
@@ -34,7 +34,8 @@ export const LauncherSection = () => {
   const queryClient = useQueryClient();
   const updateStatus = useUpdaterStatus();
   const { bytes: cacheBytes } = useMediaCacheSize();
-  const { mutate: clearMediaCache, isPending: isClearingCache } = useClearMediaCache();
+  // clearLauncherCache awaits this and downgrades a failure to a warning toast.
+  const { mutateAsync: clearMediaCache, isPending: isClearingCache } = useClearMediaCache();
   const isReady = updateStatus?.state === UpdaterStates.READY;
   const isBusy =
     updateStatus?.state === UpdaterStates.CHECKING ||

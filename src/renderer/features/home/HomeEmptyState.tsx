@@ -1,4 +1,4 @@
-import backdrop from '@renderer/assets/backgrounds/6.png';
+import backdrop from '@renderer/assets/backgrounds/6.webp';
 import { useNavigationStore } from '@renderer/shared/lib/stores/navigation';
 import { Button } from '@renderer/shared/ui/Button';
 import { Boxes } from 'lucide-react';
@@ -10,7 +10,13 @@ export const HomeEmptyState = () => {
 
   return (
     <div className="relative h-full overflow-hidden">
-      <img src={backdrop} alt="" aria-hidden className="absolute inset-0 size-full object-cover" />
+      <img
+        src={backdrop}
+        alt=""
+        aria-hidden
+        decoding="async"
+        className="absolute inset-0 size-full object-cover"
+      />
       <div className="absolute inset-0 bg-canvas/30" />
       <div className="absolute inset-0 bg-linear-to-r from-canvas via-transparent to-canvas" />
       <div className="absolute inset-0 bg-linear-to-b from-canvas/40 via-transparent to-canvas" />

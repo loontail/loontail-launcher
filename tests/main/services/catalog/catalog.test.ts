@@ -175,3 +175,18 @@ describe('OfficialCatalogSource', () => {
     await expect(src.listItems()).rejects.toThrow('offline');
   });
 });
+
+describe('createCatalog locale forwarding', () => {
+  it('resolves a build with the locale the catalog was last listed with', async () => {
+    // Dropping it renders default-locale titles on launch/console AND pays a
+    // second /api/clients round trip, because the client cache is keyed by locale.
+    const listClients = vi.fn(async (_locale?: string): Promise<Client[]> => []);
+    const official = createOfficialCatalogSource({ listClients });
+    const catalog = createCatalog([official]);
+
+    await catalog.list('uk');
+    await catalog.resolveBuildByKey('official:demo' as never);
+
+    expect(listClients.mock.calls).toEqual([['uk'], ['uk']]);
+  });
+});

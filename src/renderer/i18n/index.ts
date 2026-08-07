@@ -2,6 +2,7 @@ import i18n from 'i18next';
 import { initReactI18next, type useTranslation } from 'react-i18next';
 
 export type Translator = ReturnType<typeof useTranslation>['t'];
+
 import en from './locales/en.json';
 import uk from './locales/uk.json';
 

@@ -1,4 +1,4 @@
-import { assertNoIpcArgs, parseIpcArgs } from '@main/ipc/parseArgs';
+import { parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
 import type { SkinHandlers } from '@main/services/skin/skin';
 import { UploadSkinPayloadSchema } from '@shared/contracts/skin';
@@ -10,8 +10,7 @@ export const registerSkinRoutes = (router: Router, handlers: SkinHandlers): void
     return handlers.uploadSkin(payload);
   });
 
-  router.handle(IPC_CHANNELS.mediaClearSkin, (rawArgs) => {
-    assertNoIpcArgs(rawArgs, 'media.clearSkin takes no arguments');
+  router.handleNoArgs(IPC_CHANNELS.mediaClearSkin, () => {
     return handlers.clearSkin();
   });
 };

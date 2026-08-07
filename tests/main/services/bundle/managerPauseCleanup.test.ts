@@ -20,20 +20,21 @@ const managerMocks = vi.hoisted(() => {
 });
 
 import { BUNDLE_PAUSED_SYNC_MAX_IDLE_MS } from '@main/constants/bundle';
+import { markPaused } from '@main/infra/lifecyclePhase';
 import type { BundleBroadcaster } from '@main/services/bundle/broadcast';
 import { BundleError } from '@main/services/bundle/errors';
 import type { Healer } from '@main/services/bundle/healer';
 import { BundleManager } from '@main/services/bundle/manager';
 import type { SyncPlan } from '@main/services/bundle/plan';
 import type { SyncPhasesResult, SyncTask } from '@main/services/bundle/runner';
-import { type ActiveSync, type SyncStateMap, markPaused } from '@main/services/bundle/syncState';
+import type { ActiveSync, SyncStateMap } from '@main/services/bundle/syncState';
 import {
   ClientOperationDomains,
   ClientOperationResources,
   createClientOperationLocks,
 } from '@main/services/clientOperationLocks';
 import { BundleErrorCodes, BundleSyncStatuses } from '@shared/contracts/bundle';
-import { type BundleSlug, type CatalogKey, asCatalogKey } from '@shared/contracts/ids';
+import { asCatalogKey, type BundleSlug, type CatalogKey } from '@shared/contracts/ids';
 import { seedActiveSync } from '../../../helpers/bundleSync';
 import { makeBroadcaster, makeHealer, makeLauncherSettings } from '../../../helpers/fixtures';
 
@@ -73,7 +74,7 @@ vi.mock('@main/services/bundle/runner', async (importOriginal) => {
 
 type Awaiter = { resolve: () => void; reject: (err: Error) => void };
 
-const SLUG = asCatalogKey('official:test-client');
+const KEY = asCatalogKey('official:test-client');
 const BUNDLE_SLUG = 'bundle-x';
 const CLIENT_FOLDER = '/tmp/client';
 
@@ -113,7 +114,7 @@ const DOWNLOAD_PLAN: SyncPlan = {
 };
 
 const launcherSettings = () =>
-  makeLauncherSettings({ clients: { [SLUG]: { storage: { clientFolder: CLIENT_FOLDER } } } });
+  makeLauncherSettings({ clients: { [KEY]: { storage: { clientFolder: CLIENT_FOLDER } } } });
 
 const seedPausedActive = (
   manager: BundleManager,
@@ -121,22 +122,22 @@ const seedPausedActive = (
   awaiter: Awaiter,
 ): ActiveSync => {
   const active = seedActiveSync(activeSyncs, {
-    slug: SLUG,
+    key: KEY,
     clientFolder: CLIENT_FOLDER,
     bundleSlug: BUNDLE_SLUG as BundleSlug,
     forLaunch: true,
     paused: true,
   });
   active.awaiters.push(awaiter);
-  // why: a real paused sync arms the idle auto-cancel timer inside pauseSync,
+  // why: a real paused sync arms the idle auto-cancel timer inside pause,
   // which the seeded snapshot reconstructs directly. Reaching the private method
   // (not the activeSyncs field) keeps the seam test-visible without re-exposing
   // the store internals.
   (
     manager as unknown as {
-      armPauseIdleTimer: (slug: CatalogKey, active: ActiveSync) => void;
+      armPauseIdleTimer: (key: CatalogKey, active: ActiveSync) => void;
     }
-  ).armPauseIdleTimer(SLUG, active);
+  ).armPauseIdleTimer(KEY, active);
   return active;
 };
 
@@ -207,16 +208,16 @@ describe('BundleManager pause cleanup', () => {
     };
 
     seedPausedActive(manager, activeSyncs, awaiter);
-    expect(activeSyncs.has(SLUG)).toBe(true);
+    expect(activeSyncs.has(KEY)).toBe(true);
 
-    manager.cancelSync(SLUG);
+    manager.cancel(KEY);
 
-    expect(activeSyncs.has(SLUG)).toBe(false);
+    expect(activeSyncs.has(KEY)).toBe(false);
     expect(rejected).toHaveLength(1);
     const err = rejected[0] as Error & { code?: string };
     expect(err.code).toBe(BundleErrorCodes.ABORTED);
     expect(broadcaster.status).toHaveBeenCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: BundleSyncStatuses.CANCELLED,
     });
   });
@@ -225,7 +226,7 @@ describe('BundleManager pause cleanup', () => {
     managerMocks.getClient.mockResolvedValue({ bundleSlug: BUNDLE_SLUG });
     const operationLocks = createClientOperationLocks();
     const minecraftLock = operationLocks.acquire({
-      slug: SLUG,
+      key: KEY,
       domain: ClientOperationDomains.MINECRAFT,
       resources: [ClientOperationResources.CLIENT_FOLDER],
     });
@@ -234,7 +235,7 @@ describe('BundleManager pause cleanup', () => {
     try {
       const manager = new BundleManager(makeBroadcaster(), makeHealer(), operationLocks);
 
-      await expect(manager.startSync({ slug: SLUG })).rejects.toMatchObject({
+      await expect(manager.start({ key: KEY })).rejects.toMatchObject({
         code: BundleErrorCodes.OP_IN_FLIGHT,
       });
       expect(managerMocks.fetchRemoteManifest).not.toHaveBeenCalled();
@@ -286,16 +287,16 @@ describe('BundleManager pause cleanup', () => {
     };
 
     seedPausedActive(manager, activeSyncs, awaiter);
-    expect(activeSyncs.has(SLUG)).toBe(true);
+    expect(activeSyncs.has(KEY)).toBe(true);
 
     vi.advanceTimersByTime(BUNDLE_PAUSED_SYNC_MAX_IDLE_MS + 1);
 
-    expect(activeSyncs.has(SLUG)).toBe(false);
+    expect(activeSyncs.has(KEY)).toBe(false);
     expect(rejected).toHaveLength(1);
     const err = rejected[0] as Error & { code?: string };
     expect(err.code).toBe(BundleErrorCodes.ABORTED);
     expect(broadcaster.status).toHaveBeenCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: BundleSyncStatuses.CANCELLED,
     });
   });
@@ -311,7 +312,7 @@ describe('BundleManager pause cleanup', () => {
       createClientOperationLocks(),
     );
 
-    await freshManager.startSync({ slug: SLUG });
+    await freshManager.start({ key: KEY });
 
     const freshStatuses = statusEvents(freshBroadcaster);
     expect(freshStatuses).toEqual([
@@ -336,10 +337,10 @@ describe('BundleManager pause cleanup', () => {
       },
     });
 
-    resumeManager.resumeSync(SLUG);
+    resumeManager.resume(KEY);
 
     await vi.waitFor(() => {
-      expect(activeSyncs.has(SLUG)).toBe(false);
+      expect(activeSyncs.has(KEY)).toBe(false);
     });
 
     // The seeded paused sync carries an empty remote-manifest hash (the
@@ -378,9 +379,9 @@ describe('BundleManager pause cleanup', () => {
       activeSyncs,
     );
 
-    await manager.startSync({ slug: SLUG });
+    await manager.start({ key: KEY });
 
-    expect(activeSyncs.has(SLUG)).toBe(true);
+    expect(activeSyncs.has(KEY)).toBe(true);
     expect(managerMocks.saveLocalManifest).not.toHaveBeenCalled();
     expect(healer.healAfterDeletes).not.toHaveBeenCalled();
     expect(statusEvents(broadcaster)).toEqual([
@@ -399,7 +400,7 @@ describe('BundleManager pause cleanup', () => {
     });
     managerMocks.runSyncPhases.mockResolvedValueOnce(syncResult('completed', true));
     const healer: Healer = {
-      healAfterDeletes: vi.fn(async (_slug, _bundleOwnedPaths, options) => {
+      healAfterDeletes: vi.fn(async (_key, _bundleOwnedPaths, options) => {
         const event = {
           type: EventTypes.VERIFY_FILE_CHECKED,
           file: {
@@ -414,7 +415,7 @@ describe('BundleManager pause cleanup', () => {
     const broadcaster = makeBroadcaster();
     const manager = new BundleManager(broadcaster, healer, createClientOperationLocks());
 
-    await manager.startSync({ slug: SLUG });
+    await manager.start({ key: KEY });
 
     expect(statusEvents(broadcaster)).toEqual([
       BundleSyncStatuses.FETCHING_MANIFEST,
@@ -434,7 +435,7 @@ describe('BundleManager pause cleanup', () => {
     expect(broadcaster.progress).toHaveBeenCalledTimes(1);
   });
 
-  // BUG-5: a cancel that lands after heal resolves but before the COMPLETED
+  // A cancel that lands after heal resolves but before the COMPLETED
   // settle must surface CANCELLED (and reject a forLaunch awaiter), not COMPLETED.
   it('emits CANCELLED and rejects the launch awaiter when cancel lands after heal', async () => {
     vi.useRealTimers();
@@ -451,14 +452,14 @@ describe('BundleManager pause cleanup', () => {
     const ref: { manager?: BundleManager } = {};
     const healer: Healer = {
       healAfterDeletes: vi.fn(async () => {
-        ref.manager?.cancelSync(SLUG);
+        ref.manager?.cancel(KEY);
       }),
     };
     const broadcaster = makeBroadcaster();
     const manager = new BundleManager(broadcaster, healer, createClientOperationLocks());
     ref.manager = manager;
 
-    const result = await manager.syncForLaunch(SLUG).then(
+    const result = await manager.syncForLaunch(KEY).then(
       () => ({ kind: 'resolved' as const }),
       (error: unknown) => ({ kind: 'rejected' as const, error }),
     );
@@ -482,7 +483,7 @@ describe('BundleManager pause cleanup', () => {
     const broadcaster = makeBroadcaster();
     const manager = new BundleManager(broadcaster, makeHealer(), createClientOperationLocks());
     let settled = false;
-    const launchResult = manager.syncForLaunch(SLUG).then(
+    const launchResult = manager.syncForLaunch(KEY).then(
       () => {
         settled = true;
         return { kind: 'resolved' as const };
@@ -497,7 +498,7 @@ describe('BundleManager pause cleanup', () => {
       expect(managerMocks.runSyncPhases).toHaveBeenCalledTimes(1);
     });
 
-    manager.pauseSync(SLUG);
+    manager.pause(KEY);
 
     await vi.waitFor(() => {
       expect(statusEvents(broadcaster)).toContain(BundleSyncStatuses.PAUSED);
@@ -506,7 +507,7 @@ describe('BundleManager pause cleanup', () => {
     await Promise.resolve();
     expect(settled).toBe(false);
 
-    manager.resumeSync(SLUG);
+    manager.resume(KEY);
 
     await expect(launchResult).resolves.toEqual({ kind: 'resolved' });
     expect(statusEvents(broadcaster)).toEqual([
@@ -526,7 +527,7 @@ describe('BundleManager pause cleanup', () => {
 
     const broadcaster = makeBroadcaster();
     const manager = new BundleManager(broadcaster, makeHealer(), createClientOperationLocks());
-    const launchResult = manager.syncForLaunch(SLUG).then(
+    const launchResult = manager.syncForLaunch(KEY).then(
       () => ({ kind: 'resolved' as const }),
       (error: unknown) => ({ kind: 'rejected' as const, error }),
     );
@@ -535,13 +536,13 @@ describe('BundleManager pause cleanup', () => {
       expect(managerMocks.runSyncPhases).toHaveBeenCalledTimes(1);
     });
 
-    manager.pauseSync(SLUG);
+    manager.pause(KEY);
 
     await vi.waitFor(() => {
       expect(statusEvents(broadcaster)).toContain(BundleSyncStatuses.PAUSED);
     });
 
-    manager.cancelSync(SLUG);
+    manager.cancel(KEY);
 
     const result = await launchResult;
     expect(result.kind).toBe('rejected');

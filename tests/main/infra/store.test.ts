@@ -58,6 +58,7 @@ const yggMetadata = {
 };
 
 const YGG_SESSION_TOKEN = 'session-token';
+const YGG_SESSION_EXPIRES_AT = Date.UTC(2099, 0, 1);
 
 // Seed the legacy electron-store layout so initStore's one-time import runs.
 const writeLegacyStore = (payload: Record<string, unknown>): void => {
@@ -121,7 +122,7 @@ describe('getStoredAuth', () => {
     store.initStore();
     store.setStoredAuth(
       { ...yggMetadata, accessToken: 'access', clientToken: 'client' },
-      YGG_SESSION_TOKEN,
+      { token: YGG_SESSION_TOKEN, expiresAt: YGG_SESSION_EXPIRES_AT },
     );
 
     const session = store.getStoredAuth();
@@ -132,6 +133,56 @@ describe('getStoredAuth', () => {
     // The session token rides inside the encrypted secret and is readable back.
     expect(store.getStoredSessionToken()).toBe(YGG_SESSION_TOKEN);
     expect(loggerMocks.warn).not.toHaveBeenCalled();
+  });
+
+  it('round-trips the API bearer expiry alongside the token', () => {
+    store.initStore();
+    store.setStoredAuth(
+      { ...yggMetadata, accessToken: 'access', clientToken: 'client' },
+      { token: YGG_SESSION_TOKEN, expiresAt: YGG_SESSION_EXPIRES_AT },
+    );
+
+    expect(store.getStoredApiSession()).toEqual({
+      token: YGG_SESSION_TOKEN,
+      expiresAt: YGG_SESSION_EXPIRES_AT,
+    });
+    // The expiry is not secret, but it lives inside the encrypted blob so one
+    // decrypt yields the whole API session.
+    expect(authRow()?.metadata).not.toContain(String(YGG_SESSION_EXPIRES_AT));
+  });
+
+  it('reads a secret written without an expiry as unknown rather than dropping the session', () => {
+    // CON-06 migration path: blobs written before expiry tracking must keep
+    // authenticating; a null expiry tells the caller to refresh once.
+    store.initStore();
+    getDb()
+      .prepare('INSERT INTO auth_account (id, metadata, secret) VALUES (1, ?, ?)')
+      .run(
+        JSON.stringify(yggMetadata),
+        Buffer.from(
+          JSON.stringify({
+            version: 2,
+            provider: 'yggdrasil',
+            accessToken: 'access',
+            clientToken: 'client',
+            sessionToken: YGG_SESSION_TOKEN,
+          }),
+          'utf8',
+        ),
+      );
+
+    expect(store.getStoredApiSession()).toEqual({ token: YGG_SESSION_TOKEN, expiresAt: null });
+    expect(store.getStoredAuth()).toMatchObject({ provider: 'yggdrasil', accessToken: 'access' });
+  });
+
+  it('persists a null expiry when the server omitted one', () => {
+    store.initStore();
+    store.setStoredAuth(
+      { ...yggMetadata, accessToken: 'access', clientToken: 'client' },
+      { token: YGG_SESSION_TOKEN, expiresAt: null },
+    );
+
+    expect(store.getStoredApiSession()).toEqual({ token: YGG_SESSION_TOKEN, expiresAt: null });
   });
 
   it('drops a legacy version-1 secret (no session token) and forces a fresh sign-in', () => {
@@ -151,6 +202,74 @@ describe('getStoredAuth', () => {
 
     expect(store.getStoredAuth()).toBeNull();
     expect(store.getStoredSessionToken()).toBeNull();
+  });
+
+  it('serves repeated bearer reads from memory instead of decrypting per call', () => {
+    // The bearer is read once per bundle file request and per media fetch, so a
+    // sqlite hit + synchronous DPAPI decrypt per call was thousands of
+    // round-trips on a large bundle sync (LM-08).
+    store.initStore();
+    store.setStoredAuth(
+      { ...yggMetadata, accessToken: 'access', clientToken: 'client' },
+      { token: YGG_SESSION_TOKEN, expiresAt: YGG_SESSION_EXPIRES_AT },
+    );
+    store.getStoredSessionToken();
+    safeStorageMocks.decryptString.mockClear();
+
+    for (let i = 0; i < 25; i++) {
+      expect(store.getStoredSessionToken()).toBe(YGG_SESSION_TOKEN);
+    }
+
+    expect(safeStorageMocks.decryptString).not.toHaveBeenCalled();
+  });
+
+  it('serves the rotated bearer on the first read after a refresh persisted it', () => {
+    // Rotation is single-use server-side: a stale cached bearer would burn the
+    // new token on the next request.
+    store.initStore();
+    store.setStoredAuth(
+      { ...yggMetadata, accessToken: 'access', clientToken: 'client' },
+      { token: YGG_SESSION_TOKEN, expiresAt: YGG_SESSION_EXPIRES_AT },
+    );
+    expect(store.getStoredSessionToken()).toBe(YGG_SESSION_TOKEN);
+
+    store.setStoredAuth(
+      { ...yggMetadata, accessToken: 'access', clientToken: 'client' },
+      { token: 'rotated-session-token', expiresAt: YGG_SESSION_EXPIRES_AT },
+    );
+
+    expect(store.getStoredSessionToken()).toBe('rotated-session-token');
+    expect(store.getStoredApiSession()).toEqual({
+      token: 'rotated-session-token',
+      expiresAt: YGG_SESSION_EXPIRES_AT,
+    });
+  });
+
+  it('stops serving the bearer once the session is cleared', () => {
+    store.initStore();
+    store.setStoredAuth(
+      { ...yggMetadata, accessToken: 'access', clientToken: 'client' },
+      { token: YGG_SESSION_TOKEN, expiresAt: YGG_SESSION_EXPIRES_AT },
+    );
+    expect(store.getStoredSessionToken()).toBe(YGG_SESSION_TOKEN);
+
+    store.clearStoredAuth();
+
+    expect(store.getStoredSessionToken()).toBeNull();
+  });
+
+  it('does not cache a decrypt failure so a transient secure-storage outage recovers', () => {
+    store.initStore();
+    store.setStoredAuth(
+      { ...yggMetadata, accessToken: 'access', clientToken: 'client' },
+      { token: YGG_SESSION_TOKEN, expiresAt: YGG_SESSION_EXPIRES_AT },
+    );
+    safeStorageMocks.decryptString.mockImplementationOnce(() => {
+      throw new Error('keyring busy');
+    });
+
+    expect(store.getStoredSessionToken()).toBeNull();
+    expect(store.getStoredSessionToken()).toBe(YGG_SESSION_TOKEN);
   });
 
   it('migrates a legacy plaintext Yggdrasil session by forcing a fresh sign-in', () => {
@@ -286,10 +405,10 @@ describe('getStoredAuth', () => {
     store.initStore();
     store.setStoredAuth(
       { ...yggMetadata, accessToken: 'access', clientToken: 'client' },
-      YGG_SESSION_TOKEN,
+      { token: YGG_SESSION_TOKEN, expiresAt: YGG_SESSION_EXPIRES_AT },
     );
     // A keyring/DBus hiccup: decrypt is impossible right now, but the row is
-    // still valid and must survive for the next read (BUG-3, transient branch).
+    // still valid and must survive for the next read (transient branch).
     safeStorageMocks.isEncryptionAvailable.mockReturnValue(false);
 
     expect(store.getStoredAuth()).toBeNull();
@@ -304,10 +423,10 @@ describe('getStoredAuth', () => {
     store.initStore();
     store.setStoredAuth(
       { ...yggMetadata, accessToken: 'access', clientToken: 'client' },
-      YGG_SESSION_TOKEN,
+      { token: YGG_SESSION_TOKEN, expiresAt: YGG_SESSION_EXPIRES_AT },
     );
     // Secure storage is available, but the blob no longer decrypts/validates:
-    // a genuinely corrupt secret IS destructive (BUG-3, corrupt branch).
+    // a genuinely corrupt secret IS destructive (corrupt branch).
     safeStorageMocks.decryptString.mockImplementation(() => {
       throw new Error('bad ciphertext');
     });
@@ -322,7 +441,7 @@ describe('clearStoredAuth', () => {
     store.initStore();
     store.setStoredAuth(
       { ...yggMetadata, accessToken: 'access', clientToken: 'client' },
-      YGG_SESSION_TOKEN,
+      { token: YGG_SESSION_TOKEN, expiresAt: YGG_SESSION_EXPIRES_AT },
     );
     expect(authRow()).toBeDefined();
 
@@ -438,8 +557,8 @@ describe('initStore', () => {
     });
     store.initStore();
 
-    expect(store.getStoredInstanceRegistry().instances).toHaveLength(1);
-    expect(store.getStoredInstanceRegistry().instances[0]?.name).toBe('Build A');
+    expect(store.getStoredLocalBuildRegistry().instances).toHaveLength(1);
+    expect(store.getStoredLocalBuildRegistry().instances[0]?.name).toBe('Build A');
     expect(store.getLastPlayed()).toEqual({ 'local:abc': 1700000000000 });
   });
 

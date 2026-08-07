@@ -1,2 +1,2 @@
 export { HomePage } from './HomePage';
-export { useRecentBuilds, type UseRecentBuildsResult } from './useRecentBuilds';
+export { type UseRecentBuildsResult, useRecentBuilds } from './useRecentBuilds';

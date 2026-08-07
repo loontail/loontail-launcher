@@ -104,6 +104,7 @@ export const Modal = ({
   if (!isOpen) return null;
 
   return createPortal(
+    // biome-ignore lint/a11y/noStaticElementInteractions: click-away backdrop; the keyboard route out is the window-level Escape handler above
     <div
       className={cn(
         'fixed inset-0 z-50 flex bg-backdrop/80',
@@ -115,13 +116,12 @@ export const Modal = ({
     >
       <div
         ref={dialogRef}
-        // biome-ignore lint/a11y/useSemanticElements: <dialog> requires imperative showModal/close which doesn't compose with React's render-driven open state
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}
         onMouseDown={(event) => event.stopPropagation()}
         className={cn(
-          'glass relative flex w-full max-w-lg flex-col gap-4 rounded-lg border border-border p-6 shadow-2xl',
+          'glass relative flex w-full max-w-lg flex-col gap-4 rounded-lg border border-edge p-6 shadow-2xl',
           className,
         )}
       >

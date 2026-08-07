@@ -8,26 +8,26 @@ import type { BundleManager } from './manager';
 export const registerBundleRoutes = (router: Router, manager: BundleManager): void => {
   router.handle(IPC_CHANNELS.bundleStart, async (rawArgs) => {
     const payload = parseIpcArgs(BundleStartRequestSchema, rawArgs, 'Invalid bundle start request');
-    await manager.startSync(payload);
+    await manager.start(payload);
   });
 
   router.handle(IPC_CHANNELS.bundlePause, (rawArgs) => {
     const key = parseIpcArgs(CatalogKeySchema, rawArgs, KEY_REQUIRED_MSG);
-    manager.pauseSync(key);
+    manager.pause(key);
   });
 
   router.handle(IPC_CHANNELS.bundleResume, async (rawArgs) => {
     const key = parseIpcArgs(CatalogKeySchema, rawArgs, KEY_REQUIRED_MSG);
-    await manager.resumeSync(key);
+    await manager.resume(key);
   });
 
   router.handle(IPC_CHANNELS.bundleCancel, (rawArgs) => {
     const key = parseIpcArgs(CatalogKeySchema, rawArgs, KEY_REQUIRED_MSG);
-    manager.cancelSync(key);
+    manager.cancel(key);
   });
 
-  router.handle(IPC_CHANNELS.bundleCheckStatus, async (rawArgs) => {
+  router.handle(IPC_CHANNELS.bundleGetStatus, async (rawArgs) => {
     const key = parseIpcArgs(CatalogKeySchema, rawArgs, KEY_REQUIRED_MSG);
-    return manager.getInstallState(key);
+    return manager.getStatus(key);
   });
 };

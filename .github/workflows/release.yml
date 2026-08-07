@@ -4,37 +4,70 @@ on:
   push:
     branches: [main]
 
+# Read-only by default. `contents: write` exists on the `publish` job ONLY, which
+# runs no third-party code: it never calls `npm ci` and never executes the test
+# suite. why: the GitHub Release assets ARE the auto-update channel (Squirrel
+# pulls RELEASES + .nupkg from them), so a token able to rewrite them is a token
+# able to ship auto-executed code to every user. It must not be ambient while a
+# dependency's install or test script runs.
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 # Required secrets:
-#   API_URL            — launcher API base URL baked into the build
-#   API_TOKEN          — launcher API token baked into the build
 #   RELEASE_TOKEN      — fine-grained PAT (Contents: read/write) belonging to a
 #                        user in the repo's branch ruleset bypass list. Used by
-#                        the bump job to push the version commit directly to
+#                        the publish job to push the version commit directly to
 #                        `main`, since the default `GITHUB_TOKEN` is not in the
 #                        bypass list and the ruleset requires PRs for direct
 #                        pushes.
 #
-# Optional secrets:
+# Required repository VARIABLES (Settings → Secrets and variables → Actions →
+# Variables). These were Actions secrets; they are not secret. All three are
+# baked into the shipped bundles by electron.vite.config.ts `define()`, so they
+# are extractable from any installer, and storing them as secrets only made the
+# runner redact your own API URL out of build logs:
+#   API_URL            — launcher API base URL baked into the build (required)
 #   MOJANG_CLIENT_ID   — Azure AD application id baked into the build to enable
 #                        the "Sign in with Microsoft" button. Without it, the
 #                        Yggdrasil-account login still works but MS sign-in fails
 #                        with a generic error.
 #   NETWORK_API_URL    — base URL of the Loontail in-game network service baked
-#                        into the build for the embedded network agent. Without
-#                        it the overlay ships but stays offline (no network).
+#                        into the build and handed to the in-game network mod at
+#                        launch, together with the API session bearer. It is
+#                        served by the same deployment as API_URL, so set it to
+#                        the same value; a different origin rejects the bearer.
+#                        Without it neither the URL nor the bearer is injected
+#                        and the mod stays offline.
 #
 # Loop guard: the bump commit (`chore(release): vX.Y.Z`) triggers this workflow
 # again; the guard job short-circuits when the commit message begins with
 # `chore(release):` so the release does not chain into itself.
+#
+# Ordering: verify -> package -> (tag + publish). The version is applied to the
+# working tree in `package` WITHOUT being committed, so a failed build leaves no
+# `chore(release):` commit and no tag on main — main never carries a version that
+# has no artefacts.
+#
+# NOT CLOSED by this workflow: the installer is not Authenticode-signed
+# (electron-builder.yml has no certificateFile/azureSignOptions and no CSC_LINK
+# is provided), so Windows still shows SmartScreen warnings and Squirrel still
+# trusts nothing but the SHA1 in the RELEASES file it fetched from the same feed.
+# Closing that needs a real certificate (Azure Trusted Signing or an EV cert) and
+# a `sign` step in the publish job. What IS closed here: build provenance
+# attestation over the published artefacts, a published SHA256SUMS.txt, and the
+# release-writing token no longer being reachable from dependency code.
 
 jobs:
   guard:
     runs-on: ubuntu-latest
     outputs:
       proceed: ${{ steps.check.outputs.proceed }}
+      version: ${{ steps.next.outputs.version }}
+      tag: ${{ steps.next.outputs.tag }}
     steps:
       - id: check
         env:
@@ -46,69 +79,49 @@ jobs:
             echo "proceed=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Ensure required secrets are configured
+      - name: Ensure required configuration is present
         if: steps.check.outputs.proceed == 'true'
         env:
-          API_URL: ${{ secrets.API_URL }}
-          API_TOKEN: ${{ secrets.API_TOKEN }}
+          API_URL: ${{ vars.API_URL }}
           RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
         run: |
           missing=()
-          [ -z "$API_URL" ] && missing+=("API_URL")
-          [ -z "$API_TOKEN" ] && missing+=("API_TOKEN")
-          [ -z "$RELEASE_TOKEN" ] && missing+=("RELEASE_TOKEN")
+          [ -z "$API_URL" ] && missing+=("vars.API_URL")
+          [ -z "$RELEASE_TOKEN" ] && missing+=("secrets.RELEASE_TOKEN")
           if [ ${#missing[@]} -gt 0 ]; then
-            echo "::error::Missing required secret(s): ${missing[*]}. Set them under Settings → Secrets and variables → Actions before pushing to main."
+            echo "::error::Missing required configuration: ${missing[*]}. API_URL/MOJANG_CLIENT_ID/NETWORK_API_URL are repository VARIABLES now, not secrets — set them under Settings → Secrets and variables → Actions → Variables."
             exit 1
           fi
 
-  bump:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        if: steps.check.outputs.proceed == 'true'
+        with:
+          persist-credentials: false
+
+      # Computed once and reused by package + publish so both apply the SAME
+      # version — the installer and the tag can never disagree.
+      - name: Compute next version
+        id: next
+        if: steps.check.outputs.proceed == 'true'
+        run: |
+          set -euo pipefail
+          # This checkout is throwaway, so let npm own the semver arithmetic; the
+          # package and publish jobs then apply this exact version explicitly.
+          npm version patch --no-git-tag-version >/dev/null
+          version=$(node -p "require('./package.json').version")
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+
+  verify:
     needs: guard
     if: needs.guard.outputs.proceed == 'true'
     runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.bump.outputs.version }}
-      tag: ${{ steps.bump.outputs.tag }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
-          fetch-depth: 0
-          # PAT belongs to a repo admin (bypass list), so the push below
-          # bypasses the "Require pull request" ruleset.
-          token: ${{ secrets.RELEASE_TOKEN }}
+          persist-credentials: false
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
-      - name: Configure git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Bump patch version
-        id: bump
-        run: |
-          version=$(npm version patch --no-git-tag-version)
-          plain="${version#v}"
-          tag="v${plain}"
-          git add package.json package-lock.json
-          git commit -m "chore(release): ${tag}"
-          git tag "${tag}"
-          git push origin HEAD:main
-          git push origin "${tag}"
-          echo "version=${plain}" >> "$GITHUB_OUTPUT"
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-
-  build:
-    needs: bump
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.bump.outputs.tag }}
-
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: npm
@@ -118,17 +131,148 @@ jobs:
 
       - name: Verify
         env:
-          API_URL: ${{ secrets.API_URL }}
-          API_TOKEN: ${{ secrets.API_TOKEN }}
-          MOJANG_CLIENT_ID: ${{ secrets.MOJANG_CLIENT_ID }}
-          NETWORK_API_URL: ${{ secrets.NETWORK_API_URL }}
+          API_URL: ${{ vars.API_URL }}
+          MOJANG_CLIENT_ID: ${{ vars.MOJANG_CLIENT_ID }}
+          NETWORK_API_URL: ${{ vars.NETWORK_API_URL }}
         run: npm run verify
 
-      - name: Build & publish installer
+  package:
+    needs: [guard, verify]
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Applied to the working tree only — nothing is committed here. The tag is
+      # created by `publish`, after this job has produced an installer.
+      - name: Apply release version
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          API_URL: ${{ secrets.API_URL }}
-          API_TOKEN: ${{ secrets.API_TOKEN }}
-          MOJANG_CLIENT_ID: ${{ secrets.MOJANG_CLIENT_ID }}
-          NETWORK_API_URL: ${{ secrets.NETWORK_API_URL }}
-        run: npx electron-builder --win --publish always
+          VERSION: ${{ needs.guard.outputs.version }}
+        run: npm version "$VERSION" --no-git-tag-version
+
+      # why: better-sqlite3 ships a compiled .node that must match the ELECTRON
+      # ABI, not node's. Relying on electron-builder's implicit npmRebuild is how
+      # a Windows release once shipped a node-ABI 115 binary and crashed on
+      # launch; `-f` (in the `rebuild` script) forces it. `build:win` runs this
+      # step locally, so CI must too.
+      - name: Rebuild native modules for the Electron ABI
+        run: npm run rebuild
+
+      - name: Build renderer/main bundles
+        env:
+          API_URL: ${{ vars.API_URL }}
+          MOJANG_CLIENT_ID: ${{ vars.MOJANG_CLIENT_ID }}
+          NETWORK_API_URL: ${{ vars.NETWORK_API_URL }}
+        run: npm run build
+
+      # --publish never: the artefacts are handed to the privileged `publish` job
+      # instead of being uploaded from here.
+      #
+      # why the direct bin path: bare `npx electron-builder` silently downloads
+      # electron-builder from the registry if local resolution ever breaks, turning
+      # a build failure into an unpinned network dependency in the release path.
+      # `npm exec --no-install` does NOT prevent that either — npm reports
+      # `Unknown cli config "--install"` and ignores it.
+      - name: Package installer
+        run: ./node_modules/.bin/electron-builder --win --publish never
+
+      # The Squirrel.Windows update feed is exactly these three files. Assert all
+      # three before anything is published, so a naming change breaks the release
+      # instead of shipping a feed the auto-updater cannot read.
+      - name: Stage release assets
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          out=dist/squirrel-windows
+          setup=("$out"/*Setup*.exe)
+          nupkg=("$out"/*-full.nupkg)
+          releases=("$out"/RELEASES)
+          if [ ${#setup[@]} -ne 1 ] || [ ${#nupkg[@]} -ne 1 ] || [ ${#releases[@]} -ne 1 ]; then
+            echo "::error::expected exactly one *Setup*.exe, one *-full.nupkg and one RELEASES in ${out}; found ${#setup[@]}/${#nupkg[@]}/${#releases[@]}"
+            exit 1
+          fi
+          mkdir -p release-assets
+          cp "${setup[0]}" "${nupkg[0]}" "${releases[0]}" release-assets/
+          cd release-assets
+          sha256sum -- "$(basename "${setup[0]}")" "$(basename "${nupkg[0]}")" RELEASES > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: release-assets
+          path: release-assets/
+          retention-days: 7
+          if-no-files-found: error
+
+  publish:
+    needs: [guard, verify, package]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      # persist-credentials is deliberately left on: this job pushes the version
+      # commit and tag. It runs no third-party code, so the PAT on disk is not
+      # reachable from a dependency's install or test script.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: release-assets
+          path: release-assets
+
+      - name: Verify staged checksums
+        run: |
+          set -euo pipefail
+          cd release-assets
+          sha256sum --check --strict SHA256SUMS.txt
+
+      # Signed provenance tying these exact bytes to this workflow, commit and
+      # runner. Verify with:
+      #   gh attestation verify <installer> --repo ${{ github.repository }}
+      - uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3.0.0
+        with:
+          subject-path: |
+            release-assets/*Setup*.exe
+            release-assets/*-full.nupkg
+            release-assets/RELEASES
+
+      - name: Tag the release
+        env:
+          VERSION: ${{ needs.guard.outputs.version }}
+          TAG: ${{ needs.guard.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          npm version "$VERSION" --no-git-tag-version
+          git add package.json package-lock.json
+          git commit -m "chore(release): ${TAG}"
+          git tag "$TAG"
+          git push origin HEAD:main
+          git push origin "$TAG"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          tag_name: ${{ needs.guard.outputs.tag }}
+          name: ${{ needs.guard.outputs.tag }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: release-assets/*

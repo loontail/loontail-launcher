@@ -11,4 +11,4 @@ export {
   useStopClient,
   useUninstallClient,
 } from './hooks';
-export type { ClientRuntimeState } from './store';
+export type { BuildInstallState } from './store';

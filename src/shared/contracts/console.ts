@@ -25,7 +25,7 @@ export type ConsoleLine = {
   timestamp: number;
   level: ConsoleLevel;
   source: ConsoleSource;
-  slug?: CatalogKey;
+  key?: CatalogKey;
   message: string;
   code?: string;
   args?: ConsoleLineArgs;
@@ -49,7 +49,7 @@ export const ConsoleStatuses = {
 } as const satisfies Record<string, ConsoleProcessStatus>;
 
 export type ConsoleProcessState = {
-  slug: CatalogKey;
+  key: CatalogKey;
   status: ConsoleProcessStatus;
   clientTitle?: string;
   exitCode?: number | null;
@@ -58,7 +58,7 @@ export type ConsoleProcessState = {
 
 export type ConsoleInitialPayload = {
   activeSession: {
-    slug: CatalogKey;
+    key: CatalogKey;
     clientTitle: string;
     state: ConsoleProcessState;
   } | null;

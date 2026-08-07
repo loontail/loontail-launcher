@@ -1,3 +1,4 @@
+import { assertNoIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
 import type { IpcArgs, IpcContract, IpcResult } from '@shared/ipc';
 import type { IpcMainInvokeEvent } from 'electron';
@@ -17,6 +18,17 @@ export const createTestRouter = (): { router: Router; handlers: Map<string, Stor
       ) => Promise<IpcResult<TChannel>> | IpcResult<TChannel>,
     ): void {
       handlers.set(channel, (rawArgs) => handler(rawArgs as IpcArgs<TChannel>, fakeEvent()));
+    },
+    handleNoArgs<TChannel extends keyof IpcContract>(
+      channel: TChannel,
+      handler: () => Promise<IpcResult<TChannel>> | IpcResult<TChannel>,
+    ): void {
+      // Async like the real router's ipcMain.handle wrapper, so a synchronous
+      // assertNoIpcArgs throw surfaces as a rejection here too.
+      handlers.set(channel, async (rawArgs) => {
+        assertNoIpcArgs(rawArgs, `${channel} takes no arguments`);
+        return handler();
+      });
     },
     dispose: () => undefined,
   };

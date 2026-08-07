@@ -3,11 +3,11 @@ import type { LoontailAuth, RefreshResult } from './loontailAuth';
 
 // The single, de-duplicated path that rotates a Yggdrasil session. Rotation is
 // single-use server-side (the new token revokes the old), so uncoordinated
-// parallel refreshes with the same stale token would force a spurious re-login
-// (BUG-1). `refresh()` memoizes the in-flight rotation and re-reads the stored
-// token when it fires, so concurrent callers share one round-trip and never
-// rotate a token that was already replaced. Both http.ts and verifySession route
-// through the same instance.
+// parallel refreshes with the same stale token would force a spurious re-login.
+// `refresh()` memoizes the in-flight rotation and re-reads the stored token when
+// it fires, so concurrent callers share one round-trip and never rotate a token
+// that was already replaced. Both http.ts and verifySession route through the
+// same instance.
 export type SessionRefresher = {
   refresh: () => Promise<RefreshResult>;
 };
@@ -26,7 +26,7 @@ export const createSessionRefresher = (loontailAuth: LoontailAuth): SessionRefre
 
     const result = await loontailAuth.refresh(token);
     if (result.kind === 'ok') {
-      setStoredAuth(result.identity.session, result.identity.sessionToken);
+      setStoredAuth(result.identity.session, result.identity.apiSession);
     }
     return result;
   };

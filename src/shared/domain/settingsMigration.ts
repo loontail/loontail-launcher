@@ -1,5 +1,5 @@
 import { localKey, officialKey } from '@shared/contracts/catalog';
-import { asClientSlug, asInstanceId } from '@shared/contracts/ids';
+import { asClientSlug, asLocalBuildId } from '@shared/contracts/ids';
 import type { ClientSettingsOverride } from '@shared/contracts/settings';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -10,7 +10,7 @@ const CATALOG_KEY_RE = /^(official:|local:).+/;
 // (`official:<slug>`). Already-namespaced keys pass through untouched.
 export const migrateClientOverrideKey = (key: string): string => {
   if (CATALOG_KEY_RE.test(key)) return key;
-  if (UUID_RE.test(key)) return localKey(asInstanceId(key)) as string;
+  if (UUID_RE.test(key)) return localKey(asLocalBuildId(key)) as string;
   return officialKey(asClientSlug(key)) as string;
 };
 

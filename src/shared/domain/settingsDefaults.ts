@@ -11,7 +11,7 @@ export const defaultLauncherSettings = (): LauncherSettings => ({
 
 // The on-disk folder name MUST use the bare ref value, not the CatalogKey: `:`
 // is an illegal Windows filename char, and re-keying would orphan every existing
-// install. A bare key is used as-is.
+// install. A malformed key is used as-is.
 export const joinClientFolder = (clientsFolder: string, key: CatalogKey): string => {
   if (!clientsFolder) return '';
   const folderName = catalogKeyToRefValue(key) ?? (key as string);

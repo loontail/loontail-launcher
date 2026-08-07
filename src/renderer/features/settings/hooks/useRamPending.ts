@@ -31,8 +31,13 @@ export const useRamPending = ({
 
   const handleSave = async (): Promise<void> => {
     if (pendingRam === null) return;
-    await persist(pendingRam);
-    setPendingRam(null);
+    // Keep the pending value when the save fails, so the user's edit is not
+    // silently discarded; the global mutation toast already reported the error.
+    const saved = await persist(pendingRam).then(
+      () => true,
+      () => false,
+    );
+    if (saved) setPendingRam(null);
   };
 
   return {

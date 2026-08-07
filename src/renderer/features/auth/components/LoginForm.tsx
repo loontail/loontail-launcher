@@ -7,13 +7,13 @@ import { useTranslation } from 'react-i18next';
 import { useLogin, useMojangLogin } from '../hooks';
 
 const ERROR_COPY_KEYS: Record<LoginErrorCode, string> = {
-  [LOGIN_ERROR_CODE.InvalidCredentials]: 'auth.errorInvalid',
-  [LOGIN_ERROR_CODE.NetworkError]: 'auth.errorNetwork',
-  [LOGIN_ERROR_CODE.RateLimited]: 'auth.errorRateLimited',
-  [LOGIN_ERROR_CODE.BrowserOpenFailed]: 'auth.errorBrowserOpen',
+  [LOGIN_ERROR_CODE.INVALID_CREDENTIALS]: 'auth.errorInvalid',
+  [LOGIN_ERROR_CODE.NETWORK_ERROR]: 'auth.errorNetwork',
+  [LOGIN_ERROR_CODE.RATE_LIMITED]: 'auth.errorRateLimited',
+  [LOGIN_ERROR_CODE.BROWSER_OPEN_FAILED]: 'auth.errorBrowserOpen',
   // Never shown (Cancelled is suppressed upstream); entry exists to keep the record total.
-  [LOGIN_ERROR_CODE.Cancelled]: 'auth.errorUnknown',
-  [LOGIN_ERROR_CODE.Unknown]: 'auth.errorUnknown',
+  [LOGIN_ERROR_CODE.CANCELLED]: 'auth.errorUnknown',
+  [LOGIN_ERROR_CODE.UNKNOWN]: 'auth.errorUnknown',
 };
 
 export const LoginForm = () => {
@@ -38,15 +38,15 @@ export const LoginForm = () => {
     <div className="flex h-full items-center justify-center">
       <form
         onSubmit={handleSubmit}
-        className="flex w-full max-w-sm flex-col gap-4 rounded-lg border border-border bg-card p-6"
+        className="flex w-full max-w-sm flex-col gap-4 rounded-lg border border-edge bg-surface-1 p-6"
       >
         <div className="flex flex-col gap-1">
-          <h1 className="text-lg font-semibold text-card-foreground">{t('auth.signIn')}</h1>
-          <p className="text-xs text-muted-foreground">{t('auth.description')}</p>
+          <h1 className="text-lg font-semibold text-text-hi">{t('auth.signIn')}</h1>
+          <p className="text-xs text-text-mute">{t('auth.description')}</p>
         </div>
 
         <div className="flex flex-col gap-2">
-          <label htmlFor="login-identifier" className="text-xs font-medium text-foreground">
+          <label htmlFor="login-identifier" className="text-xs font-medium text-text-hi">
             {t('auth.identifier')}
           </label>
           <Input
@@ -60,7 +60,7 @@ export const LoginForm = () => {
         </div>
 
         <div className="flex flex-col gap-2">
-          <label htmlFor="login-password" className="text-xs font-medium text-foreground">
+          <label htmlFor="login-password" className="text-xs font-medium text-text-hi">
             {t('auth.password')}
           </label>
           <Input
@@ -81,10 +81,10 @@ export const LoginForm = () => {
           {isPending ? <Loader2 className="size-4 animate-spin" /> : t('auth.submit')}
         </Button>
 
-        <div className="flex items-center gap-3 text-microlabel uppercase tracking-widest text-muted-foreground">
-          <span className="h-px flex-1 bg-border" />
+        <div className="flex items-center gap-3 text-microlabel uppercase tracking-widest text-text-mute">
+          <span className="h-px flex-1 bg-edge" />
           {t('auth.or')}
-          <span className="h-px flex-1 bg-border" />
+          <span className="h-px flex-1 bg-edge" />
         </div>
 
         {isMojangBusy ? (
@@ -96,7 +96,7 @@ export const LoginForm = () => {
             <button
               type="button"
               onClick={() => mojang.cancel()}
-              className="self-center text-xs text-muted-foreground underline hover:text-foreground"
+              className="self-center text-xs text-text-mute underline hover:text-text-hi"
             >
               {t('auth.microsoft.cancel')}
             </button>

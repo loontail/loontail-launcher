@@ -1,12 +1,13 @@
-import type { ConsolePort } from '@main/services/minecraft/env';
+import type { ConsoleSink } from '@main/services/minecraft/env';
 import type {
   AccountProvider,
+  ClearBundleManifest,
   ResolveBuild,
   ResolveBundleRepairFilter,
 } from '@main/services/minecraft/manager';
 import { vi } from 'vitest';
 
-export const stubConsolePort = (): ConsolePort => ({
+export const stubConsoleSink = (): ConsoleSink => ({
   setActiveSession: vi.fn(),
   emitState: vi.fn(),
   recordSystem: vi.fn(),
@@ -22,5 +23,7 @@ export const stubAccountProvider = (account: ReturnType<AccountProvider> = null)
 
 export const stubResolveBundleRepairFilter = (): ResolveBundleRepairFilter =>
   vi.fn(async () => null);
+
+export const stubClearBundleManifest = (): ClearBundleManifest => vi.fn(async () => undefined);
 
 export const stubResolveBuild = (): ResolveBuild => vi.fn(async () => null);

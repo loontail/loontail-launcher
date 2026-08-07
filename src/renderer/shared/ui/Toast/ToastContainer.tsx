@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { type ToastEntry, ToastItem } from './ToastItem';
 import { resolveToastStackLayout } from './stackLayout';
+import { type ToastEntry, ToastItem } from './ToastItem';
 import { subscribeToToasts } from './toast';
 
 const EXIT_ANIM_MS = 260;
@@ -53,6 +53,7 @@ export const ToastContainer = () => {
   if (!layout) return null;
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: hover only pauses auto-dismiss; every toast stays reachable and dismissable without it
     <div
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}

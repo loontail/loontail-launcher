@@ -84,3 +84,19 @@ export type Client = Omit<
   runtimeVersion?: string | null | undefined;
   bundleSlug?: BundleSlug | null | undefined;
 };
+
+// Runtime shape of the normalized `Client`, for validating values that re-enter the
+// process without passing through `normalizeClient` — currently the on-disk catalog
+// snapshot, which survives across releases and lives in a user-writable file.
+// Derived from the wire schema so a wire change cannot leave this behind.
+export const ClientSchema = ClientResponseSchema.omit({
+  slug: true,
+  description: true,
+  shortDescription: true,
+  minecraftVersion: true,
+}).extend({
+  slug: z.string().min(1),
+  description: z.string(),
+  shortDescription: z.string(),
+  minecraftVersion: z.string(),
+}) as unknown as z.ZodType<Client>;

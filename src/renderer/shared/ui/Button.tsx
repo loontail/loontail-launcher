@@ -16,8 +16,8 @@ const variantClasses: Record<Variant, string> = {
     'border border-edge-md bg-surface-2 text-text hover:border-edge-lg hover:bg-surface-3 hover:text-text-hi disabled:opacity-50',
   destructive:
     'bg-destructive text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50',
-  outline: 'border border-input bg-muted text-foreground hover:bg-secondary disabled:opacity-50',
-  ghost: 'bg-transparent text-foreground hover:bg-muted disabled:opacity-50',
+  outline: 'border border-edge-md bg-surface-2 text-text-hi hover:bg-surface-3 disabled:opacity-50',
+  ghost: 'bg-transparent text-text-hi hover:bg-surface-2 disabled:opacity-50',
 };
 
 const sizeClasses: Record<Size, string> = {

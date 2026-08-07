@@ -15,17 +15,12 @@ const managerMocks = vi.hoisted(() => {
 });
 
 import { BUNDLE_PAUSED_SYNC_MAX_IDLE_MS } from '@main/constants/bundle';
+import { markCancelled, markPaused, markRunning } from '@main/infra/lifecyclePhase';
 import type { BundleBroadcaster } from '@main/services/bundle/broadcast';
 import { BundleError } from '@main/services/bundle/errors';
 import { BundleManager } from '@main/services/bundle/manager';
 import { runSyncPhases } from '@main/services/bundle/runner';
-import {
-  type SyncStateMap,
-  createSyncTask,
-  markCancelled,
-  markPaused,
-  markRunning,
-} from '@main/services/bundle/syncState';
+import { createSyncTask, type SyncStateMap } from '@main/services/bundle/syncState';
 import {
   ClientOperationDomains,
   type ClientOperationLocks,
@@ -33,7 +28,7 @@ import {
   createClientOperationLocks,
 } from '@main/services/clientOperationLocks';
 import { BundleErrorCodes, BundleSyncStatuses } from '@shared/contracts/bundle';
-import { type BundleSlug, asCatalogKey } from '@shared/contracts/ids';
+import { asCatalogKey, type BundleSlug } from '@shared/contracts/ids';
 import { seedActiveSync } from '../../../helpers/bundleSync';
 import { makeBroadcaster, makeHealer, makeLauncherSettings } from '../../../helpers/fixtures';
 
@@ -70,26 +65,26 @@ vi.mock('@main/services/bundle/syncState', async (importOriginal) => {
   return { ...actual, resetTaskForResume: managerMocks.resetTaskForResume };
 });
 
-const SLUG = asCatalogKey('official:test-client');
+const KEY = asCatalogKey('official:test-client');
 const BUNDLE_SLUG = 'bundle-x';
 const CLIENT_FOLDER = '/tmp/client';
 
 const launcherSettings = () =>
-  makeLauncherSettings({ clients: { [SLUG]: { storage: { clientFolder: CLIENT_FOLDER } } } });
+  makeLauncherSettings({ clients: { [KEY]: { storage: { clientFolder: CLIENT_FOLDER } } } });
 
 const seedPausedActiveWithLock = (
   activeSyncs: SyncStateMap,
   operationLocks: ClientOperationLocks,
 ): void => {
   const acquired = operationLocks.acquire({
-    slug: SLUG,
+    key: KEY,
     domain: ClientOperationDomains.BUNDLE,
     resources: [ClientOperationResources.CLIENT_FOLDER],
   });
   if (acquired.kind !== 'acquired') throw new Error('Expected bundle lock');
 
   seedActiveSync(activeSyncs, {
-    slug: SLUG,
+    key: KEY,
     clientFolder: CLIENT_FOLDER,
     bundleSlug: BUNDLE_SLUG as BundleSlug,
     forLaunch: false,
@@ -122,7 +117,7 @@ const statusEvents = (broadcaster: BundleBroadcaster) =>
 // Blocks the download worker until the task's abort signal fires, then rejects
 // with ABORTED — the real runner swallows that as a cooperative pause when
 // task.paused is set, parking the sync for resume/cancel. Lets a public
-// startSync drive an ActiveSync into a genuine PAUSED state via pauseSync.
+// start drive an ActiveSync into a genuine PAUSED state via pause.
 const blockingDownloadUntilAbort = (): void => {
   managerMocks.downloadEntry.mockImplementation(
     (_entry, _dest, options: { signal?: AbortSignal }) =>
@@ -161,17 +156,17 @@ describe('BundleManager resume cleanup', () => {
     const manager = new BundleManager(makeBroadcaster(), makeHealer(), operationLocks, activeSyncs);
     seedPausedActiveWithLock(activeSyncs, operationLocks);
 
-    expect(activeSyncs.has(SLUG)).toBe(true);
+    expect(activeSyncs.has(KEY)).toBe(true);
 
-    void manager.resumeSync(SLUG);
+    void manager.resume(KEY);
 
     await vi.waitFor(() => {
-      expect(activeSyncs.has(SLUG)).toBe(false);
+      expect(activeSyncs.has(KEY)).toBe(false);
     });
 
-    // The CLIENT_FOLDER lease must be free again, or the slug is wedged.
+    // The CLIENT_FOLDER lease must be free again, or the key is wedged.
     const reacquire = operationLocks.acquire({
-      slug: SLUG,
+      key: KEY,
       domain: ClientOperationDomains.MINECRAFT,
       resources: [ClientOperationResources.CLIENT_FOLDER],
     });
@@ -181,25 +176,25 @@ describe('BundleManager resume cleanup', () => {
 
 describe('SyncTask phase transitions', () => {
   it('starts running', () => {
-    const task = createSyncTask(SLUG, CLIENT_FOLDER);
+    const task = createSyncTask(KEY, CLIENT_FOLDER);
     expect(task.phase).toBe('running');
   });
 
   it('treats a cancel after cancel as a no-op (stays cancelled)', () => {
-    const task = createSyncTask(SLUG, CLIENT_FOLDER);
+    const task = createSyncTask(KEY, CLIENT_FOLDER);
     markCancelled(task);
     markCancelled(task);
     expect(task.phase).toBe('cancelled');
   });
 
   it('treats a resume from running as a no-op', () => {
-    const task = createSyncTask(SLUG, CLIENT_FOLDER);
+    const task = createSyncTask(KEY, CLIENT_FOLDER);
     markRunning(task);
     expect(task.phase).toBe('running');
   });
 
   it('allows cancel from paused (cancelled overrides paused)', () => {
-    const task = createSyncTask(SLUG, CLIENT_FOLDER);
+    const task = createSyncTask(KEY, CLIENT_FOLDER);
     markPaused(task);
     expect(task.phase).toBe('paused');
     markCancelled(task);
@@ -207,21 +202,21 @@ describe('SyncTask phase transitions', () => {
   });
 
   it('cannot pause a cancelled task (cancel is terminal)', () => {
-    const task = createSyncTask(SLUG, CLIENT_FOLDER);
+    const task = createSyncTask(KEY, CLIENT_FOLDER);
     markCancelled(task);
     markPaused(task);
     expect(task.phase).toBe('cancelled');
   });
 
   it('cannot resume a cancelled task (cancel is terminal)', () => {
-    const task = createSyncTask(SLUG, CLIENT_FOLDER);
+    const task = createSyncTask(KEY, CLIENT_FOLDER);
     markCancelled(task);
     markRunning(task);
     expect(task.phase).toBe('cancelled');
   });
 
   it('resumes a paused task back to running', () => {
-    const task = createSyncTask(SLUG, CLIENT_FOLDER);
+    const task = createSyncTask(KEY, CLIENT_FOLDER);
     markPaused(task);
     markRunning(task);
     expect(task.phase).toBe('running');
@@ -230,7 +225,7 @@ describe('SyncTask phase transitions', () => {
 
 describe('runSyncPhases secondary worker errors (DLI-26)', () => {
   it('logs discarded secondary download worker errors at debug', async () => {
-    const task = createSyncTask(SLUG, CLIENT_FOLDER);
+    const task = createSyncTask(KEY, CLIENT_FOLDER);
     task.pendingDownloads = [
       { path: 'mods/a.jar', name: 'a.jar', size: 1, isDir: false, sha256: 'a', url: 'https://t/a' },
       { path: 'mods/b.jar', name: 'b.jar', size: 1, isDir: false, sha256: 'b', url: 'https://t/b' },
@@ -238,7 +233,7 @@ describe('runSyncPhases secondary worker errors (DLI-26)', () => {
     managerMocks.downloadEntry.mockRejectedValue(new Error('socket reset'));
 
     await expect(runSyncPhases(task, () => {})).rejects.toMatchObject({
-      code: 'downloadFailed',
+      code: 'bundle/downloadFailed',
     });
 
     expect(managerMocks.logger.debug).toHaveBeenCalledWith(
@@ -248,8 +243,8 @@ describe('runSyncPhases secondary worker errors (DLI-26)', () => {
   });
 });
 
-// Public-API integration: drive a real startSync into a genuine PAUSED state via
-// pauseSync (no seedActiveSync, no armPauseIdleTimer reflection), then exercise
+// Public-API integration: drive a real start into a genuine PAUSED state via
+// pause (no seedActiveSync, no armPauseIdleTimer reflection), then exercise
 // the pause-terminal branches through the public surface against the real
 // runner, injected activeSyncs Map, and real operation locks. The seeded
 // equivalents live in managerPauseCleanup; these prove the same branches from
@@ -263,16 +258,16 @@ describe('BundleManager pause terminal branches (public API)', () => {
     blockingDownloadUntilAbort();
     const manager = new BundleManager(broadcaster, makeHealer(), operationLocks, activeSyncs);
 
-    void manager.startSync({ slug: SLUG });
+    void manager.start({ key: KEY });
     await vi.waitFor(() => {
       expect(managerMocks.downloadEntry).toHaveBeenCalled();
     });
 
-    manager.pauseSync(SLUG);
+    manager.pause(KEY);
     await vi.waitFor(() => {
       expect(statusEvents(broadcaster)).toContain(BundleSyncStatuses.PAUSED);
     });
-    expect(activeSyncs.has(SLUG)).toBe(true);
+    expect(activeSyncs.has(KEY)).toBe(true);
     return manager;
   };
 
@@ -282,13 +277,13 @@ describe('BundleManager pause terminal branches (public API)', () => {
     const operationLocks = createClientOperationLocks();
     const manager = await driveToPause(broadcaster, activeSyncs, operationLocks);
 
-    manager.cancelSync(SLUG);
+    manager.cancel(KEY);
 
-    expect(activeSyncs.has(SLUG)).toBe(false);
+    expect(activeSyncs.has(KEY)).toBe(false);
     expect(statusEvents(broadcaster)).toContain(BundleSyncStatuses.CANCELLED);
-    // The write lease must be free again or the slug is wedged for the session.
+    // The write lease must be free again or the key is wedged for the session.
     const reacquire = operationLocks.acquire({
-      slug: SLUG,
+      key: KEY,
       domain: ClientOperationDomains.MINECRAFT,
       resources: [ClientOperationResources.CLIENT_FOLDER],
     });
@@ -306,7 +301,7 @@ describe('BundleManager pause terminal branches (public API)', () => {
     // on the injected ActiveSync and unref-s it so a parked sync never blocks
     // process exit.
     expect(BUNDLE_PAUSED_SYNC_MAX_IDLE_MS).toBeGreaterThan(0);
-    const timer = activeSyncs.get(SLUG)?.pauseIdleTimer;
+    const timer = activeSyncs.get(KEY)?.pauseIdleTimer;
     expect(timer).not.toBeNull();
     expect(timer?.hasRef()).toBe(false);
   });

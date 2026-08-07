@@ -1,7 +1,7 @@
 import fs from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { Loaders, type Target, assertNever } from '@loontail/minecraft-kit';
+import { assertNever, Loaders, type Target } from '@loontail/minecraft-kit';
 import { SIDECAR_DIR } from '@main/constants/paths';
 import { readJsonValidated, writeJsonAtomic } from '@main/infra/atomicFile';
 import { scopedLogger } from '@main/infra/logger';
@@ -18,8 +18,8 @@ const logger = scopedLogger('minecraft.installManifest');
 declare const __MINECRAFT_KIT_VERSION__: string;
 
 // Read from the build-time constant so the packaged bundle doesn't record
-// `kitVersion: 'unknown'` when node_modules is absent (DLI-71). The require
-// branch runs only under the test runner and is dead-code-eliminated in production.
+// `kitVersion: 'unknown'` when node_modules is absent. The require branch runs
+// only under the test runner and is dead-code-eliminated in production.
 const MINECRAFT_KIT_VERSION =
   typeof __MINECRAFT_KIT_VERSION__ !== 'undefined'
     ? __MINECRAFT_KIT_VERSION__
@@ -119,7 +119,7 @@ export const saveCurrentTargetInstallManifest = async (
 // Best-effort sidecar write: warns and swallows so a failure here can't demote a
 // successful install/repair.
 export const persistTargetInstallManifest = async (
-  slug: CatalogKey,
+  key: CatalogKey,
   clientFolder: string,
   target: Target,
   logPrefix: string,
@@ -127,7 +127,7 @@ export const persistTargetInstallManifest = async (
   try {
     await saveCurrentTargetInstallManifest(clientFolder, target);
   } catch (error) {
-    logger.warn(`[${slug}] ${logPrefix}: failed to persist target install manifest`, error);
+    logger.warn(`[${key}] ${logPrefix}: failed to persist target install manifest`, error);
   }
 };
 

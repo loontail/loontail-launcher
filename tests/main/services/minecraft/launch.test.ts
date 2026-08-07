@@ -4,7 +4,7 @@ import path from 'node:path';
 import {
   Architectures,
   AuthModes,
-  EventTypes,
+  asMinecraftVersionId,
   type LaunchComposition,
   type LaunchRunOptions,
   type LaunchSession,
@@ -14,26 +14,30 @@ import {
   MinecraftKitErrorCodes,
   OperatingSystems,
   type Target,
-  asMinecraftVersionId,
   targetPaths,
 } from '@loontail/minecraft-kit';
 import type { Context } from '@main/services/minecraft/context';
-import type { ManagerEnv } from '@main/services/minecraft/env';
+import type { MinecraftEnv } from '@main/services/minecraft/env';
 import { createForgeProcessorCache } from '@main/services/minecraft/forgeProcessorHealing';
 import { endLaunch, resolveLaunchAuth, runLaunch } from '@main/services/minecraft/launch';
 import { type LaunchStartingOp, type Op, OpKinds } from '@main/services/minecraft/ops';
+import { authlibInjectorJarName } from '@main/services/yggdrasil/authlibInjector';
 import type { Account } from '@shared/contracts/account';
 import type { AuthSession, MojangSession, YggdrasilSession } from '@shared/contracts/auth';
+import { type SourceKind, SourceKinds } from '@shared/contracts/catalog';
 import { ConsoleStatuses } from '@shared/contracts/console';
-import { type CatalogKey, asCatalogKey } from '@shared/contracts/ids';
+import { asCatalogKey, type CatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes } from '@shared/contracts/minecraft';
 import { LoaderChoices } from '@shared/contracts/settings';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const launchMocks = vi.hoisted(() => {
   return {
     appGetVersion: vi.fn(() => '0.0.0-test'),
-    appGetAppPath: vi.fn(() => ''),
+    config: {
+      yggdrasilApiRoot: 'https://auth.test.invalid',
+      networkServiceUrl: undefined as string | undefined,
+    },
     getStoredAuth: vi.fn<() => AuthSession | null>(() => null),
     getStoredSessionToken: vi.fn<() => string | null>(() => null),
     recordPlayed: vi.fn<(key: string) => void>(),
@@ -52,13 +56,12 @@ const launchMocks = vi.hoisted(() => {
 vi.mock('electron', () => ({
   app: {
     getVersion: launchMocks.appGetVersion,
-    getAppPath: launchMocks.appGetAppPath,
     isPackaged: false,
   },
 }));
 
 vi.mock('@main/config', () => ({
-  mainConfig: { yggdrasilApiRoot: 'https://auth.test.invalid' },
+  mainConfig: launchMocks.config,
 }));
 
 vi.mock('@main/infra/logger', () => ({
@@ -79,7 +82,23 @@ vi.mock('@main/infra/store', () => ({
   recordPlayed: launchMocks.recordPlayed,
 }));
 
-const SLUG = asCatalogKey('official:test-client');
+// The real authlib-injector jar is fetched at build time and absent while tests
+// run, so point the resolver's vendor-dir seam at a stub it can stat.
+const AUTHLIB_VENDOR_DIR_ENV = 'LOONTAIL_AUTHLIB_INJECTOR_VENDOR_DIR';
+let authlibVendorDir = '';
+
+beforeAll(async () => {
+  authlibVendorDir = await fs.mkdtemp(path.join(os.tmpdir(), 'loontail-authlib-'));
+  await fs.writeFile(path.join(authlibVendorDir, authlibInjectorJarName()), 'stub');
+  process.env[AUTHLIB_VENDOR_DIR_ENV] = authlibVendorDir;
+});
+
+afterAll(async () => {
+  delete process.env[AUTHLIB_VENDOR_DIR_ENV];
+  await fs.rm(authlibVendorDir, { recursive: true, force: true });
+});
+
+const KEY = asCatalogKey('official:test-client');
 const CLIENT_FOLDER = 'Z:/clients/test-client';
 const VERSION_ID = asMinecraftVersionId('1.20.1');
 const TEST_MAIN_CLASS = 'net.minecraft.client.main.Main';
@@ -164,9 +183,14 @@ const target = (directory: string): Target =>
 
 const CATALOG_KEY = 'local:test-client';
 
-const context = (clientFolder = CLIENT_FOLDER): Context =>
+const context = (clientFolder = CLIENT_FOLDER, kind: SourceKind = SourceKinds.OFFICIAL): Context =>
   ({
-    item: { key: CATALOG_KEY, spec: { bundleSlug: null }, presentation: { title: 'Test Client' } },
+    item: {
+      kind,
+      key: CATALOG_KEY,
+      spec: { bundleSlug: null },
+      presentation: { title: 'Test Client' },
+    },
     clientFolder,
     loader: LoaderChoices.VANILLA,
     target: target(clientFolder),
@@ -194,7 +218,9 @@ const composition = (
   ...patch,
 });
 
-const createLaunchFixture = async (): Promise<{
+const createLaunchFixture = async (
+  kind: SourceKind = SourceKinds.OFFICIAL,
+): Promise<{
   readonly ctx: Context;
   readonly composition: LaunchComposition;
   readonly javaPath: string;
@@ -211,7 +237,7 @@ const createLaunchFixture = async (): Promise<{
   await fs.writeFile(versionJsonPath, '{}');
   await fs.writeFile(clientJarPath, 'jar');
   return {
-    ctx: context(directory),
+    ctx: context(directory, kind),
     composition: composition(directory, { javaPath, classpath: [clientJarPath] }),
     javaPath,
     clientJarPath,
@@ -234,7 +260,7 @@ const logger = () => ({
   warn: vi.fn(),
 });
 
-const env = (kit: MinecraftKit, ops: Map<CatalogKey, Op>): ManagerEnv => {
+const env = (kit: MinecraftKit, ops: Map<CatalogKey, Op>): MinecraftEnv => {
   const broadcaster = {
     status: vi.fn(),
     progress: vi.fn(),
@@ -255,6 +281,7 @@ const env = (kit: MinecraftKit, ops: Map<CatalogKey, Op>): ManagerEnv => {
     persistRuntime: vi.fn(),
     clearRuntimeOverride: vi.fn(),
     resolveBundleRepairFilter: vi.fn(async () => null),
+    clearBundleManifest: vi.fn(async () => undefined),
   };
 };
 
@@ -263,6 +290,7 @@ describe('runLaunch', () => {
     vi.clearAllMocks();
     launchMocks.getStoredAuth.mockReturnValue(null);
     launchMocks.getStoredSessionToken.mockReturnValue(null);
+    launchMocks.config.networkServiceUrl = undefined;
   });
 
   afterEach(async () => {
@@ -295,25 +323,25 @@ describe('runLaunch', () => {
       abort: new AbortController(),
     };
 
-    const launchPromise = runLaunch(managerEnv, SLUG, context(), account(), startupOp);
+    const launchPromise = runLaunch(managerEnv, KEY, context(), account(), startupOp);
     await composeStarted;
 
-    expect(ops.get(SLUG)).toBe(startupOp);
+    expect(ops.get(KEY)).toBe(startupOp);
 
     startupOp.abort.abort();
     resolveCompose(composition());
 
     await expect(launchPromise).resolves.toBeUndefined();
     expect(run).not.toHaveBeenCalled();
-    expect(ops.has(SLUG)).toBe(false);
+    expect(ops.has(KEY)).toBe(false);
     expect(managerEnv.emitError).not.toHaveBeenCalled();
     expect(managerEnv.broadcaster.status).toHaveBeenNthCalledWith(1, {
-      slug: SLUG,
+      key: KEY,
       status: InstallStatuses.LAUNCHING,
       paused: false,
     });
     expect(managerEnv.broadcaster.status).toHaveBeenLastCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: InstallStatuses.INSTALLED,
       paused: false,
     });
@@ -335,14 +363,14 @@ describe('runLaunch', () => {
     startupOp.abort.abort();
 
     await expect(
-      runLaunch(managerEnv, SLUG, fixture.ctx, account(), startupOp),
+      runLaunch(managerEnv, KEY, fixture.ctx, account(), startupOp),
     ).resolves.toBeUndefined();
 
     expect(run).not.toHaveBeenCalled();
-    expect(ops.has(SLUG)).toBe(false);
+    expect(ops.has(KEY)).toBe(false);
     expect(managerEnv.emitError).not.toHaveBeenCalled();
     expect(managerEnv.broadcaster.status).toHaveBeenLastCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: InstallStatuses.INSTALLED,
       paused: false,
     });
@@ -365,15 +393,15 @@ describe('runLaunch', () => {
       abort: new AbortController(),
     };
 
-    await runLaunch(managerEnv, SLUG, fixture.ctx, account(), startupOp);
+    await runLaunch(managerEnv, KEY, fixture.ctx, account(), startupOp);
 
     expect(run).toHaveBeenCalledTimes(1);
     // The kit session is observed against the caller's controller, so a Stop in
     // the spawn window still reaches the same signal the caller can abort.
     expect(runOptions?.signal).toBe(startupOp.abort.signal);
-    expect(ops.get(SLUG)).toEqual({ kind: OpKinds.LAUNCH, session: activeSession });
+    expect(ops.get(KEY)).toEqual({ kind: OpKinds.LAUNCH, session: activeSession });
     expect(managerEnv.broadcaster.status).toHaveBeenLastCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: InstallStatuses.RUNNING,
       paused: false,
     });
@@ -391,11 +419,11 @@ describe('runLaunch', () => {
     const kit = { launch: { compose, run } } as unknown as MinecraftKit;
     const ops = new Map<CatalogKey, Op>();
 
-    await runLaunch(env(kit, ops), SLUG, fixture.ctx, account());
+    await runLaunch(env(kit, ops), KEY, fixture.ctx, account());
 
     expect(runOptions?.signal).toBeInstanceOf(AbortSignal);
     expect(runOptions?.signal?.aborted).toBe(false);
-    expect(ops.get(SLUG)).toEqual({
+    expect(ops.get(KEY)).toEqual({
       kind: OpKinds.LAUNCH,
       session: activeSession,
     });
@@ -405,7 +433,7 @@ describe('runLaunch', () => {
     // and never opens a window when the console setting is off.
     expect(launchMocks.consoleHub.setActiveSession).toHaveBeenCalled();
     expect(launchMocks.consoleHub.emitState).toHaveBeenCalledWith(
-      expect.objectContaining({ slug: SLUG, status: ConsoleStatuses.LAUNCHING }),
+      expect.objectContaining({ key: KEY, status: ConsoleStatuses.LAUNCHING }),
     );
     expect(launchMocks.openConsoleWindow).not.toHaveBeenCalled();
   });
@@ -419,25 +447,25 @@ describe('runLaunch', () => {
     const ops = new Map<CatalogKey, Op>();
     const managerEnv = env(kit, ops);
 
-    await expect(runLaunch(managerEnv, SLUG, fixture.ctx, account())).resolves.toBeUndefined();
+    await expect(runLaunch(managerEnv, KEY, fixture.ctx, account())).resolves.toBeUndefined();
 
     expect(run).not.toHaveBeenCalled();
-    expect(ops.has(SLUG)).toBe(false);
+    expect(ops.has(KEY)).toBe(false);
     expect(managerEnv.emitError).toHaveBeenCalledWith(
-      SLUG,
+      KEY,
       MinecraftErrorCodes.RUNTIME_ERROR,
       expect.stringContaining('Java executable'),
     );
     // Stays INSTALLED so the affordance remains "Play"; the failure is surfaced
     // in the console and via a repair toast on the renderer.
     expect(managerEnv.broadcaster.status).toHaveBeenLastCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: InstallStatuses.INSTALLED,
       paused: false,
     });
     expect(launchMocks.consoleHub.recordSystem).toHaveBeenCalledWith(
       expect.stringContaining('Launch check failed'),
-      { slug: SLUG },
+      { key: KEY },
     );
     expect(launchMocks.openConsoleWindow).toHaveBeenCalled();
   });
@@ -459,16 +487,16 @@ describe('runLaunch', () => {
     const ops = new Map<CatalogKey, Op>();
     const managerEnv = env(kit, ops);
 
-    await expect(runLaunch(managerEnv, SLUG, fixture.ctx, account())).resolves.toBeUndefined();
+    await expect(runLaunch(managerEnv, KEY, fixture.ctx, account())).resolves.toBeUndefined();
 
     expect(run).not.toHaveBeenCalled();
     expect(managerEnv.emitError).toHaveBeenCalledWith(
-      SLUG,
+      KEY,
       MinecraftErrorCodes.NOT_INSTALLED,
       expect.stringContaining('classpath file'),
     );
     expect(managerEnv.broadcaster.status).toHaveBeenLastCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: InstallStatuses.INSTALLED,
       paused: false,
     });
@@ -487,17 +515,17 @@ describe('runLaunch', () => {
     const ops = new Map<CatalogKey, Op>();
     const managerEnv = env(kit, ops);
 
-    await expect(runLaunch(managerEnv, SLUG, fixture.ctx, account())).resolves.toBeUndefined();
+    await expect(runLaunch(managerEnv, KEY, fixture.ctx, account())).resolves.toBeUndefined();
 
     expect(run).not.toHaveBeenCalled();
-    expect(ops.has(SLUG)).toBe(false);
+    expect(ops.has(KEY)).toBe(false);
     expect(managerEnv.emitError).toHaveBeenCalledWith(
-      SLUG,
+      KEY,
       MinecraftErrorCodes.NOT_INSTALLED,
       expect.stringContaining('classpath is empty'),
     );
     expect(managerEnv.broadcaster.status).toHaveBeenLastCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: InstallStatuses.INSTALLED,
       paused: false,
     });
@@ -515,16 +543,16 @@ describe('runLaunch', () => {
     const ops = new Map<CatalogKey, Op>();
     const managerEnv = env(kit, ops);
 
-    await expect(runLaunch(managerEnv, SLUG, fixture.ctx, account())).resolves.toBeUndefined();
+    await expect(runLaunch(managerEnv, KEY, fixture.ctx, account())).resolves.toBeUndefined();
 
     expect(run).not.toHaveBeenCalled();
     expect(managerEnv.emitError).toHaveBeenCalledWith(
-      SLUG,
+      KEY,
       MinecraftErrorCodes.NOT_INSTALLED,
       expect.stringContaining('empty entry'),
     );
     expect(managerEnv.broadcaster.status).toHaveBeenLastCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: InstallStatuses.INSTALLED,
       paused: false,
     });
@@ -544,24 +572,24 @@ describe('runLaunch', () => {
     const ops = new Map<CatalogKey, Op>();
     const managerEnv = env(kit, ops);
 
-    await expect(runLaunch(managerEnv, SLUG, fixture.ctx, account())).resolves.toBeUndefined();
+    await expect(runLaunch(managerEnv, KEY, fixture.ctx, account())).resolves.toBeUndefined();
 
     expect(run).not.toHaveBeenCalled();
-    expect(ops.has(SLUG)).toBe(false);
+    expect(ops.has(KEY)).toBe(false);
     // A disk-only compose failure must offer a repair, not read as a network error.
     expect(managerEnv.emitError).toHaveBeenCalledWith(
-      SLUG,
+      KEY,
       MinecraftErrorCodes.NOT_INSTALLED,
       expect.stringContaining('installed version JSON'),
     );
     expect(managerEnv.broadcaster.status).toHaveBeenLastCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: InstallStatuses.INSTALLED,
       paused: false,
     });
     expect(launchMocks.consoleHub.recordSystem).toHaveBeenCalledWith(
       expect.stringContaining('Launch check failed'),
-      { slug: SLUG },
+      { key: KEY },
     );
   });
 
@@ -575,11 +603,11 @@ describe('runLaunch', () => {
     const ops = new Map<CatalogKey, Op>();
     const managerEnv = env(kit, ops);
 
-    await expect(runLaunch(managerEnv, SLUG, fixture.ctx, account())).resolves.toBeUndefined();
+    await expect(runLaunch(managerEnv, KEY, fixture.ctx, account())).resolves.toBeUndefined();
 
     expect(run).not.toHaveBeenCalled();
     expect(managerEnv.emitError).toHaveBeenCalledWith(
-      SLUG,
+      KEY,
       MinecraftErrorCodes.RUNTIME_ERROR,
       expect.stringContaining('runtime missing'),
     );
@@ -593,7 +621,7 @@ describe('runLaunch', () => {
     const kit = { launch: { compose, run } } as unknown as MinecraftKit;
     const ops = new Map<CatalogKey, Op>();
 
-    await runLaunch(env(kit, ops), SLUG, fixture.ctx, account());
+    await runLaunch(env(kit, ops), KEY, fixture.ctx, account());
 
     const options = compose.mock.calls[0]?.[1] as
       | { readonly extraJvmArgs?: readonly string[]; readonly auth?: unknown }
@@ -610,47 +638,86 @@ describe('runLaunch', () => {
     );
   });
 
-  it('attaches the in-game network agent on Java 21+ when the bundled jar is present', async () => {
+  it('injects the network service URL as a -D arg when configured', async () => {
+    launchMocks.config.networkServiceUrl = 'https://network.test.invalid';
     const fixture = await createLaunchFixture();
-    const appPath = fixture.ctx.target.directory;
-    launchMocks.appGetAppPath.mockReturnValue(appPath);
-    const agentJar = path.join(appPath, 'resources', 'agent', 'loontail-network-agent.jar');
-    await fs.mkdir(path.dirname(agentJar), { recursive: true });
-    await fs.writeFile(agentJar, 'agent');
-    const ctx = {
-      ...fixture.ctx,
-      target: {
-        ...fixture.ctx.target,
-        runtime: { ...fixture.ctx.target.runtime, majorVersion: 21 },
-      },
-    } as Context;
     const compose = vi.fn(async (_target: Target, _options: unknown) => fixture.composition);
     const run = vi.fn(() => session());
     const kit = { launch: { compose, run } } as unknown as MinecraftKit;
 
-    await runLaunch(env(kit, new Map<CatalogKey, Op>()), SLUG, ctx, account());
+    await runLaunch(env(kit, new Map<CatalogKey, Op>()), KEY, fixture.ctx, account());
 
     const options = compose.mock.calls[0]?.[1] as
       | { readonly extraJvmArgs?: readonly string[] }
       | undefined;
-    expect(options?.extraJvmArgs).toEqual(expect.arrayContaining([`-javaagent:${agentJar}`]));
+    expect(options?.extraJvmArgs).toEqual(
+      expect.arrayContaining(['-Dloontail.network.serviceUrl=https://network.test.invalid']),
+    );
   });
 
-  it('hands the session token to the in-game agent via the child JVM env, never a -D arg', async () => {
+  it('omits the network service URL arg when not configured', async () => {
+    const fixture = await createLaunchFixture();
+    const compose = vi.fn(async (_target: Target, _options: unknown) => fixture.composition);
+    const run = vi.fn(() => session());
+    const kit = { launch: { compose, run } } as unknown as MinecraftKit;
+
+    await runLaunch(env(kit, new Map<CatalogKey, Op>()), KEY, fixture.ctx, account());
+
+    const options = compose.mock.calls[0]?.[1] as
+      | { readonly extraJvmArgs?: readonly string[] }
+      | undefined;
+    expect(options?.extraJvmArgs ?? []).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('loontail.network.serviceUrl')]),
+    );
+  });
+
+  it('withholds the session token from the game env when no service URL is configured', async () => {
+    // The bearer is readable by every class in the game JVM, so it is
+    // gated exactly like the URL — no NETWORK_API_URL, no credential handover.
+    launchMocks.config.networkServiceUrl = undefined;
     launchMocks.getStoredSessionToken.mockReturnValue('handoff-session-token');
     const fixture = await createLaunchFixture();
-    const appPath = fixture.ctx.target.directory;
-    launchMocks.appGetAppPath.mockReturnValue(appPath);
-    const agentJar = path.join(appPath, 'resources', 'agent', 'loontail-network-agent.jar');
-    await fs.mkdir(path.dirname(agentJar), { recursive: true });
-    await fs.writeFile(agentJar, 'agent');
-    const ctx = {
-      ...fixture.ctx,
-      target: {
-        ...fixture.ctx.target,
-        runtime: { ...fixture.ctx.target.runtime, majorVersion: 21 },
-      },
-    } as Context;
+    const compose = vi.fn(async (_target: Target, _options: unknown) => fixture.composition);
+    let ranComposition: LaunchComposition | undefined;
+    const run = vi.fn((composition: LaunchComposition) => {
+      ranComposition = composition;
+      return session();
+    });
+    const kit = { launch: { compose, run } } as unknown as MinecraftKit;
+
+    await runLaunch(env(kit, new Map<CatalogKey, Op>()), KEY, fixture.ctx, account());
+
+    expect(ranComposition?.env ?? {}).not.toHaveProperty('LOONTAIL_NETWORK_SERVICE_TOKEN');
+  });
+
+  it('withholds the session token from LOCAL builds running unvetted loose mods', async () => {
+    launchMocks.config.networkServiceUrl = 'https://network.test.invalid';
+    launchMocks.getStoredSessionToken.mockReturnValue('handoff-session-token');
+    const fixture = await createLaunchFixture(SourceKinds.LOCAL);
+    const compose = vi.fn(async (_target: Target, _options: unknown) => fixture.composition);
+    let ranComposition: LaunchComposition | undefined;
+    const run = vi.fn((composition: LaunchComposition) => {
+      ranComposition = composition;
+      return session();
+    });
+    const kit = { launch: { compose, run } } as unknown as MinecraftKit;
+
+    await runLaunch(env(kit, new Map<CatalogKey, Op>()), KEY, fixture.ctx, account());
+
+    expect(ranComposition?.env ?? {}).not.toHaveProperty('LOONTAIL_NETWORK_SERVICE_TOKEN');
+    // The non-secret service URL still rides along.
+    const options = compose.mock.calls[0]?.[1] as
+      | { readonly extraJvmArgs?: readonly string[] }
+      | undefined;
+    expect(options?.extraJvmArgs).toEqual(
+      expect.arrayContaining(['-Dloontail.network.serviceUrl=https://network.test.invalid']),
+    );
+  });
+
+  it('hands the session token via the child JVM env, never a -D arg', async () => {
+    launchMocks.config.networkServiceUrl = 'https://network.test.invalid';
+    launchMocks.getStoredSessionToken.mockReturnValue('handoff-session-token');
+    const fixture = await createLaunchFixture();
     let composedJvmArgs: readonly string[] = [];
     const compose = vi.fn(
       async (_target: Target, options: { extraJvmArgs?: readonly string[] }) => {
@@ -667,7 +734,7 @@ describe('runLaunch', () => {
     });
     const kit = { launch: { compose, run } } as unknown as MinecraftKit;
 
-    await runLaunch(env(kit, new Map<CatalogKey, Op>()), SLUG, ctx, account());
+    await runLaunch(env(kit, new Map<CatalogKey, Op>()), KEY, fixture.ctx, account());
 
     // The token is delivered through the spawned process env, not a JVM property.
     expect(ranComposition?.env).toMatchObject({
@@ -690,58 +757,6 @@ describe('runLaunch', () => {
     expect(launchedCommand).not.toContain('handoff-session-token');
     // The non-secret service URL still rides on -D (when configured) — unchanged.
   });
-
-  it('redacts the service token from the launch-command log line (no on-disk leak)', async () => {
-    launchMocks.getStoredSessionToken.mockReturnValue('handoff-session-token');
-    const fixture = await createLaunchFixture();
-    const ctx = {
-      ...fixture.ctx,
-      target: {
-        ...fixture.ctx.target,
-        runtime: { ...fixture.ctx.target.runtime, majorVersion: 21 },
-      },
-    } as Context;
-    const compose = vi.fn(async (_target: Target, _options: unknown) => fixture.composition);
-    // The kit reports the resolved command line via the LAUNCH_STARTING event;
-    // that command embeds the -D token and is what reaches the log file.
-    const run = vi.fn((_composition: LaunchComposition, options?: LaunchRunOptions) => {
-      options?.onEvent?.({
-        type: EventTypes.LAUNCH_STARTING,
-        command:
-          'java -Dloontail.network.serviceToken=handoff-session-token -cp client.jar net.minecraft.client.main.Main',
-        cwd: fixture.composition.directory,
-      } as Parameters<NonNullable<LaunchRunOptions['onEvent']>>[0]);
-      return session();
-    });
-    const kit = { launch: { compose, run } } as unknown as MinecraftKit;
-    const managerEnv = env(kit, new Map<CatalogKey, Op>());
-
-    await runLaunch(managerEnv, SLUG, ctx, account());
-
-    const startingLog = (managerEnv.logger.info as ReturnType<typeof vi.fn>).mock.calls
-      .map((call) => String(call[0]))
-      .find((line) => line.includes('launch: starting'));
-    expect(startingLog).toBeDefined();
-    expect(startingLog).not.toContain('handoff-session-token');
-    expect(startingLog).toContain('-Dloontail.network.serviceToken=<redacted>');
-  });
-
-  it('does not attach the network agent on older Java (would abort JVM startup)', async () => {
-    // The fixture's runtime carries no majorVersion (< 21), so the agent must be skipped.
-    const fixture = await createLaunchFixture();
-    const compose = vi.fn(async (_target: Target, _options: unknown) => fixture.composition);
-    const run = vi.fn(() => session());
-    const kit = { launch: { compose, run } } as unknown as MinecraftKit;
-
-    await runLaunch(env(kit, new Map<CatalogKey, Op>()), SLUG, fixture.ctx, account());
-
-    const options = compose.mock.calls[0]?.[1] as
-      | { readonly extraJvmArgs?: readonly string[] }
-      | undefined;
-    expect(options?.extraJvmArgs ?? []).not.toEqual(
-      expect.arrayContaining([expect.stringContaining('loontail-network-agent.jar')]),
-    );
-  });
 });
 
 describe('endLaunch', () => {
@@ -758,10 +773,10 @@ describe('endLaunch', () => {
       { context: { exitCode: 1 } },
     );
 
-    endLaunch(managerEnv, SLUG, crash);
+    endLaunch(managerEnv, KEY, crash);
 
     expect(launchMocks.consoleHub.emitState).toHaveBeenCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: ConsoleStatuses.CRASHED,
       message: 'Minecraft process exited with code 1',
       exitCode: 1,
@@ -772,10 +787,10 @@ describe('endLaunch', () => {
     const ops = new Map<CatalogKey, Op>();
     const managerEnv = env({} as unknown as MinecraftKit, ops);
 
-    endLaunch(managerEnv, SLUG, undefined, { code: 0, signal: null, aborted: false });
+    endLaunch(managerEnv, KEY, undefined, { code: 0, signal: null, aborted: false });
 
     expect(launchMocks.consoleHub.emitState).toHaveBeenCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: ConsoleStatuses.EXITED,
       exitCode: 0,
     });
@@ -786,10 +801,10 @@ describe('endLaunch', () => {
     const ops = new Map<CatalogKey, Op>();
     const managerEnv = env({} as unknown as MinecraftKit, ops);
 
-    endLaunch(managerEnv, SLUG, undefined, { code: null, signal: 'SIGTERM', aborted: true });
+    endLaunch(managerEnv, KEY, undefined, { code: null, signal: 'SIGTERM', aborted: true });
 
     expect(launchMocks.consoleHub.emitState).toHaveBeenCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: ConsoleStatuses.EXITED,
       exitCode: null,
     });

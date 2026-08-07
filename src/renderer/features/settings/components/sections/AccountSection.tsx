@@ -45,7 +45,7 @@ export const AccountSection = () => {
     <SettingsGroup
       title={t('settings.account.heroEyebrow')}
       bodyClassName="flex items-stretch gap-5 p-4"
-      footerClassName="flex flex-wrap items-center gap-2 border-t border-border bg-background/40 px-4 py-3"
+      footerClassName="flex flex-wrap items-center gap-2 border-t border-edge bg-canvas/40 px-4 py-3"
       footer={
         editor.hasPending ? (
           <AccountPendingToolbar

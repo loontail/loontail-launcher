@@ -1,31 +1,19 @@
 import { scopedLogger } from '@main/infra/logger';
+import { CACHE_MEDIA_PREFIX, CACHE_SCHEME } from '@shared/constants';
 import { protocol } from 'electron';
 import { fetchCachedMedia, isTrustedMediaOrigin } from './mediaCache';
 
-export const CACHE_SCHEME = 'cache';
-
-const PATH_PREFIX = `${CACHE_SCHEME}://media/`;
+const MEDIA_MAX_AGE_SECONDS = 86_400;
 
 const logger = scopedLogger('media-protocol');
 
 const decodeSourceUrl = (cacheUrl: string): string | null => {
-  if (!cacheUrl.startsWith(PATH_PREFIX)) return null;
-  const encoded = cacheUrl.slice(PATH_PREFIX.length);
-  let decoded: string;
+  if (!cacheUrl.startsWith(CACHE_MEDIA_PREFIX)) return null;
   try {
-    decoded = decodeURIComponent(encoded);
+    return decodeURIComponent(cacheUrl.slice(CACHE_MEDIA_PREFIX.length));
   } catch {
     return null;
   }
-  // Reject non-http(s) schemes (file:, data:, app:, …) so a crafted cache:// URL
-  // can't make the main process fetch a local/internal resource (SSRF).
-  try {
-    const { protocol: scheme } = new URL(decoded);
-    if (scheme !== 'http:' && scheme !== 'https:') return null;
-  } catch {
-    return null;
-  }
-  return decoded;
 };
 
 export const registerMediaProtocol = (): void => {
@@ -35,9 +23,10 @@ export const registerMediaProtocol = (): void => {
       return new Response(null, { status: 400 });
     }
     // Host-pin here too (mediaCache re-checks before fetching) to reject the
-    // SSRF/bearer-exfil request up front with a clear status.
+    // SSRF/bearer-exfil request up front with a clear status. This also rejects
+    // non-http(s) schemes (file:, data:, app:) — classifyUrl owns that rule.
     if (!isTrustedMediaOrigin(sourceUrl)) {
-      logger.warn(`Rejected media request to non-API host: ${sourceUrl}`);
+      logger.warn(`Rejected media request to untrusted source: ${sourceUrl}`);
       return new Response(null, { status: 403 });
     }
     const cached = await fetchCachedMedia(sourceUrl);
@@ -49,7 +38,10 @@ export const registerMediaProtocol = (): void => {
       status: 200,
       headers: {
         'Content-Type': cached.mimeType,
-        'Cache-Control': 'public, max-age=31536000, immutable',
+        // NOT immutable: the disk entry is keyed by URL hash, so a poster replaced
+        // in place keeps its URL. A day-long max-age keeps renders free while
+        // letting the renderer pick up the copy mediaCache revalidated.
+        'Cache-Control': `public, max-age=${MEDIA_MAX_AGE_SECONDS}`,
       },
     });
   });

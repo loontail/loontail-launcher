@@ -7,5 +7,5 @@ export {
   useResumeBundle,
   useStartBundle,
 } from './hooks';
+export type { BundleSyncState } from './store';
 export { isBundleBusy } from './store';
-export type { BundleRuntimeState } from './store';

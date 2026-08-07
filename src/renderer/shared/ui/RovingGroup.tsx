@@ -48,7 +48,7 @@ export const RovingGroup = ({ children, resetKey, ...rest }: RovingGroupProps) =
     if (!keys.includes(event.key)) return;
     const all = items();
     if (all.length === 0) return;
-    const index = all.findIndex((el) => el === document.activeElement);
+    const index = all.indexOf(document.activeElement as HTMLElement);
     if (index < 0) return;
 
     let next: number;
@@ -73,6 +73,7 @@ export const RovingGroup = ({ children, resetKey, ...rest }: RovingGroupProps) =
   };
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: the handlers only delegate arrow keys to the already-focusable children, which carry the interactive roles
     <div ref={ref} onKeyDown={onKeyDown} onFocus={onFocus} {...rest}>
       {children}
     </div>

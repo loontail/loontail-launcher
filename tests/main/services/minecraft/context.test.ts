@@ -28,7 +28,7 @@ import { buildContext } from '@main/services/minecraft/context';
 // The operational id over IPC is a CatalogKey; this build is official, so its
 // key is `official:runtime-client`. The on-disk folder must still be the bare
 // ref `runtime-client` (folder-naming decouple), asserted below.
-const SLUG = asCatalogKey('official:runtime-client');
+const KEY = asCatalogKey('official:runtime-client');
 const OFFICIAL_SLUG = asClientSlug('runtime-client');
 const STALE_RUNTIME_COMPONENT = 'java-runtime-gamma';
 const TARGET_RUNTIME_COMPONENT = 'java-runtime-delta';
@@ -38,7 +38,7 @@ const launcherSettings = (): LauncherSettings =>
     memory: { allocatedRamMb: 2048 },
     storage: { clientsFolder: 'Z:/clients' },
     clients: {
-      [SLUG]: {
+      [KEY]: {
         runtime: {
           component: STALE_RUNTIME_COMPONENT,
           path: 'Z:/userData/runtimes/java-runtime-gamma',
@@ -57,7 +57,7 @@ const client = (): Client =>
 const officialItem = (): CatalogItem =>
   ({
     kind: 'official',
-    key: SLUG,
+    key: KEY,
     ref: { source: 'official', slug: OFFICIAL_SLUG },
     spec: {
       minecraftVersion: '1.20.1',
@@ -96,11 +96,11 @@ describe('buildContext', () => {
       },
     } as unknown as MinecraftKit;
 
-    const context = await buildContext(kit, SLUG, undefined, {
+    const context = await buildContext(kit, KEY, undefined, {
       resolveBuild: contextMocks.resolveBuild,
     });
 
-    expect(contextMocks.setClientOverride).toHaveBeenCalledWith(SLUG, { runtime: undefined });
+    expect(contextMocks.setClientOverride).toHaveBeenCalledWith(KEY, { runtime: undefined });
     expect(context.target).toBe(resolvedTarget);
     // The fixup re-resolves settings whose stale override was dropped, so the
     // narrowed slice reflects the default-derived client folder.
@@ -120,7 +120,7 @@ describe('buildContext', () => {
       targets: { resolve: vi.fn(async () => resolvedTarget) },
     } as unknown as MinecraftKit;
 
-    const context = await buildContext(kit, SLUG, undefined, {
+    const context = await buildContext(kit, KEY, undefined, {
       getSettings: injectedGetSettings,
       persistClientOverride: injectedPersist,
       resolveBuild: contextMocks.resolveBuild,
@@ -130,7 +130,7 @@ describe('buildContext', () => {
     // runtime ref must be cleared via the injected persist, leaving the store
     // untouched (the module mock is never consulted).
     expect(injectedGetSettings).toHaveBeenCalled();
-    expect(injectedPersist).toHaveBeenCalledWith(SLUG, { runtime: undefined });
+    expect(injectedPersist).toHaveBeenCalledWith(KEY, { runtime: undefined });
     expect(contextMocks.setClientOverride).not.toHaveBeenCalled();
     expect(context.resolved.storage.clientFolder).toBe('Z:/clients/runtime-client');
   });

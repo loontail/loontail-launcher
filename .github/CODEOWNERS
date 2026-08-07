@@ -1,0 +1,5 @@
+# Auto-assigned reviewer on every PR. This is the one repo that ships
+# auto-updating binaries, and the GitHub Release assets ARE the update channel —
+# .github/workflows/, electron-builder.yml and src/main/services/updater/ decide
+# what every user auto-executes next, so nothing here should merge unreviewed.
+* @loontail

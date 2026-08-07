@@ -5,7 +5,7 @@ const statusMocks = vi.hoisted(() => {
   return {
     buildContext: vi.fn(),
     getSettings: vi.fn(),
-    isAnythingInstalled: vi.fn(),
+    hasAnyVersionInstalled: vi.fn(),
     resolveClientInstallPresence: vi.fn(),
     setClientOverride: vi.fn(),
   };
@@ -19,8 +19,8 @@ vi.mock('@main/services/minecraft/context', () => ({
   buildContext: statusMocks.buildContext,
 }));
 
-vi.mock('@main/services/minecraft/runtimeState', () => ({
-  isAnythingInstalled: statusMocks.isAnythingInstalled,
+vi.mock('@main/services/minecraft/installedVersions', () => ({
+  hasAnyVersionInstalled: statusMocks.hasAnyVersionInstalled,
 }));
 
 vi.mock('@main/services/minecraft/readinessPolicy', () => ({
@@ -40,13 +40,14 @@ import { InstallStatuses } from '@shared/contracts/minecraft';
 import { makeLauncherSettings, makeMinecraftBroadcaster } from '../../../helpers/fixtures';
 import {
   stubAccountProvider,
-  stubConsolePort,
+  stubClearBundleManifest,
+  stubConsoleSink,
   stubOpenConsole,
   stubResolveBuild,
   stubResolveBundleRepairFilter,
 } from './managerStubs';
 
-const SLUG = asCatalogKey('official:test-client');
+const KEY = asCatalogKey('official:test-client');
 
 const launcherSettings = () => makeLauncherSettings();
 
@@ -57,10 +58,11 @@ const makeManager = (ops?: OpMap): MinecraftManager =>
       targets: { resolve: vi.fn() },
     } as unknown as MinecraftKit,
     createClientOperationLocks(),
-    stubConsolePort(),
+    stubConsoleSink(),
     stubOpenConsole(),
     stubAccountProvider(),
     stubResolveBundleRepairFilter(),
+    stubClearBundleManifest(),
     stubResolveBuild(),
     ops ?? new Map(),
   );
@@ -68,12 +70,12 @@ const makeManager = (ops?: OpMap): MinecraftManager =>
 const resetStatusMocks = (): void => {
   statusMocks.buildContext.mockReset();
   statusMocks.getSettings.mockReset();
-  statusMocks.isAnythingInstalled.mockReset();
+  statusMocks.hasAnyVersionInstalled.mockReset();
   statusMocks.resolveClientInstallPresence.mockReset();
   statusMocks.setClientOverride.mockReset();
 
   statusMocks.getSettings.mockReturnValue(launcherSettings());
-  statusMocks.isAnythingInstalled.mockResolvedValue(false);
+  statusMocks.hasAnyVersionInstalled.mockResolvedValue(false);
   statusMocks.resolveClientInstallPresence.mockResolvedValue(InstallStatuses.INSTALLED);
 };
 
@@ -82,18 +84,18 @@ describe('MinecraftManager.getStatus', () => {
     resetStatusMocks();
     statusMocks.resolveClientInstallPresence.mockResolvedValue(InstallStatuses.INSTALLED);
 
-    await expect(makeManager().getStatus(SLUG)).resolves.toEqual({
+    await expect(makeManager().getStatus(KEY)).resolves.toEqual({
       status: InstallStatuses.INSTALLED,
       paused: false,
     });
-    expect(statusMocks.resolveClientInstallPresence).toHaveBeenCalledWith(SLUG);
+    expect(statusMocks.resolveClientInstallPresence).toHaveBeenCalledWith(KEY);
   });
 
   it('seeds not-installed without any readiness verification', async () => {
     resetStatusMocks();
     statusMocks.resolveClientInstallPresence.mockResolvedValue(InstallStatuses.NOT_INSTALLED);
 
-    await expect(makeManager().getStatus(SLUG)).resolves.toEqual({
+    await expect(makeManager().getStatus(KEY)).resolves.toEqual({
       status: InstallStatuses.NOT_INSTALLED,
       paused: false,
     });
@@ -103,7 +105,7 @@ describe('MinecraftManager.getStatus', () => {
     resetStatusMocks();
     statusMocks.resolveClientInstallPresence.mockResolvedValue(InstallStatuses.UNVERIFIED);
 
-    await expect(makeManager().getStatus(SLUG)).resolves.toEqual({
+    await expect(makeManager().getStatus(KEY)).resolves.toEqual({
       status: InstallStatuses.UNVERIFIED,
       paused: false,
     });
@@ -117,12 +119,11 @@ describe('MinecraftManager.getStatus', () => {
       kind: OpKinds.INSTALL,
       pauseController: new PauseController(),
       abort: new AbortController(),
-      paused: true,
-      cancelled: false,
+      phase: 'paused',
     };
-    ops.set(SLUG, op);
+    ops.set(KEY, op);
 
-    await expect(manager.getStatus(SLUG)).resolves.toEqual({
+    await expect(manager.getStatus(KEY)).resolves.toEqual({
       status: InstallStatuses.INSTALLING,
       paused: true,
     });

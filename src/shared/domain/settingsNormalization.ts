@@ -76,11 +76,11 @@ export const normalizeLauncherSettings = (value: unknown): LauncherSettings => {
     rawSettings.clients && typeof rawSettings.clients === 'object' ? rawSettings.clients : {};
 
   const clients: Record<string, ClientSettingsOverride> = {};
-  for (const [slug, override] of Object.entries(rawClients)) {
-    if (slug && slug !== 'undefined' && slug !== 'null') {
+  for (const [rawKey, override] of Object.entries(rawClients)) {
+    if (rawKey && rawKey !== 'undefined' && rawKey !== 'null') {
       // Lift a bare slug/uuid key onto the CatalogKey form so an upgrade does
       // not orphan existing per-client overrides.
-      clients[migrateClientOverrideKey(slug)] = normalizeClientOverride(override);
+      clients[migrateClientOverrideKey(rawKey)] = normalizeClientOverride(override);
     }
   }
 

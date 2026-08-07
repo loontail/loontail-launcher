@@ -1,8 +1,8 @@
 import fs from 'node:fs/promises';
-import { BUNDLE_DOWNLOAD_CONCURRENCY } from '@main/constants/bundle';
+import { BUNDLE_PLAN_HASH_CONCURRENCY } from '@main/constants/bundle';
 import { createLimiter } from '@main/infra/concurrency';
-import { BundleErrorCodes } from '@shared/contracts/bundle';
 import type { LocalManifest, RemoteManifest, RemoteManifestEntry } from '@shared/contracts/bundle';
+import { BundleErrorCodes } from '@shared/contracts/bundle';
 import { BundleError } from './errors';
 import { sha256File } from './hash';
 import { flattenRemoteEntries } from './manifestUtils';
@@ -115,7 +115,7 @@ export const buildPlan = async (
   const remoteComparisonKeys = new Set<string>(remoteEntries.map((e) => toComparisonKey(e.path)));
   const localFiles = indexLocalFiles(local);
 
-  const limit = createLimiter(BUNDLE_DOWNLOAD_CONCURRENCY);
+  const limit = createLimiter(BUNDLE_PLAN_HASH_CONCURRENCY);
   const verdicts = await Promise.all(
     remoteEntries.map((entry) =>
       limit(async () => {

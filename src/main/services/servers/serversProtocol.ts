@@ -56,7 +56,8 @@ export const tryParseStatusResponse = (buffer: Buffer): ServerStatus | null | 'i
 
   const body = buffer.subarray(bodyStart, bodyStart + totalLength);
   const idRead = readVarInt(body, 0);
-  if (!idRead || idRead.value !== 0x00) return null;
+  if (!idRead) return null;
+  if (idRead.value !== 0x00) return null;
 
   const strLenRead = readVarInt(body, idRead.offset);
   if (!strLenRead) return null;

@@ -1,5 +1,5 @@
 import { MinecraftKitError, type MinecraftKitErrorCode } from '@loontail/minecraft-kit';
-import { ManagerError, classifyError } from '@main/services/minecraft/errors';
+import { classifyError, MinecraftError } from '@main/services/minecraft/errors';
 import { type MinecraftErrorCode, MinecraftErrorCodes } from '@shared/contracts/minecraft';
 import { describe, expect, it } from 'vitest';
 
@@ -11,12 +11,12 @@ const abortedSignal = (): AbortSignal => {
   return controller.signal;
 };
 
-describe('ManagerError', () => {
+describe('MinecraftError', () => {
   it('preserves the launcher error code and message', () => {
-    const error = new ManagerError(MinecraftErrorCodes.NO_ACCOUNT, 'no account');
+    const error = new MinecraftError(MinecraftErrorCodes.NO_ACCOUNT, 'no account');
     expect(error.code).toBe(MinecraftErrorCodes.NO_ACCOUNT);
     expect(error.message).toBe('no account');
-    expect(error.name).toBe('ManagerError');
+    expect(error.name).toBe('MinecraftError');
     expect(error).toBeInstanceOf(Error);
   });
 });

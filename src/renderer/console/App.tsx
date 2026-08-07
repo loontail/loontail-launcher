@@ -1,13 +1,13 @@
 import { CONSOLE_BUFFER_LIMIT } from '@shared/constants';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { copyAll, copyText } from './api';
 import { ConsoleCrashBanner } from './ConsoleCrashBanner';
 import { ConsoleDetailPanel } from './ConsoleDetailPanel';
 import { ConsoleHeader } from './ConsoleHeader';
 import { ConsoleLogBody } from './ConsoleLogBody';
 import { ConsolePausedBanner } from './ConsolePausedBanner';
 import { ConsoleToolbar } from './ConsoleToolbar';
-import { copyAll, copyText } from './api';
 import { CONSOLE_ROW_HEIGHT } from './constants';
 import { COPY_FEEDBACKS, type CopyFeedback } from './format';
 import { useConsoleScroll } from './hooks/useConsoleScroll';

@@ -1,11 +1,10 @@
 import {
-  type MinecraftKit,
-  type MinecraftProfile,
   detectSkinVariant,
   isMinecraftKitError,
+  type MinecraftKit,
+  type MinecraftProfile,
 } from '@loontail/minecraft-kit';
-import type { SkinAssetKind } from '@loontail/yggdrasil-core';
-import { validatePngBuffer } from '@loontail/yggdrasil-core';
+import { errorMessage } from '@main/infra/errorMessage';
 import { scopedLogger } from '@main/infra/logger';
 import type { AuthSessionPort } from '@main/services/auth/session';
 import type { FetchTextures, YggdrasilGateway } from '@main/services/auth/yggdrasilClient';
@@ -18,6 +17,7 @@ import {
   type UploadSkinPayload,
   type UploadSkinResult,
 } from '@shared/contracts/skin';
+import { type SkinAssetKind, validatePngBuffer } from '@shared/yggdrasil/png';
 import { SkinError } from './errors';
 
 const logger = scopedLogger('skin');
@@ -26,11 +26,11 @@ const logger = scopedLogger('skin');
 // chunks (validatePngBuffer only reads the header). A real skin is a few KB.
 const MAX_TEXTURE_BYTES = 256 * 1024;
 
-// Fails tsc if our SkinKind ever diverges from yggdrasil-core's SkinAssetKind,
-// which validatePngBuffer requires.
+// Fails tsc if our SkinKind ever diverges from the SkinAssetKind that
+// validatePngBuffer requires.
 type SkinKindMatchesAsset = SkinKind extends SkinAssetKind
   ? true
-  : ['SkinKind diverged from yggdrasil-core SkinAssetKind'];
+  : ['SkinKind diverged from SkinAssetKind'];
 const _skinKindAssetCheck: SkinKindMatchesAsset = true;
 void _skinKindAssetCheck;
 
@@ -42,9 +42,25 @@ const requireSession = (authSession: AuthSessionPort): AuthSession => {
   return session;
 };
 
+// "Authenticated for textures" is one rule, not one per handler: a Yggdrasil
+// session additionally needs the live bearer, a Mojang session carries its own
+// access token. Resolved once so a change to the precondition lands in one place.
+type SkinAuth =
+  | { provider: 'yggdrasil'; session: YggdrasilSession; sessionToken: string }
+  | { provider: 'mojang'; session: MojangSession };
+
+const resolveSkinAuth = (authSession: AuthSessionPort): SkinAuth => {
+  const session = requireSession(authSession);
+  if (session.provider !== 'yggdrasil') return { provider: 'mojang', session };
+  const sessionToken = authSession.sessionToken();
+  if (!sessionToken) {
+    throw new SkinError(SkinErrorCodes.NOT_AUTHENTICATED, 'No active session');
+  }
+  return { provider: 'yggdrasil', session, sessionToken };
+};
+
 const throwUploadError = (prefix: string, error: unknown): never => {
-  const message = error instanceof Error ? error.message : 'Unknown error';
-  throw new SkinError(SkinErrorCodes.UPLOAD_FAILED, `${prefix}: ${message}`);
+  throw new SkinError(SkinErrorCodes.UPLOAD_FAILED, `${prefix}: ${errorMessage(error)}`);
 };
 
 // Pull Mojang's human-readable `errorMessage` (or `details.status`) so the toast
@@ -216,24 +232,17 @@ export const createSkinHandlers = (
     if (!verdict.ok) {
       throw new SkinError(SkinErrorCodes.INVALID_IMAGE, verdict.reason);
     }
-    const session = requireSession(authSession);
-    if (session.provider === 'yggdrasil') {
-      const sessionToken = authSession.sessionToken();
-      if (!sessionToken) {
-        throw new SkinError(SkinErrorCodes.NOT_AUTHENTICATED, 'No active session');
-      }
-      return uploadSkinYggdrasil(session, payload, gateway, sessionToken);
+    const auth = resolveSkinAuth(authSession);
+    if (auth.provider === 'yggdrasil') {
+      return uploadSkinYggdrasil(auth.session, payload, gateway, auth.sessionToken);
     }
-    return uploadSkinMojang(session, payload);
+    return uploadSkinMojang(auth.session, payload);
   };
 
   const clearSkin = async (): Promise<void> => {
-    const session = requireSession(authSession);
-    if (session.provider === 'yggdrasil') {
-      const sessionToken = authSession.sessionToken();
-      if (!sessionToken) {
-        throw new SkinError(SkinErrorCodes.NOT_AUTHENTICATED, 'No active session');
-      }
+    const auth = resolveSkinAuth(authSession);
+    if (auth.provider === 'yggdrasil') {
+      const { session, sessionToken } = auth;
       const { texturesClient, fetchTextures } = gateway;
       // Snapshot the URLs before deleting so we can invalidate the cache.
       const before = await fetchTextures(session.profile.uuid).catch(() => null);
@@ -244,8 +253,10 @@ export const createSkinHandlers = (
         ]);
       } catch (error) {
         logger.error('Failed to clear textures on Yggdrasil server', error);
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        throw new SkinError(SkinErrorCodes.CLEAR_FAILED, `Failed to clear textures: ${message}`);
+        throw new SkinError(
+          SkinErrorCodes.CLEAR_FAILED,
+          `Failed to clear textures: ${errorMessage(error)}`,
+        );
       }
       if (before?.skin?.url) await invalidateMediaCache(before.skin.url);
       if (before?.cape?.url) await invalidateMediaCache(before.cape.url);
@@ -254,12 +265,14 @@ export const createSkinHandlers = (
 
     // Mojang exposes no cape management to launchers, so only the skin resets.
     try {
-      const profile = await kit.auth.profile.resetSkin({ accessToken: session.accessToken });
-      authSession.updateMojangProfile(session, profile);
+      const profile = await kit.auth.profile.resetSkin({ accessToken: auth.session.accessToken });
+      authSession.updateMojangProfile(auth.session, profile);
     } catch (error) {
       logger.error('Failed to reset Mojang skin', error);
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      throw new SkinError(SkinErrorCodes.CLEAR_FAILED, `Failed to clear skin: ${message}`);
+      throw new SkinError(
+        SkinErrorCodes.CLEAR_FAILED,
+        `Failed to clear skin: ${errorMessage(error)}`,
+      );
     }
   };
 

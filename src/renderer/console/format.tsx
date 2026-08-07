@@ -4,7 +4,7 @@ import {
   type ConsoleSource,
   ConsoleStatuses,
 } from '@shared/contracts/console';
-import { type ReactNode, memo } from 'react';
+import { memo, type ReactNode } from 'react';
 
 const TWO_DIGITS = 2;
 const THREE_DIGITS = 3;
@@ -93,13 +93,13 @@ export const statusToneClass = (status: ConsoleProcessStatus): string => {
     case ConsoleStatuses.RUNNING:
       return 'border-success/40 text-success';
     case ConsoleStatuses.LAUNCHING:
-      return 'border-edge-lg text-foreground';
+      return 'border-edge-lg text-text-hi';
     case ConsoleStatuses.CRASHED:
     case ConsoleStatuses.ERROR:
       return 'border-destructive/50 text-destructive';
     case ConsoleStatuses.EXITED:
-      return 'border-edge-md text-foreground/60';
+      return 'border-edge-md text-text-hi/60';
     default:
-      return 'border-edge-md text-foreground/55';
+      return 'border-edge-md text-text-hi/55';
   }
 };

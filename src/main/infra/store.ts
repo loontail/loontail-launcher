@@ -12,9 +12,9 @@ import {
 } from '@shared/contracts/auth';
 import {
   INSTANCE_REGISTRY_SCHEMA_VERSION,
-  type InstanceRegistry,
-  InstanceRegistrySchema,
-} from '@shared/contracts/instance';
+  type LocalBuildRegistry,
+  LocalBuildRegistrySchema,
+} from '@shared/contracts/localBuild';
 import { type LauncherSettings, LauncherSettingsSchema } from '@shared/contracts/settings';
 import {
   defaultLauncherSettings,
@@ -23,7 +23,7 @@ import {
 } from '@shared/domain/settings';
 import { app, safeStorage } from 'electron';
 import { z } from 'zod';
-import { type Db, getDb } from './db/connection';
+import { closeDatabase as closeDb, type Db, getDb } from './db/connection';
 import { importLegacyElectronStore } from './db/legacyImport';
 import {
   deleteAuthRow,
@@ -39,7 +39,12 @@ import {
   writeSettings,
 } from './db/repos';
 
-export { closeDatabase } from './db/connection';
+// Wrapped (not re-exported) so the in-memory bearer cache cannot outlive the
+// database it was read from.
+export const closeDatabase = (): void => {
+  invalidateApiSessionCache();
+  closeDb();
+};
 
 const logger = scopedLogger('store');
 // A blob without the session token fails validation and forces a fresh sign-in,
@@ -82,6 +87,10 @@ const YggdrasilAuthSecretSchema = z.object({
   // The API bearer, stored encrypted next to the in-game Yggdrasil pair so a
   // single decrypt yields everything a session needs.
   sessionToken: z.string().min(1),
+  // Epoch ms the server expires the bearer at. Optional on purpose: blobs
+  // written before expiry tracking must keep working, and a missing value means
+  // "unknown" — the caller then refreshes once instead of assuming freshness.
+  sessionExpiresAt: z.number().int().positive().nullable().optional(),
 });
 
 const MojangAuthSecretSchema = z.object({
@@ -98,7 +107,15 @@ const AuthSecretSchema = z.discriminatedUnion('provider', [
 
 type AuthSecret = z.infer<typeof AuthSecretSchema>;
 
-const emptyInstanceRegistry = (): InstanceRegistry => ({
+// The universal API bearer plus the moment the server stops accepting it.
+// `expiresAt` is null when unknown (a session stored before expiry tracking) —
+// callers treat that as "refresh once" rather than as "never expires".
+export type StoredApiSession = {
+  readonly token: string;
+  readonly expiresAt: number | null;
+};
+
+const emptyLocalBuildRegistry = (): LocalBuildRegistry => ({
   schema: INSTANCE_REGISTRY_SCHEMA_VERSION,
   instances: [],
 });
@@ -176,6 +193,8 @@ export const initStore = (): void => {
   }
   runMigrations(db);
   purgeLegacyAuth(db);
+  // The import/purge above can rewrite or drop the auth row behind the cache.
+  invalidateApiSessionCache();
 };
 
 const secureStorageFailure = (error: unknown): { message: string } => ({
@@ -222,9 +241,12 @@ const metadataFromSession = (session: AuthSession): StoredAuthMetadata => {
   };
 };
 
-const secretFromSession = (session: AuthSession, sessionToken: string | undefined): AuthSecret => {
+const secretFromSession = (
+  session: AuthSession,
+  apiSession: StoredApiSession | undefined,
+): AuthSecret => {
   if (session.provider === 'yggdrasil') {
-    if (!sessionToken) {
+    if (!apiSession) {
       // A Yggdrasil session without its API bearer is unusable; refuse to persist
       // a half-session rather than store one that 401s on every call.
       throw new Error('Yggdrasil session requires a Loontail session token');
@@ -234,7 +256,8 @@ const secretFromSession = (session: AuthSession, sessionToken: string | undefine
       provider: 'yggdrasil',
       accessToken: session.accessToken,
       clientToken: session.clientToken,
-      sessionToken,
+      sessionToken: apiSession.token,
+      sessionExpiresAt: apiSession.expiresAt,
     };
   }
   return {
@@ -378,17 +401,35 @@ export const runAuthStoreMigrationIfNeeded = (): void => {
   getStoredAuth();
 };
 
-// `sessionToken` is the API bearer: mandatory for Yggdrasil sessions, ignored
+// The API bearer is read on the hot path — once per bundle file request and per
+// media fetch — and every read cost a sqlite hit plus a synchronous
+// safeStorage/DPAPI decrypt. Cache the already-in-memory bearer and invalidate
+// beside the only two writers of the row (`setStoredAuth`/`clearStoredAuth`), so
+// a rotated single-use token can never be served stale. `undefined` = not yet
+// read, `null` = read and genuinely absent (a Mojang session has no bearer).
+let apiSessionCache: StoredApiSession | null | undefined;
+
+const invalidateApiSessionCache = (): void => {
+  apiSessionCache = undefined;
+};
+
+const rememberApiSession = (value: StoredApiSession | null): StoredApiSession | null => {
+  apiSessionCache = value;
+  return value;
+};
+
+// `apiSession` carries the API bearer: mandatory for Yggdrasil sessions, ignored
 // for Mojang (which has none).
-export const setStoredAuth = (session: AuthSession | null, sessionToken?: string): void => {
+export const setStoredAuth = (session: AuthSession | null, apiSession?: StoredApiSession): void => {
   if (session === null) {
     clearStoredAuth();
     return;
   }
+  invalidateApiSessionCache();
   try {
     assertSecureStorageAvailable();
     const encrypted = safeStorage.encryptString(
-      JSON.stringify(secretFromSession(session, sessionToken)),
+      JSON.stringify(secretFromSession(session, apiSession)),
     );
     writeAuthRow(getDb(), JSON.stringify(metadataFromSession(session)), encrypted);
   } catch (error) {
@@ -402,24 +443,35 @@ export const setStoredAuth = (session: AuthSession | null, sessionToken?: string
   }
 };
 
-// The API bearer for the stored session, or null when none is stored (Mojang
-// has no token) or decrypt/validation fails — callers then fall back to re-login.
-export const getStoredSessionToken = (): string | null => {
+// The API bearer for the stored session with its expiry, or null when none is
+// stored (Mojang has no token) or decrypt/validation fails — callers then fall
+// back to re-login.
+export const getStoredApiSession = (): StoredApiSession | null => {
+  if (apiSessionCache !== undefined) return apiSessionCache;
   const row = readAuthRow(getDb());
-  if (!row) return null;
+  if (!row) return rememberApiSession(null);
   const raw = parseStoredMetadata(row.metadata);
-  if (raw === null) return null;
+  if (raw === null) return rememberApiSession(null);
   const metadata = StoredAuthMetadataSchema.safeParse(raw);
-  if (!metadata.success || metadata.data.provider !== 'yggdrasil') return null;
+  if (!metadata.success || metadata.data.provider !== 'yggdrasil') return rememberApiSession(null);
   try {
     const secret = decryptAuthSecret(row.secret);
-    return secret.provider === 'yggdrasil' ? secret.sessionToken : null;
+    if (secret.provider !== 'yggdrasil') return rememberApiSession(null);
+    return rememberApiSession({
+      token: secret.sessionToken,
+      expiresAt: secret.sessionExpiresAt ?? null,
+    });
   } catch {
+    // Not cached: a decrypt failure can be a transient secure-storage outage,
+    // and caching it would keep a still-valid session unreadable until a write.
     return null;
   }
 };
 
+export const getStoredSessionToken = (): string | null => getStoredApiSession()?.token ?? null;
+
 export const clearStoredAuth = (): void => {
+  invalidateApiSessionCache();
   deleteAuthRow(getDb());
 };
 
@@ -439,19 +491,19 @@ export const setStoredLauncherSettings = (settings: LauncherSettings): LauncherS
 };
 
 // The local-build index. A malformed value degrades to an empty registry; the
-// instances service self-heals it from the on-disk instance manifests.
-export const getStoredInstanceRegistry = (): InstanceRegistry => {
+// local-builds service self-heals it from the on-disk build manifests.
+export const getStoredLocalBuildRegistry = (): LocalBuildRegistry => {
   const registry = {
     schema: INSTANCE_REGISTRY_SCHEMA_VERSION,
     instances: readInstanceEntries(getDb()),
   };
-  const parsed = InstanceRegistrySchema.safeParse(registry);
+  const parsed = LocalBuildRegistrySchema.safeParse(registry);
   if (parsed.success) return parsed.data;
-  logger.warn('Stored instance registry failed validation; falling back to empty');
-  return emptyInstanceRegistry();
+  logger.warn('Stored local-build registry failed validation; falling back to empty');
+  return emptyLocalBuildRegistry();
 };
 
-export const setStoredInstanceRegistry = (registry: InstanceRegistry): InstanceRegistry => {
+export const setStoredLocalBuildRegistry = (registry: LocalBuildRegistry): LocalBuildRegistry => {
   replaceInstanceEntries(getDb(), registry.instances);
   return registry;
 };

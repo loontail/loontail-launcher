@@ -1,4 +1,4 @@
-import { createRuntimeStore } from '@renderer/shared/lib/stores/createRuntimeStore';
+import { createLiveStatusStore } from '@renderer/shared/lib/stores/createLiveStatusStore';
 import {
   type InstallStatus,
   InstallStatuses,
@@ -6,7 +6,7 @@ import {
   type ProgressStage,
 } from '@shared/contracts/minecraft';
 
-export type ClientRuntimeState = {
+export type BuildInstallState = {
   status: InstallStatus;
   paused: boolean;
   stage?: ProgressStage | undefined;
@@ -14,12 +14,11 @@ export type ClientRuntimeState = {
   overallPercent?: number | undefined;
   bytesDownloaded?: number | undefined;
   totalBytes?: number | undefined;
-  speedBytesPerSec?: number | undefined;
   currentFile?: string | undefined;
   error?: { code: MinecraftErrorCode; message: string } | undefined;
 };
 
-export const DEFAULT_STATE: ClientRuntimeState = {
+export const DEFAULT_STATE: BuildInstallState = {
   status: InstallStatuses.UNKNOWN,
   paused: false,
 };
@@ -39,7 +38,7 @@ const STATUSES_CLEAR_ERROR: ReadonlySet<InstallStatus> = new Set([
   InstallStatuses.NOT_INSTALLED,
 ]);
 
-const store = createRuntimeStore<InstallStatus, ClientRuntimeState>({
+const store = createLiveStatusStore<InstallStatus, BuildInstallState>({
   default: DEFAULT_STATE,
   terminalStatuses: STATUSES_WITHOUT_PROGRESS,
   clearProgressFields: {
@@ -48,7 +47,6 @@ const store = createRuntimeStore<InstallStatus, ClientRuntimeState>({
     overallPercent: undefined,
     bytesDownloaded: undefined,
     totalBytes: undefined,
-    speedBytesPerSec: undefined,
     currentFile: undefined,
   },
   clearErrorStatuses: STATUSES_CLEAR_ERROR,
@@ -56,4 +54,4 @@ const store = createRuntimeStore<InstallStatus, ClientRuntimeState>({
 });
 
 export const useMinecraftStore = store.useStore;
-export const selectClient = store.selectEntry;
+export const selectBuild = store.selectEntry;

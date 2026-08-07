@@ -1,9 +1,5 @@
 export { triggerInstall } from './api';
-export {
-  UpdaterAutoCheck,
-  UpdaterEventsListener,
-  markUserInitiatedCheck,
-  triggerUpdaterCheck,
-} from './events';
-export { UpdaterBadge } from './UpdaterBadge';
+export { markUserInitiated as markUserInitiatedCheck } from './checkTracking';
+export { triggerUpdaterCheck, UpdaterAutoCheck, UpdaterEventsListener } from './events';
 export { useUpdaterStatus } from './store';
+export { UpdaterBadge } from './UpdaterBadge';

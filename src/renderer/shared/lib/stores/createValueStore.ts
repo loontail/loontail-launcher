@@ -1,4 +1,4 @@
-import { type StoreApi, type UseBoundStore, create } from 'zustand';
+import { create, type StoreApi, type UseBoundStore } from 'zustand';
 
 type ValueStore<T> = {
   value: T;

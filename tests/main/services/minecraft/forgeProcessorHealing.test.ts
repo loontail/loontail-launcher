@@ -11,14 +11,14 @@ import {
   type Target,
 } from '@loontail/minecraft-kit';
 import {
-  type ForgeProcessorCache,
   createForgeProcessorCache,
+  type ForgeProcessorCache,
   repairMissingForgeProcessorOutputs,
 } from '@main/services/minecraft/forgeProcessorHealing';
 import { asCatalogKey } from '@shared/contracts/ids';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const SLUG = asCatalogKey('official:forge-client');
+const KEY = asCatalogKey('official:forge-client');
 const OUTPUT_CONTENT = 'processor-output';
 
 let tempRoot = '';
@@ -81,6 +81,45 @@ afterEach(async () => {
   }
 });
 
+describe('createForgeProcessorCache eviction', () => {
+  const targetIn = (directory: string): Target => ({ ...target(), directory }) as Target;
+
+  const planIn = (directory: string): InstallPlan => {
+    const base = processorPlan(path.join(directory, 'versions', 'forge', 'processed.jar'));
+    return { ...base, directory, target: targetIn(directory) };
+  };
+
+  it('evicts only the uninstalled directory and leaves other clients warm', () => {
+    const other = path.join(tempRoot, '..', 'other-client');
+    cache.remember(planIn(tempRoot));
+    cache.remember(planIn(other));
+
+    cache.evictByDirectory(tempRoot);
+
+    expect(cache.get(targetIn(tempRoot))).toBeUndefined();
+    expect(cache.get(targetIn(other))?.length).toBe(1);
+  });
+
+  it('matches the uninstalled directory the way the platform compares paths', () => {
+    cache.remember(planIn(tempRoot));
+
+    cache.evictByDirectory(tempRoot.toUpperCase());
+
+    // Windows paths are case-insensitive, so an upper-cased folder is the same
+    // entry; a case-sensitive filesystem must keep it.
+    const expected = process.platform === 'win32' ? undefined : expect.any(Array);
+    expect(cache.get(targetIn(tempRoot))).toEqual(expected);
+  });
+
+  it('ignores an empty directory instead of wiping the map', () => {
+    cache.remember(planIn(tempRoot));
+
+    cache.evictByDirectory('');
+
+    expect(cache.get(targetIn(tempRoot))?.length).toBe(1);
+  });
+});
+
 describe('repairMissingForgeProcessorOutputs', () => {
   it('skips full replanning when cached processor outputs are clean', async () => {
     const processorOutput = path.join(tempRoot, 'versions', 'forge', 'processed.jar');
@@ -93,7 +132,7 @@ describe('repairMissingForgeProcessorOutputs', () => {
       },
     } as unknown as MinecraftKit;
 
-    await expect(repairMissingForgeProcessorOutputs(kit, SLUG, target(), cache)).resolves.toEqual({
+    await expect(repairMissingForgeProcessorOutputs(kit, KEY, target(), cache)).resolves.toEqual({
       ranProcessors: false,
       reranCount: 0,
     });
@@ -115,7 +154,7 @@ describe('repairMissingForgeProcessorOutputs', () => {
     } as unknown as MinecraftKit;
 
     await expect(
-      repairMissingForgeProcessorOutputs(kit, SLUG, target(), cache, { runPlan }),
+      repairMissingForgeProcessorOutputs(kit, KEY, target(), cache, { runPlan }),
     ).resolves.toEqual({
       ranProcessors: true,
       reranCount: 1,
@@ -146,7 +185,7 @@ describe('repairMissingForgeProcessorOutputs', () => {
       },
     } as unknown as MinecraftKit;
 
-    await repairMissingForgeProcessorOutputs(kit, SLUG, target(), cache, { runPlan });
+    await repairMissingForgeProcessorOutputs(kit, KEY, target(), cache, { runPlan });
 
     expect(runPlan).toHaveBeenCalledWith(expect.objectContaining({ totalBytes: 250 }));
   });
@@ -165,27 +204,27 @@ describe('repairMissingForgeProcessorOutputs', () => {
     } as unknown as MinecraftKit;
 
     await expect(
-      repairMissingForgeProcessorOutputs(kit, SLUG, target(), cache, {
+      repairMissingForgeProcessorOutputs(kit, KEY, target(), cache, {
         signal: controller.signal,
       }),
     ).rejects.toThrow();
     expect(kit.install.plan).not.toHaveBeenCalled();
   });
 
-  it('replans after clear() drops the clean cached entry', async () => {
+  it('replans after evictByDirectory drops the clean cached entry', async () => {
     const processorOutput = path.join(tempRoot, 'versions', 'forge', 'processed.jar');
     await fs.mkdir(path.dirname(processorOutput), { recursive: true });
     await fs.writeFile(processorOutput, OUTPUT_CONTENT, 'utf8');
     const plan = processorPlan(processorOutput);
     cache.remember(plan);
-    cache.clear();
+    cache.evictByDirectory(tempRoot);
     const kit = {
       install: {
         plan: vi.fn(async () => plan),
       },
     } as unknown as MinecraftKit;
 
-    await expect(repairMissingForgeProcessorOutputs(kit, SLUG, target(), cache)).resolves.toEqual({
+    await expect(repairMissingForgeProcessorOutputs(kit, KEY, target(), cache)).resolves.toEqual({
       ranProcessors: false,
       reranCount: 0,
     });

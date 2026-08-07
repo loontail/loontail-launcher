@@ -4,8 +4,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { BundleError } from '@main/services/bundle/errors';
 import { buildPlan } from '@main/services/bundle/plan';
-import { BundleErrorCodes } from '@shared/contracts/bundle';
 import type { LocalManifest, RemoteManifest } from '@shared/contracts/bundle';
+import { BundleErrorCodes } from '@shared/contracts/bundle';
 import { asBundleSlug } from '@shared/contracts/ids';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 

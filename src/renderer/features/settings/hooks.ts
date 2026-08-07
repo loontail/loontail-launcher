@@ -19,8 +19,6 @@ import { getDiskSpace, getFolderSize, getRamRange, pickInstallFolder } from './s
 const DISK_SPACE_STALE_TIME_MS = 30_000;
 const DISK_SPACE_DEBOUNCE_MS = 300;
 const FOLDER_SIZE_STALE_TIME_MS = 60_000;
-// Main-side mutations bypass the setQueryData path, so refetch periodically to
-// pick them up without a manual reload.
 const LAUNCHER_SETTINGS_STALE_TIME_MS = 5 * 60 * 1000;
 
 const useLauncherSettingsMutation = <TInput>(
@@ -33,7 +31,11 @@ const useLauncherSettingsMutation = <TInput>(
       queryClient.setQueryData(QUERY_KEYS.settings.root, next);
     },
   });
-  return { mutate: mutation.mutateAsync, isPending: mutation.isPending };
+  return {
+    mutate: mutation.mutate,
+    mutateAsync: mutation.mutateAsync,
+    isPending: mutation.isPending,
+  };
 };
 
 export const useLauncherSettings = () => {
@@ -49,8 +51,8 @@ export const useSetLauncher = () => useLauncherSettingsMutation(setLauncher);
 
 export const useSetClientOverride = () =>
   useLauncherSettingsMutation(
-    ({ slug, patch }: { slug: CatalogKey; patch: ClientSettingsOverride }) =>
-      setClientOverride(slug, patch),
+    ({ key, patch }: { key: CatalogKey; patch: ClientSettingsOverride }) =>
+      setClientOverride(key, patch),
   );
 
 export const useClearClientOverrides = () => useLauncherSettingsMutation(clearClientOverrides);
@@ -62,15 +64,20 @@ export const useChooseClientFolder = () => {
     onSuccess: (result) => {
       if (!result) return;
       queryClient.setQueryData(QUERY_KEYS.settings.root, result.settings);
-      toast.success(i18n.t('clientSettings.folderChangedToast'));
+      toast.success(i18n.t('buildSettings.folderChangedToast'));
     },
   });
-  return { mutate: mutation.mutateAsync, isPending: mutation.isPending };
+  return {
+    mutate: mutation.mutate,
+    mutateAsync: mutation.mutateAsync,
+    isPending: mutation.isPending,
+  };
 };
 
 export const usePickInstallFolder = () => {
   const queryClient = useQueryClient();
-  const { mutate: applyLauncher } = useSetLauncher();
+  // Awaited inside the mutationFn, so this one has to be the throwing form.
+  const { mutateAsync: applyLauncher } = useSetLauncher();
   const mutation = useMutation({
     mutationFn: async () => {
       const picked = await pickInstallFolder();
@@ -84,7 +91,11 @@ export const usePickInstallFolder = () => {
       if (changed) toast.success(i18n.t('settings.system.folderChangedToast'));
     },
   });
-  return { mutate: mutation.mutateAsync, isPending: mutation.isPending };
+  return {
+    mutate: mutation.mutate,
+    mutateAsync: mutation.mutateAsync,
+    isPending: mutation.isPending,
+  };
 };
 
 export const useRamRange = () => {
@@ -162,5 +173,9 @@ export const useClearMediaCache = () => {
       queryClient.setQueryData(QUERY_KEYS.media.cacheSize, 0);
     },
   });
-  return { mutate: mutation.mutateAsync, isPending: mutation.isPending };
+  return {
+    mutate: mutation.mutate,
+    mutateAsync: mutation.mutateAsync,
+    isPending: mutation.isPending,
+  };
 };

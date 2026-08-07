@@ -4,9 +4,9 @@ import path from 'node:path';
 import {
   BUNDLE_DOWNLOAD_CONCURRENCY,
   BUNDLE_DOWNLOAD_PROGRESS_THROTTLE_MS,
-  BUNDLE_DOWNLOAD_SPEED_WINDOW_MS,
 } from '@main/constants/bundle';
 import { errorMessage } from '@main/infra/errorMessage';
+import { isCancelled, isPaused, isRunning, type LifecyclePhase } from '@main/infra/lifecyclePhase';
 import { scopedLogger } from '@main/infra/logger';
 import {
   BundleErrorCodes,
@@ -20,12 +20,11 @@ import { downloadEntry } from './download';
 import { BundleError } from './errors';
 import { isAncestor, resolveSafeEntryPath } from './paths';
 import type { SyncPlan } from './plan';
-import { type SyncPhase, isCancelled, isPaused, isRunning } from './syncState';
 
 const logger = scopedLogger('bundle.runner');
 
 export type SyncTask = {
-  slug: CatalogKey;
+  key: CatalogKey;
   clientFolder: string;
   plan: SyncPlan;
   abort: AbortController;
@@ -33,10 +32,8 @@ export type SyncTask = {
   currentRequests: Set<ClientRequest>;
   // Cooperative lifecycle phase, checked between files (not mid-chunk). Mutate
   // only through the syncState mark* helpers.
-  phase: SyncPhase;
+  phase: LifecyclePhase;
   bytesDownloaded: number;
-  speedWindowStart: number;
-  speedWindowBytes: number;
   processedFiles: number;
   totalFiles: number;
   lastEmittedAt: number;
@@ -46,7 +43,7 @@ export type SyncTask = {
 };
 
 export type EmitProgress = (
-  slug: CatalogKey,
+  key: CatalogKey,
   status: BundleSyncStatus,
   patch?: Partial<BundleProgressEvent>,
 ) => void;
@@ -60,14 +57,6 @@ export type SyncPhasesResult = {
   deletedAny: boolean;
 };
 
-const syncPhasesResult = (
-  outcome: SyncPhasesResult['outcome'],
-  deletedAny: boolean,
-): SyncPhasesResult => ({
-  outcome,
-  deletedAny,
-});
-
 // Coalesce progress emissions, else hundreds of IPC pushes per second flood the
 // renderer.
 const maybeEmit = (
@@ -79,19 +68,7 @@ const maybeEmit = (
   const now = Date.now();
   if (!force && now - task.lastEmittedAt < BUNDLE_DOWNLOAD_PROGRESS_THROTTLE_MS) return;
   task.lastEmittedAt = now;
-  const elapsed = now - task.speedWindowStart;
-  let speed = 0;
-  if (elapsed > 0) {
-    speed = (task.speedWindowBytes / elapsed) * 1000;
-  }
-  if (elapsed > BUNDLE_DOWNLOAD_SPEED_WINDOW_MS) {
-    task.speedWindowStart = now;
-    task.speedWindowBytes = 0;
-  }
-  emit(task.slug, status, {
-    speedBytesPerSec: Math.max(0, Math.round(speed)),
-    ...(task.currentFile ? { currentFile: task.currentFile } : {}),
-  });
+  emit(task.key, status, task.currentFile ? { currentFile: task.currentFile } : {});
 };
 
 const runDownloadWorker = async (task: SyncTask, emit: EmitProgress): Promise<void> => {
@@ -105,7 +82,6 @@ const runDownloadWorker = async (task: SyncTask, emit: EmitProgress): Promise<vo
       signal: task.abort.signal,
       onChunk: (bytes) => {
         task.bytesDownloaded += bytes;
-        task.speedWindowBytes += bytes;
         maybeEmit(task, BundleSyncStatuses.DOWNLOADING, emit);
       },
     });
@@ -116,8 +92,6 @@ const runDownloadWorker = async (task: SyncTask, emit: EmitProgress): Promise<vo
 
 const runDownloadPhase = async (task: SyncTask, emit: EmitProgress): Promise<void> => {
   if (task.pendingDownloads.length === 0) return;
-  task.speedWindowStart = Date.now();
-  task.speedWindowBytes = 0;
   maybeEmit(task, BundleSyncStatuses.DOWNLOADING, emit, true);
   const concurrency = Math.min(BUNDLE_DOWNLOAD_CONCURRENCY, task.pendingDownloads.length);
   const workers: Promise<void>[] = [];
@@ -128,7 +102,7 @@ const runDownloadPhase = async (task: SyncTask, emit: EmitProgress): Promise<voi
         if (firstError) {
           // Only the first failure is thrown; log the rest so a discarded
           // secondary cause stays traceable.
-          logger.debug(`[${task.slug}] secondary download worker error discarded`, err);
+          logger.debug(`[${task.key}] secondary download worker error discarded`, err);
         } else {
           firstError = err;
         }
@@ -237,9 +211,12 @@ export const runSyncPhases = async (
   // a pause returns 'paused' and leaves deletes for resume.
   if (isCancelled(task)) throw new BundleError(BundleErrorCodes.ABORTED, 'Sync cancelled');
   if (isPaused(task)) {
-    return syncPhasesResult('paused', false);
+    return { outcome: 'paused', deletedAny: false };
   }
   const deleteResult = await runDeletePhase(task, emit);
   if (isCancelled(task)) throw new BundleError(BundleErrorCodes.ABORTED, 'Sync cancelled');
-  return syncPhasesResult(isPaused(task) ? 'paused' : 'completed', deleteResult.deletedAny);
+  return {
+    outcome: isPaused(task) ? 'paused' : 'completed',
+    deletedAny: deleteResult.deletedAny,
+  };
 };

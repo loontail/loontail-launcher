@@ -1,4 +1,4 @@
-import { Log4jStreamParser, formatLog4jLine, mapLog4jLevel } from '@main/infra/log4jStream';
+import { formatLog4jLine, Log4jStreamParser, mapLog4jLevel } from '@main/infra/log4jStream';
 import { describe, expect, it } from 'vitest';
 
 const SAMPLE_EVENT = `<log4j:Event logger="FabricLoader/Mixin" timestamp="1778966984661" level="INFO" thread="main">

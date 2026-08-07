@@ -1,6 +1,6 @@
 import type { ConsoleHub } from '@main/infra/consoleHub';
 import type { App, BrowserWindow } from 'electron';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 vi.mock('electron', () => ({
   BrowserWindow: class {},
@@ -66,14 +66,14 @@ const makeConsoleHub = (window: BrowserWindow | null): Pick<ConsoleHub, 'getWind
 describe('installMainWindowLifecycle', () => {
   let app: FakeApp;
   let mainWindow: FakeWindow;
-  let createWindow: ReturnType<typeof vi.fn>;
-  let attachNotifier: ReturnType<typeof vi.fn>;
+  let createWindow: Mock<() => BrowserWindow>;
+  let attachNotifier: Mock<(window: BrowserWindow) => void>;
 
   beforeEach(() => {
     app = makeFakeApp();
     mainWindow = makeFakeWindow();
-    createWindow = vi.fn(() => mainWindow);
-    attachNotifier = vi.fn();
+    createWindow = vi.fn<() => BrowserWindow>(() => mainWindow);
+    attachNotifier = vi.fn<(window: BrowserWindow) => void>();
   });
 
   it('creates the window and attaches the notifier on install', () => {

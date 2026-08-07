@@ -31,13 +31,15 @@ export const readSettings = (db: Db): Record<string, unknown> | null => {
   const row = db.prepare('SELECT * FROM settings WHERE id = 1').get() as SettingsRow | undefined;
   if (!row) return null;
 
-  const overrideRows = db.prepare('SELECT slug, data FROM client_overrides').all() as Array<{
-    slug: string;
+  // why: the physical column is still named `slug` (it predates CatalogKey), but
+  // every value in it is a CatalogKey — alias it so the JS side reads honestly.
+  const overrideRows = db.prepare('SELECT slug AS key, data FROM client_overrides').all() as Array<{
+    key: string;
     data: string;
   }>;
   const clients: Record<string, unknown> = {};
-  for (const { slug, data } of overrideRows) {
-    clients[slug] = parseJsonObject(data);
+  for (const { key, data } of overrideRows) {
+    clients[key] = parseJsonObject(data);
   }
 
   return {
@@ -77,8 +79,8 @@ export const writeSettings = (db: Db, settings: LauncherSettings): void => {
 
     db.prepare('DELETE FROM client_overrides').run();
     const insert = db.prepare('INSERT INTO client_overrides (slug, data) VALUES (?, ?)');
-    for (const [slug, override] of Object.entries(value.clients)) {
-      insert.run(slug, JSON.stringify(override));
+    for (const [key, override] of Object.entries(value.clients)) {
+      insert.run(key, JSON.stringify(override));
     }
   });
   tx(settings);

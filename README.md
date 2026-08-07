@@ -7,12 +7,15 @@ Loontail Minecraft launcher built on Electron + React + Tailwind v4.
 - [Architecture](./docs/architecture.md) — process model, modules, IPC, services.
 - [Code guideline](./docs/code-guideline.md) — TypeScript, naming, testing,
   security, git conventions.
-- [UI guideline](./docs/ui-guideline.md) — shadcn, Tailwind v4 palette,
-  typography, dark-only theming.
+- [UI guideline](./docs/ui-guideline.md) — the hand-owned UI kit, Tailwind v4
+  tokens, typography, dark-only theming.
+- [Open work](./docs/audit-backlog.md) — the two decisions still needing a
+  maintainer, plus what is knowingly deferred.
 
 ## Requirements
 
-- Node.js 22.12+
+- Node.js — the version in `engines.node` (`package.json`). npm refuses to
+  install below it, so that field is the only copy worth trusting.
 - npm
 
 ## Getting started
@@ -39,4 +42,5 @@ npm run dev
 
 ## Project layout
 
-See [`docs/architecture.md`](./docs/architecture.md) §12.
+See [`docs/architecture.md`](./docs/architecture.md) §3, which describes what
+lives in each layer and why.

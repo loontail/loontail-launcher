@@ -4,10 +4,10 @@ import type { Router } from '@main/ipc/router';
 import { CatalogKeySchema } from '@shared/contracts/ids';
 import { InstallRequestSchema } from '@shared/contracts/minecraft';
 import { IPC_CHANNELS } from '@shared/ipc';
-import { ManagerError, classifyError } from './errors';
+import { classifyError, MinecraftError } from './errors';
 import type { MinecraftManager } from './manager';
 
-// Reclassify a raw MinecraftKitError into a coded ManagerError, else toIpcError
+// Reclassify a raw MinecraftKitError into a coded MinecraftError, else toIpcError
 // collapses it to the opaque IpcHandlerFailed code and the renderer loses the
 // actionable launcher code.
 const withClassifiedKitError = async (run: () => Promise<void>): Promise<void> => {
@@ -15,7 +15,7 @@ const withClassifiedKitError = async (run: () => Promise<void>): Promise<void> =
     await run();
   } catch (error) {
     if (isMinecraftKitError(error)) {
-      throw new ManagerError(classifyError(error), error.message);
+      throw new MinecraftError(classifyError(error), error.message);
     }
     throw error;
   }
@@ -29,7 +29,7 @@ export const registerMinecraftRoutes = (router: Router, manager: MinecraftManage
 
   router.handle(IPC_CHANNELS.minecraftInstall, async (rawArgs) => {
     const payload = parseIpcArgs(InstallRequestSchema, rawArgs, 'Invalid install request');
-    await withClassifiedKitError(() => manager.startInstall(payload.slug, payload.loader));
+    await withClassifiedKitError(() => manager.startInstall(payload.key, payload.loader));
   });
 
   router.handle(IPC_CHANNELS.minecraftPause, (rawArgs) => {

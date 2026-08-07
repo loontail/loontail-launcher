@@ -41,7 +41,7 @@ import type { CatalogService } from '@main/services/catalog/catalog';
 import { registerCatalogRoutes } from '@main/services/catalog/routes';
 import { createConsoleService } from '@main/services/console';
 import { registerHistoryRoutes } from '@main/services/history/routes';
-import { registerInstanceRoutes } from '@main/services/instances/routes';
+import { registerBuildRoutes } from '@main/services/localBuilds/routes';
 import { registerMediaRoutes } from '@main/services/media/routes';
 import type { MinecraftManager } from '@main/services/minecraft/manager';
 import { registerMinecraftRoutes } from '@main/services/minecraft/routes';
@@ -58,6 +58,9 @@ const recordingRouter = (): { router: Router; registered: Set<string> } => {
   const registered = new Set<string>();
   const router: Router = {
     handle: (channel) => {
+      registered.add(channel);
+    },
+    handleNoArgs: (channel) => {
       registered.add(channel);
     },
     dispose: () => undefined,
@@ -95,7 +98,7 @@ describe('IpcContract handler coverage', () => {
     registerMediaRoutes(router);
     registerSkinRoutes(router, stub<SkinHandlers>());
     registerCatalogRoutes(router, stub<CatalogService>());
-    registerInstanceRoutes(router, stub<MinecraftKit>());
+    registerBuildRoutes(router, stub<MinecraftKit>());
     registerServersRoutes(router);
     registerHistoryRoutes(router);
     registerMinecraftRoutes(router, stub<MinecraftManager>());

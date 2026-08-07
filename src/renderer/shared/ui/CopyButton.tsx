@@ -54,9 +54,9 @@ export type CopyButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'chi
 
 const VARIANT_CLASSES: Record<NonNullable<CopyButtonProps['variant']>, string> = {
   icon:
-    'inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-muted-foreground transition-colors ' +
-    'hover:bg-ghost-hover hover:text-foreground ' +
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-card',
+    'inline-flex size-7 shrink-0 items-center justify-center rounded-md border border-edge bg-surface text-text-mute transition-colors ' +
+    'hover:bg-ghost-hover hover:text-text-hi ' +
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface-1',
   inline:
     'cursor-pointer rounded-md p-1 text-glass/55 transition-colors hover:bg-ghost-hover hover:text-glass',
   custom: '',

@@ -1,12 +1,12 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.0/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.5.7/schema.json",
   "vcs": {
     "enabled": true,
     "clientKind": "git",
     "useIgnoreFile": true
   },
   "files": {
-    "ignore": ["out/**", "dist/**", "node_modules/**", "build/**", "coverage/**"]
+    "includes": ["**", "!**/out", "!**/dist", "!**/node_modules", "!**/build", "!**/coverage"]
   },
   "formatter": {
     "enabled": true,
@@ -14,6 +14,11 @@
     "indentWidth": 2,
     "lineWidth": 100,
     "lineEnding": "lf"
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
   },
   "javascript": {
     "formatter": {
@@ -26,10 +31,11 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "style": {
         "useImportType": "error",
-        "noNonNullAssertion": "error"
+        "noNonNullAssertion": "error",
+        "noNestedTernary": "error"
       },
       "suspicious": {
         "noExplicitAny": "error",
@@ -43,14 +49,12 @@
       "performance": {
         "noDelete": "off"
       },
-      "nursery": {
-        "noNestedTernary": "error"
-      }
+      "nursery": {}
     }
   },
   "overrides": [
     {
-      "include": ["scripts/**"],
+      "includes": ["**/scripts/**"],
       "linter": {
         "rules": {
           "suspicious": {
@@ -60,11 +64,17 @@
       }
     },
     {
-      "include": ["**/*.css"],
+      "includes": ["**/*.css"],
       "linter": {
         "rules": {
+          "complexity": {
+            "noImportantStyles": "off"
+          },
           "correctness": {
             "noUnknownMediaFeatureName": "off"
+          },
+          "style": {
+            "noDescendingSpecificity": "off"
           }
         }
       }

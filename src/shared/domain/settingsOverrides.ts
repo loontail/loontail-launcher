@@ -110,18 +110,18 @@ export const clearStaleClientRuntimeRef = (
 
 export const pruneClientOverrides = (
   settings: LauncherSettings,
-  keepSlugs: ReadonlySet<string>,
+  keepKeys: ReadonlySet<string>,
 ): LauncherSettings => {
   const next: Record<string, ClientSettingsOverride> = {};
   let removed = false;
-  for (const [slug, override] of Object.entries(settings.clients)) {
+  for (const [key, override] of Object.entries(settings.clients)) {
     // Narrows the `| undefined` index type and drops stray undefined entries.
     if (override === undefined) {
       removed = true;
       continue;
     }
-    if (keepSlugs.has(slug)) {
-      next[slug] = override;
+    if (keepKeys.has(key)) {
+      next[key] = override;
     } else {
       removed = true;
     }

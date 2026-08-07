@@ -23,12 +23,12 @@ export type UploadSkinResult = { url: string };
 
 // Distinct failures the renderer can localize by code rather than by error.message.
 export const SkinErrorCodes = {
-  NOT_AUTHENTICATED: 'SKIN_NOT_AUTHENTICATED',
-  INVALID_IMAGE: 'SKIN_INVALID_IMAGE',
-  CAPE_UNSUPPORTED: 'SKIN_CAPE_UNSUPPORTED',
-  UPLOAD_FAILED: 'SKIN_UPLOAD_FAILED',
-  UPLOAD_NO_URL: 'SKIN_UPLOAD_NO_URL',
-  CLEAR_FAILED: 'SKIN_CLEAR_FAILED',
+  NOT_AUTHENTICATED: 'skin/notAuthenticated',
+  INVALID_IMAGE: 'skin/invalidImage',
+  CAPE_UNSUPPORTED: 'skin/capeUnsupported',
+  UPLOAD_FAILED: 'skin/uploadFailed',
+  UPLOAD_NO_URL: 'skin/uploadNoUrl',
+  CLEAR_FAILED: 'skin/clearFailed',
 } as const;
 
 export type SkinErrorCode = (typeof SkinErrorCodes)[keyof typeof SkinErrorCodes];

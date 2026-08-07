@@ -2,10 +2,12 @@
 // returning true to signal an immediate exit. Must run before any other Electron
 // initialization.
 import squirrelStartup from 'electron-squirrel-startup';
+
 if (squirrelStartup) process.exit(0);
 
 import { seedLauncherSettings } from '@main/bootstrap/seed';
 import { sweepOrphanClientOverrides } from '@main/bootstrap/sweepOrphans';
+import { configWarnings, mainConfig } from '@main/config';
 import { createConsoleHub } from '@main/infra/consoleHub';
 import { initLogger, scopedLogger } from '@main/infra/logger';
 import { attachNotifier, notify } from '@main/infra/notifier';
@@ -13,29 +15,33 @@ import { configureSessionSecurity } from '@main/infra/session';
 import { closeDatabase, initStore } from '@main/infra/store';
 import { createRouter } from '@main/ipc/router';
 import { createTrustedSenderCheck } from '@main/ipc/trustedSender';
-import { createAppService } from '@main/services/app';
+import { registerAppRoutes } from '@main/services/app/routes';
 import { createAuthService } from '@main/services/auth';
 import { getStoredAccount } from '@main/services/auth/auth';
 import { createYggdrasilClient } from '@main/services/auth/yggdrasilClient';
 import { createBundleService } from '@main/services/bundle';
+import { clearLocalManifest } from '@main/services/bundle/manifestRepo';
 import { resolveBundleRepairFilter } from '@main/services/bundle/ownership';
 import { createCatalogService } from '@main/services/catalog';
 import { createClientOperationLocks } from '@main/services/clientOperationLocks';
 import { getClient, getClients } from '@main/services/clients';
 import { createConsoleService } from '@main/services/console';
-import { createHistoryService } from '@main/services/history';
-import { createInstancesService } from '@main/services/instances';
+import { registerHistoryRoutes } from '@main/services/history/routes';
 import { createKit } from '@main/services/kit';
-import { CACHE_SCHEME, createMediaService } from '@main/services/media';
+import { createLocalBuildsService } from '@main/services/localBuilds';
+import { registerMediaProtocol } from '@main/services/media/protocol';
+import { registerMediaRoutes } from '@main/services/media/routes';
 import { createMinecraftService } from '@main/services/minecraft';
-import { createServersService } from '@main/services/servers';
-import { createSettingsService } from '@main/services/settings';
+import { registerServersRoutes } from '@main/services/servers/routes';
+import type { LauncherService } from '@main/services/service';
+import { registerSettingsRoutes } from '@main/services/settings/routes';
 import { createSkinService } from '@main/services/skin';
-import { createSystemService } from '@main/services/system';
+import { registerSystemRoutes } from '@main/services/system/routes';
 import { createUpdaterService } from '@main/services/updater';
 import { openConsoleWindow } from '@main/windows/consoleWindow';
 import { createMainWindow, installMainWindowLifecycle } from '@main/windows/mainWindow';
-import { type BrowserWindow, app, dialog, protocol } from 'electron';
+import { CACHE_SCHEME } from '@shared/constants';
+import { app, type BrowserWindow, dialog, protocol } from 'electron';
 
 initLogger();
 const logger = scopedLogger('bootstrap');
@@ -81,6 +87,8 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 const start = async (): Promise<void> => {
+  for (const warning of configWarnings(mainConfig)) logger.warn(warning);
+
   await app.whenReady();
 
   // Run migrations and purge legacy auth before any service reads the store.
@@ -108,19 +116,24 @@ const start = async (): Promise<void> => {
   const kit = createKit();
   const yggdrasilGateway = createYggdrasilClient();
   const clientOperationLocks = createClientOperationLocks();
-  const appService = createAppService(router);
+  // Stateless route registration: no lifecycle, no teardown, no ordering.
+  registerAppRoutes(router);
+  registerSystemRoutes(router, getMainWindow);
+  registerSettingsRoutes(router, getMainWindow);
+  registerServersRoutes(router);
+  registerHistoryRoutes(router);
+  // The cache:// handler lives for the process lifetime (Electron unregisters it
+  // on exit), so there is nothing to tear down.
+  registerMediaProtocol();
+  registerMediaRoutes(router);
+
   const authService = createAuthService(router, kit, yggdrasilGateway);
-  const systemService = createSystemService(router, getMainWindow);
-  const settingsService = createSettingsService(router, getMainWindow);
   const skinService = createSkinService(router, kit, yggdrasilGateway, authService.session);
-  const instancesService = createInstancesService(router, kit);
+  const localBuildsService = createLocalBuildsService(router, kit);
   const catalogService = createCatalogService(router, {
     listClients: getClients,
-    extraSources: [instancesService.localSource],
+    extraSources: [localBuildsService.localSource],
   });
-  const serversService = createServersService(router);
-  const historyService = createHistoryService(router);
-  const mediaService = createMediaService(router);
   const minecraftService = createMinecraftService(
     router,
     getMainWindow,
@@ -130,6 +143,7 @@ const start = async (): Promise<void> => {
     openConsole,
     getStoredAccount,
     resolveBundleRepairFilter,
+    clearLocalManifest,
     (key) => catalogService.catalog.resolveBuildByKey(key),
   );
   const bundleService = createBundleService(
@@ -137,29 +151,24 @@ const start = async (): Promise<void> => {
     getMainWindow,
     kit,
     clientOperationLocks,
-    { resolveContext: (slug) => minecraftService.manager.resolveHealTarget(slug) },
+    { resolveContext: (key) => minecraftService.manager.resolveInstallContext(key) },
     getClient,
   );
   // Bundle sync runs after install, before launch; a no-op without a bundleSlug.
-  minecraftService.manager.attachLaunchHook((slug, signal) =>
-    bundleService.manager.syncForLaunch(slug, signal),
+  minecraftService.manager.attachLaunchHook((key, signal) =>
+    bundleService.manager.syncForLaunch(key, signal),
   );
   const consoleService = createConsoleService(router, consoleHub, openConsole);
   const updaterService = createUpdaterService(router, getMainWindow);
 
-  // Init order matters (instances -> catalog, etc.); dispose order does not,
-  // because teardown is independent.
-  const services = [
-    appService,
+  // Only modules that own state or teardown are lifecycle-managed. Init order
+  // matters (localBuilds -> catalog, auth's session port before any HTTP call);
+  // dispose order does not, because teardown is independent.
+  const services: readonly LauncherService[] = [
     authService,
-    systemService,
-    settingsService,
     skinService,
-    instancesService,
+    localBuildsService,
     catalogService,
-    serversService,
-    historyService,
-    mediaService,
     minecraftService,
     bundleService,
     consoleService,
@@ -185,7 +194,7 @@ const start = async (): Promise<void> => {
     // Dispose concurrently — teardown is independent, so a slow one can't block
     // the rest; the database is closed last, after this settles.
     //
-    // BUG-7: the DB is closed after the bundle drain (a 250ms bounded wait in
+    // The DB is closed after the bundle drain (a 250ms bounded wait in
     // BundleManager.cancelAll), so no sync teardown (`finally`) may issue a
     // store/DB write — it could be truncated or race this close. See
     // BundleManager.cancelAll for the full invariant.

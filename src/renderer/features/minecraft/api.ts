@@ -7,15 +7,15 @@ export const getStatus = (key: CatalogKey): Promise<{ status: InstallStatus; pau
   window.api.invoke(IPC_CHANNELS.minecraftGetStatus, key);
 
 export const install = (key: CatalogKey, loader?: LoaderChoice): Promise<void> =>
-  window.api.invoke(IPC_CHANNELS.minecraftInstall, { slug: key, ...(loader ? { loader } : {}) });
+  window.api.invoke(IPC_CHANNELS.minecraftInstall, { key, ...(loader ? { loader } : {}) });
 
-export const pauseInstall = (key: CatalogKey): Promise<void> =>
+export const pause = (key: CatalogKey): Promise<void> =>
   window.api.invoke(IPC_CHANNELS.minecraftPause, key);
 
-export const resumeInstall = (key: CatalogKey): Promise<void> =>
+export const resume = (key: CatalogKey): Promise<void> =>
   window.api.invoke(IPC_CHANNELS.minecraftResume, key);
 
-export const cancelInstall = (key: CatalogKey): Promise<void> =>
+export const cancel = (key: CatalogKey): Promise<void> =>
   window.api.invoke(IPC_CHANNELS.minecraftCancel, key);
 
 export const repair = (key: CatalogKey): Promise<void> =>

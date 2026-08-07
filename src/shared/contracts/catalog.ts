@@ -1,6 +1,6 @@
 import type { Client } from './client';
-import type { BundleSlug, CatalogKey, ClientSlug, InstanceId } from './ids';
-import type { InstanceManifest } from './instance';
+import type { BundleSlug, CatalogKey, ClientSlug, LocalBuildId } from './ids';
+import type { LocalBuildManifest } from './localBuild';
 import type { Server } from './media';
 
 // The build sources feeding the unified catalog. Local is the primary,
@@ -16,10 +16,10 @@ export type SourceKind = (typeof SourceKinds)[keyof typeof SourceKinds];
 // install/launch/repair resolve a build from its ref via the catalog service.
 export type CatalogRef =
   | { readonly source: typeof SourceKinds.OFFICIAL; readonly slug: ClientSlug }
-  | { readonly source: typeof SourceKinds.LOCAL; readonly id: InstanceId };
+  | { readonly source: typeof SourceKinds.LOCAL; readonly id: LocalBuildId };
 
 export const officialKey = (slug: ClientSlug): CatalogKey => `official:${slug}` as CatalogKey;
-export const localKey = (id: InstanceId): CatalogKey => `local:${id}` as CatalogKey;
+export const localKey = (id: LocalBuildId): CatalogKey => `local:${id}` as CatalogKey;
 
 export const refValue = (ref: CatalogRef): string =>
   ref.source === SourceKinds.OFFICIAL ? ref.slug : ref.id;
@@ -36,7 +36,7 @@ export const parseCatalogKey = (key: CatalogKey): CatalogRef | null => {
     return { source: SourceKinds.OFFICIAL, slug: value as ClientSlug };
   }
   if (source === SourceKinds.LOCAL) {
-    return { source: SourceKinds.LOCAL, id: value as InstanceId };
+    return { source: SourceKinds.LOCAL, id: value as LocalBuildId };
   }
   return null;
 };
@@ -96,10 +96,10 @@ export type LocalCatalogItem = {
   readonly kind: typeof SourceKinds.LOCAL;
   /** The operational CatalogKey — see {@link OfficialCatalogItem.key}. */
   readonly key: CatalogKey;
-  readonly ref: { readonly source: typeof SourceKinds.LOCAL; readonly id: InstanceId };
+  readonly ref: { readonly source: typeof SourceKinds.LOCAL; readonly id: LocalBuildId };
   readonly spec: BuildSpec;
   readonly presentation: CatalogPresentation;
-  readonly manifest: InstanceManifest;
+  readonly manifest: LocalBuildManifest;
 };
 
 export type CatalogItem = OfficialCatalogItem | LocalCatalogItem;

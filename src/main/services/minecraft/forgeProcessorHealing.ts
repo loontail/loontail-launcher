@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import {
   type InstallAction,
   InstallActionKinds,
@@ -50,25 +51,46 @@ const processorActionsFrom = (
 export type ForgeProcessorCache = {
   remember: (plan: InstallPlan) => void;
   get: (target: Target) => readonly RunForgeProcessorAction[] | undefined;
-  clear: () => void;
+  // Drops only the entries belonging to one install directory (an uninstall),
+  // leaving every other client's warm plan intact.
+  evictByDirectory: (directory: string) => void;
+};
+
+type CacheEntry = { directory: string; actions: readonly RunForgeProcessorAction[] };
+
+// The cache key embeds the raw directory, so entries can only be matched to an
+// uninstalled folder through a normalized comparison (Windows paths differ in
+// case and separators for the same directory).
+const toComparisonKey = (directory: string): string => {
+  const normalized = resolve(directory);
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
 };
 
 // Scoped to the MinecraftManager lifecycle (not a module singleton) so entries
 // can't leak across clients or test runs or grow unbounded for the process life.
 export const createForgeProcessorCache = (): ForgeProcessorCache => {
-  const entries = new Map<string, readonly RunForgeProcessorAction[]>();
+  const entries = new Map<string, CacheEntry>();
   return {
     remember: (plan) => {
       if (!isForgePlanTarget(plan.target)) return;
       const key = forgeProcessorCacheKey(plan.target);
       if (key === null) return;
-      entries.set(key, processorActionsFrom(plan.actions));
+      entries.set(key, {
+        directory: plan.target.directory,
+        actions: processorActionsFrom(plan.actions),
+      });
     },
     get: (target) => {
       const key = forgeProcessorCacheKey(target);
-      return key === null ? undefined : entries.get(key);
+      return key === null ? undefined : entries.get(key)?.actions;
     },
-    clear: () => entries.clear(),
+    evictByDirectory: (directory) => {
+      if (!directory) return;
+      const wanted = toComparisonKey(directory);
+      for (const [key, entry] of entries) {
+        if (toComparisonKey(entry.directory) === wanted) entries.delete(key);
+      }
+    },
   };
 };
 
@@ -132,7 +154,7 @@ const brokenProcessorIndices = async (
 // processors whose outputs are missing/broken. No-op for non-Forge targets.
 export const repairMissingForgeProcessorOutputs = async (
   kit: MinecraftKit,
-  slug: CatalogKey,
+  key: CatalogKey,
   target: Target,
   cache: ForgeProcessorCache,
   options: ProcessorHealOptions = {},
@@ -146,7 +168,7 @@ export const repairMissingForgeProcessorOutputs = async (
     const cachedBrokenIndices = await brokenProcessorIndices(cachedProcessors, options.signal);
     if (cachedBrokenIndices.size === 0) {
       logger.info(
-        `[${slug}] processor outputs clean from cache (checked ${cachedProcessors.length})`,
+        `[${key}] processor outputs clean from cache (checked ${cachedProcessors.length})`,
       );
       return { ranProcessors: false, reranCount: 0 };
     }
@@ -163,7 +185,7 @@ export const repairMissingForgeProcessorOutputs = async (
   const brokenIndices = await brokenProcessorIndices(processors, options.signal);
 
   if (brokenIndices.size === 0) {
-    logger.info(`[${slug}] processor outputs clean (checked ${processors.length})`);
+    logger.info(`[${key}] processor outputs clean (checked ${processors.length})`);
     return { ranProcessors: false, reranCount: 0 };
   }
 
@@ -185,7 +207,7 @@ export const repairMissingForgeProcessorOutputs = async (
   };
 
   logger.info(
-    `[${slug}] ${brokenIndices.size}/${processors.length} processor output(s) broken — re-running focused plan (${focusedActions.length}/${plan.actions.length} actions)`,
+    `[${key}] ${brokenIndices.size}/${processors.length} processor output(s) broken — re-running focused plan (${focusedActions.length}/${plan.actions.length} actions)`,
   );
 
   const runPlan =

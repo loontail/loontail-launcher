@@ -21,7 +21,7 @@
   },
   "setup": {
     "title": "Welcome",
-    "subtitle": "Pick a folder where Minecraft clients will be installed",
+    "subtitle": "Pick a folder where your Minecraft builds will be installed",
     "finish": "Get started"
   },
   "auth": {
@@ -42,7 +42,7 @@
       "cancel": "Cancel"
     }
   },
-  "clients": {
+  "builds": {
     "myBuilds": "My Builds",
     "official": "Official",
     "createBuild": "Create build",
@@ -95,7 +95,7 @@
     "checking": "Checking...",
     "repairing": "Repairing...",
     "repair": "Repair",
-    "repairOffer": "Some game files are missing or out of date. Repair this client?",
+    "repairOffer": "Some game files are missing or out of date. Repair this build?",
     "play": "Play",
     "running": "Running",
     "update": "Update",
@@ -108,7 +108,7 @@
     "uninstalling": "Removing…",
     "paused": "paused",
     "progressStalled": "Connection slow — still trying…",
-    "setInstallFolder": "Pick a client folder in System settings first",
+    "setInstallFolder": "Pick a builds folder in System settings first",
     "stage": {
       "prepare": "Preparing",
       "runtime": "Downloading Java runtime",
@@ -126,8 +126,8 @@
     },
     "installSteps": {
       "header": {
-        "install": "Installing client",
-        "repair": "Repairing client",
+        "install": "Installing build",
+        "repair": "Repairing build",
         "bundle": "Syncing content bundle"
       },
       "stepIndicator": "Step {{current}} of {{total}}",
@@ -154,7 +154,7 @@
       "unsafePath": "Bundle manifest references an unsafe path. Contact the administrator.",
       "healFailed": "Minecraft validation after bundle update failed: {{message}}",
       "aborted": "Bundle sync cancelled.",
-      "opInFlight": "A bundle sync is already running for this client.",
+      "opInFlight": "A bundle sync is already running for this build.",
       "unknown": "Bundle sync failed: {{message}}"
     },
     "loaderModal": {
@@ -167,14 +167,14 @@
       "noAccount": "Sign in before launching.",
       "noClientFolder": "Set the launcher install folder in System settings first.",
       "loaderAmbiguous": "Pick a loader (Forge or Fabric) before installing.",
-      "opInFlight": "Another operation is already running for this client.",
-      "notInstalled": "Client is not installed.",
+      "opInFlight": "Another operation is already running for this build.",
+      "notInstalled": "This build is not installed.",
       "aborted": "Cancelled.",
       "networkError": "Network error. Check your connection and try again.",
-      "integrityError": "Downloaded file integrity check failed. Try repairing the client.",
+      "integrityError": "Downloaded file integrity check failed. Try repairing the build.",
       "diskError": "Could not read or write game files. Check disk space and permissions.",
       "runtimeError": "Java runtime is missing or unsupported on this platform.",
-      "forgeError": "Forge installation failed. Try repairing the client.",
+      "forgeError": "Forge installation failed. Try repairing the build.",
       "launchFailed": "Failed to launch the game process. See console for details.",
       "kitError": "Minecraft runtime error: {{message}}",
       "uninstallLocked": "Close the game window and try again. Some files are still in use.",
@@ -188,9 +188,9 @@
     "emptyDescription": "Find a ready-made build on the Builds page, or create your own to start playing.",
     "emptyCta": "Browse builds"
   },
-  "clientSettings": {
-    "clientFolder": "Client folder",
-    "clientFolderDesc": "Versions, mods, resource packs and configs for this client live here — separately from other clients.",
+  "buildSettings": {
+    "buildFolder": "Build folder",
+    "buildFolderDesc": "Versions, mods, resource packs and configs for this build live here — separately from other builds.",
     "openFolder": "Open",
     "changeFolder": "Change",
     "resetAll": "Reset to defaults",
@@ -199,18 +199,18 @@
     "repair": "Repair",
     "repairDesc": "Re-check files against the server manifest and re-download anything missing or corrupt.",
     "uninstall": "Uninstall",
-    "uninstallDesc": "Delete this client's files from disk. Saves and overrides are kept.",
-    "uninstallConfirmTitle": "Remove client files?",
+    "uninstallDesc": "Delete this build's files from disk. Saves and overrides are kept.",
+    "uninstallConfirmTitle": "Remove build files?",
     "uninstallConfirm": "All files for \"{{name}}\" will be deleted from the install folder. The shared Java runtime stays.",
     "deleteBuild": "Delete build",
     "deleteBuildDesc": "Permanently remove this local build and all of its files.",
     "deleteConfirmTitle": "Delete this build?",
     "deleteConfirm": "\"{{name}}\" and all of its files will be permanently deleted. This cannot be undone.",
-    "folderChangedToast": "Client folder updated",
+    "folderChangedToast": "Build folder updated",
     "loader": {
       "title": "Loader",
       "kind": "Type",
-      "switchDesc": "This client ships with both. Switching will trigger an install on next launch.",
+      "switchDesc": "This build ships with both. Switching will trigger an install on next launch.",
       "version": "Version",
       "vanilla": "Vanilla",
       "forge": "Forge",
@@ -220,7 +220,7 @@
     "runtime": {
       "title": "Java runtime",
       "component": "Component",
-      "componentDesc": "Mojang-provided Java distribution used to launch this client.",
+      "componentDesc": "Mojang-provided Java distribution used to launch this build.",
       "path": "Path"
     }
   },
@@ -266,7 +266,8 @@
   "servers": {
     "online": "Online",
     "offline": "All servers offline",
-    "serverOffline": "Offline"
+    "serverOffline": "Offline",
+    "statusUnavailable": "Server status unavailable"
   },
   "settings": {
     "tabs": {
@@ -317,8 +318,8 @@
       "allocatedRam": "Allocated RAM",
       "ramDesc": "More RAM reduces lag and improves performance, but leaving some free for the OS is recommended.",
       "save": "Save",
-      "clientsFolder": "Clients folder",
-      "clientsFolderDesc": "All Minecraft client files are stored here: versions, mods, resource packs and configs.",
+      "clientsFolder": "Builds folder",
+      "clientsFolderDesc": "All Minecraft build files are stored here: versions, mods, resource packs and configs.",
       "openFolder": "Open folder",
       "change": "Change",
       "folderUsed": "{{value}} used",

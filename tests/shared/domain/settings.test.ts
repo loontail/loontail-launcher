@@ -1,6 +1,6 @@
 import { asCatalogKey } from '@shared/contracts/ids';
-import { LoaderChoices } from '@shared/contracts/settings';
 import type { LauncherSettings } from '@shared/contracts/settings';
+import { LoaderChoices } from '@shared/contracts/settings';
 import {
   clearClientOverrides,
   clearStaleClientRuntimeRef,
@@ -67,59 +67,59 @@ describe('normalizeLauncherSettings', () => {
 
   it('rejects non-integer, negative, and non-finite RAM so the result satisfies its schema', () => {
     const base = defaultLauncherSettings().memory.allocatedRamMb;
-    const slug = asCatalogKey('official:main-client');
+    const key = asCatalogKey('official:main-client');
     for (const bad of [4096.5, -1, Number.NaN, Number.POSITIVE_INFINITY]) {
       const result = normalizeLauncherSettings({
         memory: { allocatedRamMb: bad },
         storage: { clientsFolder: '' },
         launch: { console: false, fullscreen: false },
-        clients: { [slug]: { memory: { allocatedRamMb: bad } } },
+        clients: { [key]: { memory: { allocatedRamMb: bad } } },
       });
       expect(result.memory.allocatedRamMb).toBe(base);
-      expect(result.clients[slug]).toEqual({});
+      expect(result.clients[key]).toEqual({});
     }
   });
 
   it('keeps known fields and discards unknown ones', () => {
-    const slug = asCatalogKey('official:main-client');
+    const key = asCatalogKey('official:main-client');
     const result = normalizeLauncherSettings({
       memory: { allocatedRamMb: 4096, garbage: true },
       storage: { clientsFolder: '/c', other: 1 },
       launch: { console: true, fullscreen: false, junk: 'x' },
-      clients: { [slug]: { memory: { allocatedRamMb: 1024 } } },
+      clients: { [key]: { memory: { allocatedRamMb: 1024 } } },
     });
     expect(result.memory).toEqual({ allocatedRamMb: 4096 });
     expect(result.storage).toEqual({ clientsFolder: '/c' });
     expect(result.launch).toEqual({ console: true, fullscreen: false });
-    expect(result.clients[slug]).toEqual({ memory: { allocatedRamMb: 1024 } });
+    expect(result.clients[key]).toEqual({ memory: { allocatedRamMb: 1024 } });
   });
 
   it('drops invalid runtime overrides and invalid loader choices', () => {
-    const slugA = asCatalogKey('official:cl-a');
-    const slugB = asCatalogKey('official:cl-b');
+    const keyA = asCatalogKey('official:cl-a');
+    const keyB = asCatalogKey('official:cl-b');
     const result = normalizeLauncherSettings({
       memory: { allocatedRamMb: 0 },
       storage: { clientsFolder: '' },
       launch: { console: false, fullscreen: false },
       clients: {
-        [slugA]: {
+        [keyA]: {
           runtime: { component: 'java-runtime-gamma' /* missing path */ },
           loader: 'nonsense',
         },
-        [slugB]: {
+        [keyB]: {
           runtime: { component: 'java-runtime-gamma', path: '/jdk' },
           loader: LoaderChoices.FORGE,
         },
       },
     });
-    expect(result.clients[slugA]).toEqual({});
-    expect(result.clients[slugB]).toEqual({
+    expect(result.clients[keyA]).toEqual({});
+    expect(result.clients[keyB]).toEqual({
       runtime: { component: 'java-runtime-gamma', path: '/jdk' },
       loader: LoaderChoices.FORGE,
     });
   });
 
-  it('skips entries with empty / undefined / null slug keys and migrates a bare key', () => {
+  it('skips entries with empty / undefined / null key keys and migrates a bare key', () => {
     const result = normalizeLauncherSettings({
       memory: { allocatedRamMb: 0 },
       storage: { clientsFolder: '' },
@@ -137,7 +137,7 @@ describe('normalizeLauncherSettings', () => {
 });
 
 describe('resolveClientSettings', () => {
-  it('falls back to global values when no slug is supplied', () => {
+  it('falls back to global values when no key is supplied', () => {
     const settings = baseSettings();
     const resolved = resolveClientSettings(settings, null);
     expect(resolved.memory.allocatedRamMb).toBe(2048);
@@ -152,27 +152,27 @@ describe('resolveClientSettings', () => {
     });
   });
 
-  it('returns defaults plus joined folder for an unknown slug', () => {
+  it('returns defaults plus joined folder for an unknown key', () => {
     const settings = baseSettings();
-    const slug = asCatalogKey('official:survival');
-    const resolved = resolveClientSettings(settings, slug);
+    const key = asCatalogKey('official:survival');
+    const resolved = resolveClientSettings(settings, key);
     expect(resolved.storage.clientFolder).toBe('/games/survival');
     expect(resolved.diff.folder).toBe(false);
   });
 
   it('reports a diff only on fields the override actually changes', () => {
-    const slug = asCatalogKey('official:survival');
+    const key = asCatalogKey('official:survival');
     const settings: LauncherSettings = {
       ...baseSettings(),
       clients: {
-        [slug]: {
+        [key]: {
           memory: { allocatedRamMb: 8192 },
           launch: { console: true },
           loader: LoaderChoices.FABRIC,
         },
       },
     };
-    const resolved = resolveClientSettings(settings, slug);
+    const resolved = resolveClientSettings(settings, key);
     expect(resolved.memory.allocatedRamMb).toBe(8192);
     expect(resolved.launch.console).toBe(true);
     expect(resolved.launch.fullscreen).toBe(false);
@@ -186,14 +186,14 @@ describe('resolveClientSettings', () => {
   });
 
   it('honours a clientFolder override and flags folder diff', () => {
-    const slug = asCatalogKey('official:survival');
+    const key = asCatalogKey('official:survival');
     const settings: LauncherSettings = {
       ...baseSettings(),
       clients: {
-        [slug]: { storage: { clientFolder: '/custom/path' } },
+        [key]: { storage: { clientFolder: '/custom/path' } },
       },
     };
-    const resolved = resolveClientSettings(settings, slug);
+    const resolved = resolveClientSettings(settings, key);
     expect(resolved.storage.clientFolder).toBe('/custom/path');
     expect(resolved.diff.folder).toBe(true);
   });
@@ -213,53 +213,53 @@ describe('hasClientOverrides', () => {
 });
 
 describe('setClientOverride / clearClientOverrides', () => {
-  const slug = asCatalogKey('official:survival');
+  const key = asCatalogKey('official:survival');
 
   it('removes a key whose value matches the global default', () => {
     const settings = baseSettings();
-    const next = setClientOverride(settings, slug, { memory: { allocatedRamMb: 2048 } });
-    expect(next.clients[slug]).toBeUndefined();
+    const next = setClientOverride(settings, key, { memory: { allocatedRamMb: 2048 } });
+    expect(next.clients[key]).toBeUndefined();
   });
 
   it('drops the override entirely when nothing remains', () => {
     const settings: LauncherSettings = {
       ...baseSettings(),
-      clients: { [slug]: { memory: { allocatedRamMb: 4096 } } },
+      clients: { [key]: { memory: { allocatedRamMb: 4096 } } },
     };
-    const next = setClientOverride(settings, slug, { memory: { allocatedRamMb: 2048 } });
-    expect(next.clients[slug]).toBeUndefined();
+    const next = setClientOverride(settings, key, { memory: { allocatedRamMb: 2048 } });
+    expect(next.clients[key]).toBeUndefined();
   });
 
   it('compacts default-equivalent folder and launch overrides', () => {
     const settings: LauncherSettings = {
       ...baseSettings(),
       clients: {
-        [slug]: {
+        [key]: {
           storage: { clientFolder: '/custom/path' },
           launch: { console: true, fullscreen: true },
           loader: LoaderChoices.FORGE,
         },
       },
     };
-    const next = setClientOverride(settings, slug, {
+    const next = setClientOverride(settings, key, {
       storage: { clientFolder: '/games/survival' },
       launch: { console: false, fullscreen: false },
     });
-    expect(next.clients[slug]).toEqual({ loader: LoaderChoices.FORGE });
+    expect(next.clients[key]).toEqual({ loader: LoaderChoices.FORGE });
   });
 
   it('clears all overrides but preserves the runtime ref', () => {
     const settings: LauncherSettings = {
       ...baseSettings(),
       clients: {
-        [slug]: {
+        [key]: {
           memory: { allocatedRamMb: 4096 },
           runtime: { component: 'java-runtime-gamma', path: '/jdk' },
         },
       },
     };
-    const next = clearClientOverrides(settings, slug);
-    expect(next.clients[slug]).toEqual({
+    const next = clearClientOverrides(settings, key);
+    expect(next.clients[key]).toEqual({
       runtime: { component: 'java-runtime-gamma', path: '/jdk' },
     });
   });
@@ -267,58 +267,58 @@ describe('setClientOverride / clearClientOverrides', () => {
   it('drops the override slot completely when no runtime ref is set', () => {
     const settings: LauncherSettings = {
       ...baseSettings(),
-      clients: { [slug]: { memory: { allocatedRamMb: 4096 } } },
+      clients: { [key]: { memory: { allocatedRamMb: 4096 } } },
     };
-    const next = clearClientOverrides(settings, slug);
-    expect(next.clients[slug]).toBeUndefined();
+    const next = clearClientOverrides(settings, key);
+    expect(next.clients[key]).toBeUndefined();
   });
 
-  it('is a no-op when the slug has no override', () => {
+  it('is a no-op when the key has no override', () => {
     const settings = baseSettings();
-    expect(clearClientOverrides(settings, slug)).toBe(settings);
+    expect(clearClientOverrides(settings, key)).toBe(settings);
   });
 
   it('clears a stale runtime ref when the target component changes', () => {
     const settings: LauncherSettings = {
       ...baseSettings(),
       clients: {
-        [slug]: {
+        [key]: {
           runtime: { component: 'java-runtime-gamma', path: '/jdk/gamma' },
           memory: { allocatedRamMb: 4096 },
         },
       },
     };
-    const next = clearStaleClientRuntimeRef(settings, slug, 'java-runtime-delta');
+    const next = clearStaleClientRuntimeRef(settings, key, 'java-runtime-delta');
 
-    expect(next.clients[slug]).toEqual({ memory: { allocatedRamMb: 4096 } });
+    expect(next.clients[key]).toEqual({ memory: { allocatedRamMb: 4096 } });
   });
 
   it('keeps a runtime ref when the target component still matches', () => {
     const settings: LauncherSettings = {
       ...baseSettings(),
       clients: {
-        [slug]: {
+        [key]: {
           runtime: { component: 'java-runtime-gamma', path: '/jdk/gamma' },
         },
       },
     };
 
-    expect(clearStaleClientRuntimeRef(settings, slug, 'java-runtime-gamma')).toBe(settings);
+    expect(clearStaleClientRuntimeRef(settings, key, 'java-runtime-gamma')).toBe(settings);
   });
 });
 
 describe('pruneClientOverrides', () => {
   it('returns the same reference when nothing needs to be pruned', () => {
-    const slug = asCatalogKey('official:survival');
+    const key = asCatalogKey('official:survival');
     const settings: LauncherSettings = {
       ...baseSettings(),
-      clients: { [slug]: { memory: { allocatedRamMb: 4096 } } },
+      clients: { [key]: { memory: { allocatedRamMb: 4096 } } },
     };
-    const keep = new Set<string>([slug]);
+    const keep = new Set<string>([key]);
     expect(pruneClientOverrides(settings, keep)).toBe(settings);
   });
 
-  it('removes overrides for slugs not in the keep set', () => {
+  it('removes overrides for keys not in the keep set', () => {
     const keepSlug = asCatalogKey('official:kept');
     const dropSlug = asCatalogKey('official:gone');
     const settings: LauncherSettings = {
@@ -343,7 +343,7 @@ describe('pruneClientOverrides', () => {
       },
     };
     // The sweep builds the keep-set from official + local CatalogKeys; a local
-    // build in that set must survive even though no official slug matches it.
+    // build in that set must survive even though no official key matches it.
     const next = pruneClientOverrides(settings, new Set([localKey]));
     expect(Object.keys(next.clients)).toEqual([localKey]);
   });

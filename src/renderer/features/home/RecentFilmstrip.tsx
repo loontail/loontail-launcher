@@ -1,4 +1,4 @@
-import { BuildMedia } from '@renderer/features/clients';
+import { BuildMedia } from '@renderer/features/builds';
 import { cn } from '@renderer/shared/lib/cn';
 import type { CatalogItem } from '@shared/contracts/catalog';
 import { type KeyboardEvent, useRef } from 'react';
@@ -42,13 +42,13 @@ export const RecentFilmstrip = ({ items, activeIndex, onSelect }: RecentFilmstri
         {items.map((item, index) => {
           const active = index === activeIndex;
           return (
+            // biome-ignore lint/a11y/useSemanticElements: carousel selector uses radio buttons, not native inputs
             <button
               key={item.key}
               ref={(el) => {
                 refs.current[index] = el;
               }}
               type="button"
-              // biome-ignore lint/a11y/useSemanticElements: carousel selector uses radio buttons, not native inputs
               role="radio"
               aria-checked={active}
               aria-label={item.presentation.title}

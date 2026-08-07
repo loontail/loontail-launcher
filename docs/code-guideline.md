@@ -6,8 +6,8 @@ must include a short rationale (**Why**) so they can be revisited later.
 
 - High-level structural decisions (process model, modules, IPC, services,
   external integrations) — see [`architecture.md`](./architecture.md).
-- UI / design-system rules (shadcn, Tailwind, typography, icons, theming) —
-  see [`ui-guideline.md`](./ui-guideline.md).
+- UI / design-system rules (the hand-owned UI kit, Tailwind v4 tokens,
+  typography, icons, theming) — see [`ui-guideline.md`](./ui-guideline.md).
 
 ---
 
@@ -145,7 +145,11 @@ must include a short rationale (**Why**) so they can be revisited later.
 - `renderer` must not import from `main`.
 - `main` must not import from `renderer`.
 - `shared` must not import from `main` or `renderer`.
-- Enforce these with a Biome rule, not with conventions alone.
+- These are **convention only** today: `biome.json` has no
+  `noRestrictedImports` and tsconfig path separation does not block a relative
+  climb out of a layer. Nothing will fail your build — check it in review.
+  Adding the rule is worth doing; until it exists, do not assume a violation
+  would have been caught.
 
 ### 3.3 Where logic must not live
 
@@ -157,23 +161,19 @@ must include a short rationale (**Why**) so they can be revisited later.
 
 ### 3.4 Services in main
 
-Each domain service lives in `main/services/<name>/`:
+Each domain capability lives in `main/services/<name>/`:
 
-- `index.ts` — public API: `init(ctx)`, `dispose()`.
 - `<name>.ts` — core logic.
-- `routes.ts` — IPC routes of this feature (thin wrappers over the core).
-- Bootstrap in `main/index.ts` wires services explicitly, in the required
-  order.
+- `routes.ts` — IPC routes of this capability (thin wrappers over the core).
+- `index.ts` — **only if** the capability owns state or needs teardown; then it
+  exports `{ init, dispose }` and goes into the ordered `services` array in
+  `main/index.ts`. A capability with no state gets its routes registered
+  directly at the call site — do not add a lifecycle shell for symmetry.
+- Dependencies are passed at construction, in `main/index.ts`. No module-level
+  service singletons and no DI container.
 
-### 3.7 When to extract a function
-
-Extract a piece of code into a named function only if at least one is true:
-
-- It is used in two or more places.
-- It is independently unit-testable, while the surrounding code is not.
-- The original block is genuinely hard to follow and a name makes it clearer.
-
-A single short block used once and easy to read should stay inline.
+See architecture.md §5 for which capabilities are which, and why the init order
+matters.
 
 ### 3.5 Feature folders in renderer
 
@@ -195,8 +195,15 @@ Aligned with the official Electron security checklist; non-negotiable.
 
 **Web preferences (per `BrowserWindow`):**
 
-- `nodeIntegration: false`, `contextIsolation: true`, `sandbox: true` — no
-  exceptions.
+- `nodeIntegration: false` and `contextIsolation: true` — no exceptions, ever.
+- `sandbox: true` for any new window. There is exactly one standing exception:
+  the console window runs `sandbox: false`, because contextBridge push batches
+  (`console.lines`) are silently dropped in a sandboxed background
+  `BrowserWindow`. That exception is only tolerable because two invariants hold
+  — its IPC is scoped to `CONSOLE_TRUSTED_CHANNELS`, and it renders
+  attacker-influenceable stdout/stderr as **text nodes only**. Read the comment
+  in `windows/consoleWindow.ts` before touching either. Do not add a second
+  exception.
 - `webSecurity: true`, `allowRunningInsecureContent: false`,
   `experimentalFeatures: false`. Do not use `enableBlinkFeatures`.
 
@@ -235,10 +242,11 @@ Aligned with the official Electron security checklist; non-negotiable.
 
 - HTTPS / WSS for any non-loopback remote endpoint. Plain HTTP / WS is
   only acceptable for `localhost` / `127.0.0.1` in development.
-- Define a restrictive CSP. `connect-src` is built from the resolved
-  `mainConfig.apiUrl` so the dev origin (`http://localhost:8080`) and the
-  prod origin (`https://api.loontail.tld`) both work without editing the
-  CSP file. See `src/main/infra/session.ts` for the live definitions.
+- Define a restrictive CSP. `connect-src` is derived at runtime from
+  `new URL(mainConfig.apiUrl).origin`, so dev and prod origins both work with no
+  CSP edit. Dev additionally widens it to `ws: http: https:` for HMR — that
+  widening must stay dev-only. `src/main/infra/session.ts` holds the live
+  definitions.
 
 **Permissions:**
 
@@ -262,6 +270,16 @@ Aligned with the official Electron security checklist; non-negotiable.
 - Keep Electron version current. Security patches are not optional;
   schedule version bumps.
 
+### 3.7 When to extract a function
+
+Extract a piece of code into a named function only if at least one is true:
+
+- It is used in two or more places.
+- It is independently unit-testable, while the surrounding code is not.
+- The original block is genuinely hard to follow and a name makes it clearer.
+
+A single short block used once and easy to read should stay inline.
+
 ## 4. IPC contract
 
 - Single source of truth: `shared/ipc/contract.ts` — a map of
@@ -270,7 +288,9 @@ Aligned with the official Electron security checklist; non-negotiable.
   typed `window.api` wrapper.
 - Channel names follow `'<feature>.<action>'` (`'bundle.start'`,
   `'settings.get'`).
-- Server→client events are described in a separate `IpcEvents` map.
+- Main→renderer events are described in a separate `IpcEventPayloads` map, and
+  their names are registered in `shared/ipc/channels.ts` alongside the invoke
+  channels, behind compile-time coverage guards.
 - IPC arguments are validated by a Zod schema on entry to main — even when
   coming from the project's own renderer (the sandbox does not guarantee
   payload integrity).
@@ -300,7 +320,7 @@ fetch('/api/bundle-registry/builds/' + slug + '/manifest');
 
 // good
 if (status === BundleStatus.Ready) { ... }
-fetch(API_ROUTES.bundle.manifest(slug));
+fetch(API_ROUTES.bundleRegistry.manifest(slug));
 ```
 
 **What does NOT count as a magic literal** (no extraction needed):
@@ -344,19 +364,18 @@ or might change as a product/contract decision — it is magic. Extract it.
 
   ```ts
   export const API_ROUTES = {
-    bundle: {
-      manifest: (slug: BundleSlug) =>
-        `/api/bundle-registry/builds/${slug}/manifest`,
-      file: (slug: BundleSlug, path: string) =>
-        `/api/bundle-registry/builds/${slug}/files/${path}`,
+    clients: {
+      list: (params: { locale?: string } = {}) =>
+        params.locale ? `/clients?locale=${params.locale}` : '/clients',
     },
-    client: {
-      list:   () => `/api/clients`,
-      byId:   (id: ClientId) => `/api/clients/${id}`,
+    bundleRegistry: {
+      manifest: (slug: BundleSlug) => `/bundle-registry/builds/${slug}/manifest`,
     },
   } as const;
   ```
 
+- Builders return the path **without** the shared `API_PATH_PREFIX`;
+  `httpRequest` prepends it. Do not bake `/api` into a builder.
 - When the backend changes a path, exactly one file is edited.
 - HTTP method and expected response schema (Zod) live next to the route
   builder, not at each call site, where appropriate.
@@ -386,9 +405,10 @@ constant, not an inline literal.
 
 **React 19 specifics:**
 
-- Prefer the **React Compiler** over manual `memo` / `useMemo` /
-  `useCallback`. Add manual memoization only when the Compiler cannot
-  optimize a hot path and there is a measured problem.
+- **No React Compiler is configured** — there is no Babel step and no compiler
+  plugin, so nothing optimizes re-renders for you. Memoize by hand
+  (`memo` / `useMemo` / `useCallback`), but only against a measured problem, not
+  on principle.
 - Use `useActionState` for form submission flows and `useOptimistic` for
   mutations that need instant UI feedback.
 - Do **not** use `'use server'`, Server Actions, or React Server Components.
@@ -397,9 +417,15 @@ constant, not an inline literal.
 
 ## 8. Persistence
 
-- Small settings (`launcherSettings`) — `electron-store` in `userData/`.
-- If structured data with history / search appears — `better-sqlite3` +
-  Drizzle. Do not introduce them earlier.
+- **All launcher state lives in one SQLite database**, `userData/launcher.db`,
+  reached only through the `main/infra/store.ts` facade over `main/infra/db/`
+  (`better-sqlite3`, no ORM — hand-written statements in `db/repos.ts`).
+- New persisted state adds a repository in `infra/db/`, a facade function in
+  `infra/store.ts`, and — if it changes the `LauncherSettings` shape — a step in
+  the `MIGRATIONS` map. Do not introduce a second storage technology;
+  `electron-store` and Drizzle are **not** dependencies. `electron-store`
+  appears in the tree only as the legacy format `infra/db/legacyImport.ts` reads
+  once on upgrade.
 - Every store key is declared as a named constant in `shared/constants/`.
 - User files (bundles, logs, cache) live only under `app.getPath('userData')`
   or explicit override folders. No relative paths.
@@ -489,16 +515,20 @@ constant, not an inline literal.
 ### 11.1 Scope
 
 - **Vitest** for unit tests:
-  - `shared/domain/` — pure logic (manifest diff, `resolveClientSettings`,
-    sha comparison).
+  - `shared/domain/` — pure logic (`resolveClientSettings` and the rest of the
+    settings resolve/override/normalize family, `resolveLoader`,
+    `selectRecent`).
   - IPC routes with a mocked service — argument validation and routing.
   - Zod schemas — round-trip and negative cases.
 - **No** end-to-end tests. Smoke scenarios are verified manually before
   release.
 - No UI unit tests for components, unless a component contains non-trivial UI
   logic (which itself is a signal to extract that logic into a hook).
-- Tests live next to the code (`foo.ts` ↔ `foo.test.ts`) or in `tests/unit/`,
-  with a style consistent within a module.
+- Tests live under `tests/`, mirroring `src/`: `tests/{main,renderer,shared}`
+  for the code under test, `tests/helpers/` for shared fakes and fixtures,
+  `tests/setup/` for vitest setup. There are no co-located `*.test.ts` files
+  and no `tests/unit/` — the vitest `include` is `tests/**/*.test.{ts,tsx}`, so
+  a test placed anywhere else simply never runs.
 - Separate pure-logic tests from tests that touch fs/network/process. The
   former should run in milliseconds and be the default; the latter run
   explicitly and are kept few.
@@ -527,8 +557,11 @@ constant, not an inline literal.
 ## 12. Tooling
 
 - **Build:** electron-vite (main + preload + renderer).
-- **Packaging / auto-update:** electron-builder + electron-updater.
-- **Linter / formatter:** Biome (single config).
+- **Packaging:** electron-builder.
+- **Auto-update:** Electron's built-in Squirrel.Windows `autoUpdater` against
+  `update.electronjs.org`. `electron-updater` is **not** a dependency.
+- **Linter / formatter:** Biome (single config). Do not propose ESLint or
+  ESLint-only plugins; accept a lint gap instead.
 - **Package manager:** npm.
 - **TS:** `tsconfig.base.json` + separate configs for main / preload /
   renderer.
@@ -575,43 +608,3 @@ constant, not an inline literal.
 - All project artifacts — documentation, code comments, commit messages,
   identifiers, log messages, error codes — are written in **English**.
 - This applies regardless of the language used in chat or discussion.
-
----
-
-## Appendix: target project tree
-
-```
-minecraft-launcher/
-├─ src/
-│  ├─ shared/
-│  │  ├─ contracts/        # types + Zod schemas for external data
-│  │  ├─ ipc/              # IPC contract (channels + event types)
-│  │  ├─ domain/           # pure logic
-│  │  └─ constants/        # cross-layer constants
-│  ├─ main/
-│  │  ├─ index.ts          # bootstrap
-│  │  ├─ ipc/              # typed router
-│  │  ├─ services/<name>/  # domain services
-│  │  ├─ infra/            # fs, http, store, logger
-│  │  └─ windows/
-│  ├─ preload/
-│  │  └─ index.ts
-│  └─ renderer/
-│     ├─ app/              # router, layout, providers
-│     ├─ features/<name>/  # features with a public API via index.ts
-│     └─ shared/
-│        ├─ ui/
-│        └─ lib/
-├─ tests/
-│  └─ unit/
-├─ docs/
-│  └─ code-guideline.md
-├─ electron.vite.config.ts
-├─ electron-builder.yml
-├─ biome.json
-├─ tsconfig.base.json
-├─ tsconfig.main.json
-├─ tsconfig.preload.json
-├─ tsconfig.renderer.json
-└─ package.json
-```

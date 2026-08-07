@@ -1,5 +1,5 @@
 import { type NotificationPayload, NotificationVariants } from '@shared/contracts/notification';
-import { IPC_EVENTS, emit } from '@shared/ipc';
+import { emit, IPC_EVENTS } from '@shared/ipc';
 import type { BrowserWindow } from 'electron';
 
 let mainWindow: BrowserWindow | null = null;

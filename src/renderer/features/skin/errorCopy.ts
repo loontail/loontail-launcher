@@ -1,5 +1,5 @@
+import { makeCodeLocalizer } from '@renderer/shared/lib/makeCodeLocalizer';
 import { type SkinErrorCode, SkinErrorCodes } from '@shared/contracts/skin';
-import type { TFunction } from 'i18next';
 
 const KEY_BY_CODE: Record<SkinErrorCode, string> = {
   [SkinErrorCodes.NOT_AUTHENTICATED]: 'settings.account.skinError.notAuthenticated',
@@ -10,11 +10,7 @@ const KEY_BY_CODE: Record<SkinErrorCode, string> = {
   [SkinErrorCodes.CLEAR_FAILED]: 'settings.account.skinError.clearFailed',
 };
 
-const FALLBACK_KEY = 'settings.account.skinError.unknown';
-
-const isSkinErrorCode = (code: string): code is SkinErrorCode => code in KEY_BY_CODE;
-
-export const localizeSkinError = (code: string, message: string, t: TFunction): string => {
-  const key = isSkinErrorCode(code) ? KEY_BY_CODE[code] : FALLBACK_KEY;
-  return t(key, { message });
-};
+export const localizeSkinError = makeCodeLocalizer(
+  KEY_BY_CODE,
+  'settings.account.skinError.unknown',
+);

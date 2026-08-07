@@ -10,6 +10,9 @@ import { formatBytes } from '../lib/formatBytes';
 
 type FolderInfoBlockProps = {
   folder: DiskInfo | null | undefined;
+  // True only while the probe is in flight: a rejected probe (refused or
+  // unreadable path) has to drop the skeleton instead of spinning forever.
+  diskInfoPending?: boolean;
   folderSize?: FolderSize | null | undefined;
   folderSizeLoading?: boolean;
   pathLoading?: boolean;
@@ -20,13 +23,13 @@ type FolderInfoBlockProps = {
   onChange: () => void;
   openLabel?: string;
   changeLabel?: string;
-  showDiskUsage?: boolean;
   overridden?: boolean;
   disabled?: boolean;
 };
 
 export const FolderInfoBlock = ({
   folder,
+  diskInfoPending = false,
   folderSize,
   folderSizeLoading = false,
   pathLoading = false,
@@ -37,22 +40,17 @@ export const FolderInfoBlock = ({
   onChange,
   openLabel,
   changeLabel,
-  showDiskUsage = false,
   overridden = false,
   disabled = false,
 }: FolderInfoBlockProps) => {
   const { t } = useTranslation();
 
   const displayPath = path ?? folder?.path ?? '';
-  const diskLoading = showDiskUsage && (folder === undefined || folder === null);
-  const hasUsage =
-    showDiskUsage &&
-    folder !== null &&
-    folder !== undefined &&
-    folder.error !== true &&
-    typeof folder.free === 'number' &&
-    typeof folder.size === 'number' &&
-    folder.size > 0;
+  // Derived, not a prop: a caller could otherwise pass a flag inconsistent with
+  // the path it also passes, and the internals would contradict it.
+  const showDiskUsage = (path ?? '').length > 0;
+  const diskLoading = showDiskUsage && diskInfoPending;
+  const hasUsage = showDiskUsage && folder !== null && folder !== undefined && folder.size > 0;
 
   const folderBytes = typeof folderSize?.bytes === 'number' ? folderSize.bytes : null;
   const { clampedFolderRatio, restUsedRatio } = computeDiskUsageRatios({
@@ -67,19 +65,17 @@ export const FolderInfoBlock = ({
   const showUsageRow = diskLoading || hasUsage;
 
   return (
-    <div className="flex flex-col gap-3 rounded-md border border-border bg-card p-4">
+    <div className="flex flex-col gap-3 rounded-md border border-edge bg-surface-1 p-4">
       <div className="flex items-start gap-3">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-sm bg-muted text-foreground">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-sm bg-surface-2 text-text-hi">
           <HardDrive className="size-5" strokeWidth={1.75} aria-hidden="true" />
         </div>
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <h4 className="text-sm font-semibold text-foreground">
+          <h4 className="text-sm font-semibold text-text-hi">
             {heading}
             <OverrideMark shown={overridden} />
           </h4>
-          {description !== undefined && (
-            <p className="text-xs text-muted-foreground">{description}</p>
-          )}
+          {description !== undefined && <p className="text-xs text-text-mute">{description}</p>}
         </div>
         <div className="flex shrink-0 flex-col items-stretch gap-1">
           <Button
@@ -96,13 +92,13 @@ export const FolderInfoBlock = ({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 rounded-sm border border-border bg-background p-3">
+      <div className="flex flex-col gap-2 rounded-sm border border-edge bg-canvas p-3">
         <div className="flex h-4 items-center gap-2 text-xs">
-          <Folder className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+          <Folder className="size-3.5 shrink-0 text-text-mute" strokeWidth={1.75} />
           {pathLoading ? (
             <Skeleton className="h-3.5 w-48 max-w-full" />
           ) : (
-            <span className="truncate font-mono text-muted-foreground">
+            <span className="truncate font-mono text-text-mute">
               {displayPath || t('settings.system.folderNotSet')}
             </span>
           )}
@@ -115,23 +111,23 @@ export const FolderInfoBlock = ({
               <div className="flex h-1.5 w-full items-center gap-1">
                 {restUsedRatio > 0 && (
                   <div
-                    className="h-full rounded-full bg-foreground/85 transition-all"
+                    className="h-full rounded-full bg-cta/85 transition-all"
                     style={{ width: `${restUsedRatio * 100}%` }}
                   />
                 )}
                 {clampedFolderRatio > 0 && (
                   <div
-                    className="h-full rounded-full bg-foreground/85 transition-all"
+                    className="h-full rounded-full bg-cta/85 transition-all"
                     style={{
                       width: `${clampedFolderRatio * 100}%`,
                       minWidth: folderBytes !== null && folderBytes > 0 ? '0.5rem' : undefined,
                     }}
                   />
                 )}
-                <div className="h-full flex-1 rounded-full bg-muted" />
+                <div className="h-full flex-1 rounded-full bg-surface-2" />
               </div>
             )}
-            <div className="flex h-4 items-center justify-between text-xs text-muted-foreground">
+            <div className="flex h-4 items-center justify-between text-xs text-text-mute">
               {diskLoading ? (
                 <>
                   <Skeleton className="h-3 w-20" />

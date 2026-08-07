@@ -30,6 +30,7 @@ export const Switch = ({
   };
 
   return (
+    // biome-ignore lint/a11y/useAriaPropsSupportedByRole: role and the aria-* props are gated on the same `interactive` flag, so aria-checked never ships without role="switch"
     <span
       role={interactive ? 'switch' : undefined}
       aria-hidden={interactive ? undefined : true}
@@ -41,7 +42,7 @@ export const Switch = ({
       onKeyDown={interactive ? onKeyDown : undefined}
       className={cn(
         'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors',
-        checked ? 'bg-primary' : 'bg-input',
+        checked ? 'bg-cta' : 'bg-edge-md',
         disabled && 'opacity-50',
         interactive &&
           'cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ring',
@@ -50,7 +51,7 @@ export const Switch = ({
     >
       <span
         className={cn(
-          'pointer-events-none ml-0.5 inline-block size-4 rounded-full bg-background transition-transform',
+          'pointer-events-none ml-0.5 inline-block size-4 rounded-full bg-canvas transition-transform',
           checked ? 'translate-x-4' : 'translate-x-0',
         )}
       />

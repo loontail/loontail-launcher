@@ -1,8 +1,7 @@
-export { SettingsPage } from './components/SettingsPage';
-
 export { FolderInfoBlock } from './components/FolderInfoBlock';
 export { LanguageSwitcher } from './components/LanguageSwitcher';
 export { RamControl } from './components/RamControl';
+export { SettingsPage } from './components/SettingsPage';
 
 export {
   useChooseClientFolder,

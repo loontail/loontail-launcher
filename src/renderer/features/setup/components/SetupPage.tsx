@@ -33,7 +33,7 @@ export const SetupPage = () => {
     }
   }, [defaultPath, userTouched, localPath]);
 
-  const { info: diskInfo } = useDiskSpace(localPath || null);
+  const { info: diskInfo, isPending: diskInfoPending } = useDiskSpace(localPath || null);
   const { info: folderSize, isPending: folderSizePending } = useFolderSize(localPath || null);
 
   const handlePick = async () => {
@@ -44,9 +44,9 @@ export const SetupPage = () => {
     }
   };
 
-  const handleFinish = async () => {
+  const handleFinish = (): void => {
     if (!localPath) return;
-    await setLauncher({ storage: { clientsFolder: localPath } });
+    setLauncher({ storage: { clientsFolder: localPath } });
   };
 
   const canFinish = localPath.length > 0 && !isSaving;
@@ -75,6 +75,7 @@ export const SetupPage = () => {
 
           <FolderInfoBlock
             folder={diskInfo}
+            diskInfoPending={diskInfoPending}
             folderSize={folderSize}
             folderSizeLoading={folderSizePending}
             heading={t('settings.system.clientsFolder')}
@@ -84,7 +85,6 @@ export const SetupPage = () => {
               if (localPath) void openPath(localPath);
             }}
             onChange={() => void handlePick()}
-            showDiskUsage={localPath.length > 0}
             disabled={isSaving}
           />
         </div>
@@ -93,7 +93,7 @@ export const SetupPage = () => {
           type="button"
           className="inline-flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-md bg-cta px-6 text-body-med text-on-cta shadow-[inset_0_1px_0_var(--shadow-inset-highlight)] transition-all duration-150 ease-standard hover:bg-cta-hover active:bg-cta-press motion-safe:active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-glass/70 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-1 disabled:pointer-events-none disabled:opacity-50"
           disabled={!canFinish}
-          onClick={() => void handleFinish()}
+          onClick={handleFinish}
           aria-busy={isSaving}
         >
           {isSaving ? <Loader2 className="size-4 animate-spin" /> : t('setup.finish')}

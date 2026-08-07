@@ -16,7 +16,7 @@ import { scopedLogger } from '@main/infra/logger';
 import { BundleErrorCodes, type RemoteManifestEntry } from '@shared/contracts/bundle';
 import { BundleError } from './errors';
 import {
-  isTrustedBundleAssetUrl,
+  bundleAssetTrust,
   resolveBundleRedirectUrl,
   validateBundleAssetDownloadUrl,
 } from './urlPolicy';
@@ -26,7 +26,7 @@ const logger = scopedLogger('bundle.download');
 export type DownloadChunkCallback = (bytes: number) => void;
 
 export type DownloadOptions = {
-  // In-flight requests for the task, so cancelSync can synchronously destroy
+  // In-flight requests for the task, so cancel can synchronously destroy
   // every active socket.
   currentRequests: Set<ClientRequest>;
   signal?: AbortSignal;
@@ -54,9 +54,10 @@ const requestOnce = (url: string, options: DownloadOptions): Promise<IncomingMes
         port: parsed.port || undefined,
         path: `${parsed.pathname}${parsed.search}`,
         method: 'GET',
-        // Attach the bearer only when the host is the trusted API origin, so the
-        // secret is never sent off-host (SSRF/bearer-exfil defense).
-        headers: isTrustedBundleAssetUrl(validatedUrl) ? sessionAuthHeader() : {},
+        // Attach the bearer only when the host is our own API origin, so the
+        // secret is never sent off-host (SSRF/bearer-exfil defense). A `public`
+        // host (the local/test carve-out) is fetched bare.
+        headers: bundleAssetTrust(validatedUrl) === 'api' ? sessionAuthHeader() : {},
         timeout: BUNDLE_DOWNLOAD_REQUEST_TIMEOUT_MS,
       },
       (res) => {

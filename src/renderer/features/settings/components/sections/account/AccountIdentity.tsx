@@ -50,7 +50,7 @@ export const AccountIdentity = ({
   <div className="flex min-w-0 flex-1 flex-col gap-3">
     <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
       <h1
-        className="selectable min-w-0 truncate text-2xl font-semibold leading-tight text-foreground"
+        className="selectable min-w-0 truncate text-2xl font-semibold leading-tight text-text-hi"
         title={username ?? undefined}
       >
         {username ?? EMPTY_USERNAME}
@@ -70,7 +70,7 @@ export const AccountIdentity = ({
       {specs.cape !== null && <SpecRow term={specs.capeLabel} value={specs.cape} />}
     </dl>
 
-    <p className="text-xs leading-relaxed text-muted-foreground">{helper}</p>
+    <p className="text-xs leading-relaxed text-text-mute">{helper}</p>
 
     <div className="mt-auto flex justify-end">
       <Button
@@ -95,10 +95,10 @@ type SpecRowProps = { term: string; value: string };
 
 const SpecRow = ({ term, value }: SpecRowProps) => (
   <div className="flex items-baseline gap-3">
-    <dt className="w-12 shrink-0 text-microlabel font-semibold uppercase tracking-eyebrow text-muted-foreground">
+    <dt className="w-12 shrink-0 text-microlabel font-semibold uppercase tracking-eyebrow text-text-mute">
       {term}
     </dt>
-    <dd className="min-w-0 truncate text-foreground" title={value}>
+    <dd className="min-w-0 truncate text-text-hi" title={value}>
       {value}
     </dd>
   </div>
@@ -107,7 +107,7 @@ const SpecRow = ({ term, value }: SpecRowProps) => (
 type ProviderChipProps = { chip: AccountProviderChip };
 
 const ProviderChip = ({ chip }: ProviderChipProps) => (
-  <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-edge bg-surface px-2 text-eyebrow font-medium text-foreground/80">
+  <span className="inline-flex h-6 items-center gap-1.5 rounded-md border border-edge bg-surface px-2 text-eyebrow font-medium text-text-hi/80">
     {chip.provider === 'mojang' ? (
       <MicrosoftIcon className="size-3" />
     ) : (

@@ -57,13 +57,13 @@ describe('registerSettingsRoutes', () => {
   it('settings.get rejects any payload (no args)', async () => {
     const handlers = registerWith();
     const thrown = await captureThrow(() => handlers.get(IPC_CHANNELS.settingsGet)?.({ x: 1 }));
-    expect(thrown).toMatchObject({ code: ERROR_CODES.IpcInvalidArgs });
+    expect(thrown).toMatchObject({ code: ERROR_CODES.IPC_INVALID_ARGS });
     expect(settingsMock.getSettings).not.toHaveBeenCalled();
   });
 
-  it('settings.get returns settings for an undefined payload', () => {
+  it('settings.get returns settings for an undefined payload', async () => {
     const handlers = registerWith();
-    expect(handlers.get(IPC_CHANNELS.settingsGet)?.(undefined)).toBe(SETTINGS);
+    await expect(handlers.get(IPC_CHANNELS.settingsGet)?.(undefined)).resolves.toBe(SETTINGS);
     expect(settingsMock.getSettings).toHaveBeenCalledTimes(1);
   });
 
@@ -82,14 +82,14 @@ describe('registerSettingsRoutes', () => {
         bogus: 1,
       }),
     );
-    expect(thrown).toMatchObject({ code: ERROR_CODES.IpcInvalidArgs });
+    expect(thrown).toMatchObject({ code: ERROR_CODES.IPC_INVALID_ARGS });
     expect(settingsMock.patchLauncherSettings).not.toHaveBeenCalled();
   });
 
   it('settings.setClientOverride forwards the parsed CatalogKey and patch', async () => {
     const handlers = registerWith();
     await handlers.get(IPC_CHANNELS.settingsSetClientOverride)?.({
-      slug: 'official:vanilla',
+      key: 'official:vanilla',
       patch: { memory: { allocatedRamMb: 1024 } },
     });
     expect(settingsMock.setClientOverride).toHaveBeenCalledWith('official:vanilla', {
@@ -97,24 +97,24 @@ describe('registerSettingsRoutes', () => {
     });
   });
 
-  it('settings.setClientOverride rejects a bare slug', async () => {
+  it('settings.setClientOverride rejects a bare key', async () => {
     const handlers = registerWith();
     const thrown = await captureThrow(() =>
       handlers.get(IPC_CHANNELS.settingsSetClientOverride)?.({
-        slug: 'vanilla',
+        key: 'vanilla',
         patch: { memory: { allocatedRamMb: 1024 } },
       }),
     );
-    expect(thrown).toMatchObject({ code: ERROR_CODES.IpcInvalidArgs });
+    expect(thrown).toMatchObject({ code: ERROR_CODES.IPC_INVALID_ARGS });
     expect(settingsMock.setClientOverride).not.toHaveBeenCalled();
   });
 
   it('settings.setClientOverride rejects a missing patch', async () => {
     const handlers = registerWith();
     const thrown = await captureThrow(() =>
-      handlers.get(IPC_CHANNELS.settingsSetClientOverride)?.({ slug: 'official:vanilla' }),
+      handlers.get(IPC_CHANNELS.settingsSetClientOverride)?.({ key: 'official:vanilla' }),
     );
-    expect(thrown).toMatchObject({ code: ERROR_CODES.IpcInvalidArgs });
+    expect(thrown).toMatchObject({ code: ERROR_CODES.IPC_INVALID_ARGS });
     expect(settingsMock.setClientOverride).not.toHaveBeenCalled();
   });
 
@@ -124,12 +124,12 @@ describe('registerSettingsRoutes', () => {
     expect(settingsMock.clearClientOverride).toHaveBeenCalledWith('official:vanilla');
   });
 
-  it('settings.clearClientOverrides rejects a bare slug', async () => {
+  it('settings.clearClientOverrides rejects a bare key', async () => {
     const handlers = registerWith();
     const thrown = await captureThrow(() =>
       handlers.get(IPC_CHANNELS.settingsClearClientOverrides)?.('vanilla'),
     );
-    expect(thrown).toMatchObject({ code: ERROR_CODES.IpcInvalidArgs });
+    expect(thrown).toMatchObject({ code: ERROR_CODES.IPC_INVALID_ARGS });
     expect(settingsMock.clearClientOverride).not.toHaveBeenCalled();
   });
 
@@ -138,7 +138,7 @@ describe('registerSettingsRoutes', () => {
     const thrown = await captureThrow(() =>
       handlers.get(IPC_CHANNELS.settingsClearClientOverrides)?.(7),
     );
-    expect(thrown).toMatchObject({ code: ERROR_CODES.IpcInvalidArgs });
+    expect(thrown).toMatchObject({ code: ERROR_CODES.IPC_INVALID_ARGS });
     expect(settingsMock.clearClientOverride).not.toHaveBeenCalled();
   });
 
@@ -158,7 +158,7 @@ describe('registerSettingsRoutes', () => {
     const result = await handlers.get(IPC_CHANNELS.settingsChooseClientFolder)?.(
       'official:vanilla',
     );
-    // The picker suffix is the bare slug (`vanilla`), never `official:vanilla`:
+    // The picker suffix is the bare ref (`vanilla`), never `official:vanilla`:
     // `:` is illegal in a Windows path segment.
     expect(systemMock.pickFolderWithSuffix).toHaveBeenCalledWith(expect.anything(), 'vanilla');
     // The settings record still keys by the CatalogKey.
@@ -183,11 +183,11 @@ describe('registerSettingsRoutes', () => {
     });
   });
 
-  it('settings.chooseClientFolder rejects a bare slug before opening the picker', async () => {
+  it('settings.chooseClientFolder rejects a bare key before opening the picker', async () => {
     const handlers = registerWith();
     await expect(
       handlers.get(IPC_CHANNELS.settingsChooseClientFolder)?.('vanilla'),
-    ).rejects.toMatchObject({ code: ERROR_CODES.IpcInvalidArgs });
+    ).rejects.toMatchObject({ code: ERROR_CODES.IPC_INVALID_ARGS });
     expect(systemMock.pickFolderWithSuffix).not.toHaveBeenCalled();
   });
 });

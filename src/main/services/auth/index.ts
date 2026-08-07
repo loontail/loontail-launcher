@@ -2,18 +2,17 @@ import type { MinecraftKit } from '@loontail/minecraft-kit';
 import { registerSessionAuthPort } from '@main/infra/http';
 import { getStoredSessionToken, runAuthStoreMigrationIfNeeded } from '@main/infra/store';
 import type { Router } from '@main/ipc/router';
+import type { LauncherService } from '@main/services/service';
 import { createAuthApi } from './authApi';
 import { createLoontailAuth } from './loontailAuth';
 import { createMojangAuth } from './mojangAuth';
 import { registerAuthRoutes } from './routes';
 import { type AuthSessionPort, createAuthSessionPort } from './session';
-import { type SessionRefresher, createSessionRefresher } from './sessionRefresh';
+import { createSessionRefresher, type SessionRefresher } from './sessionRefresh';
 import type { YggdrasilGateway } from './yggdrasilClient';
 
-export type AuthService = {
+export type AuthService = LauncherService & {
   session: AuthSessionPort;
-  init: () => Promise<void>;
-  dispose: () => Promise<void>;
 };
 
 // Bridges the HTTP layer's session-auth needs (attach bearer, refresh-and-retry)
@@ -24,7 +23,7 @@ const buildSessionAuthPort = (refresher: SessionRefresher) => ({
   getToken: (): string | null => getStoredSessionToken(),
   refresh: async (): Promise<string | null> => {
     const result = await refresher.refresh();
-    return result.kind === 'ok' ? result.identity.sessionToken : null;
+    return result.kind === 'ok' ? result.identity.apiSession.token : null;
   },
 });
 

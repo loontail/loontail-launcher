@@ -3,18 +3,20 @@ import {
   type CatalogRef,
   type MediaRef,
   type OfficialCatalogItem,
-  SourceKinds,
   officialKey,
+  SourceKinds,
 } from '@shared/contracts/catalog';
 import type { Client } from '@shared/contracts/client';
 
 // One build source feeding the unified catalog. `getItem` returns null for refs
 // it does not own or that are absent; it throws only on a genuine fetch failure
 // (so the aggregator can mark it degraded without blanking other sources).
+export type CatalogSourceOptions = { locale?: string };
+
 export type CatalogSource = {
   readonly id: CatalogRef['source'];
-  listItems(opts?: { locale?: string }): Promise<CatalogItem[]>;
-  getItem(ref: CatalogRef): Promise<CatalogItem | null>;
+  listItems(opts?: CatalogSourceOptions): Promise<CatalogItem[]>;
+  getItem(ref: CatalogRef, opts?: CatalogSourceOptions): Promise<CatalogItem | null>;
 };
 
 const mediaRef = (media: { url: string } | null | undefined): MediaRef | null =>

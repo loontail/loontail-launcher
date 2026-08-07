@@ -40,7 +40,10 @@ export class HttpError extends Error {
 export type SessionAuthPort = {
   getToken: () => string | null;
   // Refresh the stored session and return the rotated token, or null on failure
-  // (the user must re-authenticate).
+  // (the user must re-authenticate). MUST be single-flight: rotation is
+  // single-use server-side, so N parallel 401s have to share one round-trip and
+  // retry with the same rotated token. The implementation memoizes the in-flight
+  // rotation (createSessionRefresher).
   refresh: () => Promise<string | null>;
 };
 
@@ -48,22 +51,6 @@ let sessionPort: SessionAuthPort | null = null;
 
 export const registerSessionAuthPort = (port: SessionAuthPort): void => {
   sessionPort = port;
-  // Drop any refresh memoized against the previous port so a re-register never
-  // returns a stale rotation.
-  refreshing = null;
-};
-
-// Session rotation is single-use server-side, so N parallel 401s must trigger
-// exactly ONE refresh: the rest await this promise and retry the same rotated
-// token (BUG-1). Cleared in `finally` so later staleness refreshes again.
-let refreshing: Promise<string | null> | null = null;
-
-const refreshOnce = (port: SessionAuthPort): Promise<string | null> => {
-  if (refreshing) return refreshing;
-  refreshing = port.refresh().finally(() => {
-    refreshing = null;
-  });
-  return refreshing;
 };
 
 const requireSessionPort = (): SessionAuthPort => {
@@ -115,10 +102,11 @@ export const httpRequest = async (url: string, options: RequestOptions): Promise
   if (current && current !== requestToken) {
     return rawFetch(fullUrl, method, payload, current, signal);
   }
-  // Otherwise rotate once (de-duplicated) and retry; a failed refresh leaves the
-  // original rejection to surface a re-login.
+  // Otherwise rotate and retry; a failed refresh leaves the original rejection
+  // to surface a re-login. `port.refresh` is single-flight (see
+  // createSessionRefresher), so N parallel 401s share one rotation.
   logger.warn(`${method} ${url} rejected (${response.status}); attempting session refresh`);
-  const rotated = await refreshOnce(port);
+  const rotated = await port.refresh();
   if (!rotated) return response;
   return rawFetch(fullUrl, method, payload, rotated, signal);
 };

@@ -1,4 +1,6 @@
 import {
+  asMinecraftVersionId,
+  createMemoryCache,
   type HttpClient,
   type HttpHeaders,
   type HttpRequestOptions,
@@ -6,10 +8,8 @@ import {
   Loaders,
   type MinecraftKit,
   MinecraftKit as RealMinecraftKit,
-  type Target,
-  asMinecraftVersionId,
-  createMemoryCache,
   silentLogger,
+  type Target,
 } from '@loontail/minecraft-kit';
 import type { Broadcaster } from '@main/services/minecraft/broadcast';
 import type { Context } from '@main/services/minecraft/context';
@@ -56,13 +56,14 @@ import { createClientOperationLocks } from '@main/services/clientOperationLocks'
 import { MinecraftManager } from '@main/services/minecraft/manager';
 import { OpKinds, type OpMap } from '@main/services/minecraft/ops';
 import {
-  stubConsolePort,
+  stubClearBundleManifest,
+  stubConsoleSink,
   stubOpenConsole,
   stubResolveBuild,
   stubResolveBundleRepairFilter,
 } from './managerStubs';
 
-const SLUG = asCatalogKey('official:vanilla-client');
+const KEY = asCatalogKey('official:vanilla-client');
 const CLIENT_FOLDER = 'Z:/clients/vanilla-client';
 const MC_VERSION = asMinecraftVersionId('1.20.1');
 
@@ -211,12 +212,13 @@ describe('MinecraftManager readiness integration', () => {
         broadcaster(),
         kit(),
         createClientOperationLocks(),
-        stubConsolePort(),
+        stubConsoleSink(),
         stubOpenConsole(),
         () => account(),
         stubResolveBundleRepairFilter(),
+        stubClearBundleManifest(),
         stubResolveBuild(),
-      ).getStatus(SLUG),
+      ).getStatus(KEY),
     ).resolves.toEqual({
       status: InstallStatuses.NOT_INSTALLED,
       paused: false,
@@ -248,12 +250,13 @@ describe('MinecraftManager readiness integration', () => {
         broadcaster(),
         guardedKit,
         createClientOperationLocks(),
-        stubConsolePort(),
+        stubConsoleSink(),
         stubOpenConsole(),
         () => account(),
         stubResolveBundleRepairFilter(),
+        stubClearBundleManifest(),
         stubResolveBuild(),
-      ).getStatus(SLUG),
+      ).getStatus(KEY),
     ).resolves.toEqual({
       status: InstallStatuses.NOT_INSTALLED,
       paused: false,
@@ -269,17 +272,18 @@ describe('MinecraftManager readiness integration', () => {
       broadcaster(),
       kit(),
       createClientOperationLocks(),
-      stubConsolePort(),
+      stubConsoleSink(),
       stubOpenConsole(),
       () => currentAccount,
       stubResolveBundleRepairFilter(),
+      stubClearBundleManifest(),
       stubResolveBuild(),
-    ).startLaunch(SLUG);
+    ).startLaunch(KEY);
 
     expect(readinessMocks.runInstall).not.toHaveBeenCalled();
     expect(readinessMocks.runLaunch).toHaveBeenCalledWith(
       expect.any(Object),
-      SLUG,
+      KEY,
       context(resolvedTarget),
       account(),
     );
@@ -288,10 +292,10 @@ describe('MinecraftManager readiness integration', () => {
 
 // Drives the full install -> post-install bundle sync -> launch lifecycle through
 // the public API against the REAL op Map and asserts it never holds more than one
-// op per slug across the transitions: each phase replaces the prior op rather than
+// op per key across the transitions: each phase replaces the prior op rather than
 // stacking, and every phase clears itself.
-describe('MinecraftManager install -> launch op-per-slug invariant (real op map)', () => {
-  it('keeps exactly one op per slug across install, bundle sync, and launch', async () => {
+describe('MinecraftManager install -> launch op-per-key invariant (real op map)', () => {
+  it('keeps exactly one op per key across install, bundle sync, and launch', async () => {
     const resolvedTarget = target();
     resetMocks(resolvedTarget);
 
@@ -303,9 +307,9 @@ describe('MinecraftManager install -> launch op-per-slug invariant (real op map)
     let phase: 'install' | 'launch' = 'install';
     const hook = vi.fn(async () => {
       // While a bundle sync is in flight the registry must carry the single
-      // BUNDLE_SYNCING op for the slug — never a second stacked op.
+      // BUNDLE_SYNCING op for the key — never a second stacked op.
       const recorded = phase === 'install' ? installHookKinds : launchHookKinds;
-      recorded.push(ops.get(SLUG)?.kind);
+      recorded.push(ops.get(KEY)?.kind);
       expect(sizeOf(ops)).toBe(1);
     });
 
@@ -313,28 +317,29 @@ describe('MinecraftManager install -> launch op-per-slug invariant (real op map)
       broadcaster(),
       kit(),
       createClientOperationLocks(),
-      stubConsolePort(),
+      stubConsoleSink(),
       stubOpenConsole(),
       () => account(),
       stubResolveBundleRepairFilter(),
+      stubClearBundleManifest(),
       stubResolveBuild(),
       ops,
     );
     manager.attachLaunchHook(hook);
 
-    await manager.startInstall(SLUG);
+    await manager.startInstall(KEY);
     await vi.waitFor(() => {
       expect(installHookKinds).toHaveLength(1);
     });
     // The post-install bundle sync ran under a BUNDLE_SYNCING op and then cleared
-    // it, so the slug is idle and a follow-up launch passes requireIdle.
+    // it, so the key is idle and a follow-up launch passes requireIdle.
     expect(installHookKinds).toEqual([OpKinds.BUNDLE_SYNCING]);
     await vi.waitFor(() => {
       expect(sizeOf(ops)).toBe(0);
     });
 
     phase = 'launch';
-    await manager.startLaunch(SLUG);
+    await manager.startLaunch(KEY);
     await vi.waitFor(() => {
       expect(launchHookKinds).toHaveLength(1);
     });

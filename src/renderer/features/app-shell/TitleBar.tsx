@@ -30,7 +30,7 @@ export const TitleBar = () => {
             </span>
             <span
               role="tooltip"
-              className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-70 -translate-x-1/2 whitespace-normal rounded-md bg-popover px-3 py-2 text-eyebrow font-medium leading-snug text-popover-foreground opacity-0 shadow-overlay ring-1 ring-edge-md transition-opacity duration-150 group-hover:opacity-100"
+              className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 w-70 -translate-x-1/2 whitespace-normal rounded-md bg-surface-2 px-3 py-2 text-eyebrow font-medium leading-snug text-text-hi opacity-0 shadow-overlay ring-1 ring-edge-md transition-opacity duration-150 group-hover:opacity-100"
             >
               {t('appBar.alphaTooltip')}
             </span>

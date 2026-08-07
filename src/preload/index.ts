@@ -5,7 +5,7 @@ import {
   type IpcResult,
   tryUnwrapIpcError,
 } from '@shared/ipc';
-import { type IpcRendererEvent, contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, type IpcRendererEvent, ipcRenderer } from 'electron';
 
 type Unsubscribe = () => void;
 

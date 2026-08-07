@@ -9,8 +9,10 @@
   glass + gradient layer is reserved for immersive chrome (title bar, hero scrims,
   overlays) — never the scrolling catalog.
 
-  Legacy token NAMES are preserved (only values changed) so every page keeps
-  building; out-of-scope pages (Settings, Login, client-settings) inherit these.
+  The shadcn legacy names are gone; if you meet one in an old snippet, translate
+  it: background→canvas, card→surface-1, popover/muted→surface-2,
+  secondary/accent→surface-3, foreground→text-hi, muted-foreground→text-mute,
+  border→edge, input→edge-md, primary/primary-foreground→cta/on-cta.
 */
 @theme {
   --font-sans: "Nunito", system-ui, sans-serif;
@@ -37,23 +39,7 @@
   /* Neutral "accent" — focus ring / active nav / progress fill / selection. */
   --color-accent-soft: oklch(1 0 0 / 0.1);
 
-  /* Legacy semantic names, retuned to shadcn neutral-dark. */
-  --color-background: oklch(0.145 0 0);
-  --color-foreground: oklch(0.985 0 0);
-  --color-card: oklch(0.205 0 0);
-  --color-card-foreground: oklch(0.985 0 0);
-  --color-popover: oklch(0.225 0 0);
-  --color-popover-foreground: oklch(0.985 0 0);
-  --color-primary: oklch(0.985 0 0);
-  --color-primary-foreground: oklch(0.205 0 0);
-  --color-secondary: oklch(0.269 0 0);
-  --color-secondary-foreground: oklch(0.985 0 0);
-  --color-muted: oklch(0.235 0 0);
-  --color-muted-foreground: oklch(0.708 0 0);
-  --color-accent: oklch(0.269 0 0);
-  --color-accent-foreground: oklch(0.985 0 0);
-  --color-border: oklch(1 0 0 / 0.1);
-  --color-input: oklch(1 0 0 / 0.15);
+  /* Focus ring. */
   --color-ring: oklch(0.708 0 0);
 
   /* Status = monochrome. Differentiated by brightness; meaning carried by icon + text. */
@@ -218,7 +204,7 @@ body,
 body {
   font-family: var(--font-sans);
   background: var(--color-canvas);
-  color: var(--color-foreground);
+  color: var(--color-text-hi);
   -webkit-font-smoothing: antialiased;
   user-select: none;
   -webkit-user-select: none;
@@ -257,10 +243,10 @@ img {
   .slider-track {
     background: linear-gradient(
       to right,
-      var(--color-primary) 0%,
-      var(--color-primary) var(--slider-progress),
-      var(--color-muted) var(--slider-progress),
-      var(--color-muted) 100%
+      var(--color-cta) 0%,
+      var(--color-cta) var(--slider-progress),
+      var(--color-surface-2) var(--slider-progress),
+      var(--color-surface-2) 100%
     );
   }
 }
@@ -288,7 +274,9 @@ img {
 }
 
 /* Reduced-motion backstop: collapse all animation/transition to near-instant.
-   Determinate progress fills remain informative (they are data, not decoration). */
+   Determinate progress fills remain informative (they are data, not decoration).
+   `!important` is load-bearing here — the backstop has to out-specify every utility
+   class — so noImportantStyles/noDescendingSpecificity are off for CSS in biome.json. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

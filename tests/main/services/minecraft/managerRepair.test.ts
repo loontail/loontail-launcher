@@ -9,7 +9,7 @@ import type { Context } from '@main/services/minecraft/context';
 import { asCatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
 import { LoaderChoices } from '@shared/contracts/settings';
-import { type MockInstance, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
 const orchestrationMocks = vi.hoisted(() => {
   return {
@@ -48,13 +48,14 @@ import { OP_TO_STATUS, OpKinds } from '@main/services/minecraft/ops';
 import { makeLauncherSettings, makeMinecraftBroadcaster } from '../../../helpers/fixtures';
 import {
   stubAccountProvider,
-  stubConsolePort,
+  stubClearBundleManifest,
+  stubConsoleSink,
   stubOpenConsole,
   stubResolveBuild,
   stubResolveBundleRepairFilter,
 } from './managerStubs';
 
-const SLUG = asCatalogKey('official:test-client');
+const KEY = asCatalogKey('official:test-client');
 const CLIENT_FOLDER = 'Z:/clients/test-client';
 const CLIENTS_FOLDER = 'Z:/clients';
 
@@ -81,10 +82,11 @@ const makeManager = (
     broadcaster,
     { targets: { resolve: vi.fn() } } as unknown as MinecraftKit,
     operationLocks,
-    stubConsolePort(),
+    stubConsoleSink(),
     stubOpenConsole(),
     stubAccountProvider(),
     stubResolveBundleRepairFilter(),
+    stubClearBundleManifest(),
     stubResolveBuild(),
   );
 
@@ -119,9 +121,9 @@ describe('MinecraftManager.startRepair', () => {
     const hook = vi.fn().mockResolvedValue(undefined);
     manager.attachLaunchHook(hook);
 
-    await manager.startRepair(SLUG);
+    await manager.startRepair(KEY);
     await vi.waitFor(() => {
-      expect(hook).toHaveBeenCalledWith(SLUG, expect.any(AbortSignal));
+      expect(hook).toHaveBeenCalledWith(KEY, expect.any(AbortSignal));
     });
   });
 
@@ -131,7 +133,7 @@ describe('MinecraftManager.startRepair', () => {
     const hook = vi.fn().mockResolvedValue(undefined);
     manager.attachLaunchHook(hook);
 
-    await manager.startRepair(SLUG);
+    await manager.startRepair(KEY);
     await vi.waitFor(() => {
       expect(orchestrationMocks.runRepair).toHaveBeenCalled();
     });
@@ -145,7 +147,7 @@ describe('MinecraftManager.startRepair', () => {
     const hook = vi.fn().mockResolvedValue(undefined);
     manager.attachLaunchHook(hook);
 
-    await manager.startRepair(SLUG);
+    await manager.startRepair(KEY);
     await vi.waitFor(() => {
       expect(orchestrationMocks.runRepair).toHaveBeenCalled();
     });
@@ -159,7 +161,7 @@ describe('MinecraftManager.startRepair', () => {
     const hook = vi.fn().mockRejectedValue(new Error('bundle boom'));
     manager.attachLaunchHook(hook);
 
-    await expect(manager.startRepair(SLUG)).resolves.toBeUndefined();
+    await expect(manager.startRepair(KEY)).resolves.toBeUndefined();
     await vi.waitFor(() => {
       expect(orchestrationMocks.logger.warn).toHaveBeenCalled();
     });
@@ -181,9 +183,9 @@ describe('MinecraftManager.startRepair', () => {
     });
     manager.attachLaunchHook(hook);
 
-    await manager.startRepair(SLUG);
+    await manager.startRepair(KEY);
     await vi.waitFor(() => {
-      expect(hook).toHaveBeenCalledWith(SLUG, expect.any(AbortSignal));
+      expect(hook).toHaveBeenCalledWith(KEY, expect.any(AbortSignal));
     });
 
     expect(releasedBeforeHook).toBe(true);
@@ -205,31 +207,31 @@ describe('MinecraftManager.startRepair — post-repair BUNDLE_SYNCING op', () =>
     );
     manager.attachLaunchHook(hook);
 
-    await manager.startRepair(SLUG);
+    await manager.startRepair(KEY);
     await vi.waitFor(() => {
-      expect(hook).toHaveBeenCalledWith(SLUG, expect.any(AbortSignal));
+      expect(hook).toHaveBeenCalledWith(KEY, expect.any(AbortSignal));
     });
 
-    expect(await manager.getStatus(SLUG)).toEqual({
+    expect(await manager.getStatus(KEY)).toEqual({
       status: OP_TO_STATUS[OpKinds.BUNDLE_SYNCING],
       paused: false,
     });
 
     resolveHook();
     await vi.waitFor(async () => {
-      expect(await manager.getStatus(SLUG)).toEqual({
+      expect(await manager.getStatus(KEY)).toEqual({
         status: InstallStatuses.INSTALLED,
         paused: false,
       });
     });
   });
 
-  it('aborts the hook signal on cancel(slug) and settles to presence without logging an error', async () => {
+  it('aborts the hook signal on cancel(key) and settles to presence without logging an error', async () => {
     orchestrationMocks.runRepair.mockResolvedValue(true);
     const manager = makeManager(makeMinecraftBroadcaster(), createClientOperationLocks());
     let capturedSignal: AbortSignal | undefined;
     const hook = vi.fn(
-      (_slug, signal?: AbortSignal) =>
+      (_key, signal?: AbortSignal) =>
         new Promise<void>((_resolve, reject) => {
           capturedSignal = signal;
           signal?.addEventListener('abort', () => reject(new Error('aborted')));
@@ -237,16 +239,16 @@ describe('MinecraftManager.startRepair — post-repair BUNDLE_SYNCING op', () =>
     );
     manager.attachLaunchHook(hook);
 
-    await manager.startRepair(SLUG);
+    await manager.startRepair(KEY);
     await vi.waitFor(() => {
-      expect(hook).toHaveBeenCalledWith(SLUG, expect.any(AbortSignal));
+      expect(hook).toHaveBeenCalledWith(KEY, expect.any(AbortSignal));
     });
 
-    manager.cancel(SLUG);
+    manager.cancel(KEY);
     expect(capturedSignal?.aborted).toBe(true);
 
     await vi.waitFor(async () => {
-      expect(await manager.getStatus(SLUG)).toEqual({
+      expect(await manager.getStatus(KEY)).toEqual({
         status: InstallStatuses.INSTALLED,
         paused: false,
       });

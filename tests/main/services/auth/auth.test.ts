@@ -47,7 +47,7 @@ vi.mock('@main/services/auth/verify', () => ({
   verifySession: vi.fn(),
 }));
 
-import { logout } from '@main/services/auth/auth';
+import { login, logout } from '@main/services/auth/auth';
 import type { LoontailAuth } from '@main/services/auth/loontailAuth';
 import { type MojangAuth, MojangBrowserOpenError } from '@main/services/auth/mojangAuth';
 import { registerAuthRoutes } from '@main/services/auth/routes';
@@ -87,6 +87,7 @@ const loontailAuth = (signOut: LoontailAuth['signOut']): LoontailAuth => ({
   signIn: vi.fn(),
   register: vi.fn(),
   refresh: vi.fn(),
+  validate: vi.fn(),
   signOut,
 });
 
@@ -128,6 +129,21 @@ describe('logout', () => {
   });
 });
 
+describe('login', () => {
+  it('rejects with the coded failure instead of resolving an in-band {ok:false}', async () => {
+    const auth = loontailAuth(vi.fn());
+    vi.mocked(auth.signIn).mockResolvedValue({
+      ok: false,
+      error: LOGIN_ERROR_CODE.INVALID_CREDENTIALS,
+    });
+
+    await expect(
+      login(auth, { identifier: 'someone', password: 'wrong' }, vi.fn()),
+    ).rejects.toMatchObject({ code: LOGIN_ERROR_CODE.INVALID_CREDENTIALS });
+    expect(storeMocks.setStoredAuth).not.toHaveBeenCalled();
+  });
+});
+
 describe('registerAuthRoutes', () => {
   it('maps Microsoft browser-open failures to a renderer-visible login error', async () => {
     const { router, handlers } = createTestRouter();
@@ -142,9 +158,8 @@ describe('registerAuthRoutes', () => {
     const handler = handlers.get(IPC_CHANNELS.authMojangSignIn);
     if (!handler) throw new Error('auth.mojangSignIn handler was not registered');
 
-    await expect(handler(undefined)).resolves.toEqual({
-      ok: false,
-      error: LOGIN_ERROR_CODE.BrowserOpenFailed,
+    await expect(handler(undefined)).rejects.toMatchObject({
+      code: LOGIN_ERROR_CODE.BROWSER_OPEN_FAILED,
     });
     expect(storeMocks.setStoredAuth).not.toHaveBeenCalled();
   });
@@ -162,14 +177,11 @@ describe('registerAuthRoutes', () => {
     if (!handler) throw new Error('auth.mojangSignIn handler was not registered');
 
     await expect(handler(undefined)).resolves.toEqual({
-      ok: true,
-      user: {
-        provider: 'mojang',
-        username: 'steve',
-        email: null,
-        skin: ACTIVE_SKIN_URL,
-        cape: null,
-      },
+      provider: 'mojang',
+      username: 'steve',
+      email: null,
+      skin: ACTIVE_SKIN_URL,
+      cape: null,
     });
     expect(storeMocks.setStoredAuth).toHaveBeenCalledWith(session);
     expect(enrichYggdrasilAccount).not.toHaveBeenCalled();

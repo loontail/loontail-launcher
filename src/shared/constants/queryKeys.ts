@@ -5,9 +5,6 @@ export const QUERY_KEYS = {
   app: {
     version: ['app', 'version'] as const,
   },
-  clients: {
-    list: (locale: string) => ['clients', 'list', locale] as const,
-  },
   catalog: {
     list: (locale: string) => ['catalog', 'list', locale] as const,
   },
@@ -41,7 +38,6 @@ export const QUERY_KEYS = {
 export const QUERY_KEY_ROOTS = {
   auth: 'auth',
   app: 'app',
-  clients: 'clients',
   catalog: 'catalog',
   builds: 'builds',
   servers: 'servers',

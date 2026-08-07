@@ -2,7 +2,8 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { SIDECAR_DIR } from '@main/constants/paths';
-import type { ManagerEnv } from '@main/services/minecraft/env';
+import { clearLocalManifest } from '@main/services/bundle/manifestRepo';
+import type { MinecraftEnv } from '@main/services/minecraft/env';
 import { isUnderClientsRoot, runUninstall } from '@main/services/minecraft/uninstall';
 import { asCatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses } from '@shared/contracts/minecraft';
@@ -109,20 +110,24 @@ describe('isUnderClientsRoot', () => {
 });
 
 describe('runUninstall residual-failure path', () => {
-  const SLUG = asCatalogKey('official:residual');
+  const KEY = asCatalogKey('official:residual');
   let clientsRoot: string;
   let folder: string;
   let sidecar: string;
 
-  const makeEnv = (statuses: string[]): ManagerEnv =>
+  const makeEnv = (statuses: string[], overrides: Partial<MinecraftEnv> = {}): MinecraftEnv =>
     ({
       ops: { set: vi.fn(), delete: vi.fn() },
-      forgeProcessorCache: { clear: vi.fn() },
+      forgeProcessorCache: { evictByDirectory: vi.fn() },
       logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
       emitStatus: (payload: { status: string }) => statuses.push(payload.status),
       emitError: vi.fn(),
       clearRuntimeOverride: vi.fn(),
-    }) as unknown as ManagerEnv;
+      // The real bundle-manifest clear, injected: uninstall must reach it
+      // through MinecraftEnv rather than a static minecraft -> bundle import.
+      clearBundleManifest: clearLocalManifest,
+      ...overrides,
+    }) as unknown as MinecraftEnv;
 
   beforeEach(async () => {
     clientsRoot = await realFs.mkdtemp(path.join(os.tmpdir(), 'uninstall-residual-'));
@@ -140,9 +145,22 @@ describe('runUninstall residual-failure path', () => {
 
   it('clears the stale bundle sidecar when the folder wipe fails but markers are gone', async () => {
     const statuses: string[] = [];
-    await runUninstall(makeEnv(statuses), SLUG, folder, clientsRoot);
+    await runUninstall(makeEnv(statuses), KEY, folder, clientsRoot);
 
     await expect(fs.access(sidecar)).rejects.toThrow();
     expect(statuses).toContain(InstallStatuses.NOT_INSTALLED);
+  });
+
+  it('evicts only the uninstalled folder from the forge processor cache', async () => {
+    // Wiping the whole cache discarded every other client's memoised install
+    // plan, costing them an extra plan on their next repair (LM-14).
+    const evictByDirectory = vi.fn();
+    const env = makeEnv([], {
+      forgeProcessorCache: { remember: vi.fn(), get: vi.fn(), evictByDirectory },
+    });
+
+    await runUninstall(env, KEY, folder, clientsRoot);
+
+    expect(evictByDirectory).toHaveBeenCalledWith(folder);
   });
 });

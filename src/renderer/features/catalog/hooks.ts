@@ -1,4 +1,4 @@
-import { QUERY_KEYS, QUERY_KEY_ROOTS } from '@shared/constants';
+import { QUERY_KEY_ROOTS, QUERY_KEYS } from '@shared/constants';
 import { type CatalogItem, SourceKinds } from '@shared/contracts/catalog';
 import type { LoaderChoice } from '@shared/contracts/settings';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';

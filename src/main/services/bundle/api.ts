@@ -3,8 +3,11 @@ import { errorMessage } from '@main/infra/errorMessage';
 import { HttpError, httpRequest } from '@main/infra/http';
 import { scopedLogger } from '@main/infra/logger';
 import { API_ROUTES } from '@shared/constants';
-import { type RemoteManifest, RemoteManifestSchema } from '@shared/contracts/bundle';
-import { BundleErrorCodes } from '@shared/contracts/bundle';
+import {
+  BundleErrorCodes,
+  type RemoteManifest,
+  RemoteManifestSchema,
+} from '@shared/contracts/bundle';
 import type { BundleSlug } from '@shared/contracts/ids';
 import { BundleError } from './errors';
 import { sha256String } from './hash';

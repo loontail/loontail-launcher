@@ -2,14 +2,14 @@ import { buildMediaUrl, httpGet } from '@main/infra/http';
 import { scopedLogger } from '@main/infra/logger';
 import { API_ROUTES } from '@shared/constants';
 import {
+  asBundleSlug,
+  asClientId,
+  asClientSlug,
   type BundleSlug,
   type Client,
   ClientListResponseSchema,
   type ClientResponse,
   type Media,
-  asBundleSlug,
-  asClientId,
-  asClientSlug,
 } from '@shared/contracts';
 
 const logger = scopedLogger('clients');

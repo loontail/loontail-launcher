@@ -13,14 +13,14 @@ describe('client operation locks', () => {
   it('blocks a second operation for the same client resource', () => {
     const locks = createClientOperationLocks();
     const minecraftLease = locks.acquire({
-      slug: ALPHA_SLUG,
+      key: ALPHA_SLUG,
       domain: ClientOperationDomains.MINECRAFT,
       resources: [ClientOperationResources.CLIENT_FOLDER],
     });
     if (minecraftLease.kind !== 'acquired') throw new Error('Expected minecraft lease');
 
     const bundleLease = locks.acquire({
-      slug: ALPHA_SLUG,
+      key: ALPHA_SLUG,
       domain: ClientOperationDomains.BUNDLE,
       resources: [ClientOperationResources.CLIENT_FOLDER],
     });
@@ -36,12 +36,12 @@ describe('client operation locks', () => {
   it('tracks operation metadata by client and resource class', () => {
     const locks = createClientOperationLocks();
     const runtimeLease = locks.acquire({
-      slug: ALPHA_SLUG,
+      key: ALPHA_SLUG,
       domain: ClientOperationDomains.MINECRAFT,
       resources: [ClientOperationResources.RUNTIME_COMPONENT],
     });
     const manifestLease = locks.acquire({
-      slug: ALPHA_SLUG,
+      key: ALPHA_SLUG,
       domain: ClientOperationDomains.BUNDLE,
       resources: [ClientOperationResources.BUNDLE_MANIFEST],
     });
@@ -50,12 +50,12 @@ describe('client operation locks', () => {
 
     expect(locks.list()).toEqual([
       {
-        slug: ALPHA_SLUG,
+        key: ALPHA_SLUG,
         domain: ClientOperationDomains.BUNDLE,
         resources: [ClientOperationResources.BUNDLE_MANIFEST],
       },
       {
-        slug: ALPHA_SLUG,
+        key: ALPHA_SLUG,
         domain: ClientOperationDomains.MINECRAFT,
         resources: [ClientOperationResources.RUNTIME_COMPONENT],
       },
@@ -69,13 +69,13 @@ describe('client operation locks', () => {
     const locks = createClientOperationLocks();
     const calls: string[] = [];
     const minecraftLease = locks.acquire({
-      slug: BETA_SLUG,
+      key: BETA_SLUG,
       domain: ClientOperationDomains.MINECRAFT,
       resources: [ClientOperationResources.CLIENT_FOLDER],
       cancel: () => calls.push('minecraft-beta'),
     });
     const bundleLease = locks.acquire({
-      slug: ALPHA_SLUG,
+      key: ALPHA_SLUG,
       domain: ClientOperationDomains.BUNDLE,
       resources: [ClientOperationResources.BUNDLE_MANIFEST],
       cancel: () => calls.push('bundle-alpha'),

@@ -45,7 +45,7 @@ vi.mock('@main/services/bundle/runner', async (importOriginal) => {
   return { ...actual, runSyncPhases: managerMocks.runSyncPhases };
 });
 
-const SLUG = asCatalogKey('official:test-client');
+const KEY = asCatalogKey('official:test-client');
 const BUNDLE_SLUG = 'bundle-x';
 const CLIENT_FOLDER = '/tmp/client';
 
@@ -78,7 +78,7 @@ const launcherSettings = (clientFolder: string | null) =>
   makeLauncherSettings({
     // Empty clientsFolder so an absent per-client override resolves to no folder.
     storage: { clientsFolder: clientFolder ? '/tmp/clients' : '' },
-    clients: clientFolder ? { [SLUG]: { storage: { clientFolder } } } : {},
+    clients: clientFolder ? { [KEY]: { storage: { clientFolder } } } : {},
   });
 
 const errorCodes = (broadcaster: BundleBroadcaster) =>
@@ -98,7 +98,7 @@ beforeEach(() => {
 });
 
 describe('classifyBundleError', () => {
-  // DL-1: a BundleError code wins over an aborted signal so the sibling-abort
+  // A BundleError code wins over an aborted signal so the sibling-abort
   // pattern (worker aborts the shared signal, then re-throws the real failure)
   // surfaces the genuine code instead of being masked as ABORTED.
   it('returns the BundleError code even when the signal is aborted', () => {
@@ -126,7 +126,6 @@ describe('classifyBundleError', () => {
 });
 
 describe('BundleManager sync error surfacing', () => {
-  // DLI-40
   it('maps a client fetch failure to MANIFEST_FETCH_FAILED, not UNKNOWN', async () => {
     managerMocks.getClient.mockRejectedValue(new Error('ECONNREFUSED 127.0.0.1:8080'));
     const manager = new BundleManager(
@@ -137,14 +136,13 @@ describe('BundleManager sync error surfacing', () => {
       fakeGetClient,
     );
 
-    await expect(manager.startSync({ slug: SLUG })).rejects.toMatchObject({
+    await expect(manager.start({ key: KEY })).rejects.toMatchObject({
       code: BundleErrorCodes.MANIFEST_FETCH_FAILED,
     });
   });
 
-  // DLI-40
   it('treats a genuine not-found client as UNKNOWN client-not-found', async () => {
-    // getClient receives the bare official slug (officialSlugFor parses the CatalogKey),
+    // getClient receives the bare official key (officialSlugFor parses the CatalogKey),
     // so the not-found message the manager matches uses that bare slug, not the key.
     managerMocks.getClient.mockRejectedValue(new Error('Client "test-client" not found'));
     const manager = new BundleManager(
@@ -155,12 +153,11 @@ describe('BundleManager sync error surfacing', () => {
       fakeGetClient,
     );
 
-    await expect(manager.startSync({ slug: SLUG })).rejects.toMatchObject({
+    await expect(manager.start({ key: KEY })).rejects.toMatchObject({
       code: BundleErrorCodes.UNKNOWN,
     });
   });
 
-  // DLI-41
   it('logs non-aborted sync failures at error level', async () => {
     managerMocks.buildPlan.mockResolvedValueOnce(DOWNLOAD_PLAN);
     managerMocks.runSyncPhases.mockRejectedValueOnce(
@@ -175,7 +172,7 @@ describe('BundleManager sync error surfacing', () => {
       fakeGetClient,
     );
 
-    await manager.startSync({ slug: SLUG });
+    await manager.start({ key: KEY });
 
     expect(errorCodes(broadcaster)).toContain(BundleErrorCodes.DOWNLOAD_FAILED);
     expect(managerMocks.logError).toHaveBeenCalledWith(
@@ -184,7 +181,7 @@ describe('BundleManager sync error surfacing', () => {
     );
   });
 
-  // DL-1: the sibling-abort pattern (worker aborts the shared signal, then the
+  // The sibling-abort pattern (worker aborts the shared signal, then the
   // phase re-throws the real BundleError) must surface the genuine code/status,
   // not be swallowed as ABORTED.
   it('surfaces a download integrity failure even when the abort signal already fired', async () => {
@@ -202,7 +199,7 @@ describe('BundleManager sync error surfacing', () => {
       fakeGetClient,
     );
 
-    await manager.startSync({ slug: SLUG });
+    await manager.start({ key: KEY });
 
     expect(errorCodes(broadcaster)).toContain(BundleErrorCodes.DOWNLOAD_INTEGRITY_FAILED);
     expect(vi.mocked(broadcaster.status).mock.calls.map(([event]) => event.status)).toContain(
@@ -210,8 +207,7 @@ describe('BundleManager sync error surfacing', () => {
     );
   });
 
-  // DLI-43
-  it('propagates a fresh-sync failure from resumeSync when no paused sync exists', async () => {
+  it('propagates a fresh-sync failure from resume when no paused sync exists', async () => {
     managerMocks.getSettings.mockReturnValue(launcherSettings(null));
     const manager = new BundleManager(
       makeBroadcaster(),
@@ -221,12 +217,11 @@ describe('BundleManager sync error surfacing', () => {
       fakeGetClient,
     );
 
-    await expect(manager.resumeSync(SLUG)).rejects.toMatchObject({
+    await expect(manager.resume(KEY)).rejects.toMatchObject({
       code: BundleErrorCodes.NO_CLIENT_FOLDER,
     });
   });
 
-  // DLI-55 / REP-15
   it('cancelAll awaits real sync completion rather than a fixed grace timer', async () => {
     managerMocks.getClient.mockResolvedValue({ bundleSlug: BUNDLE_SLUG });
     managerMocks.buildPlan.mockResolvedValue(DOWNLOAD_PLAN);
@@ -250,7 +245,7 @@ describe('BundleManager sync error surfacing', () => {
       fakeGetClient,
     );
 
-    void manager.startSync({ slug: SLUG });
+    void manager.start({ key: KEY });
     await vi.waitFor(() => expect(managerMocks.runSyncPhases).toHaveBeenCalledTimes(1));
 
     let cancelAllResolved = false;
@@ -270,7 +265,7 @@ describe('BundleManager sync error surfacing', () => {
     expect(droppedDuringPhase).toBe(true);
   });
 
-  // DLI-55: a wedged sync must not block process exit beyond the timeout.
+  // A wedged sync must not block process exit beyond the timeout.
   it('cancelAll resolves on its timeout when a sync never completes', async () => {
     managerMocks.getClient.mockResolvedValue({ bundleSlug: BUNDLE_SLUG });
     managerMocks.buildPlan.mockResolvedValue(DOWNLOAD_PLAN);
@@ -285,7 +280,7 @@ describe('BundleManager sync error surfacing', () => {
       new Map(),
       fakeGetClient,
     );
-    void manager.startSync({ slug: SLUG });
+    void manager.start({ key: KEY });
     await vi.waitFor(() => expect(managerMocks.runSyncPhases).toHaveBeenCalledTimes(1));
 
     await expect(manager.cancelAll(20)).resolves.toBeUndefined();

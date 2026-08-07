@@ -16,7 +16,7 @@ type TabsProps<T extends string> = {
 
 export const Tabs = <T extends string>({ tabs, selected, onSelect, className }: TabsProps<T>) => (
   <div
-    className={cn('flex gap-1 rounded-md border border-border bg-card p-1', className)}
+    className={cn('flex gap-1 rounded-md border border-edge bg-surface-1 p-1', className)}
     role="tablist"
   >
     {tabs.map((tab) => {
@@ -31,9 +31,7 @@ export const Tabs = <T extends string>({ tabs, selected, onSelect, className }: 
           onClick={() => onSelect(tab.id)}
           className={cn(
             'flex flex-1 items-center justify-center gap-2 rounded-sm px-3 py-1.5 text-sm transition-colors',
-            isActive
-              ? 'bg-secondary text-secondary-foreground'
-              : 'text-muted-foreground hover:text-foreground',
+            isActive ? 'bg-surface-3 text-text-hi' : 'text-text-mute hover:text-text-hi',
           )}
         >
           {Icon && <Icon className="size-4" strokeWidth={1.75} />}

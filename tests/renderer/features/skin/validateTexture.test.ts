@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const validatePngBufferMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@loontail/yggdrasil-core', () => ({
+vi.mock('@shared/yggdrasil/png', () => ({
   validatePngBuffer: validatePngBufferMock,
 }));
 

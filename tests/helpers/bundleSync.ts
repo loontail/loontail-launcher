@@ -1,9 +1,9 @@
+import { markPaused } from '@main/infra/lifecyclePhase';
 import {
   type ActiveSync,
-  type SyncStateMap,
   createActiveSync,
   createSyncTask,
-  markPaused,
+  type SyncStateMap,
 } from '@main/services/bundle/syncState';
 import {
   ClientOperationDomains,
@@ -11,8 +11,8 @@ import {
 } from '@main/services/clientOperationLocks';
 import type { BundleSlug, CatalogKey } from '@shared/contracts/ids';
 
-const noopLease = (slug: CatalogKey): ClientOperationLease => ({
-  slug,
+const noopLease = (key: CatalogKey): ClientOperationLease => ({
+  key,
   domain: ClientOperationDomains.BUNDLE,
   resources: [],
   setCancel: () => {},
@@ -26,7 +26,7 @@ const noopLease = (slug: CatalogKey): ClientOperationLease => ({
 export const seedActiveSync = (
   store: SyncStateMap,
   opts: {
-    slug: CatalogKey;
+    key: CatalogKey;
     clientFolder: string;
     bundleSlug: BundleSlug;
     forLaunch: boolean;
@@ -34,14 +34,14 @@ export const seedActiveSync = (
     lock?: ClientOperationLease;
   },
 ): ActiveSync => {
-  const task = createSyncTask(opts.slug, opts.clientFolder);
+  const task = createSyncTask(opts.key, opts.clientFolder);
   if (opts.paused) markPaused(task);
   const active = createActiveSync(
     task,
-    opts.lock ?? noopLease(opts.slug),
+    opts.lock ?? noopLease(opts.key),
     opts.bundleSlug,
     opts.forLaunch,
   );
-  store.set(opts.slug, active);
+  store.set(opts.key, active);
   return active;
 };

@@ -1,5 +1,5 @@
 import { clearLauncherCache } from '@renderer/features/settings/clearCache';
-import { type ToastPayload, subscribeToToasts } from '@renderer/shared/ui/Toast/toast';
+import { subscribeToToasts, type ToastPayload } from '@renderer/shared/ui/Toast/toast';
 import type { QueryClient } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
 import { afterEach, describe, expect, it, vi } from 'vitest';

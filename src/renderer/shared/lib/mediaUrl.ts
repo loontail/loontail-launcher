@@ -1,6 +1,4 @@
-// Mirror of the scheme registered in main/services/media — keep in sync.
-const CACHE_SCHEME = 'cache';
-const PATH_PREFIX = `${CACHE_SCHEME}://media/`;
+import { CACHE_MEDIA_PREFIX } from '@shared/constants';
 
 // Wrap an HTTP(S) URL so the disk media cache serves it; anything else is
 // returned unchanged.
@@ -9,5 +7,5 @@ export const toCachedMediaUrl = (originalUrl: string): string => {
   if (!originalUrl.startsWith('http://') && !originalUrl.startsWith('https://')) {
     return originalUrl;
   }
-  return `${PATH_PREFIX}${encodeURIComponent(originalUrl)}`;
+  return `${CACHE_MEDIA_PREFIX}${encodeURIComponent(originalUrl)}`;
 };

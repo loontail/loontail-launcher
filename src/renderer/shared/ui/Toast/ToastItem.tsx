@@ -138,6 +138,7 @@ export const ToastItem = ({ entry, style, paused, onClose, onHeight }: ToastItem
   const showCopy = isError;
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: the element always carries a live-region role, which the rule cannot see through the conditional
     <div
       ref={ref}
       role={isError ? 'alert' : 'status'}

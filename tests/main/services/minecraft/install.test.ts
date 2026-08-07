@@ -1,8 +1,6 @@
 import fs from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
-
 import {
   DownloadCategories,
   EventTypes,
@@ -27,16 +25,17 @@ import {
 import { resolveBundleRepairFilter } from '@main/services/bundle/ownership';
 import { bundleManifestPath } from '@main/services/bundle/paths';
 import type { Context } from '@main/services/minecraft/context';
-import type { ManagerEnv } from '@main/services/minecraft/env';
+import type { MinecraftEnv } from '@main/services/minecraft/env';
 import { createForgeProcessorCache } from '@main/services/minecraft/forgeProcessorHealing';
 import { type Op, OpKinds, type RepairOp } from '@main/services/minecraft/ops';
 import { runRepair } from '@main/services/minecraft/repair';
-import { type CatalogKey, asCatalogKey } from '@shared/contracts/ids';
+import { asCatalogKey, type CatalogKey } from '@shared/contracts/ids';
 import { InstallStatuses, MinecraftErrorCodes, ProgressStages } from '@shared/contracts/minecraft';
 import { LoaderChoices } from '@shared/contracts/settings';
-import { stubConsolePort, stubOpenConsole } from './managerStubs';
+import { describe, expect, it, vi } from 'vitest';
+import { stubConsoleSink, stubOpenConsole } from './managerStubs';
 
-const SLUG = asCatalogKey('official:test-client');
+const KEY = asCatalogKey('official:test-client');
 const CLIENT_FOLDER = 'Z:/missing-client-folder';
 // Real temp dir: the SQLite-backed store opens launcher.db here when the repair
 // readiness check resolves settings, so the directory must exist on disk.
@@ -110,7 +109,7 @@ const makeContext = (): Context =>
     },
   }) as unknown as Context;
 
-const makeEnv = (kit: MinecraftKit, ops: Map<CatalogKey, Op>): ManagerEnv => {
+const makeEnv = (kit: MinecraftKit, ops: Map<CatalogKey, Op>): MinecraftEnv => {
   const broadcaster = {
     status: vi.fn(),
     progress: vi.fn(),
@@ -122,7 +121,7 @@ const makeEnv = (kit: MinecraftKit, ops: Map<CatalogKey, Op>): ManagerEnv => {
     broadcaster,
     ops,
     forgeProcessorCache: createForgeProcessorCache(),
-    console: stubConsolePort(),
+    console: stubConsoleSink(),
     openConsole: stubOpenConsole(),
     logger: makeLogger(),
     emitStatus: broadcaster.status,
@@ -130,6 +129,7 @@ const makeEnv = (kit: MinecraftKit, ops: Map<CatalogKey, Op>): ManagerEnv => {
     persistRuntime: vi.fn(),
     clearRuntimeOverride: vi.fn(),
     resolveBundleRepairFilter: vi.fn(async () => null),
+    clearBundleManifest: vi.fn(async () => undefined),
   };
 };
 
@@ -159,28 +159,28 @@ describe('runRepair', () => {
         }),
       },
     } as unknown as MinecraftKit;
-    const ops = new Map<CatalogKey, Op>([[SLUG, op]]);
+    const ops = new Map<CatalogKey, Op>([[KEY, op]]);
     const env = makeEnv(kit, ops);
 
-    await runRepair(env, SLUG, makeContext(), op);
+    await runRepair(env, KEY, makeContext(), op);
 
     expect(env.broadcaster.progress).toHaveBeenCalledWith(
       expect.objectContaining({
-        slug: SLUG,
+        key: KEY,
         stage: ProgressStages.RUNTIME,
         currentFile: runtimeFile,
       }),
     );
-    expect(env.persistRuntime).toHaveBeenCalledWith(SLUG, {
+    expect(env.persistRuntime).toHaveBeenCalledWith(KEY, {
       component: RUNTIME_COMPONENT,
       path: path.join(USER_DATA, 'runtimes', RUNTIME_COMPONENT),
     });
     expect(env.broadcaster.status).toHaveBeenLastCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: InstallStatuses.INSTALLED,
       paused: false,
     });
-    expect(ops.has(SLUG)).toBe(false);
+    expect(ops.has(KEY)).toBe(false);
   });
 
   it('uses planned progress for Forge processor healing', async () => {
@@ -249,14 +249,14 @@ describe('runRepair', () => {
         }),
       },
     } as unknown as MinecraftKit;
-    const ops = new Map<CatalogKey, Op>([[SLUG, op]]);
+    const ops = new Map<CatalogKey, Op>([[KEY, op]]);
     const env = makeEnv(kit, ops);
     const context = {
       ...makeContext(),
       target: forgeTarget,
     } as unknown as Context;
 
-    await runRepair(env, SLUG, context, op);
+    await runRepair(env, KEY, context, op);
 
     expect(kit.install.run).toHaveBeenCalledWith(
       expect.objectContaining({ totalActions: 2 }),
@@ -267,19 +267,19 @@ describe('runRepair', () => {
     );
     expect(env.broadcaster.progress).toHaveBeenCalledWith(
       expect.objectContaining({
-        slug: SLUG,
+        key: KEY,
         stage: ProgressStages.LOADER,
         totalBytes: 100,
       }),
     );
     expect(env.broadcaster.progress).toHaveBeenCalledWith(
       expect.objectContaining({
-        slug: SLUG,
+        key: KEY,
         stage: ProgressStages.FINALIZE,
         overallPercent: 100,
       }),
     );
-    expect(ops.has(SLUG)).toBe(false);
+    expect(ops.has(KEY)).toBe(false);
   });
 
   it('flushes the final repair progress before the terminal status settles', async () => {
@@ -309,13 +309,13 @@ describe('runRepair', () => {
           }),
         },
       } as unknown as MinecraftKit;
-      const ops = new Map<CatalogKey, Op>([[SLUG, op]]);
+      const ops = new Map<CatalogKey, Op>([[KEY, op]]);
       const env = makeEnv(kit, ops);
 
-      await runRepair(env, SLUG, makeContext(), op);
+      await runRepair(env, KEY, makeContext(), op);
 
       expect(env.broadcaster.status).toHaveBeenLastCalledWith({
-        slug: SLUG,
+        key: KEY,
         status: InstallStatuses.INSTALLED,
         paused: false,
       });
@@ -403,14 +403,14 @@ describe('runRepair', () => {
           }),
         },
       } as unknown as MinecraftKit;
-      const ops = new Map<CatalogKey, Op>([[SLUG, op]]);
-      const env: ManagerEnv = { ...makeEnv(kit, ops), resolveBundleRepairFilter };
+      const ops = new Map<CatalogKey, Op>([[KEY, op]]);
+      const env: MinecraftEnv = { ...makeEnv(kit, ops), resolveBundleRepairFilter };
       const [bundleIssue, vanillaIssue] = minecraftVerification.issues;
       if (bundleIssue === undefined || vanillaIssue === undefined) {
         throw new Error('Expected bundle and vanilla repair issues');
       }
 
-      await runRepair(env, SLUG, context, op);
+      await runRepair(env, KEY, context, op);
 
       expect(kit.repair.all).toHaveBeenCalledWith(
         target,
@@ -435,7 +435,7 @@ describe('runRepair', () => {
         }),
       ).toBe(true);
       expect(env.broadcaster.status).toHaveBeenLastCalledWith({
-        slug: SLUG,
+        key: KEY,
         status: InstallStatuses.INSTALLED,
         paused: false,
       });
@@ -464,22 +464,22 @@ describe('runRepair', () => {
         },
       },
     } as unknown as MinecraftKit;
-    const ops = new Map<CatalogKey, Op>([[SLUG, op]]);
+    const ops = new Map<CatalogKey, Op>([[KEY, op]]);
     const env = makeEnv(kit, ops);
 
-    await runRepair(env, SLUG, makeContext(), op);
+    await runRepair(env, KEY, makeContext(), op);
 
     expect(env.emitError).toHaveBeenCalledWith(
-      SLUG,
+      KEY,
       MinecraftErrorCodes.INTEGRITY_ERROR,
       repairError.message,
     );
     expect(env.broadcaster.status).toHaveBeenLastCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: InstallStatuses.ERROR,
       paused: false,
     });
-    expect(ops.has(SLUG)).toBe(false);
+    expect(ops.has(KEY)).toBe(false);
   });
 
   it('does not emit an error event when repair cancellation leaves the target not ready', async () => {
@@ -501,10 +501,10 @@ describe('runRepair', () => {
         },
       },
     } as unknown as MinecraftKit;
-    const ops = new Map<CatalogKey, Op>([[SLUG, op]]);
+    const ops = new Map<CatalogKey, Op>([[KEY, op]]);
     const env = makeEnv(kit, ops);
 
-    await runRepair(env, SLUG, makeContext(), op);
+    await runRepair(env, KEY, makeContext(), op);
 
     expect(kit.repair.all).toHaveBeenCalledWith(
       emptyTarget,
@@ -514,10 +514,10 @@ describe('runRepair', () => {
     expect(env.emitError).not.toHaveBeenCalled();
     expect(targetReady).not.toHaveBeenCalled();
     expect(env.broadcaster.status).toHaveBeenLastCalledWith({
-      slug: SLUG,
+      key: KEY,
       status: InstallStatuses.NOT_INSTALLED,
       paused: false,
     });
-    expect(ops.has(SLUG)).toBe(false);
+    expect(ops.has(KEY)).toBe(false);
   });
 });

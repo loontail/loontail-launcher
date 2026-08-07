@@ -2,13 +2,12 @@ import { MojangSessionSchema, YggdrasilSessionSchema } from '@shared/contracts/a
 import {
   BundleErrorCodeSchema,
   BundleErrorCodes,
-  BundleSyncStatusSchema,
   BundleSyncStatuses,
+  BundleSyncStatusSchema,
 } from '@shared/contracts/bundle';
-import { asClientSlug } from '@shared/contracts/ids';
 import {
-  InstallStatusSchema,
   InstallStatuses,
+  InstallStatusSchema,
   MinecraftErrorCodeSchema,
   MinecraftErrorCodes,
   ProgressStageSchema,
@@ -39,7 +38,7 @@ describe('LauncherSettingsSchema', () => {
     };
     const parsed = LauncherSettingsSchema.parse(input);
     expect(parsed.memory.allocatedRamMb).toBe(4096);
-    const survival = parsed.clients[asClientSlug('survival')];
+    const survival = parsed.clients.survival;
     expect(survival).toBeDefined();
     expect(survival?.loader).toBe(LoaderChoices.FORGE);
   });
@@ -224,6 +223,17 @@ describe('MojangSessionSchema', () => {
     const parsed = MojangSessionSchema.parse(validSession());
     expect(parsed.profile.username).toBe('player');
     expect(parsed.profile.skins[0]?.state).toBe('ACTIVE');
+  });
+
+  it('accepts ids that only honour the hex layout, not the RFC version/variant bits', () => {
+    // Mojang and third-party Yggdrasil servers both issue such ids, so the
+    // schemas use Zod's lenient `guid()` rather than the strict `uuid()`.
+    const result = MojangSessionSchema.safeParse({
+      ...validSession(),
+      clientId: 'ffffffff-ffff-9fff-cfff-ffffffffffff',
+      profile: { ...validSession().profile, uuid: 'deadbeef-dead-beef-dead-beefdeadbeef' },
+    });
+    expect(result.success).toBe(true);
   });
 
   it('rejects a non-string client id', () => {

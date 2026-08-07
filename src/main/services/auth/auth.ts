@@ -5,13 +5,14 @@ import {
   setStoredAuth,
 } from '@main/infra/store';
 import { type Account, accountFromSession } from '@shared/contracts/account';
+import type { AuthSession, LoginPayload, RegisterPayload } from '@shared/contracts/auth';
+import { AuthError } from './errors';
 import type {
-  AuthSession,
-  LoginPayload,
-  LoginResult,
-  RegisterPayload,
-} from '@shared/contracts/auth';
-import type { AuthenticatedIdentity, LoontailAuth, LoontailAuthResult } from './loontailAuth';
+  AuthenticatedIdentity,
+  LoontailAuth,
+  LoontailAuthResult,
+  ValidateSession,
+} from './loontailAuth';
 import type { MojangAuth } from './mojangAuth';
 import type { SessionRefresher } from './sessionRefresh';
 import { enrichYggdrasilAccount, verifySession } from './verify';
@@ -20,15 +21,15 @@ import type { FetchTextures } from './yggdrasilClient';
 // Yggdrasil textures live behind a separate endpoint and need enrichment; a
 // Microsoft/Mojang session already embeds the active skin (and has no cape API),
 // so its account is returned without a fetch.
-export const buildLoginResult = async (
+export const buildAccount = async (
   session: AuthSession,
   fetchTextures: FetchTextures,
-): Promise<LoginResult> => {
+): Promise<Account> => {
   const account = accountFromSession(session);
   if (session.provider === 'yggdrasil') {
-    return { ok: true, user: await enrichYggdrasilAccount(session, account, fetchTextures) };
+    return enrichYggdrasilAccount(session, account, fetchTextures);
   }
-  return { ok: true, user: account };
+  return account;
 };
 
 // Persist the identity, then enrich the account with live texture URLs; the
@@ -36,17 +37,18 @@ export const buildLoginResult = async (
 const completeAuthentication = async (
   identity: AuthenticatedIdentity,
   fetchTextures: FetchTextures,
-): Promise<LoginResult> => {
-  setStoredAuth(identity.session, identity.sessionToken);
-  const enriched = await enrichYggdrasilAccount(identity.session, identity.account, fetchTextures);
-  return { ok: true, user: enriched };
+): Promise<Account> => {
+  setStoredAuth(identity.session, identity.apiSession);
+  return enrichYggdrasilAccount(identity.session, identity.account, fetchTextures);
 };
 
+// A rejected credential leaves the bridge the same way every other failure does:
+// as a coded rejection, so a caller needs one error path instead of two.
 const handleAuthResult = (
   result: LoontailAuthResult,
   fetchTextures: FetchTextures,
-): Promise<LoginResult> => {
-  if (!result.ok) return Promise.resolve(result);
+): Promise<Account> => {
+  if (!result.ok) throw new AuthError(result.error, 'Sign-in failed');
   return completeAuthentication(result.identity, fetchTextures);
 };
 
@@ -54,19 +56,20 @@ export const login = async (
   loontailAuth: LoontailAuth,
   payload: LoginPayload,
   fetchTextures: FetchTextures,
-): Promise<LoginResult> => handleAuthResult(await loontailAuth.signIn(payload), fetchTextures);
+): Promise<Account> => handleAuthResult(await loontailAuth.signIn(payload), fetchTextures);
 
 export const register = async (
   loontailAuth: LoontailAuth,
   payload: RegisterPayload,
   fetchTextures: FetchTextures,
-): Promise<LoginResult> => handleAuthResult(await loontailAuth.register(payload), fetchTextures);
+): Promise<Account> => handleAuthResult(await loontailAuth.register(payload), fetchTextures);
 
 export const fetchCurrentUser = (
   refresher: SessionRefresher,
+  validateSession: ValidateSession,
   mojangAuth: MojangAuth,
   fetchTextures: FetchTextures,
-): Promise<Account | null> => verifySession(refresher, mojangAuth, fetchTextures);
+): Promise<Account | null> => verifySession(refresher, validateSession, mojangAuth, fetchTextures);
 
 export const logout = (loontailAuth: LoontailAuth): Promise<void> => {
   const session = getStoredAuth();

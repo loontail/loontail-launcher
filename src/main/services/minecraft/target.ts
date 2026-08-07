@@ -1,8 +1,8 @@
-import { Loaders, type TargetResolveInput, asMinecraftVersionId } from '@loontail/minecraft-kit';
+import { asMinecraftVersionId, Loaders, type TargetResolveInput } from '@loontail/minecraft-kit';
 import type { BuildSpec } from '@shared/contracts/catalog';
 import { type LoaderChoice, LoaderChoices } from '@shared/contracts/settings';
 
-export { resolveLoader, type LoaderResolution } from '@shared/domain/loader';
+export { type LoaderResolution, resolveLoader } from '@shared/domain/loader';
 
 // Maps a BuildSpec onto the kit's target input. `targetId` is the source-native
 // identity (official slug or local instance UUID), kept stable so an existing

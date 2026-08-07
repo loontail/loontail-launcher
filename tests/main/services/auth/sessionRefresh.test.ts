@@ -29,7 +29,7 @@ const yggdrasilSession = (): YggdrasilSession => ({
 
 const identity = (sessionToken = 'rotated-session'): AuthenticatedIdentity => ({
   session: yggdrasilSession(),
-  sessionToken,
+  apiSession: { token: sessionToken, expiresAt: Date.UTC(2099, 0, 1) },
   account: { provider: 'yggdrasil', username: 'someone', email: null, skin: null, cape: null },
 });
 

@@ -7,11 +7,11 @@
     "jsx": "react-jsx",
     "allowArbitraryExtensions": true,
     "paths": {
-      "@shared/*": ["src/shared/*"],
-      "@main/*": ["src/main/*"],
-      "@preload/*": ["src/preload/*"],
-      "@renderer/*": ["src/renderer/*"],
-      "@splidejs/react-splide": ["node_modules/@splidejs/react-splide/dist/types/index.d.ts"]
+      "@shared/*": ["./src/shared/*"],
+      "@main/*": ["./src/main/*"],
+      "@preload/*": ["./src/preload/*"],
+      "@renderer/*": ["./src/renderer/*"],
+      "@splidejs/react-splide": ["./node_modules/@splidejs/react-splide/dist/types/index.d.ts"]
     }
   },
   "include": ["tests/**/*", "src/renderer/env.d.ts", "src/preload/index.d.ts", "vitest.config.ts"]

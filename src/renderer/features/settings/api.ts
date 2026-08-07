@@ -16,7 +16,7 @@ export const setClientOverride = (
   key: CatalogKey,
   patch: ClientSettingsOverride,
 ): Promise<LauncherSettings> =>
-  window.api.invoke(IPC_CHANNELS.settingsSetClientOverride, { slug: key, patch });
+  window.api.invoke(IPC_CHANNELS.settingsSetClientOverride, { key, patch });
 
 export const clearClientOverrides = (key: CatalogKey): Promise<LauncherSettings> =>
   window.api.invoke(IPC_CHANNELS.settingsClearClientOverrides, key);

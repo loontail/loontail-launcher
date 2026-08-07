@@ -21,7 +21,7 @@ vi.mock('@main/services/clients', () => ({
   getClient: mocks.getClient,
 }));
 
-const SLUG = asCatalogKey('official:test-client');
+const KEY = asCatalogKey('official:test-client');
 
 describe('BundleManager.syncForLaunch external signal', () => {
   it('throws ABORTED before touching client lookup when signal is already aborted', async () => {
@@ -30,28 +30,28 @@ describe('BundleManager.syncForLaunch external signal', () => {
     const controller = new AbortController();
     controller.abort();
 
-    await expect(manager.syncForLaunch(SLUG, controller.signal)).rejects.toMatchObject({
+    await expect(manager.syncForLaunch(KEY, controller.signal)).rejects.toMatchObject({
       code: BundleErrorCodes.ABORTED,
     });
     // Pre-abort short-circuits before any status broadcast.
     expect(broadcaster.status).not.toHaveBeenCalled();
   });
 
-  it('attaches an abort listener that calls cancelSync mid-flight', async () => {
+  it('attaches an abort listener that calls cancel mid-flight', async () => {
     const broadcaster = makeBroadcaster();
     const manager = new BundleManager(broadcaster, makeHealer(), createClientOperationLocks());
-    const cancelSpy = vi.spyOn(manager, 'cancelSync');
+    const cancelSpy = vi.spyOn(manager, 'cancel');
     const controller = new AbortController();
 
     // getClient resolves null on the next microtask, keeping syncForLaunch
     // suspended at the lookup await long enough for the synchronous abort()
     // below to fire the listener; we don't care about the outcome, only that
-    // firing the signal calls cancelSync.
+    // firing the signal calls cancel.
     mocks.getClient.mockResolvedValue(null);
-    const pending = manager.syncForLaunch(SLUG, controller.signal).catch(() => {});
+    const pending = manager.syncForLaunch(KEY, controller.signal).catch(() => {});
     controller.abort();
     await pending;
 
-    expect(cancelSpy).toHaveBeenCalledWith(SLUG);
+    expect(cancelSpy).toHaveBeenCalledWith(KEY);
   });
 });

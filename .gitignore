@@ -15,3 +15,7 @@ coverage/
 .env.*.local
 .superpowers/
 .tmp-profile/
+# Fetched at build time by scripts/fetchAuthlibInjector.mjs, never committed.
+vendor/authlib-injector/*.jar
+# Regenerated from package-lock.json by scripts/generateNotices.mjs on every pack.
+THIRD-PARTY-NOTICES.md

@@ -1,5 +1,5 @@
 import { directoryHasEntries, pickFolderWithSuffix } from '@main/infra/system';
-import { KEY_REQUIRED_MSG, assertNoIpcArgs, parseIpcArgs } from '@main/ipc/parseArgs';
+import { KEY_REQUIRED_MSG, parseIpcArgs } from '@main/ipc/parseArgs';
 import type { Router } from '@main/ipc/router';
 import {
   clearClientOverride,
@@ -20,8 +20,7 @@ export const registerSettingsRoutes = (
   router: Router,
   getMainWindow: () => BrowserWindow,
 ): void => {
-  router.handle(IPC_CHANNELS.settingsGet, (rawArgs) => {
-    assertNoIpcArgs(rawArgs, 'settings.get takes no arguments');
+  router.handleNoArgs(IPC_CHANNELS.settingsGet, () => {
     return getSettings();
   });
 
@@ -36,7 +35,7 @@ export const registerSettingsRoutes = (
       rawArgs,
       'Invalid client override',
     );
-    return setClientOverride(payload.slug, payload.patch);
+    return setClientOverride(payload.key, payload.patch);
   });
 
   router.handle(IPC_CHANNELS.settingsClearClientOverrides, (rawArgs) => {

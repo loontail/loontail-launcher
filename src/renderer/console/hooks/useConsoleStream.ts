@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { clear as clearConsole, getInitial, onBufferReset, onLines, onState } from '../api';
 
 const INITIAL_STATE: ConsoleProcessState = {
-  slug: '' as CatalogKey,
+  key: '' as CatalogKey,
   status: ConsoleStatuses.IDLE,
 };
 const RECONCILE_INTERVAL_MS = 1000;
