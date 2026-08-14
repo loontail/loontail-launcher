@@ -38,15 +38,15 @@
     "verify": "npm run lint && npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
-    "@loontail/minecraft-kit": "0.8.14",
-    "better-sqlite3": "^12.11.1",
+    "@loontail/minecraft-kit": "0.10.0",
+    "better-sqlite3": "^13.0.3",
     "check-disk-space": "^3.4.0",
     "electron-log": "^5.2.0",
     "electron-squirrel-startup": "^1.0.1",
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.7",
+    "@biomejs/biome": "^2.5.8",
     "@electron/rebuild": "^4.2.0",
     "@fontsource/nunito": "^5.3.0",
     "@splidejs/react-splide": "^0.7.12",
@@ -57,10 +57,10 @@
     "@tanstack/react-query-persist-client": "^5.101.4",
     "@testing-library/react": "^16.3.2",
     "@types/better-sqlite3": "^9.6.0",
-    "@types/node": "^24.13.3",
+    "@types/node": "^26.2.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
-    "@vitejs/plugin-react": "^5.2.0",
+    "@vitejs/plugin-react": "^6.0.5",
     "@vitest/coverage-v8": "^4.1.10",
     "clsx": "^2.1.1",
     "electron": "^43.3.0",
@@ -68,7 +68,7 @@
     "electron-vite": "^5.0.0",
     "i18next": "^26.3.6",
     "jsdom": "^30.0.1",
-    "lucide-react": "^1.30.0",
+    "lucide-react": "^1.31.0",
     "marked": "^18.0.9",
     "node-abi": "^4.33.0",
     "node-gyp": "^13.0.1",
@@ -80,7 +80,7 @@
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
-    "vite": "^7.3.6",
+    "vite": "^8.2.1",
     "vitest": "^4.1.10",
     "zustand": "^5.0.14"
   }
